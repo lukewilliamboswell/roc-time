@@ -1,6 +1,8 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.CalendarPattern
+import time.TimedOccurrence
+import time.CalendarDelta
 import time.TimedRecurrence
 import time.CalendarDate
 import time.LocalDateTime
@@ -10,6 +12,7 @@ import time.AllDayRecurrence
 import time.AllDayOccurrence
 import time.PosixSpan
 import time.PosixBoundary
+import time.PosixDelta
 import time.FixedOffset
 import time.ZoneRules
 import time.ClockPattern
@@ -342,7 +345,47 @@ main! = |args| {
 		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before] }
+	saved_start = match timed_first.status {
+		Item(item) => item.occurrence
+		_ => crash "duration start"
+	}
+	fixed_before = Host.allocated_bytes!({})
+	fixed_cursor = match TimedOccurrence.cursor(1.U64, saved_start, Coordinate(time_delta(3600000000))) {
+		Ok(value) => value
+		Err(_) => crash "fixed duration"
+	}
+	fixed_result = match TimedOccurrence.Cursor.collect(fixed_cursor, { max_segments: 0, max_candidates: 0 }) {
+		Ok(value) => value
+		Err(_) => crash "fixed duration result"
+	}
+	fixed_after = Host.allocated_bytes!({})
+	match fixed_result.status {
+		Complete(value) => Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(time_delta(3600000000)))
+		Limited(_) => Host.assert!(False)
+	}
+	Host.assert!(fixed_result.segments == 0 and fixed_after - fixed_before <= ceiling)
+	# Put the folds at the calendar end: every segment has a candidate.
+	# Completing after one segment would lose alternatives, even with a seek.
+	# Fixture transitions are 1..8192 seconds, so adding one day is exact.
+	duration_transitions = transitions.map(|transition| { at: PosixBoundary.from_microseconds(PosixBoundary.to_microseconds(transition.at) + 86400000000), offset: transition.offset })
+	duration_rules = classification_rules(duration_transitions, 200000000000)
+	duration_source = duration_start(duration_rules, local)
+	duration_before = Host.allocated_bytes!({})
+	duration_cursor = match TimedOccurrence.cursor(2.U64, duration_source, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap })) {
+		Ok(value) => value
+		Err(_) => crash "calendar duration cursor"
+	}
+	duration_result = match TimedOccurrence.Cursor.collect(duration_cursor, { max_segments: 1, max_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "calendar duration step"
+	}
+	duration_after = Host.allocated_bytes!({})
+	Host.assert!(duration_result.segments == 1 and duration_after - duration_before <= ceiling)
+	match duration_result.status {
+		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
+		Complete(_) => Host.assert!(False)
+	}
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
@@ -385,4 +428,27 @@ fixture_offset = |number| match I64.to_i32_try(number) {
 clock_fixture = |microseconds| match ClockTime.from_microseconds_since_midnight(microseconds) {
 	Ok(value) => value
 	Err(_) => crash "clock fixture"
+}
+
+time_delta = PosixDelta.from_microseconds
+
+duration_start = |rules, source| {
+	date = fixture_date(1970, 1)
+	clock = LocalDateTime.clock(source)
+	rule = match TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] }) {
+		Ok(value) => value
+		Err(_) => crash "duration fixture rule"
+	}
+	cursor = match TimedRecurrence.cursor(rule, { start: source, end: classification_label(1500000) }, { rules, occurrence: First, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "duration fixture cursor"
+	}
+	first = match TimedRecurrence.Cursor.next(cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 10000, max_zone_candidates: 10000 }) {
+		Ok(value) => value
+		Err(_) => crash "duration fixture start"
+	}
+	match first.status {
+		Item(item) => item.occurrence
+		_ => crash "duration fixture incomplete"
+	}
 }

@@ -250,7 +250,11 @@ compiler.
 A secondly recurrence over the same horizons separately verifies that seeking
 and consuming one clock period stays within the base budget. Source-exclusion
 lookup is checked with 16 and 4096 normalized labels, with construction outside
-the measured prefix scope.
+the measured prefix scope. Fixed-duration construction must use no zone
+segments; calendar-duration end resolution must pause after one segment in
+both short and long transition tables, with start resolution outside its scope.
+The calendar end lies in every fold segment, so one inspected segment cannot
+establish a complete result.
 These are explicit traffic budgets, not claims of live memory or zero-cost
 iteration. Short/vast traffic must still match exactly.
 A five-second process deadline catches catastrophic hidden traversal, and a

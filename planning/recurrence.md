@@ -6,14 +6,15 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
-- Timed-series inclusions and occurrence durations, including an
-  explicit decision on RDATE PERIOD support. Reuse CalendarPattern,
-  SubdailyPattern, ClockPattern and ZoneRules. Apply the RFC timed profile's
-  before-gap offset and first-fold policies (verified erratum 4271); only invalid
+- Timed-series inclusions, including an explicit decision on RDATE PERIOD
+  support and per-inclusion duration identity. Reuse CalendarPattern,
+  SubdailyPattern, ClockPattern, TimedOccurrence and ZoneRules. Apply the RFC
+  timed profile's before-gap offset and first-fold policies (verified erratum 4271); only invalid
   calendar dates are discarded. BYSETPOS must see full timed candidate periods.
-- Preserve inclusion/exclusion ordering and duration interpretation inputs in
-  immutable resumptions. Extend the native cursor's work/buffer/output accounting
-  through those operations; query restriction never restarts series COUNT.
+- Compose start and duration cursors under shared series budgets, preserving
+  inclusion/exclusion ordering and duration inputs in immutable resumptions.
+  Extend the native cursor's work/buffer/output accounting through those
+  operations; query restriction never restarts series COUNT.
 - Extend RFC 5545 adaptation to timed values, omitted yearly defaults and
   declared serialization/persistence. Keep its explicit profile and UNTIL type
   checks; do not introduce a separate parser execution engine. Settle UTC EXDATE

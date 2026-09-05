@@ -1,4 +1,6 @@
 import fuzz.Fuzz
+import time.TimedOccurrence
+import time.CalendarDelta
 import time.TimedRecurrence
 import time.CalendarDate
 import time.ClockTime
@@ -479,6 +481,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 				current = progress.cursor
 			}
 			Item(item) => {
+				check_duration(item.occurrence)
 				sources = sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
 				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
 				match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
@@ -660,4 +663,31 @@ check_subdaily = |input| {
 		calls = calls + 1
 	}
 	crash "subdaily grid resumption did not terminate"
+}
+
+# In fixed UTC, one calendar day plus one coordinate hour is exactly 25
+# coordinate hours. The same source with a fixed one-hour duration stays 1h.
+check_duration = |start| {
+	base = PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(start))
+	for duration in [Coordinate(PosixDelta.from_microseconds(3600000000)), Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })] {
+		cursor = match TimedOccurrence.cursor(42.U64, start, duration) {
+			Ok(value) => value
+			Err(_) => crash "duration construction"
+		}
+		batch = match TimedOccurrence.Cursor.collect(cursor, { max_segments: 1, max_candidates: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "duration resolution"
+		}
+		value = match batch.status {
+			Complete(completed) => completed
+			Limited(_) => crash "UTC duration should complete"
+		}
+		expected = match duration {
+			Coordinate(_) => 3600000000.I64
+			Calendar(_) => 90000000000.I64
+		}
+		if TimedOccurrence.id(value) != 42 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(expected)) or PosixSpan.start(TimedOccurrence.span(value)) != PosixBoundary.from_microseconds(base) {
+			crash "duration differs from UTC grid"
+		}
+	}
 }
