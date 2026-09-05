@@ -8,6 +8,7 @@ package
 		DateRecurrence,
 		TimedRecurrence,
 		TimedOccurrence,
+		TimedSchedule,
 		SubdailyPattern,
 		AllDayOccurrence,
 		AllDayRecurrence,

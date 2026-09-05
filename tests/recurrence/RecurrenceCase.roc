@@ -1,4 +1,5 @@
 import fuzz.Fuzz
+import time.TimedSchedule
 import time.TimedOccurrence
 import time.CalendarDelta
 import time.TimedRecurrence
@@ -458,6 +459,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		}
 	}
 	check_timed_batches(current, input.work.to_u64(), expected_sources, expected_boundaries)
+	check_schedule(rule, { start, end }, rules, input.work.to_u64(), expected_sources, expected_boundaries)
 
 	var sources = []
 	var boundaries = []
@@ -690,4 +692,52 @@ check_duration = |start| {
 			crash "duration differs from UTC grid"
 		}
 	}
+}
+
+# Independent UTC grid: calendar day plus hour has a 25-hour coordinate width.
+# One shared zone step forces a pause between start and end interpretation.
+check_schedule = |rule, window, rules, work, expected_sources, expected_boundaries| {
+	var current = match TimedSchedule.new(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "schedule construction"
+	}
+	var index = 0.U64
+	var calls = 0.U64
+	while calls < 10000 {
+		batch = match TimedSchedule.collect(current, { work: { max_steps: work, max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "schedule collection"
+		}
+		if batch.steps > work or batch.zone_segments > 1 or batch.occurrences.len() > 1 {
+			crash "schedule exceeded shared budget"
+		}
+		for occurrence in batch.occurrences {
+			expected_source = match expected_sources.get(index) {
+				Ok(value) => value
+				Err(_) => crash "extra schedule occurrence"
+			}
+			expected_boundary = match expected_boundaries.get(index) {
+				Ok(value) => value
+				Err(_) => crash "missing expected boundary"
+			}
+			identity = TimedOccurrence.id(occurrence)
+			if identity.series != 42 or identity.source != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(90000000000)) {
+				crash "schedule differs from independent UTC grid"
+			}
+			index = index + 1
+		}
+		match batch.status {
+			Complete => {
+				if index != expected_sources.len() {
+					crash "schedule lost occurrences"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "schedule failed to make bounded progress"
 }

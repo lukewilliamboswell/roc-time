@@ -25,15 +25,32 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, duration :
 	CalendarDuration : { delta : CalendarDelta, invalid_date : CalendarArithmetic.Policy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })] }
 
+	## Validate the duration's component domain without interpreting an anchor.
+	validate_duration : Duration -> Try({}, [InvalidDuration, ..])
+	validate_duration = |duration| match duration {
+		Coordinate(delta) => if PosixDelta.to_microseconds(delta) > 0 {
+			Ok({})
+		} else {
+			Err(InvalidDuration)
+		}
+		Calendar(spec) => {
+			parts = CalendarDelta.to_components(spec.delta)
+			tail = PosixDelta.to_microseconds(spec.tail)
+			if parts.years < 0 or parts.months < 0 or parts.days < 0 or tail < 0 or (parts.years == 0 and parts.months == 0 and parts.days == 0 and tail == 0) {
+				Err(InvalidDuration)
+			} else {
+				Ok({})
+			}
+		}
+	}
+
 	## Components must be nonnegative and at least one must be positive.
 	## Calendar work is bounded; zone interpretation resumes through collect.
 	## Existing start interpretation and its immutable rules are preserved.
 	cursor : id, TimedRecurrence.Occurrence, Duration -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields), ..])
 	cursor = |id, start, duration| match duration {
 		Coordinate(delta) => {
-			if PosixDelta.to_microseconds(delta) <= 0 {
-				return Err(InvalidDuration)
-			}
+			validate_duration(duration)?
 			end = match PosixBoundary.shift(TimedRecurrence.Occurrence.boundary(start), delta) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
@@ -43,10 +60,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, duration :
 		}
 		Calendar(spec) => {
 			parts = CalendarDelta.to_components(spec.delta)
-			tail = PosixDelta.to_microseconds(spec.tail)
-			if parts.years < 0 or parts.months < 0 or parts.days < 0 or tail < 0 or (parts.years == 0 and parts.months == 0 and parts.days == 0 and tail == 0) {
-				return Err(InvalidDuration)
-			}
+			validate_duration(duration)?
 			source = TimedRecurrence.Occurrence.source(start)
 			if parts.years == 0 and parts.months == 0 and parts.days == 0 {
 				# Zero calendar movement is identity on the already selected

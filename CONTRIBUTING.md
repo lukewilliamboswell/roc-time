@@ -246,8 +246,10 @@ construction remains outside this consumption measurement. Its outcome iterator
 also consumes a single prefix and a complete zero-work stream: a limited
 result must stop iteration rather than retry forever. The standard ceiling is
 4 KiB of requested allocation traffic per stage, except 8 KiB for the timed
-iterator prefix, accounting for its higher measured traffic on the pinned
-compiler.
+iterator prefix, 12 KiB for the composed schedule iterator prefix and 8 KiB
+for its terminal zero-work result. These accommodate measured traffic on the
+pinned compiler. Schedule checks also pause between start and calendar-end
+interpretation, then resume with zero source work under the shared zone budget.
 A secondly recurrence over the same horizons separately verifies that seeking
 and consuming one clock period stays within the base budget. Source-exclusion
 lookup is checked with 16 and 4096 normalized labels, with construction outside

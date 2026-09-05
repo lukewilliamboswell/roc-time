@@ -1,6 +1,7 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.CalendarPattern
+import time.TimedSchedule
 import time.TimedOccurrence
 import time.CalendarDelta
 import time.TimedRecurrence
@@ -385,7 +386,77 @@ main! = |args| {
 		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
 		Complete(_) => Host.assert!(False)
 	}
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before] }
+	# Consume only one composed appointment from the full clock/day product.
+	# One zone segment resolves its start; a second resolves the calendar end.
+	schedule_before = Host.allocated_bytes!({})
+	schedule = match TimedSchedule.new(42.U64, timed_rule, { start: timed_start, end: timed_end }, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "resource schedule"
+	}
+	schedule_first = match TimedSchedule.next(schedule, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "resource schedule start"
+	}
+	pending_schedule = match schedule_first.status {
+		Limited(progress) => {
+			Host.assert!(progress.reason == EndZoneWorkLimit)
+			progress.cursor
+		}
+		_ => crash "calendar end needs a second segment"
+	}
+	schedule_end = match TimedSchedule.next(pending_schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "resource schedule end"
+	}
+	schedule_after = Host.allocated_bytes!({})
+	match schedule_end.status {
+		Item(item) => Host.assert!(TimedOccurrence.id(item.occurrence) == { series: 42.U64, source: timed_start } and PosixSpan.coordinate_width(TimedOccurrence.span(item.occurrence)) == Ok(time_delta(86400000000)))
+		_ => Host.assert!(False)
+	}
+	Host.assert!(schedule_first.steps <= 8 and schedule_first.zone_segments == 1 and schedule_end.steps == 0 and schedule_end.zone_segments == 1 and schedule_after - schedule_before <= ceiling)
+
+	schedule_stream_before = Host.allocated_bytes!({})
+	schedule_count = TimedSchedule.outcomes(schedule, { max_steps: 8, max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }).take_first(1).fold(
+		0.U64,
+		|_, result| {
+			batch = match result {
+				Ok(value) => value
+				Err(_) => crash "schedule stream"
+			}
+			match batch.status {
+				Item(item) => if TimedOccurrence.id(item.occurrence).source != timed_start {
+					crash "schedule stream identity"
+				}
+				_ => crash "schedule stream item"
+			}
+			1
+		},
+	)
+	schedule_stream_after = Host.allocated_bytes!({})
+	# Pinned dev/speed measure 11728 requested bytes for this iterator prefix.
+	Host.assert!(schedule_count == 1 and schedule_stream_after - schedule_stream_before <= ceiling * 3)
+	schedule_zero_before = Host.allocated_bytes!({})
+	schedule_zero_count = TimedSchedule.outcomes(schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
+		0.U64,
+		|count_so_far, result| {
+			batch = match result {
+				Ok(value) => value
+				Err(_) => crash "zero-work schedule stream"
+			}
+			match batch.status {
+				Limited(progress) => if progress.reason != StartWorkLimit or batch.steps != 0 or batch.zone_segments != 0 {
+					crash "zero-work schedule advanced"
+				}
+				_ => crash "zero-work schedule outcome"
+			}
+			count_so_far + 1
+		},
+	)
+	schedule_zero_after = Host.allocated_bytes!({})
+	# The terminal zero-work iterator measures 4480 requested bytes.
+	Host.assert!(schedule_zero_count == 1 and schedule_zero_after - schedule_zero_before <= ceiling * 2)
+
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
