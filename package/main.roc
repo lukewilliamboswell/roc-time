@@ -7,6 +7,7 @@ package
 		CivilDay,
 		ClockTime,
 		LocalDateTime,
+		FixedOffset,
 		GregorianDate,
 		JulianDate,
 		PosixBoundary,

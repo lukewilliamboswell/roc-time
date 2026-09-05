@@ -70,6 +70,14 @@ The full pinned integration command passed on 2026-09-05 with all seven
 The interpreter required shared-memory access outside the sandbox; the successful
 rerun supplies runtime evidence. Formatting and diff checks also passed.
 
+`FixedOffset` now resolves local labels and projects POSIX boundaries into an
+explicit calendar using whole-second offsets. Its full-I32 mathematical profile
+is separate from text-format restrictions. RFC 3339's offset-sign example anchors
+the convention; generated full-range checks cover both calendars, exact inverses
+and final overflow. The pinned full integration command passed on 2026-09-05:
+eight 10,000-run campaigns, both calendar oracle gates and four bundled apps.
+Named rules, validity windows, gaps/folds and snapshot provenance remain next.
+
 Implement immutable zone fixtures and resolution (R07–R09), keeping boundary
 appointments distinct from local selections. Include independent transition
 evidence, provider validity limits and provenance; never infer host zone data.
