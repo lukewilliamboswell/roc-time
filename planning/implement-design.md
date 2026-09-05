@@ -154,6 +154,23 @@ Extend oracle evidence as arithmetic and other temporal capabilities land;
 the separate Julian gate supplies cross-calendar conversion evidence; neither
 gate implies zone, recurrence or resource evidence.
 
+## Standards-foundation review follow-through
+
+The critical Tempo/specification review is recorded in design.md's standards
+contracts. Before adapters, implement resolution-bearing descriptions separately
+from boundary labels, uncertain endpoint knowledge and component qualification,
+and IXDTF offset assertions/presentation annotations. Do not narrow recognized
+symbolic forms to the finite kernel prematurely. Before extending calendars,
+separate stable month identity, ordinal position and provider capabilities.
+Named-zone work must preserve independent operand contexts, finite validity,
+selection preimages and separately selected result presentation.
+
+Promote the design's concrete counterexamples to executable tests as these layers
+land. Maintain edition/profile evidence separately for parsing, preservation,
+interpretation, formatting and persistence. Full ISO normative clauses remain an
+input needed for clause-level conformance; the public catalogue alone is not
+that evidence. No current implementation or Tempo claim closes these obligations.
+
 ## Unresolved decisions
 
 Calendar/provider ranges, calendar interoperability scope, zone policy signatures, RFC adapter feature profile, persistence schema and supported reasoning profile must be settled with evidence as their slices land. Allocation/layout and supported Wasm claims require measurements on the pinned compiler.

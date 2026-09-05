@@ -4,7 +4,7 @@
 
 This document describes the intended architecture, not the current implementation. It governs semantic boundaries, dependencies, and performance expectations. Compiler-specific observations and benchmark results inform implementation decisions without becoming permanent architectural assumptions.
 
-Contributor methodology belongs in [AGENTS.md](AGENTS.md). Proposed API examples below specify intended usage and observable behavior; they do not claim that the placeholder package already implements these modules.
+Contributor methodology belongs in [AGENTS.md](AGENTS.md). Proposed API examples below specify intended usage and observable behavior; they do not claim that the package already implements the proposed modules.
 
 ## Principles
 
@@ -57,9 +57,23 @@ Coordinate width on a POSIX-like axis must not be advertised as physical elapsed
 
 ### Calendar values describe spans at a resolution
 
-A year, month, day, or clock reading denotes a span at its stated resolution. A microsecond-resolution timestamp denotes one microsecond of time. Boundaries are exact positions used to construct spans and answer point queries; they are not required to masquerade as calendar values.
+A resolution-bearing calendar value denotes a civil-domain selection at its stated resolution; its timeline preimage can be empty, contiguous or disconnected.
+Boundary labels (`ClockTime`, `LocalDateTime`) and exact resolved positions are
+separate types: they do not retain which fields a caller originally supplied.
+Description types preserve supplied fields, resolution and qualifiers before
+lowering to a boundary, local selection or occurrence. A minute value such as
+`12:30` differs from a second value `12:30:00`; fractional values `.12` and `.120`
+can share a starting boundary while denoting different widths. Do not add this
+metadata to every numerical kernel endpoint.
 
-For a fully interpreted day, the span runs from that day's start to the next day's start. The upper boundary is exclusive. There is no “last microsecond of the day” calculation in the model.
+An interchange timestamp can denote an instant rather than a precision-width
+span. Adapters preserve their format's meaning: converting an RFC timestamp to
+a span at its textual precision requires an explicit application operation.
+A microsecond-resolution *calendar value* denotes one local microsecond, whose
+timeline preimage can be empty or have multiple components. This does not
+redefine every timestamp as a one-microsecond interval.
+
+A civil day denotes its full local-day selection. Resolution computes its preimage under the supplied rules, which can be empty or disconnected. In the ordinary contiguous case it spans that day's start to the next day's start, with an exclusive upper boundary. There is no “last microsecond of the day” calculation in the model.
 
 Resolution is semantic information, not a storage unit. Microsecond storage does not imply that a year was supplied with microsecond precision. Iteration step is another independent concept: a day can be walked by hours or a larger interval by days.
 
@@ -350,6 +364,105 @@ Source occurrence identity survives until a caller requests coverage. Enumeratio
 Uncertain expressions remain uncertain. “One of these days” is different from “all of these days,” and an approximate date is not automatically a wider certain interval. A query distinguishes definite, possible, and impossible relationships where its model supports them. An unsupported reasoning problem is an explicit outcome, not a fabricated certainty.
 
 For a supported evidence model, “definite” means true for every admissible interpretation; “possible” means true for at least one but not all; “impossible” means true for none. Inconsistent evidence is an error, not vacuous certainty. Merely parsing an approximate qualifier does not supply a numerical tolerance or a probability model.
+
+## Standards adapters and semantic preservation
+
+Broad standards coverage is an intended capability, not a current conformance
+claim. Maintain an edition/profile matrix as adapters land; syntax acceptance,
+semantic preservation, interpretation, formatting and persistence need separate
+evidence. Native lossless persistence is distinct from standards interchange.
+
+| Target | Required scope distinction | Current evidence |
+|---|---|---|
+| ISO 8601-1:2019 | Name adopted amendments and exact supported date/time forms | No implemented text adapter |
+| ISO 8601-2:2019 and Amendment 1:2025 | Part 2 exceeds EDTF; canonical expressions and arithmetic require edition-specific contracts | Catalogue reviewed; full normative clauses and clause-level tests remain required |
+| EDTF, Library of Congress published specification, Levels 0–2 | Preserve independent endpoint resolution, component qualifications, masks, sets, seasons and significant digits | Semantic requirements below; no implemented adapter |
+| IXDTF, RFC 9557 (2024) with RFC 3339 base semantics | Preserve offset assertions and annotation interpretation independently of syntax | Fixed-offset conversion evidence only; no implemented adapter |
+| RFC 5545 (2009) recurrence profile | Standard series rules distinct from native recurrence extensions | Required series semantics above; implementation remains pending |
+
+[ISO's Part 2 catalogue](https://www.iso.org/standard/70908.html) identifies
+Amendment 1:2025. Public abstracts do not prove clause-level conformance. Obtain
+normative requirements before declaring that scope complete; lack of those
+clauses does not prevent implementing the independently specified foundations.
+
+Recognition, symbolic validation, calendar conversion and finite-axis
+materialization are separate stages. Descriptions can outlive the numerical
+range of the current providers. Long years, exponents, finer fractions and
+unresolved leap-second notation must not be silently forced into `GregorianDate`
+or `ClockTime`. Each adapter declares bounded input/work limits and symbolic
+range, returning structured unsupported/range errors beyond them. Numerical
+precision reduction still requires explicit policy. Recognition alone does not
+establish interpretation or computational support.
+
+### Interval and qualification meaning
+
+An interval description preserves each endpoint's knowledge, supplied resolution
+and qualifiers. Exact boundary appointments, uncertain-endpoint intervals and
+inclusive all-of ranges have distinct lowering contracts. In particular, EDTF
+`1964/2008` begins sometime in 1964 and ends sometime in 2008; replacing it with
+an exact interval between year starts invents knowledge. Mixed endpoint
+precision such as `2004-02-01/2005-02` remains meaningful. Component qualification
+in `2004-06~-11` is not whole-value approximation; `1984-1X` describes alternatives,
+not certain coverage. Seasons may require location/context; significant-digit
+expressions preserve an estimate as well as admissible interpretations. These
+forms converge on shared semantic descriptions, not separate parser-specific
+interpretation engines. [Library of Congress EDTF specification](https://www.loc.gov/standards/datetime/edtf.html).
+
+### IXDTF assertions and annotations
+
+The adapter preserves whether an offset asserts the local relationship.
+`Z` and `-00:00` differ from an asserted numeric `+00:00` under RFC 9557's
+semantics; they must not all become the same `FixedOffset` assertion.
+`2022-07-08T00:14:07Z[Europe/Paris]` can identify the UTC instant presented as
+02:14:07 locally without an offset conflict. In contrast, a numeric asserted
+offset is checked against the named rules when interpretation requires it.
+The `u-ca` annotation selects preferred calendar presentation; it does not
+reinterpret the timestamp's Gregorian fields as Hebrew or another calendar.
+
+Parse annotations without fetching zone rules. Preserve criticality and the
+information needed for the standard's ordering, duplicate and conflict rules;
+unknown critical annotations fail. Interpretation requiring unavailable rules
+returns a missing-context error. Any supported policy for elective conflicts is
+explicit. Preserve the semantic distinction in formatting and persistence.
+[RFC 9557 sections 2–5](https://www.rfc-editor.org/rfc/rfc9557.html).
+
+### Calendar capabilities and cross-zone algebra
+
+The implemented Gregorian/Julian `{year, month, day}` shape is not a universal
+calendar-provider interface. Providers separately declare conversion, year/month
+advancement, stable month identity, era conventions and day-boundary context.
+A leap-month calendar's ordinal month can differ from its stable month identity;
+recurrence and anniversaries cannot silently substitute one for the other.
+Gregorian arithmetic does not imply arithmetic support for every calendar.
+[Temporal's calendar guidance](https://tc39.es/proposal-temporal/docs/calendars.html)
+provides comparative cases; each adopted calendar still needs its own sources.
+
+Resolve each cross-zone operand with its own explicit interpretation context and
+finite rule validity before combining compatible-axis coverage. Missing rules
+for any requested part must produce an error or explicit incomplete outcome,
+never a clipped complete result. Presentation of a result uses a separately
+chosen context; inheriting the first operand's zone is an explicit display
+policy, not part of set equality. Swapping union/intersection operands preserves
+coverage even if independently chosen presentation differs. Disconnected repeated selections retain every component without filling
+intervening gaps; skipped dates can produce empty complete coverage only
+when rules establish that result.
+
+### Review evidence and acceptance counterexamples
+
+Tempo remains an inspiration and differential source, not the conformance
+oracle. Its [conformance guide at revision e8a074ed](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/guides/iso8601-conformance.md)
+qualifies the broad support claim with fractional truncation, offset-token
+conflation and cross-endpoint validation gaps. This is a documentation review,
+not an independently executed audit of Tempo. roc-time retains its own checked
+precision and semantic contracts.
+
+Before claiming R07/R13/R14/R16 adapter coverage, promote the concrete examples
+above to executable cases: resolution distinctions; uncertain mixed-resolution
+endpoints; scoped qualifiers and masked alternatives; IXDTF offset assertion,
+calendar presentation and critical/duplicate annotations; provider-range errors;
+and commutative cross-zone coverage under independently chosen display contexts.
+These cases are currently requirements, not passing tests. They supplement the
+stable acceptance IDs below rather than replacing their wider obligations.
 
 ## Motivating Roc usage
 
