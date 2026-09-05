@@ -1,7 +1,8 @@
 # Pinned interpreter result-widening reproducer
 
 On `nightly-2026-09-04-c125b82`, Apple Silicon macOS, interpret `main.roc`
-with the pinned Roc executable. The expected result is `Ok(<opaque>)`.
+with the pinned Roc executable. The expected result is `Ok` containing the original 2025-01-31 date
+(originally displayed as `Ok(<opaque>)`, before custom inspection was added).
 The observed result is `Err(InvalidDestination({ day: 1, month: 0, year: 2025 }))`.
 The same root built with `roc build` and executed natively returns the expected
 success. This fixture is a known compiler defect reproducer, not a passing

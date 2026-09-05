@@ -15,9 +15,9 @@ decoders, and the named-case replay checks validate that contract.
 
 | Target | Domain and property |
 | --- | --- |
-| `precision-v1` | R01: all signed I64 coordinates/displacements with extra limit/zero cases; checked addition/subtraction against I128; microsecond-aligned nanoseconds and deliberate precision errors; nearest rounding bounded by half a microsecond with even ties. |
+| `precision-v1` | R01: all signed I64 coordinates/displacements with extra limit/zero cases; checked addition/subtraction against I128; microsecond-aligned nanoseconds and deliberate precision errors; nearest rounding bounded by half a microsecond with even ties; comparison operators against raw I64 order and dictionary lookup for equal boundaries. |
 | `spans-v1` | R03: all signed endpoint coordinates, deliberate invalid constructors, and valid ordered spans; all 13 relation predicates and inverses against endpoint order, plus an enumerated small-domain membership/overlap oracle. |
-| `coverage-v2` | R04: two lists of up to sixteen spans with starts in [-8, 8] and integer widths in [1, 17]; every integer point in [-9, 26] checks construction, union, intersection, difference, finite complement, count and width against raw-field membership; algebraic laws and owned/shared/sliced inputs. |
+| `coverage-v2` | R04: two lists of up to sixteen spans with starts in [-8, 8] and integer widths in [1, 17]; every integer point in [-9, 26] checks construction, union, intersection, difference, finite complement, count and width against raw-field membership; algebraic laws and owned/shared/sliced inputs; dictionary lookup across equal canonical values and whole-span iterator output. |
 | `gregorian-v1` | R05: full Gregorian provider day range with endpoint/year-zero bias; coordinate and field round trips, independent next-day field progression, malformed fields and out-of-provider coordinates. Fixed tests separately enumerate all 292,194 days in years -400 through 399 against a sequential day counter. |
 | `arithmetic-v1` | R05: full provider years with endpoint/year-zero bias; years ±2, months ±24 and days ±60 against a field-walking oracle for Reject/Clamp/Carry; I64 extreme components assert range failures. The model shares Gregorian month/leap conventions but neither production civil conversion nor month-index arithmetic. |
 

@@ -43,13 +43,17 @@ backend checks.
 
 ## Next slice
 
-Before adding the next provider, finish a focused static-dispatch usability
-milestone from the requested agent review: ordering hooks for ordered scalar
-domains, hashing consistent with semantic equality, canonical-span iteration
-for Coverage and useful domain-labelled inspection. Pinned probes confirm
-method chaining/equality already work, but `CivilDay < CivilDay` lacks `is_lt`.
-Use named checked arithmetic; numeric literals need an explicit unit/domain
-contract and future date literals must delegate to the actual parser.
+The static-dispatch milestone implements ordering hooks for the four ordered
+scalar domains, equality-consistent scalar/span/coverage hashes, whole-span
+Coverage iteration and domain-labelled inspection. Tests exercise public
+operators, dictionary lookup across independently constructed equal values,
+canonical segmentation and empty/nonempty iteration; mixed-domain ordering
+must fail typechecking. Generated boundary and coverage checks now also exercise
+these hooks without changing their input decoders. Named arithmetic and explicit
+numeric units remain necessary for checked errors and interpretation safety.
+The pinned full integration command passed on 2026-09-05, including both static-
+dispatch execution paths, all five 10,000-run campaigns, the external conversion
+oracle, and all three bundled applications.
 
 Complete calendar interoperability evidence (R06): settle the next supported
 calendar profile, add independently sourced equal-day fixtures through the shared

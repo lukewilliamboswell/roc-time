@@ -42,6 +42,12 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 		Ok({ start: point, end: upper })
 	}
 
+	to_hash : PosixSpan, Hasher -> Hasher
+	to_hash = |span, hasher| span.end.to_hash(span.start.to_hash(hasher))
+
+	to_inspect : PosixSpan -> Str
+	to_inspect = |span| "PosixSpan([${PosixBoundary.to_microseconds(span.start).to_str()}, ${PosixBoundary.to_microseconds(span.end).to_str()}) microseconds)"
+
 	is_eq : PosixSpan, PosixSpan -> Bool
 	is_eq = |a, b| a.start == b.start and a.end == b.end
 

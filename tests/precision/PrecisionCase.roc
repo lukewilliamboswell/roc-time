@@ -27,6 +27,13 @@ PrecisionCase := { a : I64, b : I64, nanos : U64 }.{
 	check = |input| {
 		a = PosixBoundary.from_microseconds(input.a)
 		b = PosixBoundary.from_microseconds(input.b)
+		if (a < b) != (input.a < input.b) or (a <= b) != (input.a <= input.b) or
+			(a > b) != (input.a > input.b) or (a >= b) != (input.a >= input.b) {
+			crash "R02 boundary operator dispatch differs from coordinate oracle"
+		}
+		if Dict.get(Dict.insert(Dict.empty(), a, 1.U64), PosixBoundary.from_microseconds(input.a)) != Ok(1) {
+			crash "R02 equal boundary cannot retrieve dictionary entry"
+		}
 		aligned_nanos = I64.to_i128(input.a) * 1000
 		if PosixBoundary.from_nanoseconds(aligned_nanos) != Ok(a) or
 			PosixBoundary.from_nanoseconds(aligned_nanos + 1) != Err(Submicrosecond) {

@@ -54,6 +54,16 @@ Coverage :: [Spans(List(PosixSpan))].{
 	member_count : Coverage -> U64
 	member_count = |Spans(items)| List.len(items)
 
+	## Iterate whole canonical spans, never individual microseconds.
+	iter : Coverage -> Iter(PosixSpan)
+	iter = |Spans(items)| List.iter(items)
+
+	to_hash : Coverage, Hasher -> Hasher
+	to_hash = |Spans(items), hasher| items.to_hash(hasher)
+
+	to_inspect : Coverage -> Str
+	to_inspect = |Spans(items)| "Coverage(${Str.inspect(items)})"
+
 	is_eq : Coverage, Coverage -> Bool
 	is_eq = |Spans(a), Spans(b)| a == b
 

@@ -39,6 +39,24 @@ PosixBoundary :: [Micros(I64)].{
 		}
 	}
 
+	is_lt : PosixBoundary, PosixBoundary -> Bool
+	is_lt = |Micros(a), Micros(b)| a < b
+
+	is_lte : PosixBoundary, PosixBoundary -> Bool
+	is_lte = |Micros(a), Micros(b)| a <= b
+
+	is_gt : PosixBoundary, PosixBoundary -> Bool
+	is_gt = |Micros(a), Micros(b)| a > b
+
+	is_gte : PosixBoundary, PosixBoundary -> Bool
+	is_gte = |Micros(a), Micros(b)| a >= b
+
+	to_hash : PosixBoundary, Hasher -> Hasher
+	to_hash = |Micros(value), hasher| value.to_hash(hasher)
+
+	to_inspect : PosixBoundary -> Str
+	to_inspect = |Micros(value)| "PosixBoundary(${value.to_str()} microseconds)"
+
 	is_eq : PosixBoundary, PosixBoundary -> Bool
 	is_eq = |Micros(a), Micros(b)| a == b
 

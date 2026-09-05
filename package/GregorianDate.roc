@@ -71,6 +71,24 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(Date({ year: lower, month, day: day_of_month }))
 	}
 
+	to_hash : GregorianDate, Hasher -> Hasher
+	to_hash = |Date(fields), hasher| fields.day.to_hash(fields.month.to_hash(fields.year.to_hash(hasher)))
+
+	to_inspect : GregorianDate -> Str
+	to_inspect = |Date(fields)| "GregorianDate(${fields.year.to_str()}, ${fields.month.to_str()}, ${fields.day.to_str()})"
+
+	is_lt : GregorianDate, GregorianDate -> Bool
+	is_lt = |a, b| to_civil_day(a) < to_civil_day(b)
+
+	is_lte : GregorianDate, GregorianDate -> Bool
+	is_lte = |a, b| to_civil_day(a) <= to_civil_day(b)
+
+	is_gt : GregorianDate, GregorianDate -> Bool
+	is_gt = |a, b| to_civil_day(a) > to_civil_day(b)
+
+	is_gte : GregorianDate, GregorianDate -> Bool
+	is_gte = |a, b| to_civil_day(a) >= to_civil_day(b)
+
 	is_eq : GregorianDate, GregorianDate -> Bool
 	is_eq = |Date(a), Date(b)| a.year == b.year and a.month == b.month and a.day == b.day
 

@@ -20,7 +20,7 @@ Availability :: { free : Coverage }.{
 	report : Availability -> Try(List(Str), [OutOfRange, ..])
 	report = |available| {
 		var lines = []
-		for span in Coverage.to_spans(available.free) {
+		for span in available.free {
 			# Present exact epoch microseconds; calendar formatting is not implemented yet.
 			start = PosixBoundary.to_microseconds(PosixSpan.start(span))
 			end = PosixBoundary.to_microseconds(PosixSpan.end(span))

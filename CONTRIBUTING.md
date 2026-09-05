@@ -37,6 +37,9 @@ bundle verification.
 
 ## Tests
 
+The gate also runs `tests/static_dispatch/main.roc` under both the interpreter
+and native execution to check public operator, dictionary-key and iterator use.
+
 Run the full CI check locally with `ROC=/path/to/pinned/roc python3 scripts/all_tests.py`.
 Generate local versioned docs with `python3 scripts/docs.py 0.1.0`.
 

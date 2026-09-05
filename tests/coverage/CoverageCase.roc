@@ -30,6 +30,16 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		backing = List.concat([window], List.concat(spans, [window]))
 		sliced = List.sublist(backing, { start: 1, len: List.len(spans) })
 		from_slice = Coverage.from_spans(sliced)
+		if Dict.get(Dict.insert(Dict.empty(), a, 1.U64), from_slice) != Ok(1) {
+			return Ok(Bool.False)
+		}
+		var iterated = []
+		for member in a {
+			iterated = iterated.append(member)
+		}
+		if iterated != Coverage.to_spans(a) {
+			return Ok(Bool.False)
+		}
 		if a != owned or a != shared or a != duplicated or a != from_slice {
 			return Ok(Bool.False)
 		}

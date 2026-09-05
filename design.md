@@ -401,6 +401,17 @@ Use nominal types for semantic distinctions, records for fixed data, and tag uni
 
 Keep common operations specialized over compact numeric values. Avoid a universal record containing optional parser fields, recurrence rules, zone strings, metadata, and cached endpoints. Rich types are appropriate at the expression boundary; small types are appropriate in the kernel.
 
+The implemented ordered scalar domains (`CivilDay`, `GregorianDate`,
+`PosixBoundary`, and `PosixDelta`) support Roc comparison operators within the
+same nominal type. Spans and coverage deliberately have no arbitrary total-order
+operator: use their temporal relations or set operations. Scalars, spans and
+canonical coverage expose hashing consistent with equality for dictionary/set
+keys; hash values are not a persistence format. Coverage iteration visits whole
+canonical spans in order, not microseconds. Domain-labelled inspection is for
+diagnostics, not a stable serialization contract. Numeric construction keeps
+named units, and arithmetic remains checked rather than hiding errors behind
+ordinary numeric operators.
+
 Immutable APIs should permit Roc's allocation reuse. Build results with capacity-aware accumulators and forward scans. Do not translate Elixir linked-list construction patterns mechanically. Sharing old lists can require copying, and a small slice can retain a large backing allocation; both behaviors belong in memory measurements.
 
 Batch construction and edits are the normal path for flat coverage. An isolated insertion may be linear. If a workload needs frequent persistent updates, add an appropriate collection or index without changing the meaning of coverage.

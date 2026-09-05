@@ -79,6 +79,14 @@ def main() -> None:
     heading("Checking domain and representation compile failures...")
     run([sys.executable, "scripts/test_compile_failures.py"])
 
+    heading("Checking public static dispatch...")
+    dispatch = "tests/static_dispatch/main.roc"
+    run([ROC, "check", dispatch])
+    run([ROC, dispatch])
+    dispatch_binary = (tmp_dir / "static-dispatch").resolve()
+    run([ROC, "build", dispatch, f"--output={dispatch_binary}"])
+    run([str(dispatch_binary)])
+
     heading("Running bounded semantic fuzz checks and regression replay...")
     run([sys.executable, "scripts/fuzz.py", "--operation", "all"])
 
