@@ -355,8 +355,8 @@ at most one matching position. Segment order produces sorted distinct results.
 implicitly. Work is O(n) in transitions with O(k) output for k matches, plus
 bounded calendar conversions. Synthetic direct-timeline enumeration anchors
 classification independently of inverse conversion; three-fold and finite-edge
-counterexamples are retained. Snapshot provenance remains separate implementation
-work.
+counterexamples are retained. Snapshot provenance is preserved by the
+resolved wrappers described below.
 
 `resolve_occurrence` requires an explicit policy: `RequireUnique`, `First`,
 `Last`, or `MatchingOffset(offset)`. First/last refer to chronological order
@@ -417,6 +417,28 @@ flowchart TD
 ```
 
 Arrows here point from a consumer to its dependency. The application acquires clock readings and interpretation data and supplies them to the library. The core has no dependency on the application, adapters, or interpretation providers. Providers are explicit data and operations, not a global registry. Their exact Roc signatures should allow specialization and avoid repeated dynamic dispatch in inner loops.
+
+`ResolvedBoundary` stores a validated occurrence with its original local label,
+explicit occurrence policy, applied offset and exact immutable `ZoneRules`.
+`ResolvedSelection` stores complete coverage with its original local boundaries
+and exact rules. Their constructors invoke the existing resolution operations;
+callers cannot pair an arbitrary result with unrelated interpretation evidence.
+Result accessors read stored values and never look up offsets or re-resolve.
+`reresolve` explicitly applies new rules to the original source and policy,
+returning a new snapshot or the normal structured error. A newly conflicting
+offset assertion remains a conflict rather than silently changing the policy.
+
+Boundary `same_position` and selection `same_extent` compare stored compatible
+POSIX results independently of provider metadata. Snapshots intentionally have
+no implied equality between their complete provenance records. They retain rule
+contents even when callers reuse a name/version for different data. No cache
+keys or content hashes are inferred from those labels. Snapshot inspection uses
+bounded semantic previews and does not walk the rule table or re-resolve.
+Immutable rule/list storage can be shared; keeping a snapshot can retain its
+entire source rule table. No exact allocation or retained-memory claim is made
+without R15 measurement. Constructors cost the underlying resolution plus one
+offset lookup for boundary provenance; result access is constant work, while
+extent comparison has the coverage equality cost.
 
 Resolved values are snapshots of a particular interpretation. Updating zone or calendar data does not mutate their meaning. Re-resolving an expression is a distinct operation. Caches must be tied to the source description, relevant policies, and provider identity/version. No unbounded global cache is required by the library.
 

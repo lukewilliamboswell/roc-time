@@ -9,6 +9,8 @@ package
 		LocalDateTime,
 		FixedOffset,
 		ZoneRules,
+		ResolvedBoundary,
+		ResolvedSelection,
 		GregorianDate,
 		JulianDate,
 		PosixBoundary,

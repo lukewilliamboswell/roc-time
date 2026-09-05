@@ -4,11 +4,43 @@ import Coverage
 import FixedOffset
 import LocalDateTime
 import PosixBoundary
+import ResolvedBoundary
+import ResolvedSelection
 import PosixSpan
 import ZoneRules
 
 ## Independent bounded timeline enumeration for R07 classification.
 ZoneRulesTests :: [].{
+	expect {
+		span = PosixSpan.new(point(-10000000000), point(10000000000))?
+		old_rules = ZoneRules.new_bounded("Synthetic/Changed", "v1", span, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 3600 })?
+		# Deliberately reuse the same name/version with different contents:
+		# metadata is not a substitute for retaining the actual immutable rules.
+		new_rules = ZoneRules.new_bounded("Synthetic/Changed", "v1", span, FixedOffset.from_seconds(3600), [], { minimum: 0, maximum: 3600 })?
+		other_version = ZoneRules.new_bounded("Synthetic/Changed", "v2", span, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 3600 })?
+		local = local_label(0)?
+		original = ResolvedBoundary.resolve(old_rules, local, RequireUnique)?
+		changed = ResolvedBoundary.reresolve(original, new_rules)?
+		equivalent = ResolvedBoundary.reresolve(original, other_version)?
+		end = local_label(1000000)?
+		selection = ResolvedSelection.resolve(old_rules, local, end)?
+		moved = ResolvedSelection.reresolve(selection, new_rules)?
+		same = ResolvedSelection.reresolve(selection, other_version)?
+		original_span = PosixSpan.new(point(0), point(1000000))?
+		moved_span = PosixSpan.new(point(-3600000000), point(-3599000000))?
+		selection_valid = ResolvedSelection.coverage(selection) == Coverage.from_spans([original_span]) and
+			ResolvedSelection.coverage(moved) == Coverage.from_spans([moved_span]) and
+				ResolvedSelection.same_extent(selection, same) and !ResolvedSelection.same_extent(selection, moved)
+		selection_valid and ResolvedBoundary.boundary(original) == point(0) and
+			ResolvedBoundary.boundary(changed) == point(-3600000000) and
+				!ResolvedBoundary.same_position(original, changed) and
+					ResolvedBoundary.same_position(original, equivalent) and
+						ResolvedBoundary.source(changed) == local and
+							ResolvedBoundary.offset(original) == FixedOffset.from_seconds(0) and
+								ZoneRules.offset_at(ResolvedBoundary.rules(original), point(0)) == Ok(FixedOffset.from_seconds(0)) and
+									ZoneRules.offset_at(ResolvedBoundary.rules(changed), point(0)) == Ok(FixedOffset.from_seconds(3600))
+	}
+
 	expect {
 		# Synthetic dateline move: the whole local epoch day is skipped.
 		span = PosixSpan.new(point(-259200000000), point(259200000000))?

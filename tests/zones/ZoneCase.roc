@@ -7,6 +7,8 @@ import time.LocalDateTime
 import time.PosixBoundary
 import time.PosixSpan
 import time.ZoneRules
+import time.ResolvedBoundary
+import time.ResolvedSelection
 
 ZoneCase := { number : I64, first : I32, second : I32 }.{
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(ZoneCase)
@@ -85,6 +87,27 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		}
 		for occurrence in expected {
 			seconds = I64.div_trunc_by(input.number - PosixBoundary.to_microseconds(occurrence), 1000000).to_i32_wrap()
+			snapshot = match ResolvedBoundary.resolve(rules, local, MatchingOffset(FixedOffset.from_seconds(seconds))) {
+				Ok(value) => value
+				Err(_) => crash "valid snapshot rejected"
+			}
+			if ResolvedBoundary.boundary(snapshot) != occurrence or ResolvedBoundary.source(snapshot) != local {
+				crash "snapshot lost resolution evidence"
+			}
+			updated = ResolvedBoundary.reresolve(snapshot, make_rules(0, 0))
+			if seconds == 0 {
+				match updated {
+					Ok(value) => if ResolvedBoundary.boundary(value) != point(input.number) {
+						crash "snapshot re-resolution wrong"
+					}
+					Err(_) => crash "valid re-resolution rejected"
+				}
+			} else {
+				match updated {
+					Err(OffsetConflict) => {}
+					_ => crash "re-resolution discarded offset policy"
+				}
+			}
 			if ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(seconds))) != Ok(occurrence) {
 				crash "asserted offset chose wrong occurrence"
 			}
@@ -112,6 +135,13 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		selected = match ZoneRules.select(rules, local, LocalDateTime.new(end_date, end_clock)) {
 			Ok(value) => value
 			Err(_) => crash "complete local selection rejected"
+		}
+		snapshot = match ResolvedSelection.resolve(rules, local, LocalDateTime.new(end_date, end_clock)) {
+			Ok(value) => value
+			Err(_) => crash "complete selection snapshot rejected"
+		}
+		if ResolvedSelection.coverage(snapshot) != selected {
+			crash "selection snapshot changed coverage"
 		}
 		var probe_second = -10.I64
 		while probe_second < 10 {
