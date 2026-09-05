@@ -14,6 +14,12 @@ Replacing that propagation with explicit `Ok(value)` / `Err(OutOfRange)` matchin
 returns the expected success under the interpreter too. CalendarArithmetic uses
 that equivalent explicit mapping without changing its public error behavior.
 
+The [room example](../../../examples/coverage/main.roc) also needs explicit
+matching when propagating `Availability.report`'s `OutOfRange` error into the
+app's union containing `DuplicateId(Str)`. With `?`, the interpreter reports
+`DuplicateId("")` for a successful report; native execution succeeds. Verify
+both execution paths before removing that mapping.
+
 The code requires neither a clock nor an operating-system time service. This
 reproducer is retained for a future compiler-pin update; no upstream report has
 been sent. Do not remove the explicit mapping based on typechecking alone.

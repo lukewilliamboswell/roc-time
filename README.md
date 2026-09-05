@@ -23,7 +23,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 
 | Application | Demonstrates |
 | --- | --- |
-| [Room availability](examples/coverage/main.roc) | Subtract overlapping bookings from opening hours and report the remaining windows |
+| [Room availability](examples/coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |

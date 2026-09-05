@@ -1,6 +1,6 @@
 # Temporal property targets
 
-The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, `tests/clock/main.roc`, `tests/offsets/main.roc`, and `tests/zones/main.roc`
+The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, `tests/clock/main.roc`, `tests/offsets/main.roc`, `tests/zones/main.roc`, and `tests/events/main.roc`
 import the real public package and the content-addressed
 [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0).
 `dependency.json` records the release commit and independently verified SHA-256.
@@ -23,6 +23,7 @@ decoders, and the named-case replay checks validate that contract.
 | `calendars-v1` | R06: full Julian provider coordinates with endpoint/epoch bias; cross-calendar shared-day equality vs description identity, Gregorian overlap range errors, Julian four-year periodicity, unsupported-name rejection, local calendar conversion preserving clock labels and distinguishing position from description. Independent generated Julian oracle modules anchor the conversion algorithm. |
 | `clock-v1` | R01/R07/R08: numeric positions from -1 through 86400000000; explicit range errors, field reconstruction, microsecond adjacency and ordering. An exhaustive field-counter oracle independently checks all 86,400 seconds at three fractional positions. |
 | `offsets-v1` | R01/R07/R08: full I64 POSIX coordinates with limit bias and full I32 offsets; both calendar projections, exact round trips, explicit offset sign and final range errors; immutable rule lookup against an independent step-function model, including excluded validity endpoints. RFC 3339 section 4.2 supplies a separate sign-convention fixture. |
+| `events-v1` | R10: up to twelve spans with source-order U64 identities, bounded numeric starts/widths; independent cell membership verifies contributor partitions, coverage projection and disconnected clipping, with duplicate-ID rejection and retained/shared source entries. |
 | `zones-v1` | R07: two synthetic transitions imported through the structural database adapter, offsets -2 through 2 seconds, local labels within a complete finite rule domain and arbitrary microsecond fractions; classification, explicit occurrence policies, snapshot provenance/re-resolution and half-second selection membership compared with independent timeline-cell enumeration. Fixed fixtures add three-occurrence folds, a skipped local day and incomplete-domain errors. |
 
 Bounds apply before production calls. None of the targets discards expected

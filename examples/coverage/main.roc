@@ -19,13 +19,18 @@ main! = |_args| {
 	available = Availability.from_bookings(
 		{ start: local(9, 0)?, end: local(17, 0)?, offset: utc },
 		[
-			{ start: local(12, 0)?, end: local(13, 0)?, offset: FixedOffset.from_seconds(7200) },
-			{ start: local(10, 30)?, end: local(12, 0)?, offset: utc },
+			{ id: "Design workshop", window: { start: local(12, 0)?, end: local(13, 0)?, offset: FixedOffset.from_seconds(7200) } },
+			{ id: "Project review", window: { start: local(10, 30)?, end: local(12, 0)?, offset: utc } },
 		],
 	)?
 	echo!("Room availability on 2026-06-15\n")
 	echo!("Opening: 09:00–17:00 UTC; bookings: 12:00–13:00 +02:00 and 10:30–12:00 UTC\n")
-	for line in Availability.report(available)? {
+	# Explicit matching avoids the pinned interpreter's result-widening defect.
+	lines = match Availability.report(available) {
+		Ok(value) => value
+		Err(OutOfRange) => return Err(OutOfRange)
+	}
+	for line in lines {
 		echo!("${line}\n")
 	}
 	Ok({})

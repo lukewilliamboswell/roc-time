@@ -17,5 +17,6 @@ package
 		PosixSpan,
 		PosixDelta,
 		Coverage,
+		EventCollection,
 	]
 	{}

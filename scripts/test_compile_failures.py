@@ -30,6 +30,7 @@ def main() -> None:
         "civil_as_posix": ["first argument", "CivilDay", "PosixBoundary"],
         "delta_as_boundary": ["first argument", "PosixDelta", "PosixBoundary"],
         "raw_integer_as_boundary": ["first argument", "I64", "PosixBoundary"],
+        "forge_events": ["annotation says", "EventCollection(U64)", "List(_a)"],
         "forge_span": ["annotation says", "PosixSpan", "{ end: PosixBoundary, start: PosixBoundary }"],
         "read_span_representation": ["not a record", "PosixSpan", "start field"],
     }
