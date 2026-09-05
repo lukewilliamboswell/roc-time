@@ -112,7 +112,14 @@ def run_example_checks(examples: list[Path]) -> None:
 
 def run_example_apps(examples: list[Path]) -> None:
     for example in examples:
-        run([ROC, example.name, "--no-cache"], cwd=example.parent)
+        result = run([ROC, example.name, "--no-cache"], cwd=example.parent)
+        check_output(example, result.stdout)
+
+
+def check_output(example: Path, actual: str) -> None:
+    expected = ROOT / "tests" / "examples" / f"{example.parent.name}.txt"
+    if expected.exists() and actual != expected.read_text(encoding="utf-8"):
+        raise SystemExit(f"Unexpected output from {example.parent.name}:\n{actual}")
 
 
 def build_and_run_examples(examples: list[Path], build_dir: Path) -> None:
@@ -122,7 +129,8 @@ def build_and_run_examples(examples: list[Path], build_dir: Path) -> None:
     for example in examples:
         output = build_dir / f"{example.parent.name}{exe_suffix}"
         run([ROC, "build", example.name, f"--output={output}", "--no-cache"], cwd=example.parent)
-        run([str(output)])
+        result = run([str(output)])
+        check_output(example, result.stdout)
 
 
 def main() -> None:

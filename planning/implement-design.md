@@ -4,7 +4,7 @@ Objective: satisfy [design requirements R01–R16](../design.md#acceptance-requi
 
 ## Remaining deliverables and dependencies
 
-1. Complete application-supplied zone replacement examples and remaining provider resource/portability evidence (R07–R09, R15–R16).
+1. Complete remaining provider resource/portability evidence (R07–R09, R15–R16).
 2. Add stateful recurrence, a declared RFC profile, candidate/output budgets and resumptions (R11–R12). Preserve series state across windows; depend on calendar and zone interpretation rather than duplicating them.
 3. Add resolution-bearing descriptions, uncertain endpoint knowledge and component qualifications before standards adapters (R13–R14). Keep symbolic range distinct from finite materialization. Separate stable month identity and provider capabilities before extending beyond Gregorian/Julian calendar shapes.
 4. Implement shared semantic adapters and versioned persistence, including IXDTF offset assertions and presentation annotations. Declare edition/profile support separately for recognition, semantic preservation, interpretation and serialization.
@@ -16,7 +16,6 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 ## Zone database decisions and acceptance
 
 - Measure remaining provider construction, retained runtime data and supported Wasm costs for core-only, static one-zone, dynamic global-name and generated-subset workloads. Establish whether entirely unused URL dependencies are acquired; source and binary elimination are separate concerns.
-- Add an application-supplied provider replacement example, including an explicit rules update that leaves prior snapshots unchanged. Keep the ordinary companion example focused on named-zone usage.
 - If introducing subset packs, state their selection profile and distinguish omitted names from unknown identifiers. Do not imply subset support through an undocumented filter.
 
 ## Outstanding evidence and external inputs

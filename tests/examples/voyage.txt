@@ -1,0 +1,4 @@
+Research voyage: briefing on 2026-07-01 at 12:00 ship time
+Saved booking (itinerary-1): 2026-07-01 11:00 UTC
+Revised itinerary (itinerary-2): 2026-07-01 12:00 UTC
+The saved booking remains unchanged; adopting the revised time is an application decision.

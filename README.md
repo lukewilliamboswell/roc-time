@@ -27,6 +27,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |
+| [Voyage briefing](examples/voyage/main.roc) | Supply a ship's clock schedule and review a rules update while retaining the saved booking |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:
@@ -37,6 +38,7 @@ roc examples/sample_windows/main.roc
 roc examples/invoice/main.roc
 roc examples/calendar_conversion/main.roc
 roc examples/staffing/main.roc
+roc examples/voyage/main.roc
 ```
 
 The availability example resolves dated bookings with explicit offsets before
