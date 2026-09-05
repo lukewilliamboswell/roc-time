@@ -62,7 +62,29 @@ Coverage :: [Spans(List(PosixSpan))].{
 	to_hash = |Spans(items), hasher| items.to_hash(hasher)
 
 	to_inspect : Coverage -> Str
-	to_inspect = |Spans(items)| "Coverage(${Str.inspect(items)})"
+	to_inspect = |Spans(items)| {
+		count = List.len(items)
+		var index = 0.U64
+		var preview = ""
+		# A fixed four-member budget; no full-list traversal or width calculation.
+		while index < count and index < 4 {
+			separator = if index == 0 {
+				""
+			} else {
+				", "
+			}
+			preview = "${preview}${separator}${Str.inspect(at(items, index))}"
+			index = index + 1
+		}
+		omitted = if count > index {
+			", omitted=${(count - index).to_str()}"
+		} else {
+			""
+		}
+		"Coverage(members=${count.to_str()}, preview=[${preview}]${omitted})"
+	}
+
+	expect Str.inspect(empty) == "Coverage(members=0, preview=[])"
 
 	is_eq : Coverage, Coverage -> Bool
 	is_eq = |Spans(a), Spans(b)| a == b

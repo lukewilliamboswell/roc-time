@@ -192,8 +192,10 @@ that evidence. No current implementation or Tempo claim closes these obligations
 ## Inspection and explanation follow-through
 
 Follow the enduring design contract for concise static-dispatch inspection and
-separate detailed semantic explanation. Implement bounded coverage previews,
-then extend typed semantic facts with resolution-bearing descriptions and
+separate detailed semantic explanation. Coverage previews now inspect at most four spans and report member/omitted
+counts without scanning the remainder or calculating width. Public dispatch
+checks exercise 10,000-member output bounds and a span whose width overflows.
+Extend typed semantic facts with resolution-bearing descriptions and
 interpretation snapshots as those layers land. Do not create a second resolver
 or infer walking granularity. The masked-year, uncertain-endpoint, fold/skip,
 missing-context and limited-result acceptance cases remain required future work.

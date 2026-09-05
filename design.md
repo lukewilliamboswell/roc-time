@@ -707,8 +707,11 @@ work/output limits; report truncation separately from semantic evaluation
 completeness. Cost is bounded by visited description/result nodes and rendered
 text, not the number of instants or potential occurrences denoted. Exact totals
 may be shown when already available; otherwise say they were not computed.
-The current full-list `Coverage.to_inspect` still needs this bounded-preview
-implementation. Locale and terminal/HTML styling are explicit rendering choices;
+`Coverage.to_inspect` now shows at most four canonical spans, an O(1) member
+count and an explicit omitted count. It indexes only those preview members; it
+does not scan the remainder, calculate width or materialize a detached full list.
+Its scalar span previews preserve both exact I64 endpoints. Nested expression
+and embedded-text budgets remain requirements for future types. Locale and terminal/HTML styling are explicit rendering choices;
 the default diagnostic needs neither ambient locale nor terminal capability.
 
 Tempo provides useful precedent: its separate

@@ -66,6 +66,23 @@ DispatchChecks :: [].{
 			Str.inspect(next) != "GregorianDate(0, 1, 1)" {
 			return Err(Failed)
 		}
+		var many = []
+		var index = 0.I64
+		while index < 10000 {
+			many = many.append(PosixSpan.new(PosixBoundary.from_microseconds(index * 2), PosixBoundary.from_microseconds(index * 2 + 1))?)
+			index = index + 1
+		}
+		large = Coverage.from_spans(many)
+		text = Str.inspect(large)
+		if !text.contains("members=10000") or !text.contains("omitted=9996") or
+			text.contains("[8, 9)") or !text.contains("[6, 7)") or text.count_utf8_bytes() > 600 {
+			return Err(Failed)
+		}
+		# Debugging must not require a representable accumulated width.
+		wide = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+		if !Str.inspect(Coverage.from_spans([wide])).contains("9223372036854775807") {
+			return Err(Failed)
+		}
 		Ok({})
 	}
 }
