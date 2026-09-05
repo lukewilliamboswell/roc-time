@@ -7,6 +7,12 @@ import JulianDate
 CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 	Fields : { year : I64, month : U8, day : U8 }
 
+	## Preserve an already validated date and its calendar without revalidation.
+	from_gregorian : GregorianDate -> CalendarDate
+	from_gregorian = |date| Gregorian(date)
+	from_julian : JulianDate -> CalendarDate
+	from_julian = |date| Julian(date)
+
 	from_fields : Calendar, Fields -> Try(CalendarDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
 	from_fields = |calendar, fields| match calendar {
 		Gregorian => match GregorianDate.from_fields(fields) {

@@ -26,6 +26,14 @@ CalendarCase := { number : I64 }.{
 	check : CalendarCase -> Fuzz.Outcome
 	check = |input| {
 		coordinate = CivilDay.from_day_number(input.number)
+		validated = match JulianDate.from_civil_day(coordinate) {
+			Ok(value) => value
+			Err(_) => crash "Julian fixture range"
+		}
+		preserved = CalendarDate.from_julian(validated)
+		if CalendarDate.to_civil_day(preserved) != coordinate or CalendarDate.calendar(preserved) != Julian {
+			crash "Validated date conversion changed coordinate or calendar"
+		}
 		julian = match CalendarDate.from_civil_day(Julian, coordinate) {
 			Ok(date) => date
 			Err(_) => crash "R06 supported Julian coordinate rejected"
