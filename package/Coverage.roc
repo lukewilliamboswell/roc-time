@@ -4,6 +4,33 @@ import PosixSpan
 
 ## Canonical finite coverage on the POSIX microsecond axis.
 ## Members are nonempty, sorted, disjoint, and do not touch.
+##
+## Example
+##
+## Combine occupied spans, then subtract them from a finite availability window.
+## Overlapping or touching spans coalesce. Keep bookings in `EventCollection`
+## when their individual identities matter; coverage deliberately forgets them.
+##
+## ```roc
+## import time.Coverage
+## import time.PosixSpan
+## import time.PosixDelta
+##
+## expect {
+##     window = PosixSpan.from_seconds(0, 10, RejectSubmicrosecond)?
+##     busy = Coverage.from_spans([
+##         PosixSpan.from_seconds(2, 4, RejectSubmicrosecond)?,
+##         PosixSpan.from_seconds(4, 6, RejectSubmicrosecond)?,
+##     ])
+##     free = Coverage.difference(Coverage.from_spans([window]), busy)
+##     expected_width = PosixDelta.from_microseconds(6000000)
+##     Coverage.member_count(busy) == 1 and
+##         Coverage.member_count(free) == 2 and
+##         Coverage.coordinate_width(free) == Ok(expected_width)
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 Coverage :: [Spans(List(PosixSpan))].{
 	empty : Coverage
 	empty = Spans([])

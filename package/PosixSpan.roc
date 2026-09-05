@@ -2,6 +2,25 @@ import PosixBoundary
 import PosixDelta
 
 ## A finite, nonempty half-open span on the POSIX microsecond axis.
+##
+## Example
+##
+## Construct a half-open interval: the start belongs to it and the end does not.
+## Equal endpoints return `EmptySpan`; reversed endpoints return `ReversedBounds`.
+##
+## ```roc
+## import time.PosixBoundary
+## import time.PosixSpan
+##
+## expect {
+##     start = PosixBoundary.from_microseconds(0)
+##     end = PosixBoundary.from_microseconds(1000000)
+##     span = PosixSpan.new(start, end)?
+##     PosixSpan.contains(span, start) and !PosixSpan.contains(span, end)
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	new : PosixBoundary, PosixBoundary -> Try(PosixSpan, [EmptySpan, ReversedBounds, ..])
 	new = |start, end| {

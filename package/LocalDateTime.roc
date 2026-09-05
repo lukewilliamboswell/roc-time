@@ -4,6 +4,32 @@ import CivilDay
 import ClockTime
 
 ## A dated local label. A zone occurrence has not been selected or resolved.
+##
+## Example
+##
+## Combine a calendar date with a wall-clock label before choosing a timezone.
+## Construction alone does not resolve daylight-saving gaps or folds.
+##
+## ```roc
+## import time.GregorianDate
+## import time.CalendarDate
+## import time.ClockTime
+## import time.LocalDateTime
+##
+## expect {
+##     date = GregorianDate.from_fields({ year: 2025, month: 6, day: 12 })?
+##     clock = ClockTime.from_fields({
+##         hour: 9,
+##         minute: 30,
+##         second: 0,
+##         microsecond: 0,
+##     })?
+##     local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+##     ClockTime.to_fields(LocalDateTime.clock(local)).hour == 9
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 	new : CalendarDate, ClockTime -> LocalDateTime
 	new = |date, clock| { date, clock }

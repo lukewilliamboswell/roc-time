@@ -5,6 +5,39 @@ import GregorianDate
 ## Gregorian date-only series. Dates identify occurrences within this series;
 ## applications pair them with their own series ID. They are not POSIX instants.
 ## Native CalendarPattern defaults apply; this is not an RFC text adapter.
+##
+## Example
+##
+## A monthly rule anchored on the 31st skips months without that day.
+## Collect with explicit work and output limits. `Limited` carries the cursor
+## to resume; even reaching the exact output capacity does not prove completion.
+##
+## ```roc
+## import time.GregorianDate
+## import time.CalendarPattern
+## import time.DateRecurrence
+##
+## expect {
+##     start = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
+##     end = GregorianDate.from_fields({ year: 2025, month: 6, day: 1 })?
+##     rule = DateRecurrence.new(start, {
+##         pattern: CalendarPattern.defaults(Monthly),
+##         termination: Count(3),
+##         by_set_pos: [], inclusions: [], exclusions: [],
+##     })?
+##     cursor = DateRecurrence.cursor(rule, { start, end })?
+##     batch = DateRecurrence.Cursor.collect(cursor, {
+##         max_steps: 1000, max_buffered: 31, max_occurrences: 4,
+##     })?
+##     months = batch.dates.map(|date| GregorianDate.to_fields(date).month)
+##     months == [1.U8, 3, 5] and match batch.status {
+##         Complete => Bool.True
+##         Limited(_) => Bool.False
+##     }
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 DateRecurrence :: {
 	anchor : GregorianDate,
 	pattern : CalendarPattern,

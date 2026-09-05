@@ -1,0 +1,18 @@
+<article class="roc-time-overview">
+<h1>roc-time</h1>
+<p>Build date calculations, availability queries and bounded schedules with explicit calendar and time-zone choices.</p>
+<h2>Choose a starting point</h2>
+<ul>
+<li><strong>Civil dates:</strong> <a href="GregorianDate/">GregorianDate</a> validates dates; <a href="CalendarArithmetic/">CalendarArithmetic</a> makes month-end policy explicit.</li>
+<li><strong>Availability:</strong> <a href="PosixSpan/">PosixSpan</a> represents a nonempty interval; <a href="Coverage/">Coverage</a> combines intervals and finds uncovered time.</li>
+<li><strong>Local appointments:</strong> <a href="LocalDateTime/">LocalDateTime</a> combines a date and clock label; <a href="ZoneRules/">ZoneRules</a> interprets it with supplied data.</li>
+<li><strong>Schedules:</strong> <a href="DateRecurrence/">DateRecurrence</a> enumerates dates; <a href="TimedSchedule/">TimedSchedule</a> produces identified appointment spans.</li>
+<li><strong>Imported recurrence values:</strong> <a href="RfcDateRule/">RfcDateRule</a> supports a declared DATE-only RFC 5545 profile. Native timed constructors are separate.</li>
+</ul>
+<h2>Using the examples</h2>
+<p>Code blocks import modules through a package dependency named <code>time</code>. Add that name to your application's package header. The <a href="https://github.com/lukewilliamboswell/roc-time/tree/main/examples">example applications</a> show complete headers, effects and reporting. The <code>expect</code> lines demonstrate results; Roc runs them with <code>roc test</code>.</p>
+<p>Constructors return <code>Try</code> for invalid input. Inside a function returning <code>Try</code>, <code>?</code> forwards an error to its caller. Choose a policy explicitly when an operation can clamp a date, round precision or resolve an ambiguous clock label.</p>
+<h2>Dates, coordinates and evaluation limits</h2>
+<p>A civil date is not an instant. A local clock label needs an explicit offset or zone before it becomes a resolved boundary. Core calculations do not read the clock, use the machine's zone or download a database. Named zones can come from the optional <a href="https://github.com/lukewilliamboswell/roc-time/tree/main/tzdb">zone-data package</a>.</p>
+<p>Spans include their start and exclude their end. Calendar days and months differ from coordinate durations across clock changes. Recurrence batches distinguish <code>Complete</code> from <code>Limited</code>; keep and resume the returned cursor to preserve COUNT, exclusions and pending interpretation. Never treat a limited batch as the whole answer.</p>
+</article>

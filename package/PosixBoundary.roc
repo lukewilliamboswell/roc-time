@@ -2,6 +2,23 @@ import PosixDelta
 
 ## Exact POSIX coordinates: microseconds since 1970-01-01T00:00:00Z.
 ## Leap seconds are not representable on this axis.
+##
+## Example
+##
+## Use integer microseconds for exact coordinates, or explicitly select the
+## rounding policy when accepting decimal seconds. Zero is the Unix epoch; this
+## coordinate does not attach a display timezone.
+##
+## ```roc
+## import time.PosixBoundary
+##
+## expect {
+##     point = PosixBoundary.from_seconds(1.25, RejectSubmicrosecond)?
+##     PosixBoundary.to_microseconds(point) == 1250000
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 PosixBoundary :: [Micros(I64)].{
 
 	## Nearest rounding resolves exact ties to the even microsecond.

@@ -3,6 +3,26 @@ import CivilDay
 ## Proleptic Gregorian day, with astronomical years (0 means 1 BCE).
 ## Valid years are -2147483648 through 2147483647, inclusive.
 ## No timezone or resolved timeline is implied by a date.
+##
+## Example
+##
+## Create a date and read its fields. Invalid leap days return `InvalidDay`;
+## year zero and negative years use astronomical numbering.
+##
+## ```roc
+## import time.GregorianDate
+##
+## expect {
+##     date = GregorianDate.from_fields({ year: 2024, month: 2, day: 29 })?
+##     GregorianDate.to_fields(date).day == 29
+## }
+## expect {
+##     invalid = GregorianDate.from_fields({ year: 2025, month: 2, day: 29 })
+##     invalid == Err(InvalidDay)
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	Fields : { year : I64, month : U8, day : U8 }
 

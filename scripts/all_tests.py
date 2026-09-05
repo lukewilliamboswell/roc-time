@@ -105,7 +105,10 @@ def main() -> None:
         run([ROC, "check", str(example.relative_to(ROOT))])
 
     heading("Generating package docs...")
-    run([ROC, "docs", "package/main.roc", f"--output={docs_dir}"])
+    run([sys.executable, "scripts/docs.py", "0.0.0", "--docs-root", str(docs_dir)])
+
+    heading("Verifying documentation code examples...")
+    run([sys.executable, "scripts/test_doc_examples.py"])
 
     if sys.platform.startswith("win"):
         heading("Skipping package bundling on Windows.")

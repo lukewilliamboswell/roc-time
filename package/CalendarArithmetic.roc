@@ -3,6 +3,26 @@ import CivilDay
 import GregorianDate
 
 ## Gregorian arithmetic. No timezone resolution or recurrence is implied.
+##
+## Example
+##
+## For an invoice due one month after January 31, `Clamp` chooses February's
+## last day. `Reject` instead returns `InvalidDestination`; `Carry` carries excess
+## days into the following month. Recurrence rules use different skip semantics.
+##
+## ```roc
+## import time.GregorianDate
+## import time.CalendarArithmetic
+## import time.CalendarDelta
+##
+## expect {
+##     issued = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
+##     due = CalendarArithmetic.shift_day(issued, CalendarDelta.months(1), Clamp)?
+##     GregorianDate.to_fields(due) == { year: 2025, month: 2, day: 28 }
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 CalendarArithmetic :: [].{
 	Policy : [Reject, Clamp, Carry]
 

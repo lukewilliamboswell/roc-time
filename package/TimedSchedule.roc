@@ -15,6 +15,77 @@ import ZoneRules
 ## Identified appointment spans in source-label order. The window selects
 ## starts; duration may extend beyond it. IDs preserve the series and source.
 ## Start and end interpretation share one zone-work budget per call.
+##
+## Example
+##
+## Use this layer when each recurrence start should become an identified span.
+## `Coordinate` measures POSIX microseconds; `Calendar` applies calendar components,
+## resolves the end, then adds its coordinate tail. The window selects starts,
+## not every appointment overlapping that window.
+##
+## This example supplies a finite UTC rules snapshot. Applications using named
+## zones can pass rules from the optional zone-data package instead. For a complete
+## application with calendar-month durations and an extra booking, see
+## [equipment loans](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/equipment_loans).
+##
+## ```roc
+## import time.TimedSchedule
+## import time.TimedRecurrence
+## import time.TimedOccurrence
+## import time.CalendarPattern
+## import time.GregorianDate
+## import time.CalendarDate
+## import time.ClockTime
+## import time.LocalDateTime
+## import time.ZoneRules
+## import time.FixedOffset
+## import time.PosixSpan
+## import time.PosixBoundary
+## import time.PosixDelta
+##
+## expect {
+##     date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+##     end_date = GregorianDate.from_fields({ year: 1970, month: 1, day: 4 })?
+##     clock = ClockTime.from_microseconds_since_midnight(0)?
+##     start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+##     end = LocalDateTime.new(CalendarDate.from_gregorian(end_date), clock)
+##     validity = PosixSpan.from_seconds(-1, 345600, RejectSubmicrosecond)?
+##     rules = ZoneRules.new_bounded(
+##         "UTC", "fixed", validity,
+##         FixedOffset.from_seconds(0), [],
+##         { minimum: 0, maximum: 0 },
+##     )?
+##     rule = TimedRecurrence.new({ date, clock }, {
+##         calendar: CalendarPattern.defaults(Daily),
+##         clocks: { hours: [], minutes: [], seconds: [] },
+##         termination: Count(2),
+##         by_set_pos: [],
+##     })?
+##     duration = Coordinate(PosixDelta.from_microseconds(3600000000))
+##     schedule = TimedSchedule.new(
+##         42.U64, rule, { start, end }, duration,
+##         { rules, occurrence: RequireUnique, gap: RejectGap },
+##     )?
+##     work = {
+##         max_steps: 100, max_buffered: 1,
+##         max_zone_segments: 10, max_zone_candidates: 1,
+##     }
+##     result = TimedSchedule.collect(schedule, {
+##         work, max_occurrences: 3,
+##     })
+##     match result {
+##         Err(_) => Bool.False
+##         Ok(batch) => match batch.status {
+##             Complete => batch.occurrences.len() == 2
+##             Limited(_) => Bool.False
+##         }
+##     }
+## }
+## ```
+##
+## When a batch returns `Limited`, process its partial output and resume the returned
+## cursor with sufficient budgets. Increasing only the output cap does not fix a
+## work or buffer limit.
 TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrides : List(Override), starts : TimedRecurrence.Cursor, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, pending : [None, Some(TimedOccurrence.Cursor({ series : id, source : LocalDateTime }))] }.{
 	Override : { source : LocalDateTime, duration : TimedOccurrence.Duration }
 	Limits : TimedRecurrence.Limits

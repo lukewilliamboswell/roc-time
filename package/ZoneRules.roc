@@ -5,6 +5,47 @@ import PosixBoundary
 import PosixSpan
 
 ## Immutable finite rules supplied by the caller; no registry or host lookup.
+##
+## Example
+##
+## Supply rules explicitly: use `from_database` with the optional zone-data
+## package, or construct a bounded snapshot for an application's own clock schedule.
+## Offsets are local minus timeline in seconds. A rules snapshot only interprets
+## labels inside its declared validity; it never falls back to the machine's zone.
+##
+## For an ambiguous label, `RequireUnique` returns an error; `First`, `Last`, or
+## `MatchingOffset` select an occurrence. `classification_cursor` separates bounded
+## interpretation from choosing a result. `select` instead finds all coverage of a
+## local-label range, which may be disconnected.
+##
+## ```roc
+## import time.ZoneRules
+## import time.FixedOffset
+## import time.PosixSpan
+## import time.PosixBoundary
+## import time.GregorianDate
+## import time.CalendarDate
+## import time.ClockTime
+## import time.LocalDateTime
+##
+## expect {
+##     validity = PosixSpan.from_seconds(-86400, 86400, RejectSubmicrosecond)?
+##     rules = ZoneRules.new_bounded(
+##         "UTC", "fixed", validity,
+##         FixedOffset.from_seconds(0), [],
+##         { minimum: 0, maximum: 0 },
+##     )?
+##     date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+##     clock = ClockTime.from_microseconds_since_midnight(0)?
+##     local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+##     resolved = ZoneRules.resolve_occurrence(rules, local, RequireUnique)
+##     resolved == Ok(PosixBoundary.from_microseconds(0))
+## }
+## ```
+##
+## When a batch returns `Limited`, process its partial output and resume the returned
+## cursor with sufficient budgets. Increasing only the output cap does not fix a
+## work or buffer limit.
 ZoneRules :: {
 	name : Str,
 	version : Str,

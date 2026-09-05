@@ -74,6 +74,22 @@ def main() -> None:
     if completed.returncode != 0:
         raise SystemExit(completed.returncode)
 
+    # roc docs supplies navigation and API pages but no package introduction.
+    index = version_dir / "index.html"
+    page = index.read_text()
+    marker = '<div class="main-content">'
+    if page.count(marker) != 1:
+        raise SystemExit("Compiler docs layout changed; review landing-page insertion")
+    guide = (ROOT / "docs/overview.html").read_text()
+    page = page.replace(marker, marker + "\n" + guide, 1)
+    page = page.replace('<div class="index-decoration">', '<div class="index-decoration" style="display: none">', 1)
+    index.write_text(page)
+    for generated_page in version_dir.rglob("*.html"):
+        html = generated_page.read_text().replace("package Docs", "roc-time API")
+        html = re.sub(r'(<h1 class="pkg-full-name"><a href="[^"]*">)package(</a></h1>)',
+                      r'\1roc-time\2', html)
+        generated_page.write_text(html)
+
     (docs_root / "index.html").write_text(
         INDEX_TEMPLATE.format(repo=REPO_NAME, version=version), encoding="utf-8"
     )

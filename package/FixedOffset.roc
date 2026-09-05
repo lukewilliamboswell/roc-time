@@ -6,6 +6,28 @@ import LocalDateTime
 import PosixBoundary
 
 ## Explicit local-minus-POSIX offset in whole seconds. No named-zone rules.
+##
+## Example
+##
+## Offsets are local minus timeline, in whole seconds. A fixed offset does not
+## model daylight-saving transitions; use `ZoneRules` for named zones.
+##
+## ```roc
+## import time.FixedOffset
+## import time.PosixBoundary
+## import time.LocalDateTime
+## import time.ClockTime
+##
+## expect {
+##     local = FixedOffset.project(
+##         FixedOffset.from_seconds(3600),
+##         PosixBoundary.from_microseconds(0), Gregorian,
+##     )?
+##     ClockTime.to_fields(LocalDateTime.clock(local)).hour == 1
+## }
+## ```
+##
+## Examples assume a package dependency named `time`.
 FixedOffset :: [Seconds(I32)].{
 	from_seconds : I32 -> FixedOffset
 	from_seconds = |seconds| Seconds(seconds)

@@ -38,12 +38,23 @@ third-party Python dependencies.
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
 | `bundle.py` | Bundle `package/` into a distributable `.tar.zst` |
-| `docs.py` | Generate versioned docs into `www/<version>` |
+| `docs.py` | Generate API docs and the user landing guide into `www/<version>` |
+| `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
 | `test_bundle_examples.py` | Verify the examples against a bundled package served over localhost |
 | `update_example_urls.py` | Point the examples at a released bundle URL |
 
 Python tooling orchestrates compiler subprocesses and localhost serving for
 bundle verification.
+
+## API documentation
+
+API usage examples belong in module `##` comments, in fenced `roc` code blocks.
+Use complete imports through the `time` dependency and executable `expect`
+examples. `scripts/test_doc_examples.py` checks them together against the real
+package and runs in the default gate. The docs publisher adds
+`docs/overview.html` as the landing guide because the compiler-generated package
+index currently contains navigation and a logo only. Review generated API pages
+with `ROC=/path/to/pinned/roc python3 scripts/docs.py 0.1.0 --docs-root .roc-time-tmp/docs-review`.
 
 ## Tests
 
