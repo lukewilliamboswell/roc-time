@@ -36,6 +36,7 @@ At completion, move enduring decisions into `design.md` and useful verification 
 - Preserve recurring-series state across query windows and resumptions. Clamped calendar addition is not an implementation of RFC recurrence rules.
 - Public malformed data returns structured errors. Do not hide failures with invented dates, default spans, catch-all empty results, or unchecked casts. Use internal unchecked operations only under documented, tested invariants.
 - Review public types against Roc's static-dispatch conventions using the pinned compiler: equality/order, hashing, iteration, inspection and literals where their meaning is defined. Preserve domain distinctions and checked failures; operator convenience must not silently introduce overflow, units, an epoch or a timezone. Literal adapters must use real validated constructors/parsers, and serialization must preserve the semantic format rather than expose opaque backing records.
+- Keep `to_inspect` concise, semantic and bounded. Debug inspection must not resolve zones, enumerate recurrences or materialize selections. Detailed explanation uses shared semantic facts with explicit context, work limits and incomplete/unsupported outcomes; neither diagnostic prose nor display formatting is a persistence format. Follow [the design contract](design.md#inspection-explanation-and-presentation).
 - Unsupported feature scopes remain explicit. Do not claim all of ISO, EDTF, RRULE, leap-aware time, or Allen reasoning based on a narrower implementation.
 
 ## Examples and evidence

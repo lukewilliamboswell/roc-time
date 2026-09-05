@@ -657,6 +657,91 @@ Batch construction and edits are the normal path for flat coverage. An isolated 
 
 Effects remain at application boundaries. Reading the current time or loading zone data produces inputs for pure functions. Tests can supply those inputs directly, and the same core can serve native programs and Wasm applications.
 
+### Inspection, explanation and presentation
+
+Make temporal values understandable in a debugger through Roc's
+`to_inspect : T -> Str` hook. Inspection is a concise semantic diagnostic:
+identify the nominal domain, meaningful fields or expression kind, and relevant
+unresolved state. It must not expose only an opaque backing number or imply that
+a local label is already a timeline instant. Preserve exact seconds and
+microseconds in displayed scalar fields. The hook serves `Str.inspect` and
+debugging; verify the pinned compiler's actual `dbg` path when extending it.
+The pinned interpreter and native executable both dispatch `dbg` and
+`Str.inspect` through `PosixBoundary.to_inspect`; this is evidence for those
+paths, not an untested-backend guarantee.
+Inspection text is neither a stable interchange format nor necessarily a
+parseable literal.
+
+Provide a separate explicit explanation facility for callers asking what a
+description means and what further interpretation it needs. This is semantic
+help suitable for an interactive tool or application, distinct from localized
+date/time formatting and versioned serialization. The facility is **required
+future API**, not implemented by the existing inspection hooks; public names
+and concrete result types will be settled with its executable slice.
+
+Use one source of typed semantic facts for concise inspection and detailed
+explanation. Facts distinguish the original description and resolution,
+calendar/axis, qualifiers and their scope, endpoint knowledge, interpretation
+requirements, and any explicitly supplied resolution result and provenance.
+Renderers consume those facts rather than parse diagnostic prose or implement
+a second resolver. A shared fact visitor can emit only the requested summary;
+ordinary scalar inspection must not build a detailed explanation tree first.
+Keep this machinery outside compact endpoint storage and coverage inner loops.
+
+Context-free explanation describes the value as supplied. It may report
+intrinsic symbolic constraints, but must not materialize selections, enumerate
+recurrences, choose an occurrence, infer a timezone, or consult provider data.
+To explain an interpretation, accept a result bound to its original description
+and explicit immutable context, or use a separately named bounded analysis
+operation which invokes the normal resolver. Reject mismatched supplied evidence.
+Report missing context, unsupported interpretation, out-of-range results,
+inconsistent evidence and limited evaluation explicitly; none may disappear as
+an omitted span or be described as empty coverage. A complete empty preimage
+remains a successful, explainable result. Formatting a supplied result does not
+re-resolve it.
+
+Inspection uses documented fixed preview limits for collection members, nested
+expressions and embedded text, with visible truncation. It must not walk an
+entire collection merely to format a prefix. Detailed explanation accepts finite
+work/output limits; report truncation separately from semantic evaluation
+completeness. Cost is bounded by visited description/result nodes and rendered
+text, not the number of instants or potential occurrences denoted. Exact totals
+may be shown when already available; otherwise say they were not computed.
+The current full-list `Coverage.to_inspect` still needs this bounded-preview
+implementation. Locale and terminal/HTML styling are explicit rendering choices;
+the default diagnostic needs neither ambient locale nor terminal capability.
+
+Tempo provides useful precedent: its separate
+[explanation structure and renderers](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/lib/explain.ex)
+and [inspection implementation](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/lib/inspect.ex)
+serve different uses. We retain that separation while requiring explicit
+interpretation and bounded work. Explanation must not introduce Tempo's implicit
+iteration granularity into roc-time's explicit walk contract.
+
+Future executable acceptance cases (R01–R02, R07–R09, R12–R16):
+
+- A Gregorian masked year `156X` reports the years 1560–1569 as admissible
+  values, retaining its unknown digit. Any `[1560-01-01, 1570-01-01)` summary
+  is labelled a civil-domain envelope of possibilities, not proof that every
+  year occurred or resolved timeline coverage. It claims no monthly iteration
+  unless a walk with that step was explicitly supplied. A noncontiguous mask
+  cannot be explained as its filled envelope.
+- Minute and second descriptions with the same start remain distinguishable;
+  fractional resolutions `.12` and `.120` remain distinguishable. Inspecting
+  `LocalDateTime` does not invent source resolution discarded by that type.
+- A local selection in a fold explains all supplied coverage components; a
+  boundary appointment retains its unresolved occurrence choice. A proven
+  skipped date, missing rules and a limited evaluation produce different text
+  and typed explanation states.
+- An approximate qualifier invents no tolerance. Unknown endpoints differ
+  from unbounded endpoints; alternatives differ from all-of coverage. An
+  unbounded recurrence can be inspected and explained without expansion.
+- A large coverage value and a deeply nested expression produce bounded,
+  visibly abbreviated diagnostics through direct inspection and actual `dbg`.
+  Rendering existing snapshots performs no provider lookup; plain and styled
+  renderers agree on the underlying facts. Tests assert these semantic facts
+  separately from optional prose snapshots.
+
 ## Performance objectives
 
 These are engineering targets and review criteria, not claims about the placeholder implementation. Let `n` and `m` be input span counts and `k` the number of output spans or matches. Complexity assumes compatible resolved domains and constant-cost endpoint comparison.

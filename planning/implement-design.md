@@ -189,6 +189,18 @@ interpretation, formatting and persistence. Full ISO normative clauses remain an
 input needed for clause-level conformance; the public catalogue alone is not
 that evidence. No current implementation or Tempo claim closes these obligations.
 
+## Inspection and explanation follow-through
+
+Follow the enduring design contract for concise static-dispatch inspection and
+separate detailed semantic explanation. Implement bounded coverage previews,
+then extend typed semantic facts with resolution-bearing descriptions and
+interpretation snapshots as those layers land. Do not create a second resolver
+or infer walking granularity. The masked-year, uncertain-endpoint, fold/skip,
+missing-context and limited-result acceptance cases remain required future work.
+Pinned interpreter and native probes confirmed `dbg` uses the current boundary
+inspection hook; native compilation emitted the expected optimized-`dbg` warning.
+This does not establish future expression behavior or untested backend support.
+
 ## Unresolved decisions
 
 Calendar/provider ranges, calendar interoperability scope, zone policy signatures, RFC adapter feature profile, persistence schema and supported reasoning profile must be settled with evidence as their slices land. Allocation/layout and supported Wasm claims require measurements on the pinned compiler.
