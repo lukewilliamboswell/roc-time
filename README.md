@@ -5,7 +5,7 @@ A date and time package for [Roc](https://www.roc-lang.org).
 > [!NOTE]
 > This package is a work in progress. Its initial kernel provides exact POSIX
 > boundaries, coordinate displacements, nonempty half-open spans, and canonical
-> coverage algebra, proleptic Gregorian civil-day conversion, and explicit
+> coverage algebra, proleptic Gregorian/Julian civil-day conversion, and explicit Gregorian
 > calendar arithmetic. Zone interpretation and the remaining design are still being implemented.
 
 “POSIX” names a time scale here, not an operating-system requirement: its
@@ -29,6 +29,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | Application | Demonstrates |
 | --- | --- |
 | [Room availability](examples/coverage/main.roc) | Subtract overlapping bookings from opening hours and report the remaining windows |
+| [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
@@ -38,6 +39,7 @@ Run them with the pinned compiler:
 roc examples/coverage/main.roc
 roc examples/sample_windows/main.roc
 roc examples/invoice/main.roc
+roc examples/calendar_conversion/main.roc
 ```
 
 The availability and recorder examples use explicitly resolved POSIX coordinates.

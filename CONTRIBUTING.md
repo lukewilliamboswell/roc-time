@@ -52,7 +52,7 @@ independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
 At least one oracle is required for temporal implementation work. Run
-`ROC=/path/to/pinned/roc python3 scripts/oracles.py` to compare 4,096 Gregorian
+`ROC=/path/to/pinned/roc python3 scripts/oracles.py` to compare 4,096 Gregorian and 4,096 Julian
 observations against checked-in generated Roc expectations. The full test command includes this
 gate. Expectations come from CPython 3.14.3 `datetime` within years 1–9999 and a
 400-year table model beyond that range; model-derived BCE/extreme-year cases
@@ -69,14 +69,17 @@ missing/duplicate case identities, driver failures and budget overruns fail the 
 live reference service. Each stage is limited to 120 seconds and 1 MiB of output.
 Reports and generated inputs stay under `.roc-time-tmp/oracles/`.
 
-Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml`.
+Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
+`tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
+Howard Hinnant’s attributed public-domain March-based formulas, independent of
+production January counting; the 1582 equal-day fixture anchors the epochs.
 To deliberately refresh expectations, use CPython 3.14.3 and run
 `python3 scripts/oracles.py --refresh`, then review the generated Roc module and manifest diff.
 Generation checks the table model against all 3,652,059 dates in Python's domain.
 Never regenerate expected values from roc-time output or bless a mismatch.
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
-neighboring type modules. The precision, span, coverage, Gregorian and arithmetic roots
+neighboring type modules. The precision, span, coverage, Gregorian, arithmetic and calendar-interoperability roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in `.roc-version`:

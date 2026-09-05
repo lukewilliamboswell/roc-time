@@ -55,10 +55,24 @@ The pinned full integration command passed on 2026-09-05, including both static-
 dispatch execution paths, all five 10,000-run campaigns, the external conversion
 oracle, and all three bundled applications.
 
-Complete calendar interoperability evidence (R06): settle the next supported
-calendar profile, add independently sourced equal-day fixtures through the shared
-civil-day convention, and make unsupported calendar/range outcomes explicit.
-Gregorian conversion and ordered arithmetic now have their initial R05 evidence.
+Implement immutable zone fixtures and resolution (R07–R09), keeping boundary
+appointments distinct from local selections. Include independent transition
+evidence, provider validity limits and provenance; never infer host zone data.
+
+The initial R06 profile now includes proleptic Julian conversion across the full
+signed I32 year domain, explicit Gregorian/Julian dispatch, and calendar-tagged
+day descriptions. Equal extents remain distinct from equal descriptions.
+The reform-date anchor is sourced from Hinnant; 4,096 generated Julian oracle
+observations use his independent March-based formulas against production's
+January counting and binary-search inverse. Unknown calendars and destination
+range failures remain explicit. The archive example preserves its source date
+while displaying the corresponding Gregorian catalogue date.
+
+Verified on 2026-09-05 with the full pinned integration command: six semantic
+targets completed 10,000 runs each, both 4,096-case oracle drivers passed, and
+all four applications passed interpreted and native bundle execution. Formatting
+and `git diff --check` passed. This establishes the supported calendar profile,
+not support for context-dependent calendars, historical regional reforms or zones.
 
 Conversion is implemented in `CivilDay` and `GregorianDate`, separating the
 shared day coordinate from validated Gregorian descriptions. The provider
@@ -78,8 +92,8 @@ checks. The invoice application uses an explicit clamp business rule. Generated
 checks compare all three policies with a bounded field-walking oracle; fixed
 cases distinguish component order, a single two-month destination, noninvertible
 clamping and negative-year rollover. POSIX displacement is rejected as a calendar
-delta by an intended-diagnostic compile-failure check. R06 remains incomplete;
-keep unsupported calendar dispatch explicit as providers land.
+delta by an intended-diagnostic compile-failure check. Calendar arithmetic remains
+Gregorian-specific; additional providers do not imply arithmetic support.
 
 Interpreter investigation found a pinned-compiler defect in `?` propagation from
 a checked integer result into an error union containing a record payload. Native
@@ -114,7 +128,8 @@ scan reuses production-normalized members and overlap predicates, so that scan
 establishes search agreement rather than independent overlap correctness.
 
 Extend oracle evidence as arithmetic and other temporal capabilities land;
-no cross-calendar, zone, recurrence or resource evidence is implied by this gate.
+the separate Julian gate supplies cross-calendar conversion evidence; neither
+gate implies zone, recurrence or resource evidence.
 
 ## Unresolved decisions
 

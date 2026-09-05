@@ -1,0 +1,69 @@
+import fuzz.Fuzz
+import time.Calendar
+import time.CalendarDate
+import time.CivilDay
+import time.JulianDate
+
+# R06: full Julian coordinate range, overlap with Gregorian and explicit errors.
+CalendarCase := { number : I64 }.{
+	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(CalendarCase)
+	generator_for = |_| Fuzz.map(
+		Fuzz.map2(
+			Fuzz.u8_in(0, 4),
+			Fuzz.u64_in(0, 1568736804863),
+			|choice, value| match choice {
+				0 => -784369121962.I64
+				1 => 784367682901.I64
+				2 => 0.I64
+				_ => U64.to_i64_wrap(value) - 784369121962
+			},
+		),
+		|number| { number: number },
+	)
+
+	check : CalendarCase -> Fuzz.Outcome
+	check = |input| {
+		coordinate = CivilDay.from_day_number(input.number)
+		julian = match CalendarDate.from_civil_day(Julian, coordinate) {
+			Ok(date) => date
+			Err(_) => crash "R06 supported Julian coordinate rejected"
+		}
+		if CalendarDate.to_civil_day(julian) != coordinate or CalendarDate.calendar(julian) != Julian {
+			crash "R06 Julian round trip or calendar identity"
+		}
+		if CalendarDate.from_fields(Julian, CalendarDate.to_fields(julian)) != Ok(julian) {
+			crash "R06 Julian field reconstruction"
+		}
+		converted = CalendarDate.in_calendar(julian, Gregorian)
+		if input.number < -784353015833 or input.number > 784351576776 {
+			if converted != Err(OutOfRange) {
+				crash "R06 Gregorian provider range ignored"
+			}
+		} else {
+			gregorian = match converted {
+				Ok(date) => date
+				Err(_) => crash "R06 shared coordinate rejected"
+			}
+			if !CalendarDate.same_day(julian, gregorian) or julian == gregorian or
+				CalendarDate.in_calendar(gregorian, Julian) != Ok(julian) {
+				crash "R06 extent and description equality confused"
+			}
+		}
+		# The four-year rule is independent of Gregorian century exceptions.
+		fields = CalendarDate.to_fields(julian)
+		if fields.year <= 2147483643 {
+			shifted = match JulianDate.from_fields({ year: fields.year + 4, month: fields.month, day: fields.day }) {
+				Ok(date) => date
+				Err(_) => crash "R06 four-year recurrence of Julian fields"
+			}
+			if CivilDay.to_day_number(JulianDate.to_civil_day(shifted)) != input.number + 1461 {
+				crash "R06 Julian four-year cycle width"
+			}
+		}
+		unknown = input.number.to_str()
+		if Calendar.from_name(unknown) != Err(UnsupportedCalendar(unknown)) {
+			crash "R06 unsupported calendar substituted"
+		}
+		Fuzz.keep
+	}
+}

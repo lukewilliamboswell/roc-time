@@ -1,9 +1,12 @@
 package
 	[
+		Calendar,
+		CalendarDate,
 		CalendarDelta,
 		CalendarArithmetic,
 		CivilDay,
 		GregorianDate,
+		JulianDate,
 		PosixBoundary,
 		PosixSpan,
 		PosixDelta,

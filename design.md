@@ -211,8 +211,40 @@ probes for the year and eleven month advances. Negative-year floor division and
 400-year periodicity follow the proleptic convention described in
 [Howard Hinnant's calendar derivation](https://howardhinnant.github.io/date_algorithms.html).
 The implementation uses January-based year counting rather than that source's
-March-based conversion code. Cross-calendar fixtures remain work in progress;
-Gregorian support alone does not establish R06.
+March-based conversion code. The Julian profile below supplies cross-calendar
+fixtures; Gregorian support alone does not establish R06.
+
+`JulianDate` adds the proleptic Julian profile with the same astronomical year
+range, -2147483648 through 2147483647. Every year divisible by four is a leap
+year, including year zero; no historical intercalation irregularities or
+regional reform are inferred. Its shared civil-day range is -784369121962
+through 784367682901. Julian 1969-12-19 and Gregorian 1970-01-01 both denote
+day zero. This integer axis labels civil days with midnight boundaries, not
+the noon-based astronomical Julian Day numbering system. Mapping these days
+to a resolved timeline still requires explicit zone interpretation.
+
+`Calendar` selects the supported `Gregorian` or `Julian` profile. Its case-sensitive
+names are `gregorian` and `julian`; every other name returns
+`UnsupportedCalendar(name)`. `CalendarDate` retains a validated calendar-tagged
+description, converts through `CivilDay`, and checks the destination provider's
+range. `same_day` compares one-day extents on that axis; `is_eq` compares
+descriptions, including calendar identity. Equal-day descriptions in different
+calendars therefore have equal extents but unequal descriptions. Hashing follows
+description equality. This initial dispatcher makes no claim to support
+location-dependent or sunset-based calendars; they remain unsupported rather
+than silently receiving midnight or Gregorian semantics. Gregorian arithmetic
+remains explicitly specialized, with no automatic conversion of Julian input.
+
+The [archive application](examples/calendar_conversion/main.roc) converts an
+explicit source calendar while retaining its original description. Oracle
+fixtures use the independent March-based Julian formulas and the 1582-10-05
+Julian / 1582-10-15 Gregorian equal-day anchor from
+[Hinnant's derivation](https://howardhinnant.github.io/date_algorithms.html).
+The [US Naval Observatory](https://aa.usno.navy.mil/faq/calendars) supplies the
+calendar rule distinction. The generator retains attribution for Hinnant's
+public-domain formulas; production uses January counting and bounded inverse
+search. Its cost bounds match the Gregorian provider and do not depend on the
+distance from the epoch.
 
 `CalendarDelta` holds signed I64 years, months and civil days. The implemented
 `CalendarArithmetic.shift_day` is specialized to Gregorian dates and applies
