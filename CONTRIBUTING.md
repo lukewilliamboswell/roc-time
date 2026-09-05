@@ -24,7 +24,7 @@ third-party Python dependencies.
 | Script | Purpose |
 | --- | --- |
 | `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
-| `measure_zone_roc.py` | Generate prototype zone columns and measure source/archive, compiler and native binary costs |
+| `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
@@ -162,14 +162,16 @@ Use the same pinned wheel as the zone oracle generator. The script verifies its
 hash, generates disposable Roc modules, and compares core-only, static one-zone,
 dynamic global-name and four-zone subset applications. It writes generated
 sources, command output and a JSON report under `.roc-time-tmp/`. Every measured
-zone application consumes the columns and checks its output against the source
+zone application consumes its data and checks its output against the source
 values, so merely linking an unused import is not the workload.
 
 Builds disable Roc's cache; operating-system caches may be warm. macOS compiler
 peak RSS comes from `/usr/bin/time -l` and requires access to system statistics.
 Other hosts report no compiler memory measurement. This prototype retains
 transition times, type indices, offsets and future-rule text, but omits DST flags
-and abbreviations and does not expand future rules or construct validated zone
-providers. Its sizes are not a complete database implementation's costs. Runtime
+and abbreviations. Repeat with `--encoding tzif` to measure original TZif bytes
+embedded as `List(U8)` instead. That mode consumes all bytes without parsing
+them; it includes fields omitted by the column mode. Neither mode expands future
+rules or constructs validated zone providers. Its sizes are not a complete database implementation's costs. Runtime
 allocations, retained data, URL acquisition and Wasm require separate evidence.
 Do not copy measurement transcripts into the architecture or active plan.

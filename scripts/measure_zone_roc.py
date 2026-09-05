@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prototype generated zone columns and measure compiler/binary costs (not a DB release)."""
+"""Prototype generated zone encodings and measure compiler/binary costs (not a DB release)."""
 import argparse
 import hashlib
 import io
@@ -32,7 +32,7 @@ def execute(cmd, cwd, logs, label):
     return result, time.perf_counter() - begin
 
 
-def export(destination, entries):
+def export(destination, entries, encoding):
     destination.mkdir()
     unique, names = {}, {}
     for name, raw in entries.items():
@@ -41,9 +41,12 @@ def export(destination, entries):
             module = f"Z{len(unique):03}"
             indices, times, offsets, _, _, footer = load_data(io.BytesIO(raw))
             payload = dict(times=list(times), indices=list(indices), offsets=list(offsets), footer=(footer or b"").decode())
+            if encoding == "tzif":
+                payload = dict(bytes=list(raw))
             unique[key] = module, payload
             fields = ", ".join(f"{field}: {json.dumps(value)}" for field, value in payload.items())
-            destination.joinpath(f"{module}.roc").write_text(f'{module} :: [].{{\n data : {{ times : List(I64), indices : List(U8), offsets : List(I32), footer : Str }}\n data = {{ {fields} }}\n}}\n')
+            annotation = "{ bytes : List(U8) }" if encoding == "tzif" else "{ times : List(I64), indices : List(U8), offsets : List(I32), footer : Str }"
+            destination.joinpath(f"{module}.roc").write_text(f'{module} :: [].{{\n data : {annotation}\n data = {{ {fields} }}\n}}\n')
         names[name] = unique[key]
     imports = "".join(f"import {module}\n" for module, _ in unique.values())
     matches = "".join(f'  {json.dumps(name)} => Ok({module}.data)\n' for name, (module, _) in sorted(names.items()))
@@ -54,7 +57,7 @@ def export(destination, entries):
     return names
 
 
-def main(wheel, samples):
+def main(wheel, samples, encoding):
     if platform.python_implementation() != "CPython" or platform.python_version() != "3.14.3":
         raise SystemExit("Requires pinned CPython 3.14.3 TZif decoder")
     if hashlib.sha256(wheel.read_bytes()).hexdigest() != WHEEL_SHA256:
@@ -73,11 +76,11 @@ def main(wheel, samples):
                 raw = archive.read(info)
                 if raw.startswith(b"TZif"):
                     entries[info.filename.removeprefix("tzdata/zoneinfo/")] = raw
-    global_names = export(work / "global", entries)
-    subset_names = export(work / "subset", {name: entries[name] for name in SELECTED})
+    global_names = export(work / "global", entries, encoding)
+    subset_names = export(work / "subset", {name: entries[name] for name in SELECTED}, encoding)
     report = {"compiler": version.stdout.strip(), "host": platform.platform(), "wheel_sha256": WHEEL_SHA256,
-              "samples": samples, "representation": "one module per byte-distinct TZif; times I64, indices U8, offsets I32, footer Str; dynamic match lookup with aliases",
-              "limits": "Prototype columns only, not a full provider or TZif adapter. No footer expansion, schema import, construction allocation or retained-memory measurement. OS/compiler caches may be warm; --no-cache disables Roc cache for uncached builds. Native default backend only.",
+              "samples": samples, "encoding": encoding, "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "representation": "one module per byte-distinct TZif; columns use times I64, indices U8, offsets I32, footer Str; tzif uses original bytes U8; dynamic match lookup with aliases",
+              "limits": "Prototype storage only, not a full provider or TZif adapter. TZif bytes include fields omitted by columns; no runtime parsing cost measured. No footer expansion, schema import, construction allocation or retained-memory measurement. OS/compiler caches may be warm; --no-cache disables Roc cache for uncached builds. Native default backend only.",
               "packages": {}, "applications": {}}
     for kind in ["global", "subset"]:
         directory = work / kind
@@ -99,6 +102,10 @@ def main(wheel, samples):
  Ok({})
 }
 '''
+    if encoding == "tzif":
+        begin = app_body.index(" for second")
+        end = app_body.index(" Ok({})", begin)
+        app_body = app_body[:begin] + ' for byte in data.bytes { checksum = I64.rem_by(checksum + byte.to_i64(), 1000003) }\n echo!("${data.bytes.len().to_str()}|${checksum.to_str()}\\n")\n' + app_body[end:]
     for kind in ["core_only", "static_global", "dynamic_global", "dynamic_subset"]:
         app = work / kind
         app.mkdir()
@@ -128,9 +135,13 @@ def main(wheel, samples):
                 # Roc rem_by truncates toward zero; reproduce its sign convention.
                 def rem(n): return n % 1000003 if n >= 0 else -((-n) % 1000003)
                 checksum = len(name.encode())
-                for n in payload["times"]: checksum = rem(checksum + rem(n))
-                for n in payload["indices"] + payload["offsets"]: checksum = rem(checksum + n)
-                expected = f'{len(payload["times"])}|{checksum}|{payload["footer"]}\n'
+                if encoding == "tzif":
+                    for n in payload["bytes"]: checksum = rem(checksum + n)
+                    expected = f'{len(payload["bytes"])}|{checksum}\n'
+                else:
+                    for n in payload["times"]: checksum = rem(checksum + rem(n))
+                    for n in payload["indices"] + payload["offsets"]: checksum = rem(checksum + n)
+                    expected = f'{len(payload["times"])}|{checksum}|{payload["footer"]}\n'
                 if result.stdout != expected:
                     raise RuntimeError(f"Observable checksum mismatch {kind} {name}: {result.stdout!r} != {expected!r}")
             outputs[name] = result.stdout.strip()
@@ -144,6 +155,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--samples", type=int, default=3)
+    parser.add_argument("--encoding", choices=["columns", "tzif"], default="columns")
     args = parser.parse_args()
     if not 1 <= args.samples <= 10: parser.error("samples must be 1..10")
-    main(args.wheel, args.samples)
+    main(args.wheel, args.samples, args.encoding)
