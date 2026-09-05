@@ -24,6 +24,7 @@ third-party Python dependencies.
 | Script | Purpose |
 | --- | --- |
 | `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
+| `measure_zone_roc.py` | Generate prototype zone columns and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
@@ -148,3 +149,27 @@ Bundle the package for distribution using `python3 scripts/bundle.py --output-di
 Run the release workflow from GitHub Actions with a release version such as `0.1.0`.
 It builds and tests the bundle, creates the GitHub release, generates versioned docs,
 commits the generated `www/` update, and publishes the docs to GitHub Pages.
+
+## Zone-data representation measurements
+
+With the pinned Roc compiler and CPython 3.14.3, run:
+
+```sh
+ROC=/path/to/pinned/roc python3 scripts/measure_zone_roc.py .roc-time-tmp/tzdata-2025.2.whl --samples 3
+```
+
+Use the same pinned wheel as the zone oracle generator. The script verifies its
+hash, generates disposable Roc modules, and compares core-only, static one-zone,
+dynamic global-name and four-zone subset applications. It writes generated
+sources, command output and a JSON report under `.roc-time-tmp/`. Every measured
+zone application consumes the columns and checks its output against the source
+values, so merely linking an unused import is not the workload.
+
+Builds disable Roc's cache; operating-system caches may be warm. macOS compiler
+peak RSS comes from `/usr/bin/time -l` and requires access to system statistics.
+Other hosts report no compiler memory measurement. This prototype retains
+transition times, type indices, offsets and future-rule text, but omits DST flags
+and abbreviations and does not expand future rules or construct validated zone
+providers. Its sizes are not a complete database implementation's costs. Runtime
+allocations, retained data, URL acquisition and Wasm require separate evidence.
+Do not copy measurement transcripts into the architecture or active plan.
