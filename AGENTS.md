@@ -88,7 +88,9 @@ Use at least one oracle when adding temporal behavior or changing an algorithm; 
 
 ## Verification and handoff
 
-For code changes, run the affected module's `roc check`/`roc test` and executable examples with the pinned compiler. Before handing off changes that affect package integration, run `ROC=/path/to/pinned/roc python3 scripts/all_tests.py`. A failed environmental step remains unverified until rerun successfully; report it accurately.
+Keep unit `expect` tests in the implementation file. Run package unit tests once through `roc test package/main.roc`; the CLI discovers tests in its module graph. Do not create parallel `*Tests.roc` unit modules or loop over implementation modules in the default runner. Keep separate roots for executable applications, fuzzing, independent oracles and compile-failure scenarios. Place tests of composed behavior with the higher-level implementation so test imports do not introduce dependency cycles.
+
+For code changes, run `roc check package/main.roc`, `roc test package/main.roc` and affected executable examples with the pinned compiler. Before handing off changes that affect package integration, run `ROC=/path/to/pinned/roc python3 scripts/all_tests.py`. A failed environmental step remains unverified until rerun successfully; report it accurately.
 
 For documentation-only changes, review contracts and examples, check local links and Mermaid structure, and use the pinned formatter to validate new Roc sketch syntax. Do not run unrelated benchmarks or claim unimplemented sketches were typechecked. Keep unresolved API choices explicit; do not fill the package with scaffolding to make documentation appear executable.
 

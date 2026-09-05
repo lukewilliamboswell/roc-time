@@ -11,7 +11,10 @@ generated artifacts under ignored `.roc-time-tmp/`.
 
 Examples are focused applications, not test fixtures. Each belongs in its own
 folder with a `main.roc` entrypoint and pure logic in a separate type module.
-Put exhaustive cases and harnesses under `tests/` using the same root layout.
+Keep unit `expect` tests beside their implementation. Run them once with
+`roc test package/main.roc`; the CLI discovers the package's module graph.
+Do not add separate `*Tests.roc` unit modules or a per-module test loop.
+Put integration fixtures and harnesses under `tests/` using the same root layout.
 Update recursive discovery and verify local and bundled package usage when
 adding or moving an example.
 

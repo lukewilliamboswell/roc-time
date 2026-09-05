@@ -378,3 +378,47 @@ database_boundary = |seconds| match I128.to_i64_try(seconds.to_i128() * 1000000)
 	Ok(micros) => Ok(PosixBoundary.from_microseconds(micros))
 	Err(_) => Err(OutOfRange)
 }
+
+expect {
+	rules = ZoneRules.from_database(test_zonedatabase_fixture({}))?
+	ZoneRules.name(rules) == "Synthetic/Canonical" and
+		ZoneRules.version(rules) == "source-v1" and
+			ZoneRules.offset_at(rules, PosixBoundary.from_microseconds(-1)) == Ok(FixedOffset.from_seconds(0)) and
+				ZoneRules.offset_at(rules, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(1800)) and
+					ZoneRules.provenance(rules) == DatabaseSource({ requested_name: "Synthetic/Alias", canonical_name: "Synthetic/Canonical", source_digest: "test_zonedatabase_fixture-content-v1", profile: "synthetic-bounded" })
+}
+
+expect {
+	good = test_zonedatabase_fixture({})
+	test_zonedatabase_status({ ..good, schema: 2 }) == Err(UnsupportedSchema(2)) and
+		test_zonedatabase_status({ ..good, axis: "tai-seconds" }) == Err(UnsupportedAxis("tai-seconds")) and
+			test_zonedatabase_status({ ..good, future_handling: "last-offset-forever" }) == Err(UnsupportedFutureHandling("last-offset-forever")) and
+				test_zonedatabase_status({ ..good, source_digest: "" }) == Err(MissingProvenance) and
+					test_zonedatabase_status({ ..good, end_second: I64.highest }) == Err(OutOfRange) and
+						test_zonedatabase_status({ ..good, start_second: 10, end_second: -10 }) == Err(ReversedBounds) and
+							test_zonedatabase_status({ ..good, minimum_offset: 1 }) == Err(OffsetOutsideBounds) and
+								test_zonedatabase_status({ ..good, transitions: [{ second: 10, offset: 0 }] }) == Err(TransitionOutsideValidity)
+}
+
+test_zonedatabase_fixture : {} -> ZoneRules.Database
+test_zonedatabase_fixture = |_| {
+	schema: 1,
+	axis: "posix-seconds-1970",
+	requested_name: "Synthetic/Alias",
+	canonical_name: "Synthetic/Canonical",
+	source_version: "source-v1",
+	source_digest: "test_zonedatabase_fixture-content-v1",
+	profile: "synthetic-bounded",
+	future_handling: "expanded-through-validity",
+	start_second: -10,
+	end_second: 10,
+	initial_offset: 0,
+	minimum_offset: 0,
+	maximum_offset: 1800,
+	transitions: [{ second: 0, offset: 1800 }],
+}
+
+test_zonedatabase_status = |data| match ZoneRules.from_database(data) {
+	Ok(_) => Ok({})
+	Err(error) => Err(error)
+}

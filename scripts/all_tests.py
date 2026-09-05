@@ -72,9 +72,7 @@ def main() -> None:
     run([ROC, "check", "package/main.roc"])
 
     heading("Running package tests...")
-    modules = sorted(p for p in (ROOT / "package").glob("*.roc") if p.name != "main.roc")
-    for module in modules:
-        run([ROC, "test", str(module.relative_to(ROOT))])
+    run([ROC, "test", "package/main.roc"])
 
     heading("Checking domain and representation compile failures...")
     run([sys.executable, "scripts/test_compile_failures.py"])
