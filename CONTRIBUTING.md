@@ -63,11 +63,11 @@ At least one oracle is required for temporal implementation work. Run:
 ROC=/path/to/pinned/roc python3 scripts/oracles.py --workers 4
 ```
 
-The default gate includes 4,096 Gregorian, 4,096 Julian and 2,592 zone
+The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone and 448 calendar-pattern
 observations stored as JSONL under `tests/oracles/`. Each native fixture is
 compiled once. Python validates the corpus, passes only inputs as arguments to
 bounded parallel processes, and compares exact observations in corpus order.
-Use `--oracle gregorian`, `julian` or `zones` to select one corpus. Full-corpus expected
+Use `--oracle gregorian`, `julian`, `zones` or `calendar_pattern` to select one corpus. Full-corpus expected
 results stay in the Python harness. Small typed scenarios retain
 interpreter coverage and comparator regression checks.
 
@@ -79,6 +79,23 @@ supported, with four by default. Failure inputs/output and deterministic result
 records are saved under `.roc-time-tmp/oracles/`. Per-case records include host
 allocation traffic, which includes argument decoding and result formatting;
 use explicit in-fixture counter snapshots to isolate an algorithm.
+
+Calendar-pattern cases compare complete later periods with pinned dateutil
+2.9.0.post0. Week-number selectors use an independent calendar-row model:
+enumerate seven-day rows, assign each to its majority year, then select positive
+or negative row positions. The corpus retains nine adjacent-year disagreements
+with dateutil under `calendar_pattern-reference-gaps.jsonl`; those outputs are
+evidence to review, not expectations copied from roc-time. The negative-week
+case also corresponds to a TODO in dateutil's next-year week handling. Other
+differences expose its previous-year week-count calculation. Fixed Roc tests
+retain readable examples of both cases.
+
+Refresh with `python3 scripts/generate_pattern_oracle.py /path/to/wheel-directory`
+using the exact dateutil and six wheel names/hashes in the generator and
+`calendar_pattern-manifest.toml`. Wheels remain under `.roc-time-tmp/`; normal
+replay needs neither the reference dependencies nor network access. This corpus
+does not yet establish timed recurrence, COUNT, BYSETPOS, exclusion or cursor
+semantics. Do not infer those from a passing calendar-candidate check.
 
 Gregorian expectations come from CPython 3.14.3 `datetime` for years 1–9999 and
 a 400-year table model outside that range. The model extension is not direct
@@ -118,7 +135,7 @@ network service.
 
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
-neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone and event roots
+neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event and calendar-pattern roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in `.roc-version`:

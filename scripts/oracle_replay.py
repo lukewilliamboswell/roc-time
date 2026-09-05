@@ -103,6 +103,31 @@ def validate_zone_cases(cases: list[dict]) -> None:
             raise ValueError("Invalid zone oracle candidates")
 
 
+def validate_pattern_cases(cases: list[dict]) -> None:
+    for case in cases:
+        inputs, expected = case['input'], case['expected']
+        if case['operation'] != 'pattern' or len(inputs) != 12:
+            raise ValueError('Invalid pattern oracle operation/arity')
+        if any(not INTEGER.fullmatch(value) for value in inputs[:7]):
+            raise ValueError('Noncanonical pattern integer input')
+        year, month, day, frequency, interval, weekday, index = map(int, inputs[:7])
+        if not (1 <= year <= 9999 and 1 <= month <= 12 and 1 <= day <= 31
+                and 0 <= frequency <= 3 and 1 <= interval <= 2147483647
+                and 0 <= weekday <= 6 and 0 <= index < 2**64):
+            raise ValueError('Pattern oracle input outside reference domain')
+        for value in inputs[7:11]:
+            if value != '-' and any(not INTEGER.fullmatch(part) for part in value.split(',')):
+                raise ValueError('Invalid pattern selector transport')
+        if inputs[11] != '-' and any(not re.fullmatch(r'-?[0-9]+:[0-6]', part) for part in inputs[11].split(',')):
+            raise ValueError('Invalid pattern weekday transport')
+        if (not 4 <= len(expected) <= 6 or expected[0] != 'ok'
+                or any(not INTEGER.fullmatch(value) for value in expected[1:3])):
+            raise ValueError('Invalid pattern observation')
+        width = int(expected[2]) - int(expected[1])
+        if not 1 <= width <= 366 or any(not re.fullmatch(r'[01]{1,128}', part) for part in expected[3:]) or sum(map(len, expected[3:])) != width:
+            raise ValueError('Invalid pattern membership bitmap')
+
+
 def compare(case: dict, output: str) -> None:
     expected = "\t".join([case["id"], *case["expected"]]) + "\n"
     if output != expected:

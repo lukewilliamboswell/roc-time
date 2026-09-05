@@ -1,0 +1,17 @@
+version = 2
+corpus_format = "jsonl-v1"
+profile = "gregorian-calendar-patterns-v1"
+case_count = 448
+corpus_sha256 = "365be7233383325f772eabe5fcd46ab34c60586a40b71bc6455e2028628d9cd4"
+smoke_case_count = 4
+smoke_sha256 = "e367047e8c93c1865b690c00f6668fc212a96cfcb861fb6cf522b29c4a9d7ae1"
+generator_sha256 = "22fab994c03d0d16ba45b9c62322792802484990d82fd9d746819dc62fa0b57b"
+reference_gap_count = 9
+reference_gap_sha256 = "af56234a85f6340c0155f31ecc24a86de734bf76819acbac5e9da4598326a09b"
+reference = "python-dateutil 2.9.0.post0 with six 1.17.0, CPython 3.14.3"
+seed = 20260905
+source_wheels = ["python_dateutil-2.9.0.post0-py2.py3-none-any.whl", "six-1.17.0-py2.py3-none-any.whl"]
+source_sha256 = ["a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"]
+sources = ["https://pypi.org/project/python-dateutil/2.9.0.post0/", "https://pypi.org/project/six/1.17.0/", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10", "https://www.rfc-editor.org/rfc/rfc8984.html#section-4.3.3.1"]
+license = "Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT."
+independence = "dateutil expands indexed day masks; Roc tests dates against calendar selectors. Week selectors instead enumerate calendar rows and majority-year assignment; retained dateutil differences expose its adjacent-year gaps. Shared Gregorian/week convention assumptions. Positive years only; no timezone, COUNT, BYSETPOS, exclusions or first-period truncation claim."

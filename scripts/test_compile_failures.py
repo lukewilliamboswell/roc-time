@@ -33,6 +33,7 @@ def main() -> None:
         "forge_events": ["annotation says", "EventCollection(U64)", "List(_a)"],
         "forge_span": ["annotation says", "PosixSpan", "{ end: PosixBoundary, start: PosixBoundary }"],
         "read_span_representation": ["not a record", "PosixSpan", "start field"],
+        "read_pattern_representation": ["not a record", "CalendarPattern", "anchor field"],
     }
     for name, fragments in cases.items():
         result = check(ROOT / "tests/compile_fail" / name / "main.roc")
