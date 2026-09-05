@@ -1,5 +1,0 @@
-import DatabaseRecord
-Zone199 :: [].{
- get : Str -> DatabaseRecord.Value
- get = |requested| { schema: 1.U16, axis: "posix-seconds-1970", requested_name: requested, canonical_name: "Asia/Manila", source_version: "2025b", source_digest: "1681a62321489c79277c4d74dcf6e20fae46530b269d85b3179a06cacd3706a6", profile: "iana-2025b-wheel-2025.2-posix-1800-2200-v1", future_handling: "expanded-through-validity", start_second: -5364662400.I64, end_second: 7258118400.I64, initial_offset: -57368.I32, minimum_offset: -57368.I32, maximum_offset: 32400.I32, transitions: [{ second: -3944621032, offset: 29032 }, { second: -2219083200, offset: 28800 }, { second: -1046678400, offset: 32400 }, { second: -1040115600, offset: 28800 }, { second: -885024000, offset: 32400 }, { second: -880016400, offset: 32400 }, { second: -783594000, offset: 32400 }, { second: -760093200, offset: 28800 }, { second: -496224000, offset: 32400 }, { second: -491562000, offset: 28800 }, { second: 228326400, offset: 32400 }, { second: 243702000, offset: 28800 }, { second: 643219200, offset: 32400 }, { second: 649177200, offset: 28800 }] }
-}

@@ -28,6 +28,7 @@ third-party Python dependencies.
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
+| `measure_zone_package.py` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
 | `fixture_platform.py` | Build the instrumented test host and verify resource assertions/trace effects |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
@@ -248,9 +249,11 @@ and C interpretation are different code paths sharing source data; this does
 not establish independent historical truth. `--verify-roc` checks and builds a
 native caller that imports every name through the real package adapter, checks
 transition counts and position-weighted checksums, and queries both sides of
-every transition. `--encoding columns` exports separate numeric lists assembled
-into the same structural records; the default `records` emits literals directly.
-Compare the complete provider workload when evaluating these encodings. Output
+every transition. The generator emits two compact text assets and copies
+`tzdb/Database.roc` into the package. Top-level values decode the assets at
+compile time; runtime lookup does not parse them. Maintain that source module,
+then regenerate the pack. `text-assets-v1` is a private generator/decoder
+contract, separate from the public structural interchange schema. Output
 includes source integrity metadata and applicable notices. This generator does
 not publish a release; provider integration tests and bundled application
 examples remain necessary before distribution.
@@ -258,11 +261,25 @@ examples remain necessary before distribution.
 The default test gate replays the committed `tzdb/package/` without the wheel or
 CPython generation pin. Refresh into a new ignored directory, review semantic
 changes, then replace the committed generated pack and its manifest together.
+The resource fixture uses runtime names and consumes transition checksums. It
+limits lookup to zero allocation/reallocation calls in development and at most
+one in optimized native builds under the pinned compiler. This covers the data lookup and
+returned record, not core adaptation, parsing/formatting or retained memory.
+Trace marks bracket the operation. The host assertion remains active when
+optimized `expect` checks are removed. Bundled examples import the text assets
+through the downloaded package in interpreter and native execution.
 Bundle the companion separately:
 
 ```sh
 python3 scripts/bundle.py --package-dir tzdb/package --output-dir .roc-time-tmp/zone-bundle
 ```
+
+Measure the actual package with
+`ROC=/path/to/pinned/roc python3 scripts/measure_zone_package.py --package tzdb/package`.
+Repeat `--package` to compare a historical pack checked out under `.roc-time-tmp/`.
+Reports retain commands, hashes, compiler/target, build samples and observable
+lookup results. Source encoding, compile-time evaluation and linked data retention
+are separate costs; a static name alone does not prove unused-zone elimination.
 
 Use `update_example_urls.py --zone-bundle-url` alongside `--bundle-url` when
 updating both independently versioned dependencies. Example

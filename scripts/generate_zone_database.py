@@ -72,7 +72,7 @@ def table(raw):
     return initial, min(bounds), max(bounds), kept, len(probes)
 
 
-def generate(wheel, output, encoding="records"):
+def generate(wheel, output):
     if platform.python_implementation() != "CPython" or platform.python_version() != "3.14.3":
         raise SystemExit("Requires CPython 3.14.3 for pinned TZif/footer decoding")
     if hashlib.sha256(wheel.read_bytes()).hexdigest() != WHEEL_SHA256:
@@ -96,6 +96,7 @@ def generate(wheel, output, encoding="records"):
             if name not in canonical: raise ValueError(f"No canonical identity: {name}")
             return name
         names, unique, checks = {}, {}, 0
+        rows = []
         expectations = {}
         for entry in sorted(archive.namelist()):
             if not entry.startswith("tzdata/zoneinfo/") or entry.endswith("/"): continue
@@ -109,46 +110,27 @@ def generate(wheel, output, encoding="records"):
                 initial, minimum, maximum, transitions, count = table(raw)
                 checks += count
                 expectations[target] = dict(count=len(transitions), checksum=sum((i + 1) * (t + v) for i, (t, v) in enumerate(transitions)))
-                module = f"Zone{len(unique):03}"
                 digest = hashlib.sha256(raw).hexdigest()
-                transition_text = ', '.join(f'{{ second: {t}, offset: {v} }}' for t, v in transitions)
-                prelude = ''
-                transition_value = '[' + transition_text + ']'
-                if encoding == 'columns':
-                    prelude = f' times : List(I64)\n times = {json.dumps([t for t, _ in transitions])}\n offsets : List(I32)\n offsets = {json.dumps([v for _, v in transitions])}\n'
-                    transition_value = 'DatabaseRecord.expand(times, offsets)'
-                data = f'''{{ schema: 1.U16, axis: "posix-seconds-1970", requested_name: requested, canonical_name: {json.dumps(target)}, source_version: "2025b", source_digest: "{digest}", profile: "{PROFILE}", future_handling: "expanded-through-validity", start_second: {START}.I64, end_second: {END}.I64, initial_offset: {initial}.I32, minimum_offset: {minimum}.I32, maximum_offset: {maximum}.I32, transitions: {transition_value} }}'''
-                # The shared structural annotation keeps empty lists and numeric
-                # literals stable without a dependency on nominal roc-time types.
-                (output / f"{module}.roc").write_text(f'import DatabaseRecord\n{module} :: [].{{\n{prelude} get : Str -> DatabaseRecord.Value\n get = |requested| {data}\n}}\n')
-                unique[target] = module
-            names[name] = unique[target]
-        (output / 'DatabaseRecord.roc').write_text('''DatabaseRecord :: [].{
- # Internal generated columns have identical lengths by construction. Full
- # provider verification compares every reconstructed transition checksum.
- expand : List(I64), List(I32) -> List({ second : I64, offset : I32 })
- expand = |times, offsets| List.map_with_index(times, |second, index| {
-  offset = match List.get(offsets, index) {
-   Ok(value) => value
-   Err(_) => crash "Generated zone column lengths differ"
-  }
-  { second, offset }
- })
- Value : { schema : U16, axis : Str, requested_name : Str, canonical_name : Str, source_version : Str, source_digest : Str, profile : Str, future_handling : Str, start_second : I64, end_second : I64, initial_offset : I32, minimum_offset : I32, maximum_offset : I32, transitions : List({ second : I64, offset : I32 }) }
-}
-''')
-        imports = ''.join(f'import {m}\n' for m in unique.values())
-        cases = ''.join(f' {json.dumps(n)} => Ok({m}.get(name))\n' for n, m in names.items())
-        (output / 'Database.roc').write_text(imports + 'Database :: [].{\n get = |name| match name {\n' + cases + ' _ => Err(UnknownZone(name))\n }\n}\n')
+                # Stable canonical ordering and plain data keep Roc module identity
+                # independent of the number of zones in a release.
+                unique[target] = len(rows)
+                rows.append("\t".join([target, digest, str(initial), str(minimum), str(maximum),
+                                        ";".join(f"{t},{v}" for t, v in transitions) or "-"]))
+            names[name] = target
+        header = f"roc-time-tzdb-v1\t2025b\t{PROFILE}\t{START}\t{END}"
+        (output / 'zones.txt').write_text(header + "\n" + "\n".join(rows) + "\n")
+        (output / 'names.txt').write_text("".join(f"{name}\t{unique[target]}\n" for name, target in names.items()))
+        implementation = Path(__file__).resolve().parents[1] / 'tzdb/Database.roc'
+        (output / 'Database.roc').write_bytes(implementation.read_bytes())
         (output / 'main.roc').write_text('package [Database] {}\n')
         for source, destination in [('LICENSE', 'LICENSE.txt'), ('licenses/LICENSE_APACHE', 'LICENSE_APACHE.txt')]:
             (output / destination).write_bytes(archive.read('tzdata-2025.2.dist-info/licenses/' + source))
-    manifest = dict(profile=PROFILE, encoding=encoding, wheel_url=WHEEL_URL, wheel_sha256=WHEEL_SHA256,
+    manifest = dict(profile=PROFILE, source_version="2025b", encoding="text-assets-v1", wheel_url=WHEEL_URL, wheel_sha256=WHEEL_SHA256,
                     generator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     zi_sha256=hashlib.sha256(zi).hexdigest(), zone_names=len(names), canonical_zones=len(unique),
                     offset_comparisons=checks, start_second=START, end_second=END,
                     transition_expectations=expectations,
-                    names={name: next(target for target, module in unique.items() if module == selected) for name, selected in names.items()},
+                    names=names,
                     files={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(output.iterdir()) if p.is_file()},
                     limitation="Offset-only finite profile; no abbreviation/DST-status API. Python footer expansion compared with C ZoneInfo using common pinned data; not an independent tzdb authority.")
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
@@ -173,6 +155,15 @@ def verify(output, names, roc):
     transition_checks = ' var previous = data.initial_offset\n for transition in data.transitions {\n at_transition = PosixBoundary.from_microseconds(transition.second * 1000000)\n before = PosixBoundary.from_microseconds(transition.second * 1000000 - 1)\n actual = ZoneRules.offset_at(rules, at_transition)?\n prior = ZoneRules.offset_at(rules, before)?\n if FixedOffset.to_seconds(actual) != transition.offset or FixedOffset.to_seconds(prior) != previous { return Err(WrongTransitionBoundary) }\n previous = transition.offset\n }\n'
     source = source.replace(' at = PosixBoundary', transition_checks + ' at = PosixBoundary')
 
+    manifest = json.loads((output / 'manifest.json').read_text())
+    metadata_check = (f' if data.schema != 1 or data.axis != "posix-seconds-1970" or data.requested_name != name '
+                      f'or data.source_version != {json.dumps(manifest["source_version"])} '
+                      f'or data.profile != {json.dumps(manifest["profile"])} '
+                      f'or data.start_second != {manifest["start_second"]} '
+                      f'or data.end_second != {manifest["end_second"]} '
+                      f'or data.future_handling != "expanded-through-validity" {{ return Err(WrongMetadata) }}\n')
+    source = source.replace(' expected = match', metadata_check + ' expected = match')
+
     (directory / 'main.roc').write_text(source)
     for command in [[roc, 'check', 'main.roc'], [roc, 'build', 'main.roc', '--output=verify']]:
         subprocess.run(command, cwd=directory, check=True, timeout=180)
@@ -193,8 +184,7 @@ if __name__ == '__main__':
     parser.add_argument('wheel', type=Path)
     parser.add_argument('output', type=Path, help='new directory for generated package')
     parser.add_argument('--verify-roc', help='pinned Roc executable; compile and run all names through the real adapter')
-    parser.add_argument('--encoding', choices=['columns', 'records'], default='records')
     args = parser.parse_args()
-    names = generate(args.wheel, args.output, args.encoding)
+    names = generate(args.wheel, args.output)
     if args.verify_roc: verify(args.output, names, str(Path(args.verify_roc).resolve()))
     summary(names, args.output)

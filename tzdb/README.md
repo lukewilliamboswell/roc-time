@@ -24,9 +24,19 @@ Keep the data version pinned independently of the core. An application may pass
 its own schema-compatible data to the same adapter. Updating a data dependency
 requires explicitly resolving new values; existing snapshots retain their rules.
 The data package imports no roc-time modules.
+The [voyage briefing](../examples/voyage/main.roc) demonstrates an application-owned
+clock schedule and an explicit update while retaining the original booking.
+
+The package contains one implementation module and two compact text assets.
+Roc imports and decodes the assets into top-level values at compile time;
+ordinary lookups use the resulting immutable data. Both assets are included in
+the content-addressed package archive, so applications need no separate files.
+This layout does not promise that a one-zone application eliminates all other
+zones from its binary.
 
 There is no published companion release yet. Repository examples use local
 package paths; bundle checks exercise separate URL dependencies. See the
 [contributor guide](../CONTRIBUTING.md#zone-data-representation-measurements)
 for generation, review and verification. Generated files and source notices are
-under `package/`; do not edit generated modules by hand.
+under `package/`. Maintain the decoder in `Database.roc` and regenerate the
+distributable package; do not edit generated assets or copied modules by hand.
