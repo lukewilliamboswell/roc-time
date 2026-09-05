@@ -29,21 +29,12 @@ jobs:
 
       - run: python3 scripts/all_tests.py
 
-      - name: Preserve fuzz failure evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-failure-evidence
-          path: .roc-time-tmp/fuzz/
-          include-hidden-files: true
-          retention-days: 14
-
       - name: Preserve fuzz smoke evidence and reproducers
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-smoke-${{ runner.os }}-${{ runner.arch }}
-          path: .roc-time-tmp/fuzz-smoke/
+          path: .roc-time-tmp/fuzz/
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
