@@ -5,8 +5,8 @@ A date and time package for [Roc](https://www.roc-lang.org).
 > [!NOTE]
 > This package is a work in progress. Its initial kernel provides exact POSIX
 > boundaries, coordinate displacements, nonempty half-open spans, and canonical
-> coverage algebra. Calendar interpretation and the remaining design are still
-> being implemented.
+> coverage algebra, plus proleptic Gregorian civil-day conversion. Calendar
+> arithmetic, zone interpretation, and the remaining design are still being implemented.
 
 ## Documentation
 
@@ -86,7 +86,7 @@ independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
-neighboring type modules. The precision, span and coverage roots
+neighboring type modules. The precision, span, coverage and Gregorian roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in `.roc-version`:

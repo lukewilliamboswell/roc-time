@@ -1,5 +1,7 @@
 package
 	[
+		CivilDay,
+		GregorianDate,
 		PosixBoundary,
 		PosixSpan,
 		PosixDelta,

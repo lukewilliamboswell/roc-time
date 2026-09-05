@@ -48,6 +48,22 @@ including explicit ranges, negative years/year zero, round trips and ordered
 month-end arithmetic. Promote the invoice scenario through the public package
 and add its generated evidence through the consolidated test runner.
 
+Conversion is implemented in `CivilDay` and `GregorianDate`, separating the
+shared day coordinate from validated Gregorian descriptions. The provider
+range is the full signed 32-bit year domain, computed in I64. January-based
+counting and a bounded inverse search avoid negative-year truncation and
+unchecked narrowing. Deterministic evidence enumerates all 292,194 dates in
+years -400 through 399 using a sequential calendar model. Generated evidence
+covers the entire provider day range, field/coordinate round trips, next-day
+progression, malformed fields, and range rejection. A compile-failure fixture
+rejects civil coordinates passed as POSIX boundaries. The pinned full integration
+command recorded below passed on 2026-09-05 with all four semantic targets,
+including 10,000 Gregorian runs (seed 1, five-second maximum, LLVM speed/arm64mac).
+
+Next implement ordered arithmetic with explicit destination policy, the invoice
+application, and cross-calendar equal-day fixtures. Conversion alone does not
+complete R05–R06. Keep unsupported calendar dispatch explicit as providers land.
+
 ## Unresolved decisions
 
 Calendar/provider ranges, calendar interoperability scope, zone policy signatures, RFC adapter feature profile, persistence schema and supported reasoning profile must be settled with evidence as their slices land. Allocation/layout and supported Wasm claims require measurements on the pinned compiler.
@@ -72,4 +88,4 @@ access for bundle verification, including the single consolidated fuzz gate, mig
 The merged precision/span/coverage checks were also verified with
 `ROC=.roc-time-tmp/roc_nightly-macos_apple_silicon-2026-09-04-c125b82/roc python3 scripts/fuzz.py --operation all`
 using explicit `--opt=speed`. Layout/allocation, complexity measurements and Wasm
-evidence remain. Gregorian interpretation and later layers remain unimplemented.
+evidence remain. Gregorian conversion now has separate evidence above; calendar arithmetic and later layers remain unimplemented.

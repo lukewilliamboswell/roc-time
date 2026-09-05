@@ -191,6 +191,29 @@ Operations that retain provenance must define how contributors combine and how s
 
 The calendar layer converts between validated civil fields and a shared civil-day axis within its supported range. Gregorian conversion is the initial foundation; additional calendars implement the same conceptual contract without imposing their complexity on span algebra.
 
+The initial Gregorian provider uses astronomical year numbering (year zero is
+1 BCE), with years -2147483648 through 2147483647 inclusive. All months and valid
+days in those years are supported. This explicit 32-bit year domain contains
+the entire I64 POSIX microsecond date range while leaving ample I64 headroom for
+calendar conversion. It does not extend any zone provider's range.
+`GregorianDate` validates fields once and preserves their day resolution.
+`CivilDay` is a separate opaque signed I64 day coordinate, with zero denoting
+Gregorian 1970-01-01; it is neither a UTC midnight nor an elapsed duration.
+Gregorian conversion accepts day numbers -784353015833 through 784351576776.
+Dates describe civil extents `[day, day + 1)`; mapping those extents to a timeline
+requires explicit zone interpretation. Numeric civil coordinates outside this
+provider range remain representable, but Gregorian interpretation returns
+`OutOfRange`.
+
+Conversion counts complete Gregorian years using floor division and walks at
+most eleven preceding months. Inverse conversion uses at most 32 binary-search
+probes for the year and eleven month advances. Negative-year floor division and
+400-year periodicity follow the proleptic convention described in
+[Howard Hinnant's calendar derivation](https://howardhinnant.github.io/date_algorithms.html).
+The implementation uses January-based year counting rather than that source's
+March-based conversion code. Calendar arithmetic and cross-calendar fixtures
+remain work in progress; these conversion APIs alone do not establish R05–R06.
+
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 
 Distinguish **an appointment between chosen boundary occurrences** from **all positions whose local labels fall in a selection**. The former resolves each endpoint under explicit gap/fold policies and validates their order. The latter computes the preimage of the civil selection under zone rules and may yield empty or disconnected coverage. Taking the earliest start and latest end would incorrectly fill gaps between repeated local-time ranges. Calendar-day selection uses this set interpretation; a skipped civil day yields empty coverage. Fixed-offset conversion is the simple special case.
