@@ -1,3 +1,4 @@
+import Coverage
 import FixedOffset
 import LocalDateTime
 import PosixBoundary
@@ -107,6 +108,37 @@ ZoneRules :: {
 		)
 	}
 
+	## Preimage of the half-open local selection; never an endpoint hull.
+	select : ZoneRules, LocalDateTime, LocalDateTime -> Try(Coverage, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
+	select = |rules, start, end| {
+		match LocalDateTime.compare_position(start, end) {
+			EQ => return Err(EmptySelection)
+			GT => return Err(ReversedSelection)
+			LT => {}
+		}
+		earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), start)?
+		latest_end = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), end)?
+		# End is excluded: equality with the upper validity boundary is safe.
+		if earliest < PosixSpan.start(rules.validity) or latest_end > PosixSpan.end(rules.validity) {
+			return Err(OutsideValidity)
+		}
+		var spans = []
+		var lower = PosixSpan.start(rules.validity)
+		var offset = rules.initial
+		for transition in rules.transitions {
+			spans = append_selected(spans, lower, transition.at, offset, start, end)?
+			lower = transition.at
+			offset = transition.offset
+		}
+		spans = append_selected(spans, lower, PosixSpan.end(rules.validity), offset, start, end)?
+		# Each span is clipped to an ordered disjoint timeline segment.
+		# Sorted construction merges touch without sorting or filling gaps.
+		match Coverage.from_sorted_spans(spans) {
+			Ok(coverage) => Ok(coverage)
+			Err(_) => crash "internal zone segment ordering invariant"
+		}
+	}
+
 	expect {
 		# Synthetic rule fixture: timeline cells, independently enumerated.
 		# Whole-second offsets need not imply whole-second transition positions.
@@ -145,5 +177,30 @@ ZoneRules :: {
 			_ => Bool.False
 		}
 		duplicate and outside
+	}
+}
+
+append_selected = |spans, lower, upper, offset, start, end| {
+	candidate_start = FixedOffset.resolve(offset, start)?
+	candidate_end = FixedOffset.resolve(offset, end)?
+	clipped_start = if candidate_start > lower {
+		candidate_start
+	} else {
+		lower
+	}
+	clipped_end = if candidate_end < upper {
+		candidate_end
+	} else {
+		upper
+	}
+	if clipped_start < clipped_end {
+		# Strict comparison establishes the constructor's nonempty invariant.
+		span = match PosixSpan.new(clipped_start, clipped_end) {
+			Ok(value) => value
+			Err(_) => crash "internal clipped zone span invariant"
+		}
+		Ok(spans.append(span))
+	} else {
+		Ok(spans)
 	}
 }

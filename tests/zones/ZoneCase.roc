@@ -1,6 +1,7 @@
 import fuzz.Fuzz
 import time.CalendarDate
 import time.ClockTime
+import time.Coverage
 import time.FixedOffset
 import time.LocalDateTime
 import time.PosixBoundary
@@ -64,6 +65,49 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		}
 		if ZoneRules.resolve(rules, local) != Ok(classification) {
 			crash "zone resolution differs from independent timeline enumeration"
+		}
+		end_number = input.number + 500000
+		end_fields = if end_number < 0 {
+			{ year: 1969.I64, month: 12.U8, day: 31.U8 }
+		} else {
+			{ year: 1970.I64, month: 1.U8, day: 1.U8 }
+		}
+		end_date = match CalendarDate.from_fields(Gregorian, end_fields) {
+			Ok(value) => value
+			Err(_) => crash "fixture end date rejected"
+		}
+		end_clock = match ClockTime.from_microseconds_since_midnight(
+			if end_number < 0 {
+				end_number + 86400000000
+			} else {
+				end_number
+			},
+		) {
+			Ok(value) => value
+			Err(_) => crash "fixture end clock rejected"
+		}
+		selected = match ZoneRules.select(rules, local, LocalDateTime.new(end_date, end_clock)) {
+			Ok(value) => value
+			Err(_) => crash "complete local selection rejected"
+		}
+		var probe_second = -10.I64
+		while probe_second < 10 {
+			for probe_fraction in [0.I64, fraction, 999999] {
+				probe = probe_second * 1000000 + probe_fraction
+				offset = if probe_second < 0 {
+					0.I32
+				} else if probe_second < 4 {
+					input.first
+				} else {
+					input.second
+				}
+				label = probe + offset.to_i64() * 1000000
+				expected_member = label >= input.number and label < end_number
+				if Coverage.contains(selected, point(probe)) != expected_member {
+					crash "local selection differs from direct timeline membership"
+				}
+			}
+			probe_second = probe_second + 1
 		}
 		Fuzz.keep
 	}

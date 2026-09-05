@@ -355,8 +355,26 @@ at most one matching position. Segment order produces sorted distinct results.
 implicitly. Work is O(n) in transitions with O(k) output for k matches, plus
 bounded calendar conversions. Synthetic direct-timeline enumeration anchors
 classification independently of inverse conversion; three-fold and finite-edge
-counterexamples are retained. Selection preimages, explicit occurrence policies
-and snapshot provenance remain separate implementation work.
+counterexamples are retained. Explicit occurrence policies and snapshot
+provenance remain separate implementation work.
+
+`ZoneRules.select(rules, start, end)` computes the preimage of a nonempty
+half-open local range, comparing its boundaries by civil position rather than
+calendar description equality. Equal/reversed positions return `EmptySelection`
+or `ReversedSelection`. Each constant-offset segment receives the translated
+selection, clipped to that segment's timeline extent. Ordered construction merges
+touching pieces while retaining gaps; it does not resolve two occurrences and
+take their hull. Work is O(n + k) with O(k) result storage for n transitions and
+k contributed spans, apart from bounded calendar conversion cost.
+
+Completeness requires the earliest possible start and latest possible exclusive
+end to fit the finite axis and rule validity. The excluded end may equal the
+upper validity boundary; exceeding it returns `OutsideValidity`. No implicit
+clipping to the provider domain is allowed. A proven skipped local day returns
+empty coverage. Synthetic dateline, triple-fold and finite-end fixtures anchor
+these cases; generated timeline membership independently checks arbitrary
+microsecond selections. This operation does not select appointment occurrences
+or introduce any gap/fold default.
 
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 

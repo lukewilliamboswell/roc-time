@@ -1,5 +1,6 @@
 import CalendarDate
 import ClockTime
+import Coverage
 import FixedOffset
 import LocalDateTime
 import PosixBoundary
@@ -8,6 +9,40 @@ import ZoneRules
 
 ## Independent bounded timeline enumeration for R07 classification.
 ZoneRulesTests :: [].{
+	expect {
+		# Synthetic dateline move: the whole local epoch day is skipped.
+		span = PosixSpan.new(point(-259200000000), point(259200000000))?
+		rules = ZoneRules.new_bounded(
+			"Synthetic/SkippedDay",
+			"v1",
+			span,
+			FixedOffset.from_seconds(0),
+			[
+				{ at: point(0), offset: FixedOffset.from_seconds(86400) },
+			],
+			{ minimum: 0, maximum: 86400 },
+		)?
+		midnight = ClockTime.from_microseconds_since_midnight(0)?
+		first = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
+		second = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?
+		third = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 3 })?
+		expected = PosixSpan.new(point(0), point(86400000000))?
+		ZoneRules.select(rules, LocalDateTime.new(first, midnight), LocalDateTime.new(second, midnight)) == Ok(Coverage.from_spans([])) and
+			ZoneRules.select(rules, LocalDateTime.new(second, midnight), LocalDateTime.new(third, midnight)) == Ok(Coverage.from_spans([expected]))
+	}
+
+	expect {
+		span = PosixSpan.new(point(-10000000), point(10000000))?
+		rules = ZoneRules.new_bounded("Synthetic/Finite", "v1", span, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+		start = local_label(0)?
+		end = local_label(10000000)?
+		beyond = local_label(10000001)?
+		expected = PosixSpan.new(point(0), point(10000000))?
+		# The excluded endpoint may equal validity.end, but never exceed it.
+		ZoneRules.select(rules, start, end) == Ok(Coverage.from_spans([expected])) and
+			ZoneRules.select(rules, start, beyond) == Err(OutsideValidity)
+	}
+
 	expect {
 		span = PosixSpan.new(point(-10000000), point(10000000))?
 		bad_bounds = match ZoneRules.new_bounded("Synthetic", "v1", span, FixedOffset.from_seconds(0), [], { minimum: 1, maximum: -1 }) {
@@ -95,7 +130,15 @@ ZoneRulesTests :: [].{
 			{ minimum: 0, maximum: 4 },
 		)?
 		local = local_label(2500000)?
-		ZoneRules.resolve(rules, local) == Ok(Fold([point(-1500000), point(500000), point(2500000)]))
+		end = local_label(2750000)?
+		selected = ZoneRules.select(rules, local, end)?
+		a = PosixSpan.new(point(-1500000), point(-1250000))?
+		b = PosixSpan.new(point(500000), point(750000))?
+		c = PosixSpan.new(point(2500000), point(2750000))?
+		ZoneRules.resolve(rules, local) == Ok(Fold([point(-1500000), point(500000), point(2500000)])) and
+			selected == Coverage.from_spans([a, b, c]) and
+				ZoneRules.select(rules, local, local) == Err(EmptySelection) and
+					ZoneRules.select(rules, end, local) == Err(ReversedSelection)
 	}
 }
 

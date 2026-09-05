@@ -86,8 +86,12 @@ Independent timeline enumeration supplies fixed and generated evidence. The pinn
 passed with nine 10,000-run campaigns, both calendar oracles and four bundled
 applications. Additional malformed-bound constructor tests passed in
 `roc test package/ZoneRulesTests.roc` (64 tests including imports). Selection
-preimages, explicit occurrence policies, resolved snapshot provenance and external
-rule-data adapters remain next; lookup is currently a
+preimages now preserve clipped segment coverage and prove finite-domain
+completeness, with skipped-day, triple-fold and exact validity-end fixtures plus
+generated membership comparisons. The full pinned integration command passed
+after selection implementation on 2026-09-05: all nine 10,000-run campaigns,
+both external calendar oracles and all four bundled applications. Explicit occurrence policies, resolved snapshot
+provenance and external rule-data adapters remain next; lookup is currently a
 bounded linear scan whose performance still needs R15 evidence. The full pinned
 integration command passed after this addition on 2026-09-05, including all eight
 10,000-run campaigns, both external calendar oracles and four bundled apps.
