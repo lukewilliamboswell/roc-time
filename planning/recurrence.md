@@ -7,7 +7,7 @@ finite immutable zone rules and event/coverage distinctions.
 ## Deliverables
 
 - Local/UTC timed series, subdaily frequencies and time selectors. Reuse calendar
-  candidates from CalendarPattern and ZoneRules. Apply the RFC timed profile's
+  candidates from CalendarPattern, ClockPattern and ZoneRules. Apply the RFC timed profile's
   explicit before-gap offset and first-fold policies (verified erratum 4271);
   only invalid calendar dates are discarded. BYSETPOS must see the full timed
   candidate set, not a date-only filter reused by timed rules.

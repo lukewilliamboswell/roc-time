@@ -11,6 +11,7 @@ package
 		RfcDateRule,
 		CivilDay,
 		ClockTime,
+		ClockPattern,
 		LocalDateTime,
 		FixedOffset,
 		ZoneRules,

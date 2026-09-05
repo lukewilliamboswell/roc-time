@@ -9,6 +9,8 @@ import time.PosixSpan
 import time.PosixBoundary
 import time.FixedOffset
 import time.ZoneRules
+import time.ClockPattern
+import time.ClockTime
 
 # R12/R15: runtime horizon, shared cursor, bounded prefix. Hundreds of billions
 # of logical days must never become an eagerly materialized intermediate list.
@@ -187,7 +189,26 @@ main! = |args| {
 	}
 	choice_after = Host.allocated_bytes!({})
 	Host.assert!(choice.boundary == PosixBoundary.from_microseconds(last * 1000000 + 500000) and choice_after == choice_before)
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before] }
+	var hours = []
+	var parts = []
+	var part = 0.U8
+	while part < 60 {
+		parts = parts.append(part)
+		if part < 24 {
+			hours = hours.append(part)
+		}
+		part = part + 1
+	}
+	clock_anchor = clock_fixture(I64.rem_by(year, 1000000))
+	clock_pattern = match ClockPattern.new(clock_anchor, { hours, minutes: parts, seconds: parts }) {
+		Ok(value) => value
+		Err(_) => crash "full clock pattern"
+	}
+	clock_before = Host.allocated_bytes!({})
+	first_clock = ClockPattern.iter(clock_pattern).take_first(1).fold(None, |_, value| Some(value))
+	clock_after = Host.allocated_bytes!({})
+	Host.assert!(ClockPattern.count(clock_pattern) == 86400 and first_clock == Some(clock_anchor) and clock_after - clock_before <= ceiling)
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
@@ -225,4 +246,9 @@ classification_label = |micros| match FixedOffset.project(FixedOffset.from_secon
 fixture_offset = |number| match I64.to_i32_try(number) {
 	Ok(value) => value
 	Err(_) => crash "fixture offset"
+}
+
+clock_fixture = |microseconds| match ClockTime.from_microseconds_since_midnight(microseconds) {
+	Ok(value) => value
+	Err(_) => crash "clock fixture"
 }

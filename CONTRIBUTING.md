@@ -236,6 +236,9 @@ classification must remain incomplete and have identical allocation traffic.
 After full classification outside the measured choice scope, selecting an
 asserted offset from the resulting 17- or 8193-occurrence fold must allocate
 nothing. The synthetic offsets deliberately repeat one local clock range.
+Clock-pattern traversal separately consumes one candidate from all 86400
+hour/minute/second combinations after selector construction; its byte ceiling
+catches eager materialization of the clock candidates.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory
