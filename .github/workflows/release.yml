@@ -58,7 +58,7 @@ jobs:
           fi
 
       - name: Validate package
-        run: ./ci/all_tests.sh
+        run: python3 scripts/all_tests.py
 
       - name: Resolve previous release
         if: github.event_name == 'workflow_dispatch'
@@ -79,7 +79,7 @@ jobs:
           previous_url: ${{ steps.previous.outputs.previous_url }}
 
       - name: Bundle package
-        run: ./scripts/bundle.sh --output-dir dist
+        run: python3 scripts/bundle.py --output-dir dist
 
       - name: Prepare release bundle metadata
         id: bundles
@@ -140,7 +140,7 @@ jobs:
       - name: Test release bundle
         uses: roc-lang/release-package/actions/test-bundle@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
-          test_bundle_command: python3 ci/test_bundle_examples.py --bundle-path
+          test_bundle_command: python3 scripts/test_bundle_examples.py --bundle-path
           bundle_path: .release/test-bundles/${{ matrix.artifact_file }}
           bundle_name: ${{ matrix.bundle_name }}
           release_version: ${{ needs.build.outputs.release_version }}
@@ -255,9 +255,7 @@ jobs:
           docs_root: www
 
       - name: Generate docs
-        run: |
-          rm -rf "www/${{ needs.build.outputs.docs_version }}"
-          roc docs package/main.roc --output="www/${{ needs.build.outputs.docs_version }}"
+        run: python3 scripts/docs.py "${{ needs.build.outputs.docs_version }}" --docs-root www
 
       - name: Update docs index
         uses: roc-lang/release-package/actions/docs-index@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf

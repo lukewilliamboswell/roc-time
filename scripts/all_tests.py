@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""Run the full local CI check: check, test, docs, bundle, and examples.
+
+This is what `.github/workflows` runs, so a green run here should mean a green
+run in CI.
+"""
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CREATED_RE = re.compile(r"^Created:\s+(.+\.tar\.zst)\s*$", re.MULTILINE)
+
+
+def roc_command() -> str:
+    roc = os.environ.get("ROC", "roc")
+    if "/" in roc or "\\" in roc:
+        return str(Path(roc).resolve())
+    return roc
+
+
+ROC = roc_command()
+
+
+def run(cmd: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    print("+", " ".join(cmd), flush=True)
+    completed = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE if capture else None,
+    )
+
+    if completed.returncode != 0:
+        if capture and completed.stdout:
+            print(completed.stdout)
+        raise SystemExit(f"command failed with exit code {completed.returncode}: {' '.join(cmd)}")
+
+    return completed
+
+
+def heading(text: str) -> None:
+    print(f"\n{text}", flush=True)
+
+
+def main() -> None:
+    tmp_base = Path(os.environ.get("ROC_TIME_TMPDIR", ROOT / ".roc-time-tmp"))
+    tmp_dir = tmp_base / "roc-time-ci"
+    docs_dir = tmp_dir / "docs"
+    bundle_dir = tmp_dir / "bundle"
+
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    docs_dir.mkdir(parents=True)
+    bundle_dir.mkdir(parents=True)
+
+    os.environ["ROC_TIME_TMPDIR"] = str(tmp_base)
+    os.environ["ROC"] = ROC
+
+    run([ROC, "version"])
+
+    heading("Checking package...")
+    run([ROC, "check", "package/main.roc"])
+
+    heading("Running package tests...")
+    modules = sorted(p for p in (ROOT / "package").glob("*.roc") if p.name != "main.roc")
+    for module in modules:
+        run([ROC, "test", str(module.relative_to(ROOT))])
+
+    heading("Checking scripts and examples...")
+    for example in sorted((ROOT / "examples").glob("*.roc")):
+        run([ROC, "check", str(example.relative_to(ROOT))])
+
+    heading("Generating package docs...")
+    run([ROC, "docs", "package/main.roc", f"--output={docs_dir}"])
+
+    if sys.platform.startswith("win"):
+        heading("Skipping package bundling on Windows.")
+        return
+
+    heading("Bundling package...")
+    completed = run(
+        [sys.executable, "scripts/bundle.py", "--output-dir", str(bundle_dir)],
+        capture=True,
+    )
+    print(completed.stdout, end="")
+
+    match = CREATED_RE.search(completed.stdout)
+    if match is None:
+        raise SystemExit("Error: could not extract bundle path from roc bundle output")
+
+    heading("Testing examples against localhost bundle...")
+    run([sys.executable, "scripts/test_bundle_examples.py", "--bundle-path", match.group(1)])
+
+
+if __name__ == "__main__":
+    main()
