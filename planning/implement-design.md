@@ -79,8 +79,15 @@ eight 10,000-run campaigns, both calendar oracle gates and four bundled apps.
 `ZoneRules` now validates immutable finite tables, transition ordering and
 metadata, and provides offset lookup with explicit validity errors. Synthetic
 multi-transition fixtures and generated step-function comparisons establish
-boundary behavior. Local gaps/folds, selection preimages, resolved snapshot
-provenance and external rule-data adapters remain next; lookup is currently a
+boundary behavior. Local boundary classification now preserves unique/gap/fold outcomes, including
+three-occurrence folds. Explicit provider-wide offset bounds prove finite-table
+completeness; outside candidate ranges error even when one match is visible.
+Independent timeline enumeration supplies fixed and generated evidence. The pinned full integration command
+passed with nine 10,000-run campaigns, both calendar oracles and four bundled
+applications. Additional malformed-bound constructor tests passed in
+`roc test package/ZoneRulesTests.roc` (64 tests including imports). Selection
+preimages, explicit occurrence policies, resolved snapshot provenance and external
+rule-data adapters remain next; lookup is currently a
 bounded linear scan whose performance still needs R15 evidence. The full pinned
 integration command passed after this addition on 2026-09-05, including all eight
 10,000-run campaigns, both external calendar oracles and four bundled apps.

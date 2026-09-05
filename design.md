@@ -334,7 +334,29 @@ immutable lists may share backing storage. No cache or mutable provider state
 is introduced. A name/version pair alone is not a content identity for future
 caches: different supplied rule contents must not share cached interpretation.
 Synthetic fixtures specify their entire timeline rather than relying on host
-zone data. Local resolution and selection preimages remain separate operations.
+zone data. `resolve` classifies a local boundary as `Unique`, `Gap`, or `Fold` only after
+proving all possible inverse candidates lie within supplied rule validity.
+`new_bounded` accepts an inclusive whole-second offset range guaranteed by the
+provider, including outside the loaded table. Every supplied offset is checked
+against that range; reversed bounds fail. Do not derive this guarantee from
+observed table entries alone: unknown past/future entries may differ. `new`
+uses the entire I32 range when no narrower guarantee is supplied.
+
+For a local label L and declared offsets [minimum, maximum], possible candidates
+lie in [L - maximum, L - minimum]. Both extremes must fit the POSIX representation
+and lie within the table; otherwise resolution returns `OutOfRange` or
+`OutsideValidity`, even if an in-table occurrence is visible. This conservative
+rule prevents false unique/gap results near missing data. Tight authoritative
+bounds permit practical finite fixtures without hidden extrapolation.
+
+Within a complete query domain, each constant-offset timeline segment contributes
+at most one matching position. Segment order produces sorted distinct results.
+`Fold` retains every occurrence, not just two; no occurrence is selected
+implicitly. Work is O(n) in transitions with O(k) output for k matches, plus
+bounded calendar conversions. Synthetic direct-timeline enumeration anchors
+classification independently of inverse conversion; three-fold and finite-edge
+counterexamples are retained. Selection preimages, explicit occurrence policies
+and snapshot provenance remain separate implementation work.
 
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 
