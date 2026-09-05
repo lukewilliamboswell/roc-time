@@ -68,6 +68,34 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		if ZoneRules.resolve(rules, local) != Ok(classification) {
 			crash "zone resolution differs from independent timeline enumeration"
 		}
+		var classification_cursor = match ZoneRules.classification_cursor(rules, local) {
+			Ok(value) => value
+			Err(_) => crash "classification cursor"
+		}
+		var classified = Bool.False
+		for _ in [0, 1, 2] {
+			batch = match ZoneRules.ClassificationCursor.collect(classification_cursor, { max_segments: 1, max_candidates: 3 }) {
+				Ok(value) => value
+				Err(_) => crash "classification advance"
+			}
+			if batch.segments > 1 {
+				crash "classification work limit"
+			}
+			match batch.status {
+				Complete(value) => {
+					if ZoneRules.Classification.resolution(value) != classification {
+						crash "resumed classification differs from timeline oracle"
+					}
+					classified = Bool.True
+				}
+				Limited(progress) => {
+					classification_cursor = progress.cursor
+				}
+			}
+		}
+		if !classified {
+			crash "classification did not finish"
+		}
 		match expected {
 			[] => {
 				if ZoneRules.resolve_occurrence(rules, local, First) != Err(Gap) {

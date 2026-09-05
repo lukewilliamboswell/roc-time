@@ -230,6 +230,9 @@ exactly one incomplete outcome and terminate. Both operations have separately
 measured traffic ceilings, including when there is no nearby visible occurrence.
 The probe also resolves the first all-day occurrence through the composed date
 and zone cursors, with a separate traffic ceiling and the same vast date horizon.
+Boundary classification is measured separately on 16- and 8192-transition
+synthetic tables. Table construction is outside that scope; one segment of
+classification must remain incomplete and have identical allocation traffic.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory

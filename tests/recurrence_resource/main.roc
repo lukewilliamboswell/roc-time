@@ -139,7 +139,45 @@ main! = |args| {
 		_ => Host.assert!(False)
 	}
 	Host.assert!(composition_after - composition_before <= ceiling)
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before] }
+	# Construct the input table outside the measured classification scope.
+	var transitions = []
+	var index = 1.I64
+	last = if year > 2001 {
+		8192.I64
+	} else {
+		16.I64
+	}
+	while index <= last {
+		transitions = transitions.append({
+			at: PosixBoundary.from_microseconds(index * 1000000),
+			offset: FixedOffset.from_seconds(
+				if I64.rem_by(index, 2) == 0 {
+					0
+				} else {
+					1
+				},
+			),
+		})
+		index = index + 1
+	}
+	zone_rules = classification_rules(transitions, 10000000000)
+	local = classification_label(500000)
+	classification_before = Host.allocated_bytes!({})
+	classification_cursor = match ZoneRules.classification_cursor(zone_rules, local) {
+		Ok(value) => value
+		Err(_) => crash "classification cursor"
+	}
+	classified = match ZoneRules.ClassificationCursor.collect(classification_cursor, { max_segments: 1, max_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "classification step"
+	}
+	classification_after = Host.allocated_bytes!({})
+	Host.assert!(classified.segments == 1 and classified.buffered == 1 and classification_after - classification_before <= ceiling)
+	match classified.status {
+		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
+		_ => Host.assert!(False)
+	}
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
@@ -156,4 +194,20 @@ fixture_rules = |upper| {
 		Ok(value) => value
 		Err(_) => crash "rules"
 	}
+}
+
+classification_rules = |transitions, upper| {
+	validity = match PosixSpan.new(PosixBoundary.from_microseconds(-2000000), PosixBoundary.from_microseconds(upper)) {
+		Ok(value) => value
+		Err(_) => crash "classification validity"
+	}
+	match ZoneRules.new_bounded("Synthetic/Long", "v1", validity, FixedOffset.from_seconds(0), transitions, { minimum: 0, maximum: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "classification rules"
+	}
+}
+
+classification_label = |micros| match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(micros), Gregorian) {
+	Ok(value) => value
+	Err(_) => crash "classification label"
 }

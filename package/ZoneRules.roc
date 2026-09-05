@@ -127,34 +127,120 @@ ZoneRules :: {
 	## Complete classification only when every possible candidate is covered.
 	resolve : ZoneRules, LocalDateTime -> Try(Resolution, [OutsideValidity, OutOfRange, ..])
 	resolve = |rules, local| {
+		cursor = classification_cursor(rules, local)?
+		batch = ClassificationCursor.collect(cursor, { max_segments: U64.highest, max_candidates: U64.highest })?
+		match batch.status {
+			Complete(value) => Ok(Classification.resolution(value))
+			Limited(_) => crash "Finite allocated zone table exhausted U64 limits"
+		}
+	}
+
+	GapTransition : { at : PosixBoundary, before : FixedOffset, after : FixedOffset }
+	Classification :: { rules : ZoneRules, local : LocalDateTime, resolution : Resolution, gaps : List(GapTransition) }.{
+		resolution : Classification -> Resolution
+		resolution = |value| value.resolution
+		rules : Classification -> ZoneRules
+		rules = |value| value.rules
+		local : Classification -> LocalDateTime
+		local = |value| value.local
+
+		## Forward transitions whose skipped local interval contains the label.
+		## A synthetic table can contain several; never silently select one.
+		gap_transitions : Classification -> List(GapTransition)
+		gap_transitions = |value| value.gaps
+		to_inspect : Classification -> Str
+		to_inspect = |value| {
+			kind = match value.resolution {
+				Gap => "Gap"
+				Unique(_) => "Unique"
+				Fold(matches) => "Fold(${matches.len().to_str()})"
+			}
+			"ZoneRules.Classification(${kind}, ${Str.inspect(value.local)}, gap_transitions=${value.gaps.len().to_str()})"
+		}
+	}
+	ClassificationLimits : { max_segments : U64, max_candidates : U64 }
+	ClassificationBatch : {
+		segments : U64,
+		buffered : U64,
+		status : [Complete(Classification), Limited({ cursor : ClassificationCursor, reason : [WorkLimit, BufferLimit] })],
+	}
+	classification_cursor : ZoneRules, LocalDateTime -> Try(ClassificationCursor, [OutsideValidity, OutOfRange, ..])
+	classification_cursor = |rules, local| {
 		earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), local)?
 		latest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), local)?
 		if earliest < PosixSpan.start(rules.validity) or latest >= PosixSpan.end(rules.validity) {
 			return Err(OutsideValidity)
 		}
-		var matches = []
-		var lower = PosixSpan.start(rules.validity)
-		var offset = rules.initial
-		for transition in rules.transitions {
-			candidate = FixedOffset.resolve(offset, local)?
-			if candidate >= lower and candidate < transition.at {
-				matches = matches.append(candidate)
+		Ok({ rules, local, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, matches: [], gaps: [], done: Bool.False })
+	}
+	ClassificationCursor :: {
+		rules : ZoneRules,
+		local : LocalDateTime,
+		index : U64,
+		lower : PosixBoundary,
+		offset : FixedOffset,
+		matches : List(PosixBoundary),
+		gaps : List(GapTransition),
+		done : Bool,
+	}.{
+
+		## One work unit visits one constant-offset segment and its ending
+		## transition. Capacity includes matches and forward-gap evidence.
+		## Shared cursor snapshots may copy retained buffers on append.
+		collect : ClassificationCursor, ClassificationLimits -> Try(ClassificationBatch, [OutOfRange, ..])
+		collect = |initial, limits| {
+			var state = initial
+			var segments = 0.U64
+			while True {
+				buffered = state.matches.len() + state.gaps.len()
+				if buffered > limits.max_candidates {
+					return Ok({ segments, buffered, status: Limited({ cursor: state, reason: BufferLimit }) })
+				}
+				if state.done {
+					resolution = match state.matches {
+						[] => Gap
+						[only] => Unique(only)
+						_ => Fold(state.matches)
+					}
+					return Ok({ segments, buffered, status: Complete({ rules: state.rules, local: state.local, resolution, gaps: state.gaps }) })
+				}
+				if segments == limits.max_segments {
+					return Ok({ segments, buffered, status: Limited({ cursor: state, reason: WorkLimit }) })
+				}
+				transition = state.rules.transitions.get(state.index)
+				upper = match transition {
+					Ok(value) => value.at
+					Err(_) => PosixSpan.end(state.rules.validity)
+				}
+				candidate = FixedOffset.resolve(state.offset, state.local)?
+				matches = candidate >= state.lower and candidate < upper
+				gap = match transition {
+					Ok(value) => candidate >= upper and FixedOffset.resolve(value.offset, state.local)? < upper
+					Err(_) => Bool.False
+				}
+				segments = segments + 1
+				if (matches or gap) and buffered == limits.max_candidates {
+					return Ok({ segments, buffered, status: Limited({ cursor: state, reason: BufferLimit }) })
+				}
+				if matches {
+					state = { ..state, matches: state.matches.append(candidate) }
+				}
+				state = match transition {
+					Ok(value) => {
+						gaps = if gap {
+							state.gaps.append({ at: upper, before: state.offset, after: value.offset })
+						} else {
+							state.gaps
+						}
+						{ ..state, gaps, index: state.index + 1, lower: upper, offset: value.offset }
+					}
+					Err(_) => { ..state, done: Bool.True }
+				}
 			}
-			lower = transition.at
-			offset = transition.offset
+			crash "Classification loop returns an outcome"
 		}
-		candidate = FixedOffset.resolve(offset, local)?
-		if candidate >= lower and candidate < PosixSpan.end(rules.validity) {
-			matches = matches.append(candidate)
-		}
-		# Segments are ordered and disjoint; matches are sorted and unique.
-		Ok(
-			match matches {
-				[] => Gap
-				[only] => Unique(only)
-				_ => Fold(matches)
-			},
-		)
+		to_inspect : ClassificationCursor -> Str
+		to_inspect = |state| "ZoneRules.ClassificationCursor(segment=${state.index.to_str()}, buffered=${(state.matches.len() + state.gaps.len()).to_str()})"
 	}
 
 	## Choose explicitly; gaps never silently move to another local label.
@@ -421,4 +507,47 @@ test_zonedatabase_fixture = |_| {
 test_zonedatabase_status = |data| match ZoneRules.from_database(data) {
 	Ok(_) => Ok({})
 	Err(error) => Err(error)
+}
+
+# Two forward jumps can skip the same label in a synthetic rule table.
+# Preserve both transition witnesses; a future adapter must not guess which
+# pre-gap offset it should use. Buffer exhaustion must preserve the next jump.
+expect {
+	point = PosixBoundary.from_microseconds
+	validity = PosixSpan.new(point(-10000000), point(10000000))?
+	rules = ZoneRules.new_bounded(
+		"Synthetic/RepeatedGap",
+		"v1",
+		validity,
+		FixedOffset.from_seconds(0),
+		[
+			{ at: point(0), offset: FixedOffset.from_seconds(2) },
+			{ at: point(100000), offset: FixedOffset.from_seconds(-2) },
+			{ at: point(200000), offset: FixedOffset.from_seconds(2) },
+		],
+		{ minimum: -2, maximum: 2 },
+	)?
+	local = FixedOffset.project(FixedOffset.from_seconds(0), point(1000000), Gregorian)?
+	initial = ZoneRules.classification_cursor(rules, local)?
+	zero = ZoneRules.ClassificationCursor.collect(initial, { max_segments: 0, max_candidates: 2 })?
+	zero_valid = match zero.status {
+		Limited(progress) => zero.segments == 0 and progress.reason == WorkLimit
+		_ => False
+	}
+	limited = ZoneRules.ClassificationCursor.collect(initial, { max_segments: 4, max_candidates: 1 })?
+	match limited.status {
+		Complete(_) => False
+		Limited(progress) => {
+			finished = ZoneRules.ClassificationCursor.collect(progress.cursor, { max_segments: 2, max_candidates: 2 })?
+			match finished.status {
+				Limited(_) => False
+				Complete(value) => zero_valid and progress.reason == BufferLimit and limited.segments == 3 and finished.segments == 2 and
+					ZoneRules.Classification.resolution(value) == Gap and ZoneRules.Classification.local(value) == local and
+						ZoneRules.Classification.gap_transitions(value) == [
+							{ at: point(0), before: FixedOffset.from_seconds(0), after: FixedOffset.from_seconds(2) },
+							{ at: point(200000), before: FixedOffset.from_seconds(-2), after: FixedOffset.from_seconds(2) },
+						]
+			}
+		}
+	}
 }
