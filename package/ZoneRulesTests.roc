@@ -71,6 +71,20 @@ ZoneRulesTests :: [].{
 		equivalent = ResolvedBoundary.reresolve(original, other_version)?
 		end = local_label(1000000)?
 		selection = ResolvedSelection.resolve(old_rules, local, end)?
+		cursor = ZoneRules.selection_cursor(old_rules, local, end)?
+		limited = ResolvedSelection.collect(cursor, { max_segments: 0, max_members: 1 })?
+		resumed_valid = match limited.status {
+			Complete(_) => False
+			Limited(progress) => {
+				batch = ResolvedSelection.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
+				match batch.status {
+					Limited(_) => False
+					Complete(snapshot) => ResolvedSelection.same_extent(snapshot, selection) and
+						ResolvedSelection.start(snapshot) == local and ResolvedSelection.end(snapshot) == end and
+							ZoneRules.offset_at(ResolvedSelection.rules(snapshot), point(0)) == Ok(FixedOffset.from_seconds(0))
+				}
+			}
+		}
 		moved = ResolvedSelection.reresolve(selection, new_rules)?
 		same = ResolvedSelection.reresolve(selection, other_version)?
 		original_span = PosixSpan.new(point(0), point(1000000))?
@@ -78,7 +92,7 @@ ZoneRulesTests :: [].{
 		selection_valid = ResolvedSelection.coverage(selection) == Coverage.from_spans([original_span]) and
 			ResolvedSelection.coverage(moved) == Coverage.from_spans([moved_span]) and
 				ResolvedSelection.same_extent(selection, same) and !ResolvedSelection.same_extent(selection, moved)
-		selection_valid and ResolvedBoundary.boundary(original) == point(0) and
+		resumed_valid and selection_valid and ResolvedBoundary.boundary(original) == point(0) and
 			ResolvedBoundary.boundary(changed) == point(-3600000000) and
 				!ResolvedBoundary.same_position(original, changed) and
 					ResolvedBoundary.same_position(original, equivalent) and
@@ -106,7 +120,15 @@ ZoneRulesTests :: [].{
 		second = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?
 		third = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 3 })?
 		expected = PosixSpan.new(point(0), point(86400000000))?
-		ZoneRules.select(rules, LocalDateTime.new(first, midnight), LocalDateTime.new(second, midnight)) == Ok(Coverage.from_spans([])) and
+		cursor = ZoneRules.selection_cursor(rules, LocalDateTime.new(first, midnight), LocalDateTime.new(second, midnight))?
+		batch = ResolvedSelection.collect(cursor, { max_segments: 2, max_members: 0 })?
+		empty_snapshot = match batch.status {
+			Limited(_) => False
+			Complete(snapshot) => ResolvedSelection.coverage(snapshot) == Coverage.empty and
+				ResolvedSelection.start(snapshot) == LocalDateTime.new(first, midnight) and
+					ResolvedSelection.end(snapshot) == LocalDateTime.new(second, midnight)
+		}
+		empty_snapshot and ZoneRules.select(rules, LocalDateTime.new(first, midnight), LocalDateTime.new(second, midnight)) == Ok(Coverage.from_spans([])) and
 			ZoneRules.select(rules, LocalDateTime.new(second, midnight), LocalDateTime.new(third, midnight)) == Ok(Coverage.from_spans([expected]))
 	}
 

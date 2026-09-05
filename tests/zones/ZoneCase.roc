@@ -141,7 +141,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		}
 		var completed = Bool.False
 		for _ in [0, 1, 2] {
-			batch = match ZoneRules.SelectionCursor.collect(cursor, { max_segments: 1, max_members: 3 }) {
+			batch = match ResolvedSelection.collect(cursor, { max_segments: 1, max_members: 3 }) {
 				Ok(value) => value
 				Err(_) => crash "selection cursor failed"
 			}
@@ -150,7 +150,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			}
 			match batch.status {
 				Complete(value) => {
-					if value != selected {
+					if ResolvedSelection.coverage(value) != selected or ResolvedSelection.start(value) != local or ResolvedSelection.end(value) != LocalDateTime.new(end_date, end_clock) {
 						crash "chunk boundaries changed selection"
 					}
 					completed = Bool.True
