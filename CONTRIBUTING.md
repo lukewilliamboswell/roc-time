@@ -24,6 +24,7 @@ third-party Python dependencies.
 | Script | Purpose |
 | --- | --- |
 | `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
+| `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
@@ -175,3 +176,26 @@ them; it includes fields omitted by the column mode. Neither mode expands future
 rules or constructs validated zone providers. Its sizes are not a complete database implementation's costs. Runtime
 allocations, retained data, URL acquisition and Wasm require separate evidence.
 Do not copy measurement transcripts into the architecture or active plan.
+
+Generate the optional bounded database into a new directory with:
+
+```sh
+python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata-2025.2.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/pinned/roc
+```
+
+Generation requires CPython 3.14.3 and verifies the wheel hash. It exports
+1800-01-01 through 2200-01-01 exclusively, with future footer transitions
+expanded ahead of time and original alias/canonical identities from `tzdata.zi`.
+The output is a separate Roc package with `Database.get(name)` returning the
+structural record accepted by `ZoneRules.from_database`; core has no dependency
+on it. Unknown names fail at lookup and the imported rules enforce their horizon.
+The generated pack exposes offsets, not abbreviations or DST-status labels.
+
+The generator compares transition endpoints, interval midpoints and monthly
+probes with C `ZoneInfo` loaded from the pinned bytes. Python footer expansion
+and C interpretation are different code paths sharing source data; this does
+not establish independent historical truth. `--verify-roc` checks and builds a
+native caller that imports every name through the real package adapter. Output
+includes source integrity metadata and applicable notices. This generator does
+not publish a release; provider integration tests and bundled application
+examples remain necessary before distribution.
