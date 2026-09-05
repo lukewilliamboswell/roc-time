@@ -24,6 +24,7 @@ third-party Python dependencies.
 | Script | Purpose |
 | --- | --- |
 | `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
+| `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |

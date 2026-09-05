@@ -404,6 +404,68 @@ these cases; generated timeline membership independently checks arbitrary
 microsecond selections. This operation does not select appointment occurrences
 or introduce any gap/fold default.
 
+### Zone database distribution
+
+Ship the interval/calendar core without a transitive zone-database dependency.
+The intended first-party companion package is the recommended default data
+source for named-zone applications; users explicitly pin it alongside roc-time.
+"Default" here means the documented, supported choice, not an ambient database
+or an implicit download at runtime. Fixed-offset and interval-only applications
+need no companion. Application/platform providers and deliberately selected-zone
+bundles remain supported through the same interpretation boundary.
+
+The companion supplies versioned data, not a second temporal engine. Prefer a
+versioned structural interchange boundary adapted once by roc-time into validated
+`ZoneRules`; do not require the data package to return nominal core types from
+its own pinned roc-time version. Roc's content-based nominal identity makes that
+coupling sensitive to core module changes. The data contract must state schema
+version, POSIX epoch/second units, source release and profile, canonical and
+requested zone identifiers, finite validity, transitions, offset bounds and
+future-rule semantics. Unknown schema or malformed data fails during adaptation.
+The concrete payload representation remains an implementation decision requiring
+size/compiler measurements; generated Roc tables and compact TZif are candidates.
+
+The ordinary caller path should be: select a named zone and finite query window
+from the recommended data package, adapt through a small public operation, then
+pass the resulting rules/context to resolution. Lookup need not imply effects:
+a compiled provider is pure; a platform provider loads data before that same
+boundary. Do not require routine callers to hand-build transitions, calculate
+global offset bounds, parse TZif, or implement a registry. Custom providers use
+the same adapter and validation. Preserve the requested alias alongside the
+canonical data identity. Distinguish an unknown identifier, a zone omitted by an
+explicit subset profile, unavailable time range and invalid/unsupported data.
+
+Pin data releases independently from core releases. Updating a dependency is an
+explicit application decision; prior snapshots remain unchanged. A bounded pack
+must advertise its horizon and reject queries beyond it, including ranges needed
+for candidate-completeness proof. Future POSIX footer rules must be expanded under
+finite work/range limits or explicitly remain unsupported; never extrapolate a
+final offset or silently truncate history. Historical coverage is the selected
+IANA profile's evidence, not a claim of complete historical truth.
+
+The optional package is not yet implemented. Before publishing, measure download
+archive, uncompressed source/data, compiler time and peak memory, linked native
+and supported Wasm sizes, and retained runtime data separately for no-zone,
+one-zone and dynamic-name applications. Dead-code elimination cannot be assumed
+to remove dependency download or compiler costs. A documented global-data default including compatibility aliases
+is preferable to silent regional omissions or cutoffs; add subset packs only with clear profiles and
+measured benefit. Named-zone examples must demonstrate both the first-party
+provider and replacement with supplied application data.
+
+Size alone is not a reason to reject a global data package. The pinned tzdata
+2025.2 distribution measured 347,839 bytes as a wheel; its 598 TZif entries total
+345,403 uncompressed bytes. These are source-distribution measurements, not Roc
+bundle or runtime costs. Reproduce them with `scripts/measure_zone_data.py`;
+keep representation tradeoffs tied to the fuller benchmark matrix above.
+[IANA's theory](https://data.iana.org/time-zones/tzdb/theory.html) qualifies
+historical coverage, including pre-1970 and `backzone` data. Pin the source/build
+profile and applicable notices, as described by
+[IANA's database links](https://data.iana.org/time-zones/data/tz-link.html).
+Any production TZif adapter must declare and test the
+[RFC 9636](https://www.rfc-editor.org/rfc/rfc9636.html) footer and truncation
+semantics it supports. Reading explicit transitions alone is not full support.
+
+
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 
 Distinguish **an appointment between chosen boundary occurrences** from **all positions whose local labels fall in a selection**. The former resolves each endpoint under explicit gap/fold policies and validates their order. The latter computes the preimage of the civil selection under zone rules and may yield empty or disconnected coverage. Taking the earliest start and latest end would incorrectly fill gaps between repeated local-time ranges. Calendar-day selection uses this set interpretation; a skipped civil day yields empty coverage. Fixed-offset conversion is the simple special case.

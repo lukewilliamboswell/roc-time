@@ -218,6 +218,54 @@ Pinned interpreter and native probes confirmed `dbg` uses the current boundary
 inspection hook; native compilation emitted the expected optimized-`dbg` warning.
 This does not establish future expression behavior or untested backend support.
 
+## Zone database distribution scope
+
+Direction: publish an optional first-party `roc-time-tzdb` data package as the
+documented default choice for named-zone apps; retain a data-independent core.
+Ordinary callers select a zone/window and adapt once into `ZoneRules`, without
+building tables or implementing a provider callback. Custom application data
+uses the same versioned structural schema. No package is published yet.
+
+Deliverables before selecting the final encoding and release profile:
+
+- Prototype generated Roc tables/columns and compare compact TZif ingestion.
+  Avoid a companion-to-core nominal-type dependency; keep source/schema/profile,
+  units, aliases, finite validity and authoritative offset bounds explicit.
+- Measure core-only, statically selected one-zone, dynamic global-name and
+  generated-subset applications. Separate archive/source bytes, cold/warm compiler
+  work, linked native/Wasm sizes, construction cost and retained data.
+- Set the historical inclusion profile, compatibility aliases, future-rule
+  representation and finite expansion budgets. A bounded release advertises and
+  checks its horizon; no silent recent-history cut or final-offset extrapolation.
+- Add malformed-data/schema, unknown-zone/subset, alias, boundary, future-rule
+  and independent-oracle gates. Extend executable examples with the ordinary
+  provider and an application-supplied replacement. Demonstrate explicit data
+  upgrades and unchanged prior snapshots.
+- Pin IANA data/generator/build profile with notices, deterministic artifacts and
+  an update process independent of core releases. Keep acquisition out of core.
+
+Initial data measurements (2026-09-05), reproducible with
+`python3 scripts/measure_zone_data.py .roc-time-tmp/tzdata-2025.2.whl`:
+
+| Artifact | Bytes |
+|---|---:|
+| Complete pinned wheel | 347,839 |
+| 598 TZif entries, uncompressed sum | 345,403 |
+| TZif ZIP-compressed entry payload sum (not whole archive) | 182,606 |
+| 341 byte-distinct payloads, uncompressed sum | 203,282 |
+| Australia/Melbourne payload | 904 |
+| America/New_York payload | 1,744 |
+| Europe/London payload | 1,599 |
+| Pacific/Apia payload | 407 |
+
+The pin/hash is shared with the zone oracle generator. Byte-distinct payloads do
+not count canonical names. These measurements do not establish generated Roc
+size, dead stripping, compiler memory or retained runtime allocation. Roc's
+URL resolver acquires complete hash-addressed bundles; unused-module elimination
+cannot save bytes inside a fetched bundle. Whether an entirely unused dependency
+declaration is fetched and how native/Wasm data is eliminated remain unverified.
+Do not rely on either assumption to make the optionality decision.
+
 ## Unresolved decisions
 
 Calendar/provider ranges, calendar interoperability scope, zone policy signatures, RFC adapter feature profile, persistence schema and supported reasoning profile must be settled with evidence as their slices land. Allocation/layout and supported Wasm claims require measurements on the pinned compiler.
