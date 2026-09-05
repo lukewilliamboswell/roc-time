@@ -24,6 +24,7 @@ def main() -> None:
     if control.returncode != 0:
         raise SystemExit(f"Positive control failed:\n{control.stdout}")
     cases = {
+        "local_as_posix": ["first argument", "LocalDateTime", "PosixBoundary"],
         "mixed_domain_order": ["PosixBoundary", "CivilDay", "trying to use it as"],
         "posix_as_calendar_delta": ["second argument", "PosixDelta", "CalendarDelta"],
         "civil_as_posix": ["first argument", "CivilDay", "PosixBoundary"],

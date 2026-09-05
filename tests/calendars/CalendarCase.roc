@@ -3,6 +3,8 @@ import time.Calendar
 import time.CalendarDate
 import time.CivilDay
 import time.JulianDate
+import time.ClockTime
+import time.LocalDateTime
 
 # R06: full Julian coordinate range, overlap with Gregorian and explicit errors.
 CalendarCase := { number : I64 }.{
@@ -43,6 +45,20 @@ CalendarCase := { number : I64 }.{
 			gregorian = match converted {
 				Ok(date) => date
 				Err(_) => crash "R06 shared coordinate rejected"
+			}
+			# Map the existing full-range input to local fractions without changing
+			# the curated decoder. Calendar conversion must preserve the label.
+			micros = I64.rem_by(input.number + 784369121962, 86400000000)
+			clock = match ClockTime.from_microseconds_since_midnight(micros) {
+				Ok(label) => label
+				Err(_) => crash "supported local clock rejected"
+			}
+			local = LocalDateTime.new(julian, clock)
+			other = LocalDateTime.new(gregorian, clock)
+			if !LocalDateTime.same_position(local, other) or local == other or
+				LocalDateTime.in_calendar(local, Gregorian) != Ok(other) or
+					LocalDateTime.clock(other) != clock {
+				crash "local calendar conversion changed position or description"
 			}
 			if !CalendarDate.same_day(julian, gregorian) or julian == gregorian or
 				CalendarDate.in_calendar(gregorian, Julian) != Ok(julian) {

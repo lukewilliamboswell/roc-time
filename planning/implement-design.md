@@ -59,7 +59,12 @@ The zone input foundation now includes opaque `ClockTime`, explicit field and
 leap-second errors, constant-cost coordinate conversion, and an independent
 odometer oracle covering 259,200 labels. The `clock-v1` generated target checks
 arbitrary fractions and adjacent labels. This does not implement resolution;
-local date attachment, immutable zone rules and transition interpretation remain.
+`LocalDateTime` now attaches a validated calendar date without assuming a zone.
+Its named position comparison differs from description equality; generated
+calendar cases preserve local labels across conversion, the sourced reform
+anchor verifies equal local positions, and a compile-failure fixture rejects
+local labels used as POSIX boundaries. Immutable zone rules and transition
+interpretation remain.
 The full pinned integration command passed on 2026-09-05 with all seven
 10,000-run campaigns, both oracle gates and all four bundled applications.
 The interpreter required shared-memory access outside the sandbox; the successful

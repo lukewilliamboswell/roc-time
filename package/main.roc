@@ -6,6 +6,7 @@ package
 		CalendarArithmetic,
 		CivilDay,
 		ClockTime,
+		LocalDateTime,
 		GregorianDate,
 		JulianDate,
 		PosixBoundary,
