@@ -3,6 +3,12 @@ import pf.Host
 import time.CalendarPattern
 import time.DateRecurrence
 import time.GregorianDate
+import time.AllDayRecurrence
+import time.AllDayOccurrence
+import time.PosixSpan
+import time.PosixBoundary
+import time.FixedOffset
+import time.ZoneRules
 
 # R12/R15: runtime horizon, shared cursor, bounded prefix. Hundreds of billions
 # of logical days must never become an eagerly materialized intermediate list.
@@ -117,10 +123,37 @@ main! = |args| {
 	)
 	zero_after = Host.allocated_bytes!({})
 	Host.assert!(zero_count == 1 and zero_after - zero_before <= ceiling)
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before] }
+	rules = fixture_rules(2000000000000000)
+	composition_before = Host.allocated_bytes!({})
+	composed = match AllDayRecurrence.new("service", rule, { start: anchor, end }, 1, rules) {
+		Ok(value) => value
+		Err(_) => crash "composed cursor"
+	}
+	resolved = match AllDayRecurrence.next(composed, { max_date_steps: 8, max_date_buffered: 1, max_zone_segments: 1, max_zone_members: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "composed next"
+	}
+	composition_after = Host.allocated_bytes!({})
+	match resolved.status {
+		Item(item) => Host.assert!(AllDayOccurrence.id(item.occurrence) == { series: "service", date: anchor })
+		_ => Host.assert!(False)
+	}
+	Host.assert!(composition_after - composition_before <= ceiling)
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
 	Ok(value) => value
 	Err(_) => crash "fixture date"
+}
+
+fixture_rules = |upper| {
+	validity = match PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(upper)) {
+		Ok(value) => value
+		Err(_) => crash "validity"
+	}
+	match ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) {
+		Ok(value) => value
+		Err(_) => crash "rules"
+	}
 }

@@ -7,6 +7,7 @@ package
 		CalendarPattern,
 		DateRecurrence,
 		AllDayOccurrence,
+		AllDayRecurrence,
 		RfcDateRule,
 		CivilDay,
 		ClockTime,

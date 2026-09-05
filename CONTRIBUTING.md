@@ -228,6 +228,8 @@ A query starting near the end of each horizon must return `Limited(WorkLimit)`
 under a one-step search budget. Fully consuming a zero-work iterator must yield
 exactly one incomplete outcome and terminate. Both operations have separately
 measured traffic ceilings, including when there is no nearby visible occurrence.
+The probe also resolves the first all-day occurrence through the composed date
+and zone cursors, with a separate traffic ceiling and the same vast date horizon.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory

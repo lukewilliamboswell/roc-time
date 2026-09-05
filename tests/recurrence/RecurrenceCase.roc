@@ -1,4 +1,12 @@
 import fuzz.Fuzz
+import time.AllDayRecurrence
+import time.AllDayOccurrence
+import time.Coverage
+import time.PosixDelta
+import time.PosixSpan
+import time.PosixBoundary
+import time.FixedOffset
+import time.ZoneRules
 import time.CalendarPattern
 import time.DateRecurrence
 import time.GregorianDate
@@ -177,6 +185,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 						Limited(_) => crash "Parsed recurrence unexpectedly limited"
 					}
 					check_consumers(cursor, limits, normalized)
+					check_all_day(rule, window, normalized)
 					return Fuzz.keep
 				}
 				Limited(progress) => {
@@ -307,4 +316,57 @@ month_length = |year, month| match month {
 	}
 	4 | 6 | 9 | 11 => 30
 	_ => 31
+}
+
+# The date oracle above remains independent; fixed UTC supplies exactly one
+# 86400-second selection for each generated date, with a stable source ID.
+check_all_day = |rule, window, expected| {
+	rules = fixture_rules(2000000000000000)
+	var current = match AllDayRecurrence.new(42.U64, rule, window, 1, rules) {
+		Ok(value) => value
+		Err(_) => crash "all-day construction"
+	}
+	var observed = []
+	var calls = 0.U64
+	while calls < 5000 {
+		batch = match AllDayRecurrence.next(current, { max_date_steps: 7, max_date_buffered: 366, max_zone_segments: 1, max_zone_members: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "all-day next"
+		}
+		if batch.date_steps > 7 or batch.zone_segments > 1 {
+			crash "all-day budget exceeded"
+		}
+		match batch.status {
+			End => {
+				if observed != expected {
+					crash "all-day dates differ from calendar oracle"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+			Item(item) => {
+				identity = AllDayOccurrence.id(item.occurrence)
+				if identity.series != 42 or Coverage.coordinate_width(AllDayOccurrence.coverage(item.occurrence)) != Ok(PosixDelta.from_microseconds(86400000000)) {
+					crash "all-day identity or width"
+				}
+				observed = observed.append(identity.date)
+				current = item.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "all-day resumption did not finish"
+}
+
+fixture_rules = |upper| {
+	validity = match PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(upper)) {
+		Ok(value) => value
+		Err(_) => crash "validity"
+	}
+	match ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) {
+		Ok(value) => value
+		Err(_) => crash "rules"
+	}
 }

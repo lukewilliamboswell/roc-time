@@ -61,6 +61,10 @@ omitted defaults remain unsupported.
 date and civil-day duration against explicit zone rules, with resumable work
 limits. Clock changes can alter its coordinate width; a skipped date retains
 the occurrence's identity with empty coverage.
+[AllDayRecurrence](package/AllDayRecurrence.roc) applies that interpretation to a
+date series. Use bounded `collect` for a list, or `next`/`outcomes` for incremental
+consumption; limits retain a cursor for resumption. Its query window selects
+source dates, rather than clipping resolved coverage to a timeline window.
 
 ## Acknowledgements
 
