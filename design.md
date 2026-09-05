@@ -359,6 +359,10 @@ These are **proposed API sketches**, using Roc records, tag unions, pure functio
 
 Two appointments specified in different offsets must subtract correctly from a UTC work window. Formatting does not participate in the subtraction.
 
+This scenario now runs with typed local dates and explicit offsets in
+[the room availability application](examples/coverage/main.roc). The parsing API
+below remains proposed; the executable uses the same public coverage kernel.
+
 ```roc
 booking_availability = |_| {
     work = Iso8601.posix_span("2026-06-15T09:00:00Z/2026-06-15T17:00:00Z")?

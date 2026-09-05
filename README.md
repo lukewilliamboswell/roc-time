@@ -42,9 +42,10 @@ roc examples/invoice/main.roc
 roc examples/calendar_conversion/main.roc
 ```
 
-The availability and recorder examples use explicitly resolved POSIX coordinates.
-The invoice example uses civil dates without assuming a timezone. Parsing and
-zone-aware display will be demonstrated as those capabilities land.
+The availability example resolves dated bookings with explicit offsets before
+subtracting their coverage. The recorder example uses resolved POSIX coordinates.
+The invoice example uses civil dates without assuming a timezone. General parsing
+and named-zone display will be demonstrated as those capabilities land.
 
 ## Acknowledgements
 

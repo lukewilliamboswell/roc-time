@@ -3,15 +3,28 @@ app [main!] {
 }
 
 import Availability
+import time.CalendarDate
+import time.ClockTime
+import time.FixedOffset
+import time.LocalDateTime
 
 main! = |_args| {
-	# These inputs are already resolved POSIX seconds, not local clock readings.
+	date = CalendarDate.from_fields(Gregorian, { year: 2026, month: 6, day: 15 })?
+	local = |hour, minute| {
+		clock = ClockTime.from_fields({ hour, minute, second: 0, microsecond: 0 })?
+		Ok(LocalDateTime.new(date, clock))
+	}
+	utc = FixedOffset.from_seconds(0)
+	# The first booking supplies +02:00 explicitly; no city rules are inferred.
 	available = Availability.from_bookings(
-		{ start: 32400.Dec, end: 61200.Dec },
-		[{ start: 36000.Dec, end: 39600.Dec }, { start: 37800.Dec, end: 43200.Dec }],
+		{ start: local(9, 0)?, end: local(17, 0)?, offset: utc },
+		[
+			{ start: local(12, 0)?, end: local(13, 0)?, offset: FixedOffset.from_seconds(7200) },
+			{ start: local(10, 30)?, end: local(12, 0)?, offset: utc },
+		],
 	)?
-	echo!("Room availability on 1970-01-01 (UTC)\n")
-	echo!("Opening hours: 09:00–17:00; bookings: 10:00–11:00 and 10:30–12:00\n")
+	echo!("Room availability on 2026-06-15\n")
+	echo!("Opening: 09:00–17:00 UTC; bookings: 12:00–13:00 +02:00 and 10:30–12:00 UTC\n")
 	for line in Availability.report(available)? {
 		echo!("${line}\n")
 	}
