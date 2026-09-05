@@ -411,9 +411,10 @@ of the implementation, and which domains it actually covers. Round trips and
 agreement between implementations are insufficient when they share the same
 mistaken convention or algorithm. Sourced convention fixtures, independent
 models and differential implementations provide complementary evidence; their
-limitations and disagreements must remain visible. The durable harness strategy
-belongs in [Oracle verification](docs/oracles.md), with implementation gaps
-tracked in the active plan.
+limitations and disagreements must remain visible. Every temporal implementation must use at least one oracle appropriate to its
+claim. The working Gregorian gate compares public conversion results against
+external and explicitly model-derived expectations; commands and evidence limits
+are documented in [CONTRIBUTING.md](CONTRIBUTING.md#tests). Track remaining evidence gaps in the active plan.
 
 | ID | Required observable behavior |
 |---|---|

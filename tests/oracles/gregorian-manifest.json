@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "profile": "gregorian-i32-years-civil-day-1970-v1",
+  "corpus_sha256": "f791bb3f7e9b7a89d68a59925975d69100cfd9e4dbde80ca4ecd125aa71e7446",
+  "generator_version": 1,
+  "generator_sha256": "93c0fe486c1c72b2855a9e7326e64a8204e376a486c794ebaab46d2a9cc58a24",
+  "reference": "CPython 3.14.3 datetime",
+  "seed": 20260905,
+  "command": "python3 scripts/oracles.py --refresh",
+  "case_count": 4096,
+  "overlap_dates_verified": 3652059,
+  "sources": [
+    "https://docs.python.org/3.14/library/datetime.html#date-objects",
+    "https://docs.python.org/3.14/library/calendar.html",
+    "https://github.com/python/cpython/blob/v3.14.3/Modules/_datetimemodule.c",
+    "https://github.com/python/cpython/blob/v3.14.3/LICENSE"
+  ],
+  "license": "Reference runtime: PSF License; generated numerical observations, no implementation code copied",
+  "independence": "Forward complete-year formula shared; inverse cycle decomposition differs from production search. Cycle extension outside years1..9999 is derived model evidence, not direct datetime support."
+}

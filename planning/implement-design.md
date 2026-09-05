@@ -30,7 +30,7 @@ The duplicate runner was removed at the user's request, with its extra checks
 and thirteen named Allen cases migrated and verified under the retained decoder.
 
 Enduring commands, domains and raw-input provenance are in
-[README](../README.md#tests) and [test evidence](../tests/fuzz/README.md).
+[contributor guide](../CONTRIBUTING.md#tests) and [test evidence](../tests/fuzz/README.md).
 The release manifest is `tests/fuzz/dependency.json`; runtime data stays under
 `.roc-time-tmp/` by default. Normal CI invokes one gate; a separate weekly
 workflow configures longer campaigns and artifact retention.
@@ -64,40 +64,29 @@ Next implement ordered arithmetic with explicit destination policy, the invoice
 application, and cross-calendar equal-day fixtures. Conversion alone does not
 complete R05–R06. Keep unsupported calendar dispatch explicit as providers land.
 
-### Oracle evidence before extending calendar semantics
+### Oracle evidence
 
-Follow the durable [oracle harness strategy](../docs/oracles.md), including its
-first Gregorian milestone and explicit distinction between implemented evidence
-and proposed harness work.
+The Gregorian oracle gate is implemented in `scripts/oracles.py` and
+`tests/oracle_gregorian/`. It replays 4,096 committed observations, including
+separate field-to-day and day-to-field expectations, malformed fields and
+provider endpoints. CPython 3.14.3 generates direct expectations for years
+1–9999; a table of its 2000–2399 cycle supplies explicitly derived expectations
+outside that range. Generation verifies both directions over all 3,652,059
+shared-domain dates. Runtime uses the real public package and a native driver;
+expected values remain outside Roc. Commands and limitations are in CONTRIBUTING.md.
+The full pinned integration command passed on 2026-09-05, including comparator
+corruption checks, a failing-driver control and all 4,096 native observations
+(0.43 seconds for check/build/run on Apple Silicon macOS).
 
-The current Gregorian tests provide algorithmically distinct sequential counting
-and generated next-day checks, but share calendar assumptions and manually
-entered epoch anchors with the implementation. They are not an independently
-sourced conformance corpus. The coverage bitmap model independently checks set
-membership on a bounded domain; its query scan still uses production-normalized
-members and `PosixSpan.overlaps`, so that check establishes search/scan agreement
-rather than independent construction or overlap correctness.
+CPython's forward formula shares our January-based leap counting, while its
+inverse uses cycle decomposition rather than our binary search. Keep the
+sequential model and sourced convention evidence alongside these comparisons.
+Coverage's bitmap oracle independently checks bounded membership; its query
+scan reuses production-normalized members and overlap predicates, so that scan
+establishes search agreement rather than independent overlap correctness.
 
-Implement the first external oracle harness for Gregorian conversion before
-extending calendar arithmetic. Compare public API observations against a pinned,
-independently generated Gregorian corpus over the external provider's actual
-domain; verify the comparison protocol detects wrong values and missing cases.
-Keep year-zero/negative-year and provider-limit evidence separate from direct
-external comparisons. Python `datetime` supports years 1–9999: applying a
-400-year translation outside that domain supplies derived model evidence, not
-direct Python conformance. A local CPython 3.14.3 probe confirmed its rejection
-of year zero and -1 and its epoch-relative result -719162 for 0001-01-01.
-This probe informs harness selection; it did not execute roc-time or establish
-new package conformance evidence. Durable fixture provenance, reproducible
-generation, exact case accounting, disagreement handling and finite CI budgets
-are required deliverables for this harness.
-
-Source inspection also found that CPython 3.14.3 `days_before_year` uses the same
-January-based leap-count formula as our forward conversion. External maintenance
-therefore provides useful differential evidence, but not forward-algorithm
-independence. Its inverse conversion uses cycle decomposition rather than our
-binary search. Record independence per operation, and retain the distinct
-sequential model and independently sourced convention anchors.
+Extend oracle evidence as arithmetic and other temporal capabilities land;
+no cross-calendar, zone, recurrence or resource evidence is implied by this gate.
 
 ## Unresolved decisions
 

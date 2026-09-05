@@ -82,6 +82,9 @@ def main() -> None:
     heading("Running bounded semantic fuzz checks and regression replay...")
     run([sys.executable, "scripts/fuzz.py", "--operation", "all"])
 
+    heading("Comparing public APIs with oracle expectations...")
+    run([sys.executable, "scripts/oracles.py"])
+
     heading("Checking scripts and examples...")
     for example in sorted((ROOT / "examples").rglob("main.roc")):
         run([ROC, "check", str(example.relative_to(ROOT))])

@@ -4,7 +4,7 @@
 
 - Read [design.md](design.md) before changing temporal behavior or public APIs. Its requirements R01–R16 are architectural contracts.
 - If an active project or task has a plan under `planning/`, read it before working on that scope. Plans do not silently override the design.
-- This file contains methodology and guardrails. README introduces the project. Keep each document focused on that role.
+- This file contains methodology and guardrails. CONTRIBUTING.md provides contributor setup and workflows. README introduces package capabilities and usage. Keep each document focused on that role.
 - Use the compiler pinned by `.roc-version`; `ROC` can select its executable for repository scripts. Verify `roc version` rather than assuming the executable on PATH matches.
 - Keep disposable binaries, downloaded sources, generated probes, and raw exploratory outputs under ignored `.roc-time-tmp/`. Preserve durable decisions in the design and reproducible checks in tests or tooling; do not require ignored files to understand a decision.
 
@@ -50,7 +50,7 @@ At completion, move enduring decisions into `design.md` and useful verification 
 
 ## Property-based testing
 
-[roc-fuzz](https://github.com/lukewilliamboswell/roc-fuzz) is the default property-based testing platform for temporal implementation work. For changes to temporal semantics, add or extend a test root under `tests/` through the real public modules. Where generated testing is unsuitable, explain the alternative executable evidence. The platform release URL and integrity metadata are pinned in `tests/fuzz/dependency.json`; each fuzz test must use that exact URL. Update the pin and test declarations together when deliberately upgrading the dependency. `scripts/fuzz.py` is the single runner for builds, replay, bounded searches, and failure-lifecycle checks. See [README](README.md#tests) for commands and [the implementation plan](planning/implement-design.md#roc-fuzz-integration) for remaining evidence work.
+[roc-fuzz](https://github.com/lukewilliamboswell/roc-fuzz) is the default property-based testing platform for temporal implementation work. For changes to temporal semantics, add or extend a test root under `tests/` through the real public modules. Where generated testing is unsuitable, explain the alternative executable evidence. The platform release URL and integrity metadata are pinned in `tests/fuzz/dependency.json`; each fuzz test must use that exact URL. Update the pin and test declarations together when deliberately upgrading the dependency. `scripts/fuzz.py` is the single runner for builds, replay, bounded searches, and failure-lifecycle checks. See [contributor guide](CONTRIBUTING.md#tests) for commands and [the implementation plan](planning/implement-design.md#roc-fuzz-integration) for remaining evidence work.
 
 - State the applicable requirement IDs, input domain, property preconditions, and independent oracle or semantic law. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
 - Generate useful valid inputs directly and deliberately include signed limits, adjacent endpoints, empty collections, duplicates, and touching/overlapping spans as applicable. Exercise owned, shared, and sliced collections where ownership can affect behavior. Small exhaustive models complement exploration across the full supported range.
@@ -63,7 +63,7 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
 
 ## Oracle evidence
 
-Oracles are central to semantic verification. Follow the [oracle harness strategy](docs/oracles.md) when adding temporal behavior or changing an algorithm. Establish the intended caller meaning from the design and primary evidence, then compare the public API against independently sourced expectations or a deliberately different bounded model. Round trips and agreement between libraries can preserve the same incorrect interpretation.
+Use at least one oracle when adding temporal behavior or changing an algorithm; this is a standing implementation requirement. Extend the working `scripts/oracles.py` gate, an independent bounded reference model, or sourced executable fixtures as appropriate. Establish the intended caller meaning from the design and primary evidence, then compare the public API against independently sourced expectations or a deliberately different bounded model. Round trips and agreement between libraries can preserve the same incorrect interpretation.
 
 - Record what makes each oracle independent, its supported semantic intersection, shared assumptions and remaining gaps. Distinguish sourced facts, external-library outputs and model-derived extensions; never claim an oracle supports a domain it cannot represent.
 - Pin source revisions, data, generators and adapters with provenance, integrity hashes and applicable notices. Review expected-result refreshes; never derive or automatically bless expectations from the package under test. Keep normal replay deterministic and independent of the host's clock, zone database or live network data.

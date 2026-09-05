@@ -72,7 +72,7 @@ as a roc-time bug. The lifecycle check repeats these assertions in normal CI.
 On Apple Silicon macOS, all four targets built from the release URL, replayed
 the curated inputs, and passed 10,000 runs each with seed 1, 5-second maximum,
 256-byte input maximum, 256 MB RSS limit, and 2-second per-input timeout.
-Coverage counters were present. Exact runnable commands live in the root README
+Coverage counters were present. Exact runnable commands live in CONTRIBUTING.md
 and `scripts/fuzz.py`. Linux x86-64/musl is configured from the upstream platform
 and must pass the CI gate, but runtime execution has not been verified locally.
 Other host/architecture combinations explicitly report fuzz checks as unverified.
