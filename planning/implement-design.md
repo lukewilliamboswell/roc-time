@@ -98,8 +98,15 @@ source labels and policies; explicit re-resolution preserves original values
 and validates offset assertions under new data. Same-axis comparisons ignore
 provenance differences. The full pinned integration command passed on
 2026-09-05 with nine 10,000-run campaigns, both calendar oracles and four
-bundled applications. External rule-data adapters and broader sourced zone
-fixtures remain next; lookup is currently a
+bundled applications. Pinned real-world zone fixtures now cover Lord Howe's half-hour fold/gap and
+Apia's skipped day, with 2,592 CPython ZoneInfo-derived occurrence expectations.
+The generator validates every second of the three exported ten-day windows and
+normal replay consumes typed Roc data without host zone lookup. The full pinned
+integration suite passed on 2026-09-05, including all nine fuzz campaigns,
+4,096 Gregorian, 4,096 Julian and 2,592 zone oracle observations, and all four
+bundled applications. A production
+rule-data adapter, broader sourced scenarios and remaining R07/R09 integration
+remain; lookup is currently a
 bounded linear scan whose performance still needs R15 evidence. The full pinned
 integration command passed after this addition on 2026-09-05, including all eight
 10,000-run campaigns, both external calendar oracles and four bundled apps.

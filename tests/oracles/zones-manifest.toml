@@ -1,0 +1,12 @@
+version = 1
+profile = "zones-tzdata-2025b-v1"
+case_count = 2592
+corpus_sha256 = "c70a8c497b1beffebb2432a3c34e35246d260b15b1a87a72a5ca016c0fda190d"
+generator_sha256 = "54624d281eb95f044895646fdf5965ff7b42fb06f0196cd8210650fd8a7ccb97"
+wheel_url = "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl"
+wheel_sha256 = "1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8"
+reference = "CPython 3.14.3 ZoneInfo.from_file; tzdata 2025.2 (IANA 2025b)"
+independence = "CPython fold/UTC-roundtrip candidates vs Roc segment preimages; common pinned rule data. Synthetic enumeration remains separate evidence."
+limitation = "Selected modern transition windows only; Python fold models at most two occurrences. Synthetic tests cover triple folds."
+tzif_0_sha256 = "f368bd25659c0293d02bb79ec7dac7d5b73a92dffafce14b4dd2ffb8ba11aada"
+tzif_1_sha256 = "dc70c47c80ab2c87a1ab754bab8febfc38508059e249dfe55e73a3759808ea14"

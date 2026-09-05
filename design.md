@@ -334,7 +334,17 @@ immutable lists may share backing storage. No cache or mutable provider state
 is introduced. A name/version pair alone is not a content identity for future
 caches: different supplied rule contents must not share cached interpretation.
 Synthetic fixtures specify their entire timeline rather than relying on host
-zone data. `resolve` classifies a local boundary as `Unique`, `Gap`, or `Fold` only after
+zone data. The external zone oracle additionally uses pinned IANA 2025b
+TZif data distributed in the Python tzdata 2025.2 wheel. Generated Roc fixtures
+cover Lord Howe's 2024 half-hour transitions and Apia's 2011 skipped day;
+CPython's fold/UTC-round-trip reference supplies expected local occurrences.
+The generator validates each exported finite rule table against every second
+of its source window, including future-rule footer expansion. Offset bounds
+cover all source TZif types plus the checked footer offsets, not merely observed
+window entries. Source hashes, wheel pin, notices and independence limits live
+in `tests/oracles/zones-manifest.toml` and CONTRIBUTING.md. This evidence does not
+implement a TZif loader, a zone registry or current-law network lookup.
+ `resolve` classifies a local boundary as `Unique`, `Gap`, or `Fold` only after
 proving all possible inverse candidates lie within supplied rule validity.
 `new_bounded` accepts an inclusive whole-second offset range guaranteed by the
 provider, including outside the loaded table. Every supplied offset is checked

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay independently generated Gregorian expectations through public Roc APIs."""
+"""Replay independently generated calendar and zone expectations through public Roc APIs."""
 from __future__ import annotations
 
 import argparse
@@ -229,7 +229,8 @@ def command(args: list[str], cwd: Path, label: str) -> str:
 def replay(name: str) -> None:
     driver = ROOT / f"tests/oracle_{name}"
     manifest = tomllib.loads((DATA / f"{name}-manifest.toml").read_text())
-    if manifest["profile"] != PROFILE.replace("gregorian", name) or manifest["version"] != 1:
+    expected_profile = "zones-tzdata-2025b-v1" if name == "zones" else PROFILE.replace("gregorian", name)
+    if manifest["profile"] != expected_profile or manifest["version"] != 1:
         raise ValueError("Unsupported oracle profile")
     if manifest["corpus_sha256"] != digest(driver / "Cases.roc"):
         raise ValueError("Generated oracle module integrity mismatch")
@@ -276,14 +277,14 @@ def replay(name: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refresh", action="store_true", help="Explicitly regenerate reviewed external expectations")
+    parser.add_argument("--refresh", action="store_true", help="Explicitly regenerate reviewed calendar expectations (zones use generate_zone_oracle.py)")
     args = parser.parse_args()
     try:
         if args.refresh:
             refresh()
             refresh_julian()
         else:
-            for name in ("gregorian", "julian"):
+            for name in ("gregorian", "julian", "zones"):
                 replay(name)
     except (ValueError, KeyError, OSError) as error:
         raise SystemExit(str(error)) from error

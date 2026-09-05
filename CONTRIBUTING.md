@@ -53,7 +53,7 @@ See the [contributor method](AGENTS.md#property-based-testing).
 
 At least one oracle is required for temporal implementation work. Run
 `ROC=/path/to/pinned/roc python3 scripts/oracles.py` to compare 4,096 Gregorian and 4,096 Julian
-observations against checked-in generated Roc expectations. The full test command includes this
+observations, plus 2,592 zone observations, against checked-in generated Roc expectations. The full test command includes this
 gate. Expectations come from CPython 3.14.3 `datetime` within years 1–9999 and a
 400-year table model beyond that range; model-derived BCE/extreme-year cases
 are not direct Python conformance evidence. The external forward formula shares
@@ -77,6 +77,28 @@ To deliberately refresh expectations, use CPython 3.14.3 and run
 `python3 scripts/oracles.py --refresh`, then review the generated Roc module and manifest diff.
 Generation checks the table model against all 3,652,059 dates in Python's domain.
 Never regenerate expected values from roc-time output or bless a mismatch.
+
+Zone provenance is in `tests/oracles/zones-manifest.toml`. The pinned tzdata
+2025.2 wheel contains IANA 2025b data; its URL and SHA-256 are recorded there.
+The generator uses `ZoneInfo.from_file`, never the host database, and writes
+`tests/oracle_zones/Cases.roc`. To refresh with CPython 3.14.3, download that exact
+wheel under `.roc-time-tmp/` and run:
+
+```bash
+python3 scripts/generate_zone_oracle.py .roc-time-tmp/tzdata-2025.2.whl
+```
+
+The three ten-day fixtures cover Lord Howe's 2024 half-hour fold/gap and Apia's
+2011 skipped day. Generation validates exported offsets at every second of each
+window. Expected local occurrences use both Python fold values and UTC-to-local
+round-trip validation; a fold flag alone does not prove that a label exists.
+The corpus covers 15-minute labels at three microsecond positions on three days
+around each transition. This is selected-window evidence, not full tzdb support.
+Python's two-fold model does not validate arbitrary multi-fold behavior; synthetic
+Roc tests provide separate triple-fold evidence. Retain the copied tzdata license
+notices when refreshing. Normal replay requires neither Python tzdata nor a
+network service.
+
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset and zone roots
