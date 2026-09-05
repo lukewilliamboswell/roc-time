@@ -195,7 +195,11 @@ The generator compares transition endpoints, interval midpoints and monthly
 probes with C `ZoneInfo` loaded from the pinned bytes. Python footer expansion
 and C interpretation are different code paths sharing source data; this does
 not establish independent historical truth. `--verify-roc` checks and builds a
-native caller that imports every name through the real package adapter. Output
+native caller that imports every name through the real package adapter, checks
+transition counts and position-weighted checksums, and queries both sides of
+every transition. `--encoding columns` exports separate numeric lists assembled
+into the same structural records; the default `records` emits literals directly.
+Compare the complete provider workload when evaluating these encodings. Output
 includes source integrity metadata and applicable notices. This generator does
 not publish a release; provider integration tests and bundled application
 examples remain necessary before distribution.
