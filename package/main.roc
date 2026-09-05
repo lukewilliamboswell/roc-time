@@ -7,6 +7,7 @@ package
 		CalendarPattern,
 		DateRecurrence,
 		TimedRecurrence,
+		SubdailyPattern,
 		AllDayOccurrence,
 		AllDayRecurrence,
 		RfcDateRule,

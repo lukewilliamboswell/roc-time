@@ -145,6 +145,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				month = month + 1
 			}
 		}
+		check_subdaily(input)
 		check_timed(input, anchor, pattern, window, expected)
 		# Direct ordered set model; deliberately not the cursor's two-stream merge.
 		var normalized = []
@@ -524,4 +525,123 @@ check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
 		calls = calls + 1
 	}
 	crash "timed batches did not finish"
+}
+
+# A finite integer-second grid, independent of SubdailyPattern's clock seeks.
+# Expand lower fields, filter seconds at SECONDLY frequency, then apply source
+# truncation, COUNT and a later query. The epoch day makes UTC boundaries direct.
+check_subdaily = |input| {
+	mode = U8.rem_by(input.query_month, 3)
+	frequency = match mode {
+		0 => Hourly
+		1 => Minutely
+		_ => Secondly
+	}
+	unit = match mode {
+		0 => 3600.I64
+		1 => 60.I64
+		_ => 1.I64
+	}
+	anchor_second = if mode == 0 {
+		84650.I64
+	} else {
+		86390.I64
+	}
+	fraction = input.work.to_i64()
+	anchor_clock = match ClockTime.from_microseconds_since_midnight(anchor_second * 1000000 + fraction) {
+		Ok(value) => value
+		Err(_) => crash "subdaily anchor clock"
+	}
+	anchor = date(1970, 1, 1)
+	start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
+	query = match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds((anchor_second + 30) * 1000000), Gregorian) {
+		Ok(value) => value
+		Err(_) => crash "subdaily query"
+	}
+	end = local(date(1970, 1, 3), 0)
+	rule = match TimedRecurrence.new_subdaily(
+		{ date: anchor, clock: anchor_clock },
+		{
+			pattern: {
+				frequency,
+				interval: input.interval.to_i64(),
+				calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] },
+				clocks: {
+					hours: [],
+					minutes: if mode == 0 {
+						[0, 30]
+					} else {
+						[]
+					},
+					seconds: [10, 50],
+				},
+			},
+			termination: Count(input.count.to_u64()),
+			by_set_pos: [],
+		},
+	) {
+		Ok(value) => value
+		Err(_) => crash "subdaily grid construction"
+	}
+	window_start = if input.exclude_anchor {
+		query
+	} else {
+		start
+	}
+	var current = match TimedRecurrence.cursor(rule, { start: window_start, end }, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "subdaily grid cursor"
+	}
+	var expected = []
+	var count = 0.U64
+	var index = 0.I64
+	while index < 1000 and count < input.count.to_u64() {
+		base = I64.div_trunc_by(anchor_second, unit) * unit + index * input.interval.to_i64() * unit
+		offsets = match mode {
+			0 => [10.I64, 50, 1810, 1850]
+			1 => [10.I64, 50]
+			_ => [0.I64]
+		}
+		for offset in offsets {
+			candidate = base + offset
+			seconds = I64.mod_by(candidate, 60)
+			if candidate >= anchor_second and (mode != 2 or seconds == 10 or seconds == 50) and count < input.count.to_u64() {
+				count = count + 1
+				if !input.exclude_anchor or candidate >= anchor_second + 30 {
+					expected = expected.append(candidate * 1000000 + fraction)
+				}
+			}
+		}
+		index = index + 1
+	}
+	if count != input.count.to_u64() {
+		crash "finite subdaily model too short"
+	}
+	var observed = []
+	var calls = 0.U64
+	while calls < 10000 {
+		batch = match TimedRecurrence.Cursor.collect(current, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 2 }) {
+			Ok(value) => value
+			Err(_) => crash "subdaily grid execution"
+		}
+		if batch.steps > input.work.to_u64() or batch.zone_segments > 2 or batch.occurrences.len() > 2 {
+			crash "subdaily grid budget"
+		}
+		for occurrence in batch.occurrences {
+			observed = observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
+		}
+		match batch.status {
+			Complete => {
+				if observed != expected {
+					crash "subdaily differs from integer-second model"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "subdaily grid resumption did not terminate"
 }

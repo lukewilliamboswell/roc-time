@@ -27,49 +27,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## per selector. Duplicates have set meaning and do not duplicate candidates.
 	new : GregorianDate, Spec -> Try(CalendarPattern, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), ..])
 	new = |anchor, spec| {
-		if spec.interval < 1 or spec.interval > 2147483647 {
-			return Err(InvalidInterval)
-		}
-		if spec.by_month.len() > 4096 or spec.by_month_day.len() > 4096 or spec.by_year_day.len() > 4096 or spec.by_week_no.len() > 4096 or spec.by_day.len() > 4096 {
-			return Err(TooManySelectors)
-		}
-		for month in spec.by_month {
-			if month < 1 or month > 12 {
-				return Err(InvalidSelector("BYMONTH"))
-			}
-		}
-		for day in spec.by_month_day {
-			if day == 0 or day < -31 or day > 31 {
-				return Err(InvalidSelector("BYMONTHDAY"))
-			}
-		}
-		for day in spec.by_year_day {
-			if day == 0 or day < -366 or day > 366 {
-				return Err(InvalidSelector("BYYEARDAY"))
-			}
-		}
-		for week in spec.by_week_no {
-			if week == 0 or week < -53 or week > 53 {
-				return Err(InvalidSelector("BYWEEKNO"))
-			}
-		}
-		for day in spec.by_day {
-			if day.ordinal < -53 or day.ordinal > 53 {
-				return Err(InvalidSelector("BYDAY"))
-			}
-			if day.ordinal != 0 and (spec.frequency == Daily or spec.frequency == Weekly or !spec.by_week_no.is_empty()) {
-				return Err(InvalidCombination("ordinal BYDAY"))
-			}
-		}
-		if spec.frequency == Weekly and !spec.by_month_day.is_empty() {
-			return Err(InvalidCombination("BYMONTHDAY with WEEKLY"))
-		}
-		if spec.frequency != Yearly and !spec.by_year_day.is_empty() {
-			return Err(InvalidCombination("BYYEARDAY requires YEARLY"))
-		}
-		if spec.frequency != Yearly and !spec.by_week_no.is_empty() {
-			return Err(InvalidCombination("BYWEEKNO requires YEARLY"))
-		}
+		validate(spec)?
 		Ok({ anchor, spec })
 	}
 
@@ -116,75 +74,13 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 		if date < frame.start or date >= frame.end {
 			return Ok(False)
 		}
+		if !matches_filters(pattern.spec, date)? {
+			return Ok(False)
+		}
 		spec = pattern.spec
 		fields = GregorianDate.to_fields(date)
 		anchor = GregorianDate.to_fields(pattern.anchor)
-		day = number(date)
-		weekday = weekday_number(day)
-		length = match GregorianDate.days_in_month(fields.year, fields.month) {
-			Ok(value) => value.to_i64()
-			Err(_) => crash "Validated Gregorian date fields"
-		}
-		if !spec.by_month.is_empty() and !spec.by_month.contains(fields.month) {
-			return Ok(False)
-		}
-		if !spec.by_month_day.is_empty() {
-			var found = False
-			for selected in spec.by_month_day {
-				found = found or ordinal_matches(selected.to_i64(), fields.day.to_i64(), length)
-			}
-			if !found {
-				return Ok(False)
-			}
-		}
-		if !spec.by_year_day.is_empty() {
-			first = number(january(fields.year.to_i128())?)
-			last = number(january(fields.year.to_i128() + 1)?)
-			var found = False
-			for selected in spec.by_year_day {
-				found = found or ordinal_matches(selected.to_i64(), day - first + 1, last - first)
-			}
-			if !found {
-				return Ok(False)
-			}
-		}
-		if !spec.by_week_no.is_empty() {
-			week = week_position(date, spec.week_start)?
-			var found = False
-			for selected in spec.by_week_no {
-				found = found or ordinal_matches(selected.to_i64(), week.position, week.total)
-			}
-			if !found {
-				return Ok(False)
-			}
-		}
-		if !spec.by_day.is_empty() {
-			var found = False
-			for selected in spec.by_day {
-				if weekday_index(selected.weekday) == weekday {
-					if selected.ordinal == 0 {
-						found = True
-					} else {
-						var position = fields.day.to_i64()
-						var total = length
-						# RFC 5545 verified erratum 3779: ordinal YEARLY BYDAY
-						# is relative to the year only when BYMONTH is absent.
-						if spec.frequency == Yearly and spec.by_month.is_empty() {
-							first = number(january(fields.year.to_i128())?)
-							last = number(january(fields.year.to_i128() + 1)?)
-							position = day - first + 1
-							total = last - first
-						}
-						positive = I64.div_trunc_by(position - 1, 7) + 1
-						negative = -(I64.div_trunc_by(total - position, 7) + 1)
-						found = found or selected.ordinal.to_i64() == positive or selected.ordinal.to_i64() == negative
-					}
-				}
-			}
-			if !found {
-				return Ok(False)
-			}
-		}
+		weekday = weekday_number(number(date))
 		# Defaults supply missing expansion fields, not extra filters when other
 		# date selectors already expanded the period.
 		if spec.frequency == Weekly and spec.by_day.is_empty() {
@@ -197,6 +93,23 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 			return Ok(fields.day == anchor.day and (!spec.by_month.is_empty() or fields.month == anchor.month))
 		}
 		Ok(True)
+	}
+
+	## Date restrictions without a frequency's expansion defaults. Subdaily
+	## periods use these same selector predicates after choosing their date.
+	Filter :: { spec : CalendarPattern.Spec }.{
+		Spec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
+		new : Spec -> Try(Filter, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), ..])
+		new = |filters| {
+			if filters.by_month.len() > 4096 or filters.by_month_day.len() > 4096 or filters.by_year_day.len() > 4096 or filters.by_day.len() > 4096 {
+				return Err(TooManySelectors)
+			}
+			spec = { ..CalendarPattern.defaults(Yearly), by_month: filters.by_month, by_month_day: filters.by_month_day, by_year_day: filters.by_year_day, by_day: filters.by_day.map(|weekday| { ordinal: 0.I8, weekday }) }
+			validate(spec)?
+			Ok({ spec: spec })
+		}
+		matches : Filter, GregorianDate -> Try(Bool, [OutOfRange, ..])
+		matches = |filter, date| matches_filters(filter.spec, date)
 	}
 
 	to_inspect : CalendarPattern -> Str
@@ -395,4 +308,138 @@ expect {
 test_calendarpattern_status = |anchor, spec| match CalendarPattern.new(anchor, spec) {
 	Ok(_) => Ok({})
 	Err(error) => Err(error)
+}
+
+validate = |spec| {
+	if spec.interval < 1 or spec.interval > 2147483647 {
+		return Err(InvalidInterval)
+	}
+	if spec.by_month.len() > 4096 or spec.by_month_day.len() > 4096 or spec.by_year_day.len() > 4096 or spec.by_week_no.len() > 4096 or spec.by_day.len() > 4096 {
+		return Err(TooManySelectors)
+	}
+	for month in spec.by_month {
+		if month < 1 or month > 12 {
+			return Err(InvalidSelector("BYMONTH"))
+		}
+	}
+	for day in spec.by_month_day {
+		if day == 0 or day < -31 or day > 31 {
+			return Err(InvalidSelector("BYMONTHDAY"))
+		}
+	}
+	for day in spec.by_year_day {
+		if day == 0 or day < -366 or day > 366 {
+			return Err(InvalidSelector("BYYEARDAY"))
+		}
+	}
+	for week in spec.by_week_no {
+		if week == 0 or week < -53 or week > 53 {
+			return Err(InvalidSelector("BYWEEKNO"))
+		}
+	}
+	for day in spec.by_day {
+		if day.ordinal < -53 or day.ordinal > 53 {
+			return Err(InvalidSelector("BYDAY"))
+		}
+		if day.ordinal != 0 and (spec.frequency == Daily or spec.frequency == Weekly or !spec.by_week_no.is_empty()) {
+			return Err(InvalidCombination("ordinal BYDAY"))
+		}
+	}
+	if spec.frequency == Weekly and !spec.by_month_day.is_empty() {
+		return Err(InvalidCombination("BYMONTHDAY with WEEKLY"))
+	}
+	if spec.frequency != Yearly and !spec.by_year_day.is_empty() {
+		return Err(InvalidCombination("BYYEARDAY requires YEARLY"))
+	}
+	if spec.frequency != Yearly and !spec.by_week_no.is_empty() {
+		return Err(InvalidCombination("BYWEEKNO requires YEARLY"))
+	}
+	Ok({})
+}
+
+matches_filters : CalendarPattern.Spec, GregorianDate -> Try(Bool, [OutOfRange, ..])
+matches_filters = |spec, date| {
+	fields = GregorianDate.to_fields(date)
+	day = number(date)
+	weekday = weekday_number(day)
+	length = match GregorianDate.days_in_month(fields.year, fields.month) {
+		Ok(value) => value.to_i64()
+		Err(_) => crash "Validated Gregorian date fields"
+	}
+	if !spec.by_month.is_empty() and !spec.by_month.contains(fields.month) {
+		return Ok(False)
+	}
+	if !spec.by_month_day.is_empty() {
+		var found = False
+		for selected in spec.by_month_day {
+			found = found or ordinal_matches(selected.to_i64(), fields.day.to_i64(), length)
+		}
+		if !found {
+			return Ok(False)
+		}
+	}
+	if !spec.by_year_day.is_empty() {
+		first = number(january(fields.year.to_i128())?)
+		last = first + year_length(fields.year)
+		var found = False
+		for selected in spec.by_year_day {
+			found = found or ordinal_matches(selected.to_i64(), day - first + 1, last - first)
+		}
+		if !found {
+			return Ok(False)
+		}
+	}
+	if !spec.by_week_no.is_empty() {
+		week = week_position(date, spec.week_start)?
+		var found = False
+		for selected in spec.by_week_no {
+			found = found or ordinal_matches(selected.to_i64(), week.position, week.total)
+		}
+		if !found {
+			return Ok(False)
+		}
+	}
+	if !spec.by_day.is_empty() {
+		var found = False
+		for selected in spec.by_day {
+			if weekday_index(selected.weekday) == weekday {
+				if selected.ordinal == 0 {
+					found = True
+				} else {
+					var position = fields.day.to_i64()
+					var total = length
+					# RFC 5545 verified erratum 3779: ordinal YEARLY BYDAY
+					# is relative to the year only when BYMONTH is absent.
+					if spec.frequency == Yearly and spec.by_month.is_empty() {
+						first = number(january(fields.year.to_i128())?)
+						last = first + year_length(fields.year)
+						position = day - first + 1
+						total = last - first
+					}
+					positive = I64.div_trunc_by(position - 1, 7) + 1
+					negative = -(I64.div_trunc_by(total - position, 7) + 1)
+					found = found or selected.ordinal.to_i64() == positive or selected.ordinal.to_i64() == negative
+				}
+			}
+		}
+		if !found {
+			return Ok(False)
+		}
+	}
+
+	Ok(True)
+}
+
+# Only called with a year from a validated date. Do not require a representable
+# next January merely to filter a date in the final supported Gregorian year.
+year_length = |year| match GregorianDate.days_in_month(year, 2) {
+	Ok(february) => 337.I64 + february.to_i64()
+	Err(_) => crash "validated Gregorian year"
+}
+
+expect {
+	filter = CalendarPattern.Filter.new({ by_month: [], by_month_day: [], by_year_day: [-1], by_day: [] })?
+	last = GregorianDate.from_fields({ year: 2147483647, month: 12, day: 31 })?
+	first = GregorianDate.from_fields({ year: 2147483647, month: 1, day: 1 })?
+	CalendarPattern.Filter.matches(filter, last)? and !CalendarPattern.Filter.matches(filter, first)?
 }

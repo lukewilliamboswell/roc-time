@@ -1,5 +1,6 @@
 import CalendarDate
 import CalendarPattern
+import SubdailyPattern
 import CivilDay
 import ClockPattern
 import ClockTime
@@ -15,7 +16,8 @@ import ZoneRules
 ## Windows select source labels, not timeline overlaps. This is not an RRULE parser.
 ## COUNT includes chosen source occurrences before the query window; UNTIL is
 ## inclusive in local position. Daily through yearly periods use Gregorian
-## selectors; subdaily frequencies, exceptions and durations are not exposed.
+## selectors via new; new_subdaily supplies hourly, minutely or secondly
+## periods. Exceptions and durations are not exposed.
 ## Clock candidates are ordered by source label. BYSETPOS indexes that full
 ## period after explicit interpretation, without deduplicating equal boundaries.
 ## Construction retains at most 4096 positions and bounded field selectors.
@@ -24,34 +26,34 @@ import ZoneRules
 ## Without positions, buffering holds one occurrence. With positions it holds
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
-TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks : ClockPattern, termination : Termination, positions : List(I16) }.{
+TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16) }.{
 	Termination : [Forever, Count(U64), Until(LocalDateTime)]
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new = |start, spec| {
 		anchor = LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock)
-		match spec.termination {
-			Count(0) => return Err(InvalidCount)
-			Until(end) => if before(end, anchor) {
-				return Err(InvalidUntil)
-			}
-			_ => {}
-		}
-		if spec.by_set_pos.len() > 4096 {
-			return Err(TooManySelectors)
-		}
-		for position in spec.by_set_pos {
-			if position == 0 or position < -366 or position > 366 {
-				return Err(InvalidSetPosition)
-			}
-		}
+		validate_options(anchor, spec.termination, spec.by_set_pos)?
 		calendar = CalendarPattern.new(start.date, spec.calendar)?
 		clocks = ClockPattern.new(start.clock, spec.clocks)?
 		if !CalendarPattern.matches(calendar, 0, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, calendar, clocks, termination: spec.termination, positions: spec.by_set_pos })
+		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos })
 	}
+	SubdailySpec : { pattern : SubdailyPattern.Spec, termination : Termination, by_set_pos : List(I16) }
+	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
+	new_subdaily = |start, spec| {
+		anchor = LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock)
+		validate_options(anchor, spec.termination, spec.by_set_pos)?
+		pattern = SubdailyPattern.new(start, spec.pattern)?
+		_ = SubdailyPattern.period(pattern, 0)?
+		clocks = SubdailyPattern.clocks(pattern)
+		if !SubdailyPattern.matches_date(pattern, start.date)? or !clock_matches(clocks, start.clock) {
+			return Err(UnsynchronizedStart)
+		}
+		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos })
+	}
+
 	Window : { start : LocalDateTime, end : LocalDateTime }
 	Context : { rules : ZoneRules, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Limits : { max_steps : U64, max_buffered : U64, max_zone_segments : U64, max_zone_candidates : U64 }
@@ -78,8 +80,8 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 			GT => return Err(ReversedWindow)
 			LT => {}
 		}
-		frame = CalendarPattern.period(rule.calendar, 0)?
-		Ok({ rule, window, context, period: 0, day: day_number(frame.start), end_day: day_number(frame.end), day_selected: Unknown, clock_index: 0, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0 })
+		frame = timed_frame(rule, 0)?
+		Ok({ rule, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0 })
 	}
 	Cursor :: {
 		rule : TimedRecurrence,
@@ -90,6 +92,9 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 		end_day : I64,
 		day_selected : [Unknown, Yes, No],
 		clock_index : U64,
+		clock_start : U64,
+		clock_end : U64,
+		period_end : LocalDateTime,
 		buffer : List(Occurrence),
 		phase : [Build, Emit({ index : U64, advance : Bool }), Advance],
 		pending : [None, Some({ source : LocalDateTime, cursor : ZoneRules.ClassificationCursor })],
@@ -188,7 +193,7 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 						}
 					}
 					Advance => {
-						boundary = local_at(state.end_day, midnight({}))?
+						boundary = state.period_end
 						if !before(boundary, state.window.end) {
 							return Ok(ended(state, steps, zone_segments))
 						}
@@ -198,8 +203,14 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 							}
 							_ => {}
 						}
-						frame = CalendarPattern.period(state.rule.calendar, state.period + 1)?
-						state = { ..state, period: state.period + 1, day: day_number(frame.start), end_day: day_number(frame.end), day_selected: Unknown, clock_index: 0, phase: Build, anchor_index: None }
+						match state.rule.schedule {
+							Subdaily(pattern) => if !SubdailyPattern.starts_before(pattern, state.period + 1, state.window.end) {
+								return Ok(ended(state, steps, zone_segments))
+							}
+							Calendar(_) => {}
+						}
+						frame = timed_frame(state.rule, state.period + 1)?
+						state = { ..state, period: state.period + 1, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, phase: Build, anchor_index: None }
 					}
 					Build => {
 						if state.day == state.end_day {
@@ -216,7 +227,7 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 							match state.day_selected {
 								Unknown => {
 									date = GregorianDate.from_civil_day(CivilDay.from_day_number(state.day))?
-									matches = CalendarPattern.matches(state.rule.calendar, state.period, date)?
+									matches = matches_day(state.rule, state.period, date)?
 									state = {
 										..state,
 										day_selected: if matches {
@@ -230,7 +241,7 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 									state = next_day(state)
 								}
 								Yes => {
-									if state.clock_index == ClockPattern.count(state.rule.clocks) {
+									if state.clock_index == state.clock_end {
 										state = next_day(state)
 									}
 										else {
@@ -384,7 +395,7 @@ limited = |state, steps, zone_segments, reason| { steps, zone_segments, buffered
 
 ended = |state, steps, zone_segments| { steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: End }
 
-next_day = |state| { ..state, day: state.day + 1, day_selected: Unknown, clock_index: 0 }
+next_day = |state| { ..state, day: state.day + 1, day_selected: Unknown, clock_index: state.clock_start }
 
 # The second clock is exactly outside provider validity. Neither a half-open
 # query nor inclusive UNTIL should require interpreting that unused label.
@@ -682,4 +693,197 @@ expect {
 		}
 	}
 	valid and errors == 1
+}
+
+validate_options = |anchor, termination, positions| {
+	match termination {
+		Count(0) => return Err(InvalidCount)
+		Until(end) => if before(end, anchor) {
+			return Err(InvalidUntil)
+		}
+		_ => {}
+	}
+	if positions.len() > 4096 {
+		return Err(TooManySelectors)
+	}
+	for position in positions {
+		if position == 0 or position < -366 or position > 366 {
+			return Err(InvalidSetPosition)
+		}
+	}
+	Ok({})
+}
+
+timed_frame : TimedRecurrence, U64 -> Try({ start_day : I64, end_day : I64, clock_start : U64, clock_end : U64, end : LocalDateTime }, [OutOfRange, ..])
+timed_frame = |rule, index| match rule.schedule {
+	Calendar(pattern) => {
+		period = CalendarPattern.period(pattern, index)?
+		end_day = day_number(period.end)
+		Ok({ start_day: day_number(period.start), end_day, clock_start: 0, clock_end: ClockPattern.count(rule.clocks), end: local_at(end_day, midnight({}))? })
+	}
+	Subdaily(pattern) => {
+		period = SubdailyPattern.period(pattern, index)?
+		start_day = day_number(period.date)
+		Ok({ start_day, end_day: start_day + 1, clock_start: period.start_index, clock_end: period.end_index, end: period.end })
+	}
+}
+
+matches_day : TimedRecurrence, U64, GregorianDate -> Try(Bool, [OutOfRange, ..])
+matches_day = |rule, index, date| match rule.schedule {
+	Calendar(pattern) => CalendarPattern.matches(pattern, index, date)
+	Subdaily(pattern) => SubdailyPattern.matches_date(pattern, date)
+}
+
+# Independent nominal-second grids in fixed UTC. These include expansion,
+# period filtering, microsecond retention and a midnight crossing.
+test_subdaily = |clock_fields, pattern, positions, count| {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_fields(clock_fields)?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = local_at(3, midnight({}))?
+	rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern, termination: Count(count), by_set_pos: positions })?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(432000000000))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	var current = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
+	var boundaries = []
+	var calls = 0.U64
+	while calls < 2000 {
+		batch = TimedRecurrence.Cursor.collect(current, { work: { max_steps: 1, max_buffered: 60, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
+		if batch.steps > 1 or batch.zone_segments > 1 {
+			crash "subdaily work limit"
+		}
+		for occurrence in batch.occurrences {
+			boundaries = boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
+		}
+		match batch.status {
+			Complete => return Ok(boundaries)
+			Limited(progress) => {
+				current = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "subdaily finite grid did not terminate"
+}
+
+test_subdaily_filters = { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }
+
+expect {
+	test_subdaily(
+		{ hour: 9, minute: 15, second: 30, microsecond: 7 },
+		{
+			frequency: Hourly,
+			interval: 3,
+			calendar: test_subdaily_filters,
+			clocks: { hours: [], minutes: [45, 15], seconds: [] },
+		},
+		[],
+		4,
+	)? == [33330000007, 35130000007, 44130000007, 45930000007]
+}
+
+expect {
+	test_subdaily(
+		{ hour: 23, minute: 45, second: 20, microsecond: 7 },
+		{
+			frequency: Minutely,
+			interval: 15,
+			calendar: test_subdaily_filters,
+			clocks: { hours: [], minutes: [], seconds: [50, 20] },
+		},
+		[],
+		4,
+	)? == [85520000007, 85550000007, 86420000007, 86450000007]
+}
+
+expect {
+	test_subdaily(
+		{ hour: 23, minute: 59, second: 50, microsecond: 7 },
+		{
+			frequency: Secondly,
+			interval: 17,
+			calendar: test_subdaily_filters,
+			clocks: { hours: [], minutes: [], seconds: [] },
+		},
+		[],
+		3,
+	)? == [86390000007, 86407000007, 86424000007]
+}
+
+expect {
+	test_subdaily(
+		{ hour: 9, minute: 30, second: 30, microsecond: 0 },
+		{
+			frequency: Hourly,
+			interval: 1,
+			calendar: test_subdaily_filters,
+			clocks: { hours: [], minutes: [0, 30], seconds: [0, 30] },
+		},
+		[-1],
+		2,
+	)? == [34230000000, 37830000000]
+}
+
+expect {
+	test_subdaily(
+		{ hour: 0, minute: 0, second: 0, microsecond: 0 },
+		{
+			frequency: Hourly,
+			interval: 24,
+			calendar: { ..test_subdaily_filters, by_year_day: [1] },
+			clocks: { hours: [], minutes: [], seconds: [] },
+		},
+		[],
+		2,
+	)? == [0]
+}
+
+expect {
+	# A huge interval must stop at this finite query before trying to construct
+	# an irrelevant future period. Provider-extreme starts are tested in
+	# SubdailyPattern without requiring a resolved axis of that larger range.
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = local_at(1, clock)?
+	rule = TimedRecurrence.new_subdaily(
+		{ date, clock },
+		{
+			pattern: {
+				frequency: Hourly,
+				interval: 2147483647,
+				calendar: test_subdaily_filters,
+				clocks: { hours: [], minutes: [], seconds: [] },
+			},
+			termination: Forever,
+			by_set_pos: [],
+		},
+	)?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(86400000000))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
+	result = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
+	result.occurrences.len() == 1 and match result.status {
+		Complete => Bool.True
+		Limited(_) => Bool.False
+	}
+}
+
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	start = { date, clock }
+	pattern = { frequency: Hourly, interval: 1.I64, calendar: test_subdaily_filters, clocks: { hours: [], minutes: [], seconds: [] } }
+	test_subdaily_status(start, { ..pattern, interval: 0 }) == Err(InvalidInterval) and
+		test_subdaily_status(start, { ..pattern, interval: 2147483648 }) == Err(InvalidInterval) and
+			test_subdaily_status(start, { ..pattern, clocks: { hours: [24], minutes: [], seconds: [] } }) == Err(InvalidHour) and
+				test_subdaily_status(start, { ..pattern, clocks: { hours: [], minutes: [], seconds: [60] } }) == Err(UnsupportedLeapSecond) and
+					test_subdaily_status(start, { ..pattern, clocks: { hours: [], minutes: [1], seconds: [] } }) == Err(UnsynchronizedStart) and
+						test_subdaily_status(start, { ..pattern, calendar: { ..test_subdaily_filters, by_year_day: [367] } }) == Err(InvalidSelector("BYYEARDAY")) and
+							test_subdaily_status(start, { ..pattern, calendar: { ..test_subdaily_filters, by_day: List.repeat(Monday, 4097) } }) == Err(TooManySelectors)
+}
+
+test_subdaily_status = |start, pattern| match TimedRecurrence.new_subdaily(start, { pattern, termination: Forever, by_set_pos: [] }) {
+	Ok(_) => Ok({})
+	Err(error) => Err(error)
 }

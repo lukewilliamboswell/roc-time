@@ -247,6 +247,8 @@ result must stop iteration rather than retry forever. The standard ceiling is
 4 KiB of requested allocation traffic per stage, except 8 KiB for the timed
 iterator prefix, accounting for its higher measured traffic on the pinned
 compiler.
+A secondly recurrence over the same horizons separately verifies that seeking
+and consuming one clock period stays within the base budget.
 These are explicit traffic budgets, not claims of live memory or zero-cost
 iteration. Short/vast traffic must still match exactly.
 A five-second process deadline catches catastrophic hidden traversal, and a
