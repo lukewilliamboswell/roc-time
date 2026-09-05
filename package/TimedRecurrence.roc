@@ -55,7 +55,7 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 	Window : { start : LocalDateTime, end : LocalDateTime }
 	Context : { rules : ZoneRules, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Limits : { max_steps : U64, max_buffered : U64, max_zone_segments : U64, max_zone_candidates : U64 }
-	Limit : [WorkLimit, BufferLimit, ZoneWorkLimit, ZoneBufferLimit]
+	Limit : [WorkLimit, BufferLimit, ZoneWorkLimit, ZoneBufferLimit, OutputLimit]
 	Occurrence :: { source : LocalDateTime, choice : ZoneRules.BoundaryChoice, rules : ZoneRules }.{
 		source : Occurrence -> LocalDateTime
 		source = |value| value.source
@@ -69,6 +69,8 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 		to_inspect = |value| "TimedRecurrence.Occurrence(${Str.inspect(value.source)}, ${Str.inspect(value.choice.boundary)})"
 	}
 	Next : { steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [End, Item({ occurrence : Occurrence, cursor : Cursor }), Limited({ cursor : Cursor, reason : Limit })] }
+	CollectLimits : { work : Limits, max_occurrences : U64 }
+	Batch : { occurrences : List(Occurrence), steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [Complete, Limited({ cursor : Cursor, reason : Limit })] }
 	cursor : TimedRecurrence, Window, Context -> Try(Cursor, [EmptyWindow, ReversedWindow, OutOfRange, ..])
 	cursor = |rule, window, context| {
 		match LocalDateTime.compare_position(window.start, window.end) {
@@ -263,6 +265,55 @@ TimedRecurrence :: { anchor : LocalDateTime, calendar : CalendarPattern, clocks 
 			}
 			crash "Timed recurrence loop returns an outcome"
 		}
+
+		## Budgets apply to the entire batch, not separately to each output.
+		## Output capacity is a separate bound from pending candidate buffers.
+		## At capacity return Limited(OutputLimit) without looking ahead; even
+		## an exactly full final batch needs resumption to prove completion.
+		collect : Cursor, CollectLimits -> Try(Batch, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
+		collect = |initial, limits| {
+			var current = initial
+			var occurrences = []
+			var steps = 0.U64
+			var zone_segments = 0.U64
+			while occurrences.len() < limits.max_occurrences {
+				result = next(current, { ..limits.work, max_steps: limits.work.max_steps - steps, max_zone_segments: limits.work.max_zone_segments - zone_segments })?
+				steps = steps + result.steps
+				zone_segments = zone_segments + result.zone_segments
+				match result.status {
+					End => return Ok({ occurrences, steps, zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Complete })
+					Limited(progress) => return Ok({ occurrences, steps, zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Limited(progress) })
+					Item(item) => {
+						occurrences = occurrences.append(item.occurrence)
+						current = item.cursor
+					}
+				}
+			}
+			Ok({ occurrences, steps, zone_segments, buffered: buffered_count(current), zone_buffered: current.zone_buffered, status: Limited({ cursor: current, reason: OutputLimit }) })
+		}
+
+		## A lazy stream of next outcomes. Budgets apply per advancement.
+		## End, errors and Limited are terminal items. Resume a Limited cursor
+		## explicitly; iterating a zero-work stream cannot retry forever.
+		outcomes : Cursor, Limits -> Iter(Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart]))
+		outcomes = |initial, limits| Iter.custom(
+			Some(initial),
+			Unknown,
+			|state| match state {
+				None => Err(NoMore)
+				Some(current) => {
+					result = next(current, limits)
+					rest = match result {
+						Ok(batch) => match batch.status {
+							Item(item) => Some(item.cursor)
+							_ => None
+						}
+						Err(_) => None
+					}
+					Ok((result, rest))
+				}
+			},
+		)
 		to_inspect : Cursor -> Str
 		to_inspect = |state| "TimedRecurrence.Cursor(period=${state.period.to_str()}, count=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
 	}
@@ -523,4 +574,112 @@ expect {
 	result = test_series_with_pauses([1, -1], budget, 3600, First, pauses)?
 	expected = test_gap_series([1, -1], budget)?
 	result.valid and expected.valid and result.sources == expected.sources and result.boundaries == expected.boundaries and result.adjusted == expected.adjusted
+}
+
+# A tiny explicit UTC grid isolates collection/output budgeting from date
+# selection. Its expected boundaries are zero and one hour after the epoch.
+test_stream_cursor = |count| test_stream_cursor_with_validity(count, 172800000000)
+
+test_stream_cursor_with_validity = |count, validity_end| {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(count), by_set_pos: [] })?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(validity_end))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })
+}
+
+expect {
+	initial = test_stream_cursor(2)?
+	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
+	zero = TimedRecurrence.Cursor.collect(initial, { work, max_occurrences: 0 })?
+	var valid = zero.steps == 0 and zero.zone_segments == 0 and zero.occurrences.is_empty()
+	resume = match zero.status {
+		Limited(progress) => {
+			valid = valid and progress.reason == OutputLimit
+			progress.cursor
+		}
+		Complete => crash "zero-output collection must not infer completion"
+	}
+	full = TimedRecurrence.Cursor.collect(resume, { work, max_occurrences: 2 })?
+	boundaries = full.occurrences.map(TimedRecurrence.Occurrence.boundary)
+	rest = match full.status {
+		Limited(progress) => {
+			valid = valid and progress.reason == OutputLimit
+			progress.cursor
+		}
+		Complete => crash "exact capacity must not look ahead"
+	}
+	final = TimedRecurrence.Cursor.collect(rest, { work, max_occurrences: 2 })?
+	valid and boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)] and final.occurrences.is_empty() and match final.status {
+		Complete => Bool.True
+		Limited(_) => Bool.False
+	}
+}
+
+expect {
+	initial = test_stream_cursor(2)?
+	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
+	first = TimedRecurrence.Cursor.collect(initial, { work, max_occurrences: 10 })?
+	var valid = first.zone_segments == 1 and first.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(0)]
+	rest = match first.status {
+		Limited(progress) => {
+			valid = valid and progress.reason == ZoneWorkLimit
+			progress.cursor
+		}
+		Complete => crash "zone work is shared by the entire batch"
+	}
+	second = TimedRecurrence.Cursor.collect(rest, { work, max_occurrences: 10 })?
+	valid and second.zone_segments == 1 and second.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(3600000000)] and match second.status {
+		Complete => Bool.True
+		Limited(_) => Bool.False
+	}
+}
+
+expect {
+	initial = test_stream_cursor(2)?
+	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
+	var zero_count = 0.U64
+	var valid = Bool.True
+	for result in TimedRecurrence.Cursor.outcomes(initial, { ..work, max_steps: 0 }) {
+		batch = result?
+		zero_count = zero_count + 1
+		valid = valid and batch.steps == 0 and match batch.status {
+			Limited(progress) => progress.reason == WorkLimit
+			_ => Bool.False
+		}
+	}
+	var boundaries = []
+	var end_count = 0.U64
+	for result in TimedRecurrence.Cursor.outcomes(initial, work) {
+		batch = result?
+		match batch.status {
+			End => {
+				end_count = end_count + 1
+			}
+			Item(item) => {
+				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+			}
+			Limited(_) => {
+				valid = Bool.False
+			}
+		}
+	}
+	valid and zero_count == 1 and end_count == 1 and boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)]
+}
+
+expect {
+	initial = test_stream_cursor_with_validity(2, 0)?
+	var errors = 0.U64
+	var valid = Bool.True
+	for result in TimedRecurrence.Cursor.outcomes(initial, { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		errors = errors + 1
+		valid = valid and match result {
+			Err(OutsideValidity) => Bool.True
+			_ => Bool.False
+		}
+	}
+	valid and errors == 1
 }

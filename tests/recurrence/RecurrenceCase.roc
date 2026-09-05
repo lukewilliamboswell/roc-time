@@ -442,6 +442,8 @@ check_timed = |input, anchor, pattern, window, dates| {
 			}
 		}
 	}
+	check_timed_batches(current, input.work.to_u64(), expected_sources, expected_boundaries)
+
 	var sources = []
 	var boundaries = []
 	var calls = 0.U64
@@ -484,3 +486,42 @@ clock = |hour| match ClockTime.from_fields({ hour, minute: 0, second: 0, microse
 }
 
 local = |date_value, hour| LocalDateTime.new(CalendarDate.from_gregorian(date_value), clock(hour))
+
+check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
+	var current = initial
+	var sources = []
+	var boundaries = []
+	var calls = 0.U64
+	while calls < 10000 {
+		batch = match TimedRecurrence.Cursor.collect(
+			current,
+			{
+				work: { max_steps: work, max_buffered: 10, max_zone_segments: 2, max_zone_candidates: 1 },
+				max_occurrences: 2,
+			},
+		) {
+			Ok(value) => value
+			Err(_) => crash "timed collection failed"
+		}
+		if batch.steps > work or batch.zone_segments > 2 or batch.occurrences.len() > 2 {
+			crash "timed batch exceeded shared work or output budget"
+		}
+		for occurrence in batch.occurrences {
+			sources = sources.append(TimedRecurrence.Occurrence.source(occurrence))
+			boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(occurrence))
+		}
+		match batch.status {
+			Complete => {
+				if sources != expected_sources or boundaries != expected_boundaries {
+					crash "timed batches differ from calendar grid"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "timed batches did not finish"
+}

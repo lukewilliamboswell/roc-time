@@ -241,7 +241,14 @@ hour/minute/second combinations after selector construction; its byte ceiling
 catches eager materialization of the clock candidates. The timed cursor then
 combines that full clock grid with the vast daily series and resolves just its
 first occurrence under explicit candidate, buffer and zone budgets. Rule
-construction remains outside this consumption measurement.
+construction remains outside this consumption measurement. Its outcome iterator
+also consumes a single prefix and a complete zero-work stream: a limited
+result must stop iteration rather than retry forever. The standard ceiling is
+4 KiB of requested allocation traffic per stage, except 8 KiB for the timed
+iterator prefix, accounting for its higher measured traffic on the pinned
+compiler.
+These are explicit traffic budgets, not claims of live memory or zero-cost
+iteration. Short/vast traffic must still match exactly.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory

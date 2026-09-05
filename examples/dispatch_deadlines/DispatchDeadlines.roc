@@ -20,20 +20,18 @@ DispatchDeadlines :: [].{
 				by_set_pos: [-1],
 			},
 		)?
-		var cursor = TimedRecurrence.cursor(rule, window, { rules, occurrence: RequireUnique, gap: RejectGap })?
-		var deadlines = []
-		while deadlines.len() < 4 {
-			batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 10000, max_buffered: 10, max_zone_segments: 100000, max_zone_candidates: 2 })?
-			match batch.status {
-				End => return Ok(deadlines)
-				Limited(progress) => return Err(PlanningLimit(progress.reason))
-				Item(item) => {
-					deadlines = deadlines.append(item.occurrence)
-					cursor = item.cursor
-				}
-			}
+		cursor = TimedRecurrence.cursor(rule, window, { rules, occurrence: RequireUnique, gap: RejectGap })?
+		batch = TimedRecurrence.Cursor.collect(
+			cursor,
+			{
+				work: { max_steps: 10000, max_buffered: 10, max_zone_segments: 100000, max_zone_candidates: 2 },
+				max_occurrences: 5,
+			},
+		)?
+		match batch.status {
+			Complete => Ok(batch.occurrences)
+			Limited(progress) => Err(PlanningLimit(progress.reason))
 		}
-		Ok(deadlines)
 	}
 	report = |deadline| {
 		source = TimedRecurrence.Occurrence.source(deadline)

@@ -32,7 +32,11 @@ Compose timed periods with bounded boundary classification and explicit
 occurrence selection; preserve gap-adjustment evidence and AmbiguousGap errors.
 Do not hide a full
 transition-table scan inside one recurrence work unit. Use RFC 5545 §3.3.5's New York 2007 gap/fold examples
-and verified erratum 4271 as conformance fixtures. Settle BYSETPOS ordering and
+and verified erratum 4271 as conformance fixtures. For the subdaily adapter,
+use [verified erratum 3883](https://www.rfc-editor.org/errata/eid3883): the
+New York 1997-09-02 three-hour example ends at 21:00Z, not the original
+17:00Z. Verify both UTC cutoff variants independently rather than preserving
+the erroneous example's output. Settle BYSETPOS ordering and
 deduplication when different source labels map to the same boundary after gap
 adjustment; retain source identity rather than inferring it from coverage.
 Settle exception duration identity, RDATE PERIOD support and subdaily buffering

@@ -242,7 +242,51 @@ main! = |args| {
 		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before] }
+	timed_stream_before = Host.allocated_bytes!({})
+	timed_count = TimedRecurrence.Cursor.outcomes(timed_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }).take_first(1).fold(
+		0.U64,
+		|_, result| {
+			batch = match result {
+				Ok(value) => value
+				Err(_) => crash "timed stream"
+			}
+			match batch.status {
+				Item(item) => if TimedRecurrence.Occurrence.source(item.occurrence) != timed_start {
+					crash "timed stream source"
+				}
+				_ => crash "timed stream prefix"
+			}
+			1
+		},
+	)
+	timed_stream_after = Host.allocated_bytes!({})
+	# The pinned timed iterator has higher measured traffic than next. Allow
+	# 8 KiB traffic for this stage at the standard 4 KiB base ceiling;
+	# the short/vast comparison still rejects horizon-dependent allocation.
+	Host.assert!(timed_count == 1 and timed_stream_after - timed_stream_before <= ceiling * 2)
+	timed_zero_before = Host.allocated_bytes!({})
+	timed_zero_count = TimedRecurrence.Cursor.outcomes(timed_cursor, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
+		0.U64,
+		|count_so_far, result| {
+			batch = match result {
+				Ok(value) => value
+				Err(_) => crash "zero-work timed stream"
+			}
+			match batch.status {
+				Limited(progress) => if progress.reason != WorkLimit {
+					crash "zero-work timed reason"
+				}
+				_ => crash "zero-work timed outcome"
+			}
+			if batch.steps != 0 or batch.zone_segments != 0 {
+				crash "zero-work timed execution"
+			}
+			count_so_far + 1
+		},
+	)
+	timed_zero_after = Host.allocated_bytes!({})
+	Host.assert!(timed_zero_count == 1 and timed_zero_after - timed_zero_before <= ceiling)
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
