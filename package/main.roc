@@ -1,5 +1,7 @@
 package
 	[
+		CalendarDelta,
+		CalendarArithmetic,
 		CivilDay,
 		GregorianDate,
 		PosixBoundary,

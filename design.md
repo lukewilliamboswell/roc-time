@@ -211,8 +211,34 @@ probes for the year and eleven month advances. Negative-year floor division and
 400-year periodicity follow the proleptic convention described in
 [Howard Hinnant's calendar derivation](https://howardhinnant.github.io/date_algorithms.html).
 The implementation uses January-based year counting rather than that source's
-March-based conversion code. Calendar arithmetic and cross-calendar fixtures
-remain work in progress; these conversion APIs alone do not establish R05–R06.
+March-based conversion code. Cross-calendar fixtures remain work in progress;
+Gregorian support alone does not establish R06.
+
+`CalendarDelta` holds signed I64 years, months and civil days. The implemented
+`CalendarArithmetic.shift_day` is specialized to Gregorian dates and applies
+years, then months, then days. Each year/month component chooses its destination
+once, rather than repeatedly repairing every intervening month. The explicit
+`Reject` policy returns `InvalidDestination` with the attempted fields;
+`Clamp` chooses the destination month's last valid day; `Carry` counts the
+original day number forward from the destination month's first day. Thus
+2025-01-31 plus one month carries to March 3, including when the same February
+destination is reached by subtracting a month from March 31.
+
+Each component's resulting date must be inside the provider range. An
+out-of-range intermediate year is an error even if later months would cancel
+it. Gregorian month-index calculations use bounded I128 intermediates to handle
+full-I64 components before checked narrowing; date storage and civil coordinates
+remain I64. Day shifts are checked civil-coordinate additions, not elapsed-time
+or timezone operations. Work is bounded by the provider's conversion cost,
+independent of the component magnitudes. No allocation or latency claim follows
+without the separate R15 measurements.
+
+For example, clamping 2020-02-29 by one year, one month, and one day gives
+2021-03-29: the year step first selects February 28. Combining the first two
+components into thirteen months would instead retain day 29 and is not this
+operation's contract. The independent field-walking oracle in
+`tests/arithmetic/` checks this ordering and destination policies without using
+the production day-axis conversion or month-index arithmetic.
 
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 
@@ -315,6 +341,10 @@ day_width = |context| {
 With a rules fixture containing Melbourne's transition from UTC+10 to UTC+11 on that date and a POSIX output axis, the expected width is 23 hours. This is the whole civil day, not an instruction to add 24 hours. The test must supply versioned rules rather than depend on the machine's current database. Separately test a skipped date and a repeated clock range that yields two disjoint spans. A syntactically valid zone name is not proof that the context has its rules.
 
 ### Make month-end policy visible
+
+The [invoice application](examples/invoice/main.roc) now executes this scenario
+through `GregorianDate`, `CalendarDelta`, and `CalendarArithmetic`. The sketch
+below retains the proposed broader `Civil` vocabulary.
 
 ```roc
 next_invoice_date = |_| {

@@ -35,6 +35,7 @@ At completion, move enduring decisions into `design.md` and useful verification 
 - Keep interpretation context explicit and immutable. No implicit clock reads, network calls, global provider registry, or unbounded cache in the core.
 - Preserve recurring-series state across query windows and resumptions. Clamped calendar addition is not an implementation of RFC recurrence rules.
 - Public malformed data returns structured errors. Do not hide failures with invented dates, default spans, catch-all empty results, or unchecked casts. Use internal unchecked operations only under documented, tested invariants.
+- Review public types against Roc's static-dispatch conventions using the pinned compiler: equality/order, hashing, iteration, inspection and literals where their meaning is defined. Preserve domain distinctions and checked failures; operator convenience must not silently introduce overflow, units, an epoch or a timezone. Literal adapters must use real validated constructors/parsers, and serialization must preserve the semantic format rather than expose opaque backing records.
 - Unsupported feature scopes remain explicit. Do not claim all of ISO, EDTF, RRULE, leap-aware time, or Allen reasoning based on a narrower implementation.
 
 ## Examples and evidence

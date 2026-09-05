@@ -24,6 +24,7 @@ def main() -> None:
     if control.returncode != 0:
         raise SystemExit(f"Positive control failed:\n{control.stdout}")
     cases = {
+        "posix_as_calendar_delta": ["second argument", "PosixDelta", "CalendarDelta"],
         "civil_as_posix": ["first argument", "CivilDay", "PosixBoundary"],
         "delta_as_boundary": ["first argument", "PosixDelta", "PosixBoundary"],
         "raw_integer_as_boundary": ["first argument", "I64", "PosixBoundary"],

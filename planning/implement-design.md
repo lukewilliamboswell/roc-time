@@ -43,10 +43,18 @@ backend checks.
 
 ## Next slice
 
-Implement the Gregorian civil-date and shared civil-day profile (R05–R06),
-including explicit ranges, negative years/year zero, round trips and ordered
-month-end arithmetic. Promote the invoice scenario through the public package
-and add its generated evidence through the consolidated test runner.
+Before adding the next provider, finish a focused static-dispatch usability
+milestone from the requested agent review: ordering hooks for ordered scalar
+domains, hashing consistent with semantic equality, canonical-span iteration
+for Coverage and useful domain-labelled inspection. Pinned probes confirm
+method chaining/equality already work, but `CivilDay < CivilDay` lacks `is_lt`.
+Use named checked arithmetic; numeric literals need an explicit unit/domain
+contract and future date literals must delegate to the actual parser.
+
+Complete calendar interoperability evidence (R06): settle the next supported
+calendar profile, add independently sourced equal-day fixtures through the shared
+civil-day convention, and make unsupported calendar/range outcomes explicit.
+Gregorian conversion and ordered arithmetic now have their initial R05 evidence.
 
 Conversion is implemented in `CivilDay` and `GregorianDate`, separating the
 shared day coordinate from validated Gregorian descriptions. The provider
@@ -60,9 +68,23 @@ rejects civil coordinates passed as POSIX boundaries. The pinned full integratio
 command recorded below passed on 2026-09-05 with all four semantic targets,
 including 10,000 Gregorian runs (seed 1, five-second maximum, LLVM speed/arm64mac).
 
-Next implement ordered arithmetic with explicit destination policy, the invoice
-application, and cross-calendar equal-day fixtures. Conversion alone does not
-complete R05–R06. Keep unsupported calendar dispatch explicit as providers land.
+`CalendarDelta` and `CalendarArithmetic` implement ordered years/months/days
+with Reject, Clamp and Carry, full-I64 component handling and intermediate range
+checks. The invoice application uses an explicit clamp business rule. Generated
+checks compare all three policies with a bounded field-walking oracle; fixed
+cases distinguish component order, a single two-month destination, noninvertible
+clamping and negative-year rollover. POSIX displacement is rejected as a calendar
+delta by an intended-diagnostic compile-failure check. R06 remains incomplete;
+keep unsupported calendar dispatch explicit as providers land.
+
+Interpreter investigation found a pinned-compiler defect in `?` propagation from
+a checked integer result into an error union containing a record payload. Native
+execution was correct. Equivalent explicit error mapping fixes calendar
+arithmetic without changing its public errors; the retained minimal reproducer
+is `tests/compiler_repro/result_widening/`. The full pinned integration command passed after the explicit mapping on
+2026-09-05: all five semantic targets completed 10,000 runs each, the generated
+Gregorian oracle replay passed, and all three applications passed both
+interpreted and native execution against the bundle.
 
 ### Oracle evidence
 
@@ -114,4 +136,4 @@ access for bundle verification, including the single consolidated fuzz gate, mig
 The merged precision/span/coverage checks were also verified with
 `ROC=.roc-time-tmp/roc_nightly-macos_apple_silicon-2026-09-04-c125b82/roc python3 scripts/fuzz.py --operation all`
 using explicit `--opt=speed`. Layout/allocation, complexity measurements and Wasm
-evidence remain. Gregorian conversion now has separate evidence above; calendar arithmetic and later layers remain unimplemented.
+evidence remain. Gregorian conversion now has separate evidence above; calendar arithmetic now has evidence above; other calendar providers and later layers remain unimplemented.

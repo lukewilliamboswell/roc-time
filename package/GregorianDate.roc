@@ -8,16 +8,22 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	from_fields : Fields -> Try(GregorianDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
 	from_fields = |fields| {
-		if fields.year < -2147483648 or fields.year > 2147483647 {
-			return Err(OutOfRange)
-		}
-		if fields.month < 1 or fields.month > 12 {
-			return Err(InvalidMonth)
-		}
-		if fields.day < 1 or fields.day > month_length(fields.year, fields.month) {
+		length = days_in_month(fields.year, fields.month)?
+		if fields.day < 1 or fields.day > length {
 			return Err(InvalidDay)
 		}
 		Ok(Date(fields))
+	}
+
+	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth, ..])
+	days_in_month = |year, month| {
+		if year < -2147483648 or year > 2147483647 {
+			return Err(OutOfRange)
+		}
+		if month < 1 or month > 12 {
+			return Err(InvalidMonth)
+		}
+		Ok(month_length(year, month))
 	}
 
 	to_fields : GregorianDate -> Fields

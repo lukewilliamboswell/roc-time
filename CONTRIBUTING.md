@@ -73,7 +73,7 @@ Generation checks the table model against all 3,652,059 dates in Python's domain
 Never regenerate expected values from roc-time output or bless a mismatch.
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
-neighboring type modules. The precision, span, coverage and Gregorian roots
+neighboring type modules. The precision, span, coverage, Gregorian and arithmetic roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in `.roc-version`:
