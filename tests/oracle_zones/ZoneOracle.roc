@@ -1,22 +1,40 @@
 import time.CalendarDate
 import time.ClockTime
-import time.FixedOffset
 import time.LocalDateTime
 import time.PosixBoundary
-import time.PosixSpan
 import time.ZoneRules
 
 ZoneOracle :: [].{
-	Fixture : { name : Str, lower : I64, upper : I64, initial : I32, minimum : I32, maximum : I32, transitions : List({ at : I64, offset : I32 }) }
+	Fixture : { name : Str, source_digest : Str, lower : I64, upper : I64, initial : I32, minimum : I32, maximum : I32, transitions : List({ at : I64, offset : I32 }) }
 	Case : { id : U64, zone : U64, date : CalendarDate.Fields, clock : ClockTime.Fields, expected : List(I64) }
 
 	rules_for = |fixture| {
-		validity = PosixSpan.new(PosixBoundary.from_microseconds(fixture.lower), PosixBoundary.from_microseconds(fixture.upper))?
+		if I64.rem_by(fixture.lower, 1000000) != 0 or I64.rem_by(fixture.upper, 1000000) != 0 {
+			return Err(FixturePrecision)
+		}
 		var transitions = []
 		for transition in fixture.transitions {
-			transitions = transitions.append({ at: PosixBoundary.from_microseconds(transition.at), offset: FixedOffset.from_seconds(transition.offset) })
+			if I64.rem_by(transition.at, 1000000) != 0 {
+				return Err(FixturePrecision)
+			}
+			transitions = transitions.append({ second: I64.div_trunc_by(transition.at, 1000000), offset: transition.offset })
 		}
-		ZoneRules.new_bounded(fixture.name, "IANA-2025b", validity, FixedOffset.from_seconds(fixture.initial), transitions, { minimum: fixture.minimum, maximum: fixture.maximum })
+		ZoneRules.from_database({
+			schema: 1,
+			axis: "posix-seconds-1970",
+			requested_name: fixture.name,
+			canonical_name: fixture.name,
+			source_version: "IANA-2025b",
+			source_digest: fixture.source_digest,
+			profile: "tzdata-2025.2-selected-windows",
+			future_handling: "expanded-through-validity",
+			start_second: I64.div_trunc_by(fixture.lower, 1000000),
+			end_second: I64.div_trunc_by(fixture.upper, 1000000),
+			initial_offset: fixture.initial,
+			minimum_offset: fixture.minimum,
+			maximum_offset: fixture.maximum,
+			transitions,
+		})
 	}
 
 	verify = |fixtures, cases, count| {
@@ -51,7 +69,7 @@ ZoneOracle :: [].{
 
 	expect {
 		fixture : Fixture
-		fixture = { name: "Synthetic/Comparator", lower: -1000000, upper: 1000000, initial: 0, minimum: 0, maximum: 0, transitions: [] }
+		fixture = { name: "Synthetic/Comparator", source_digest: "fixture-v1", lower: -1000000, upper: 1000000, initial: 0, minimum: 0, maximum: 0, transitions: [] }
 		good : Case
 		good = { id: 0, zone: 0, date: { year: 1970, month: 1, day: 1 }, clock: { hour: 0, minute: 0, second: 0, microsecond: 0 }, expected: [0] }
 		wrong = { ..good, expected: [1] }

@@ -260,12 +260,15 @@ def replay(name: str) -> None:
     started = time.monotonic()
     command([roc, "check", "main.roc"], session, "check")
     command([roc, "test", "main.roc"], session, "comparator-tests")
+    interpreted = command([roc, "main.roc"], session, "interpret")
+    if interpreted != f"PASS {count} oracle cases\n":
+        raise ValueError(f"Missing or malformed interpreted oracle completion: {interpreted[:200]}")
     binary = session / "oracle"
     command([roc, "build", "main.roc", f"--output={binary}"], session, "build")
     output = command([str(binary)], session, "run")
     if output != f"PASS {count} oracle cases\n":
         raise ValueError(f"Missing or malformed oracle completion: {output[:200]}")
-    report = {"compiler": version, "host": platform.platform(), "backend": "native default roc build",
+    report = {"compiler": version, "host": platform.platform(), "backend": "interpreter and native default roc build",
               "case_count": count, "seconds": time.monotonic() - started,
               "corpus_sha256": digest(driver / "Cases.roc"),
               "driver_sha256": {p.name: digest(p) for p in driver.glob('*.roc')},

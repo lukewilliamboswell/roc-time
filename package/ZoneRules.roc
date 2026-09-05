@@ -11,8 +11,26 @@ ZoneRules :: {
 	validity : PosixSpan,
 	initial : FixedOffset,
 	bounds : OffsetBounds,
+	provenance : Provenance,
 	transitions : List(Transition),
 }.{
+	Database : {
+		schema : U16,
+		axis : Str,
+		requested_name : Str,
+		canonical_name : Str,
+		source_version : Str,
+		source_digest : Str,
+		profile : Str,
+		future_handling : Str,
+		start_second : I64,
+		end_second : I64,
+		initial_offset : I32,
+		minimum_offset : I32,
+		maximum_offset : I32,
+		transitions : List({ second : I64, offset : I32 }),
+	}
+	Provenance : [Supplied, DatabaseSource({ requested_name : Str, canonical_name : Str, source_digest : Str, profile : Str })]
 	Transition : { at : PosixBoundary, offset : FixedOffset }
 	OffsetBounds : { minimum : I32, maximum : I32 }
 	Resolution : [Gap, Unique(PosixBoundary), Fold(List(PosixBoundary))]
@@ -50,8 +68,38 @@ ZoneRules :: {
 			}
 			previous = transition.at
 		}
-		Ok({ name, version, validity, initial, transitions, bounds })
+		Ok({ name, version, validity, initial, transitions, bounds, provenance: Supplied })
 	}
+
+	## Versioned structural data: no nominal dependency on the supplying package.
+	from_database : Database -> Try(ZoneRules, [UnsupportedSchema(U16), UnsupportedAxis(Str), UnsupportedFutureHandling(Str), MissingProvenance, EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, EmptySpan, ReversedBounds, OutOfRange, ..])
+	from_database = |data| {
+		if data.schema != 1 {
+			return Err(UnsupportedSchema(data.schema))
+		}
+		if data.axis != "posix-seconds-1970" {
+			return Err(UnsupportedAxis(data.axis))
+		}
+		if data.future_handling != "expanded-through-validity" {
+			return Err(UnsupportedFutureHandling(data.future_handling))
+		}
+		if data.requested_name.is_empty() or data.source_digest.is_empty() or data.profile.is_empty() {
+			return Err(MissingProvenance)
+		}
+		lower = database_boundary(data.start_second)?
+		upper = database_boundary(data.end_second)?
+		validity = PosixSpan.new(lower, upper)?
+		var transitions = []
+		for entry in data.transitions {
+			at = database_boundary(entry.second)?
+			transitions = transitions.append({ at, offset: FixedOffset.from_seconds(entry.offset) })
+		}
+		rules = new_bounded(data.canonical_name, data.source_version, validity, FixedOffset.from_seconds(data.initial_offset), transitions, { minimum: data.minimum_offset, maximum: data.maximum_offset })?
+		Ok({ ..rules, provenance: DatabaseSource({ requested_name: data.requested_name, canonical_name: data.canonical_name, source_digest: data.source_digest, profile: data.profile }) })
+	}
+
+	provenance : ZoneRules -> Provenance
+	provenance = |rules| rules.provenance
 
 	name : ZoneRules -> Str
 	name = |rules| rules.name
@@ -252,4 +300,11 @@ append_selected = |spans, lower, upper, offset, start, end| {
 	} else {
 		Ok(spans)
 	}
+}
+
+# Source units are seconds; do not narrow before scaling or wrap at I64 limits.
+database_boundary : I64 -> Try(PosixBoundary, [OutOfRange, ..])
+database_boundary = |seconds| match I128.to_i64_try(seconds.to_i128() * 1000000) {
+	Ok(micros) => Ok(PosixBoundary.from_microseconds(micros))
+	Err(_) => Err(OutOfRange)
 }

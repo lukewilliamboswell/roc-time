@@ -222,6 +222,16 @@ This does not establish future expression behavior or untested backend support.
 
 Direction: publish an optional first-party `roc-time-tzdb` data package as the
 documented default choice for named-zone apps; retain a data-independent core.
+The schema-1 structural import is now implemented in `ZoneRules.from_database`,
+including checked seconds-to-microseconds conversion, metadata retention and
+explicit schema/axis/future-mode errors. The real-world zone oracle and generated
+zone tests now enter through this adapter. Default oracle replay now checks
+both interpreted and native execution, retaining strict completion checks for
+each. The full pinned integration command passed on 2026-09-05 after this
+change, with all nine fuzz campaigns, all three oracle drivers in both execution
+paths, and four bundled applications. Acquisition/provider lookup and the
+companion package remain unimplemented.
+
 Ordinary callers select a zone/window and adapt once into `ZoneRules`, without
 building tables or implementing a provider callback. Custom application data
 uses the same versioned structural schema. No package is published yet.

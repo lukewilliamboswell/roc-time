@@ -5,7 +5,6 @@ import time.Coverage
 import time.FixedOffset
 import time.LocalDateTime
 import time.PosixBoundary
-import time.PosixSpan
 import time.ZoneRules
 import time.ResolvedBoundary
 import time.ResolvedSelection
@@ -168,22 +167,22 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 
 point = |number| PosixBoundary.from_microseconds(number)
 
-make_span = |lower, upper| match PosixSpan.new(point(lower), point(upper)) {
+make_rules = |first, second| match ZoneRules.from_database({
+	schema: 1,
+	axis: "posix-seconds-1970",
+	requested_name: "Synthetic/Alias",
+	canonical_name: "Synthetic/Generated",
+	source_version: "v1",
+	source_digest: "generated-fixture",
+	profile: "synthetic-bounded",
+	future_handling: "expanded-through-validity",
+	start_second: -10,
+	end_second: 10,
+	initial_offset: 0,
+	minimum_offset: -2,
+	maximum_offset: 2,
+	transitions: [{ second: 0, offset: first }, { second: 4, offset: second }],
+}) {
 	Ok(value) => value
-	Err(_) => crash "fixture range rejected"
-}
-
-make_rules = |first, second| match ZoneRules.new_bounded(
-	"Synthetic/Generated",
-	"v1",
-	make_span(-10000000, 10000000),
-	FixedOffset.from_seconds(0),
-	[
-		{ at: point(0), offset: FixedOffset.from_seconds(first) },
-		{ at: point(4000000), offset: FixedOffset.from_seconds(second) },
-	],
-	{ minimum: -2, maximum: 2 },
-) {
-	Ok(value) => value
-	Err(_) => crash "fixture rules rejected"
+	Err(_) => crash "fixture database import rejected"
 }

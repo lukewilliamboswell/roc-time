@@ -4,9 +4,9 @@ import ZoneOracle
 Cases :: [].{
 	fixtures : List(ZoneOracle.Fixture)
 	fixtures = [
-		{ name: "Australia/Lord_Howe", lower: 1712016000000000, upper: 1712880000000000, initial: 39600, minimum: 36000, maximum: 41400, transitions: [{ at: 1712415600000000, offset: 37800 }] },
-		{ name: "Australia/Lord_Howe", lower: 1727740800000000, upper: 1728604800000000, initial: 37800, minimum: 36000, maximum: 41400, transitions: [{ at: 1728142200000000, offset: 39600 }] },
-		{ name: "Pacific/Apia", lower: 1324771200000000, upper: 1325635200000000, initial: -36000, minimum: -41400, maximum: 50400, transitions: [{ at: 1325239200000000, offset: 50400 }] },
+		{ name: "Australia/Lord_Howe", source_digest: "f368bd25659c0293d02bb79ec7dac7d5b73a92dffafce14b4dd2ffb8ba11aada", lower: 1712016000000000, upper: 1712880000000000, initial: 39600, minimum: 36000, maximum: 41400, transitions: [{ at: 1712415600000000, offset: 37800 }] },
+		{ name: "Australia/Lord_Howe", source_digest: "f368bd25659c0293d02bb79ec7dac7d5b73a92dffafce14b4dd2ffb8ba11aada", lower: 1727740800000000, upper: 1728604800000000, initial: 37800, minimum: 36000, maximum: 41400, transitions: [{ at: 1728142200000000, offset: 39600 }] },
+		{ name: "Pacific/Apia", source_digest: "dc70c47c80ab2c87a1ab754bab8febfc38508059e249dfe55e73a3759808ea14", lower: 1324771200000000, upper: 1325635200000000, initial: -36000, minimum: -41400, maximum: 50400, transitions: [{ at: 1325239200000000, offset: 50400 }] },
 	]
 	inputs : List(ZoneOracle.Case)
 	inputs = [

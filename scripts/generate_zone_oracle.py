@@ -85,7 +85,7 @@ def generate(wheel):
                     index += 1
                 assert current == offset_at(t), (name, t)
             trans_text = ", ".join(f"{{ at: {t * 1000000}, offset: {offset} }}" for t, offset in changes)
-            fixtures.append(f'{{ name: "{name}", lower: {lower * 1000000}, upper: {upper * 1000000}, initial: {offset_at(lower)}, minimum: {min(offsets)}, maximum: {max(offsets)}, transitions: [{trans_text}] }}')
+            fixtures.append(f'{{ name: "{name}", source_digest: "{hashes[name]}", lower: {lower * 1000000}, upper: {upper * 1000000}, initial: {offset_at(lower)}, minimum: {min(offsets)}, maximum: {max(offsets)}, transitions: [{trans_text}] }}')
             for day_offset in [-1, 0, 1]:
                 day = dt.datetime(*fields) + dt.timedelta(days=day_offset)
                 for minute in range(0, 1440, 15):

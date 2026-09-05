@@ -63,8 +63,8 @@ necessary alongside differential agreement.
 
 The gate checks each public conversion independently, plus malformed fields and
 provider limits. Generated `tests/oracle_gregorian/Cases.roc` contains typed inputs and expected
-results derived solely from the external references. A native Roc driver
-compares them directly: normal replay performs no JSON case parsing or case
+results derived solely from the external references. The Roc driver runs under
+both the interpreter and native execution, comparing them directly: normal replay performs no JSON case parsing or case
 source generation. The compiler rejects malformed fixture types; wrong values,
 missing/duplicate case identities, driver failures and budget overruns fail the gate. Normal replay reads versioned data and needs no
 live reference service. Each stage is limited to 120 seconds and 1 MiB of output.

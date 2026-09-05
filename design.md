@@ -443,6 +443,27 @@ finite work/range limits or explicitly remain unsupported; never extrapolate a
 final offset or silently truncate history. Historical coverage is the selected
 IANA profile's evidence, not a claim of complete historical truth.
 
+The schema-1 import boundary is implemented as `ZoneRules.from_database`.
+`ZoneRules.Database` is a structural record alias, so a supplier need not import
+roc-time to construct matching values. Schema 1 requires axis
+`posix-seconds-1970` and future handling `expanded-through-validity`; unsupported
+versions, axes or future-rule modes fail explicitly. Start/end/transition seconds
+use I64; offsets and global offset bounds use I32 seconds. Scaling to the core's
+microseconds uses I128 intermediates and checked final I64 conversion. Normal
+rule constructors then enforce finite nonempty validity, transition ordering and
+offset bounds. Import costs O(n) work/storage for n transition records.
+
+Requested and canonical names remain distinct. `ZoneRules.provenance` distinguishes
+manually supplied rules from database-sourced rules and retains the requested
+name, canonical name, source digest and profile; `version` retains the source
+release. Empty source identifiers/profile/requested name fail validation. The
+source digest is preserved metadata, not authentication of the record's contents
+or a substitute for content identity. Acquisition/generation verifies original
+source bytes; the adapter validates the supplied semantic data. Existing snapshots
+retain this provenance through their immutable rules. Alias lookup itself,
+unknown-zone/subset handling and future-rule expansion still belong to the
+forthcoming provider.
+
 The optional package is not yet implemented. Before publishing, measure download
 archive, uncompressed source/data, compiler time and peak memory, linked native
 and supported Wasm sizes, and retained runtime data separately for no-zone,
