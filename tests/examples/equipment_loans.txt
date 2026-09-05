@@ -1,4 +1,5 @@
-Equipment loans starting on the 31st
+Equipment loans: monthly starts and one extra booking
 One calendar month; return dates clamp to month end. Melbourne local times.
 2025-01-31 09:00 -> 2025-02-28 09:00 (672 POSIX hours)
+2025-02-14 09:00 -> 2025-03-14 09:00 (672 POSIX hours)
 2025-03-31 09:00 -> 2025-04-30 09:00 (721 POSIX hours)

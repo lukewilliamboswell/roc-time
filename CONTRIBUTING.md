@@ -252,7 +252,9 @@ pinned compiler. Schedule checks also pause between start and calendar-end
 interpretation, then resume with zero source work under the shared zone budget.
 A secondly recurrence over the same horizons separately verifies that seeking
 and consuming one clock period stays within the base budget. Source-exclusion
-lookup is checked with 16 and 4096 normalized labels, with construction outside
+lookup is checked with 16 and 4096 normalized labels. Inclusion merging also
+compares 16 and 4096 explicit starts, interpreting one pre-anchor inclusion
+beside a retained rule start under the same budgets, with construction outside
 the measured prefix scope. Fixed-duration construction must use no zone
 segments; calendar-duration end resolution must pause after one segment in
 both short and long transition tables, with start resolution outside its scope.

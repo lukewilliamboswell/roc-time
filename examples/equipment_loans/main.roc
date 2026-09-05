@@ -9,7 +9,7 @@ main! = |_args| {
 	data = Database.get("Australia/Melbourne")?
 	rules = ZoneRules.from_database(data)?
 	loans = LoanSchedule.upcoming(rules)?
-	echo!("Equipment loans starting on the 31st\nOne calendar month; return dates clamp to month end. Melbourne local times.\n")
+	echo!("Equipment loans: monthly starts and one extra booking\nOne calendar month; return dates clamp to month end. Melbourne local times.\n")
 	for loan in loans {
 		match LoanSchedule.report(loan) {
 			Ok(text) => echo!(text)

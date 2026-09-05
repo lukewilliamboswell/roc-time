@@ -459,7 +459,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		}
 	}
 	check_timed_batches(current, input.work.to_u64(), expected_sources, expected_boundaries)
-	check_schedule(rule, { start, end }, rules, input.work.to_u64(), expected_sources, expected_boundaries)
+	check_schedule(rule, { start, end }, rules, input.work.to_u64(), expected_sources, expected_boundaries, anchor, anchor_clock, input.exclude_anchor)
 
 	var sources = []
 	var boundaries = []
@@ -696,7 +696,51 @@ check_duration = |start| {
 
 # Independent UTC grid: calendar day plus hour has a 25-hour coordinate width.
 # One shared zone step forces a pause between start and end interpretation.
-check_schedule = |rule, window, rules, work, expected_sources, expected_boundaries| {
+check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries, anchor, anchor_clock, exclude_anchor| {
+	inclusions = [{ date: date(2024, 1, 1), clock: clock(9) }, { date: date(2024, 2, 4), clock: clock(9) }, { date: anchor, clock: anchor_clock }, { date: date(2024, 2, 4), clock: clock(9) }]
+	rule = match TimedRecurrence.with_inclusions(base_rule, inclusions) {
+		Ok(value) => value
+		Err(_) => crash "schedule inclusions"
+	}
+	var expected = []
+	var position = 0.U64
+	for source in base_sources {
+		boundary = match base_boundaries.get(position) {
+			Ok(value) => value
+			Err(_) => crash "model boundary"
+		}
+		expected = expected.append({ source, boundary })
+		position = position + 1
+	}
+	for inclusion in inclusions {
+		source = LocalDateTime.new(CalendarDate.from_gregorian(inclusion.date), inclusion.clock)
+		var duplicate = Bool.False
+		for item in expected {
+			duplicate = duplicate or LocalDateTime.same_position(item.source, source)
+		}
+		removed = exclude_anchor and inclusion.date == anchor and inclusion.clock == anchor_clock
+		if !duplicate and !removed and LocalDateTime.compare_position(source, window.start) != LT and LocalDateTime.compare_position(source, window.end) == LT {
+			fields = GregorianDate.to_fields(inclusion.date)
+			days = if fields.month == 1 {
+				fields.day.to_i64() - 1
+			} else {
+				31 + fields.day.to_i64() - 1
+			}
+			micros = (1704067200 + days * 86400) * 1000000 + ClockTime.to_microseconds_since_midnight(inclusion.clock)
+			expected = expected.append({ source, boundary: PosixBoundary.from_microseconds(micros) })
+		}
+	}
+	expected = expected.sort_with(
+		|a, b| if a.boundary < b.boundary {
+			Before
+		} else if a.boundary > b.boundary {
+			After
+		} else {
+			Same
+		},
+	)
+	expected_sources = expected.map(|item| item.source)
+	expected_boundaries = expected.map(|item| item.boundary)
 	var current = match TimedSchedule.new(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "schedule construction"
@@ -704,7 +748,7 @@ check_schedule = |rule, window, rules, work, expected_sources, expected_boundari
 	var index = 0.U64
 	var calls = 0.U64
 	while calls < 10000 {
-		batch = match TimedSchedule.collect(current, { work: { max_steps: work, max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+		batch = match TimedSchedule.collect(current, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "schedule collection"
 		}

@@ -433,7 +433,7 @@ main! = |args| {
 		},
 	)
 	schedule_stream_after = Host.allocated_bytes!({})
-	# Pinned dev/speed measure 11728 requested bytes for this iterator prefix.
+	# Keep the composed iterator within its measured traffic budget.
 	Host.assert!(schedule_count == 1 and schedule_stream_after - schedule_stream_before <= ceiling * 3)
 	schedule_zero_before = Host.allocated_bytes!({})
 	schedule_zero_count = TimedSchedule.outcomes(schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
@@ -453,10 +453,43 @@ main! = |args| {
 		},
 	)
 	schedule_zero_after = Host.allocated_bytes!({})
-	# The terminal zero-work iterator measures 4480 requested bytes.
+	# Keep terminal zero-work iteration within its measured traffic budget.
 	Host.assert!(schedule_zero_count == 1 and schedule_zero_after - schedule_zero_before <= ceiling * 2)
 
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before] }
+	# Normalize the explicit input outside the measured merge. The earliest
+	# inclusion precedes DTSTART and needs interpretation beside a held start.
+	var included_starts = []
+	var included_index = 0.I64
+	while included_index < exclusion_count {
+		included_starts = included_starts.append({ date: anchor, clock: clock_fixture(included_index * 1000000) })
+		included_index = included_index + 1
+	}
+	inclusion_base = match TimedRecurrence.new({ date: anchor, clock: clock_fixture(1000000) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Forever, by_set_pos: [] }) {
+		Ok(value) => value
+		Err(_) => crash "inclusion base"
+	}
+	inclusion_rule = match TimedRecurrence.with_inclusions(inclusion_base, included_starts) {
+		Ok(value) => value
+		Err(_) => crash "inclusion normalization"
+	}
+	inclusion_start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture(0))
+	inclusion_before = Host.allocated_bytes!({})
+	inclusion_cursor = match TimedRecurrence.cursor(inclusion_rule, { start: inclusion_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "inclusion cursor"
+	}
+	inclusion_first = match TimedRecurrence.Cursor.next(inclusion_cursor, { max_steps: 8, max_buffered: 2, max_zone_segments: 2, max_zone_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "inclusion prefix"
+	}
+	inclusion_after = Host.allocated_bytes!({})
+	match inclusion_first.status {
+		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == inclusion_start)
+		_ => Host.assert!(False)
+	}
+	Host.assert!(inclusion_first.steps <= 8 and inclusion_first.zone_segments == 2 and inclusion_after - inclusion_before <= ceiling)
+
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {

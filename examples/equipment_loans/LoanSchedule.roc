@@ -10,7 +10,7 @@ import time.TimedRecurrence
 import time.TimedSchedule
 import time.TimedOccurrence
 
-## Two monthly loan starts on the 31st; each loan lasts one calendar month.
+## Monthly starts on the 31st plus an extra booking; each lasts one calendar month.
 ## Clamping the return date must not change the next scheduled start.
 LoanSchedule :: [].{
 	upcoming = |rules| {
@@ -19,11 +19,13 @@ LoanSchedule :: [].{
 		start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
 		end_date = GregorianDate.from_fields({ year: 2025, month: 4, day: 1 })?
 		end = LocalDateTime.new(CalendarDate.from_gregorian(end_date), clock)
-		rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Monthly), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
+		monthly = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Monthly), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
+		extra_date = GregorianDate.from_fields({ year: 2025, month: 2, day: 14 })?
+		rule = TimedRecurrence.with_inclusions(monthly, [{ date: extra_date, clock }])?
 		series : Str
 		series = "equipment-loans"
 		cursor = TimedSchedule.new(series, rule, { start, end }, Calendar({ delta: CalendarDelta.months(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap })?
-		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 10000, max_buffered: 1, max_zone_segments: 100000, max_zone_candidates: 2 }, max_occurrences: 3 }) {
+		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 10000, max_buffered: 2, max_zone_segments: 100000, max_zone_candidates: 2 }, max_occurrences: 4 }) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))
 		}

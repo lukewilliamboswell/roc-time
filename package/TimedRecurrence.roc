@@ -18,7 +18,8 @@ import ZoneRules
 ## inclusive in local position. Daily through yearly periods use Gregorian
 ## selectors via new; new_subdaily supplies hourly, minutely or secondly
 ## periods. Source exclusions are applied after interpretation and COUNT;
-## they do not bypass gap/fold validation. Inclusions and durations are not exposed.
+## they do not bypass gap/fold validation. Inclusions do not consume COUNT and merge by source position; durations
+## are supplied by TimedSchedule.
 ## Clock candidates are ordered by source label. BYSETPOS indexes that full
 ## period after explicit interpretation, without deduplicating equal boundaries.
 ## Construction retains at most 4096 positions and bounded field selectors.
@@ -27,7 +28,7 @@ import ZoneRules
 ## Without positions, buffering holds one occurrence. With positions it holds
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
-TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime) }.{
+TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime), inclusions : List(LocalDateTime) }.{
 	Termination : [Forever, Count(U64), Until(LocalDateTime)]
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
@@ -39,7 +40,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if !CalendarPattern.matches(calendar, 0, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [] })
+		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], inclusions: [] })
 	}
 	SubdailySpec : { pattern : SubdailyPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
@@ -52,7 +53,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if !SubdailyPattern.matches_date(pattern, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [] })
+		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], inclusions: [] })
 	}
 
 	## Replace the source-position exclusion set; an empty list clears it.
@@ -65,26 +66,21 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if labels.len() > 4096 {
 			return Err(TooManySelectors)
 		}
-		sorted = labels.sort_with(
-			|a, b| match LocalDateTime.compare_position(a, b) {
-				LT => Before
-				EQ => Same
-				GT => After
-			},
-		)
-		var exclusions = []
-		var previous = None
-		for label in sorted {
-			distinct = match previous {
-				None => Bool.True
-				Some(value) => !LocalDateTime.same_position(value, label)
-			}
-			if distinct {
-				exclusions = exclusions.append(label)
-			}
-			previous = Some(label)
-		}
+		exclusions = sorted_positions(labels)
 		Ok({ ..rule, exclusions })
+	}
+
+	## Replace at most 4096 explicit Gregorian starts, normalized by position.
+	## They may precede the anchor or follow COUNT/UNTIL; the query still applies.
+	## Duplicate starts merge with the rule, and exclusions win over both.
+	## Existing cursors retain their input set. Construction is O(n log n).
+	with_inclusions : TimedRecurrence, List({ date : GregorianDate, clock : ClockTime }) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	with_inclusions = |rule, starts| {
+		if starts.len() > 4096 {
+			return Err(TooManySelectors)
+		}
+		labels = starts.map(|start| LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock))
+		Ok({ ..rule, inclusions: sorted_positions(labels) })
 	}
 
 	Window : { start : LocalDateTime, end : LocalDateTime }
@@ -114,7 +110,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 			LT => {}
 		}
 		frame = timed_frame(rule, 0)?
-		Ok({ rule, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0 })
+		Ok({ rule, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0, inclusion_index: 0, held: None, rule_ended: Bool.False, inclusion_pending: None })
 	}
 	Cursor :: {
 		rule : TimedRecurrence,
@@ -134,6 +130,12 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		anchor_index : [None, Some(U64)],
 		count : U64,
 		zone_buffered : U64,
+		inclusion_index : U64,
+		# Keep optional merge payloads out of every cursor copy. Boxes are
+		# allocated only when inclusions require lookahead or interpretation.
+		held : [None, Some(Box(Occurrence))],
+		rule_ended : Bool,
+		inclusion_pending : [None, Some(Box({ source : LocalDateTime, cursor : ZoneRules.ClassificationCursor }))],
 	}.{
 
 		## Work counts date tests, clock candidates, period boundaries and
@@ -141,8 +143,14 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		## BYSETPOS buffers the whole period and validates DTSTART's position
 		## before any first-period output. Without BYSETPOS, only one pending
 		## occurrence is retained. Caller-retained cursors may share buffers.
+		## Merge explicit starts after rule selection/COUNT, retaining at most
+		## one rule lookahead and one pending inclusion classification. Looking
+		## ahead may examine a full BYSETPOS period under the same budgets.
 		next : Cursor, Limits -> Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
 		next = |initial, limits| {
+			if initial.rule.inclusions.is_empty() {
+				return next_rule(initial, limits)
+			}
 			var state = initial
 			var steps = 0.U64
 			var zone_segments = 0.U64
@@ -150,164 +158,103 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 				if buffered_count(state) > limits.max_buffered {
 					return Ok(limited(state, steps, zone_segments, BufferLimit))
 				}
-				match state.rule.termination {
-					Count(maximum) => if state.count == maximum {
-						return Ok(ended(state, steps, zone_segments))
-					}
-					_ => {}
-				}
-				match state.pending {
-					Some(pending) => {
+				match state.inclusion_pending {
+					Some(boxed) => {
+						pending = Box.unbox(boxed)
 						batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - zone_segments, max_candidates: limits.max_zone_candidates })?
 						zone_segments = zone_segments + batch.segments
 						state = { ..state, zone_buffered: batch.buffered }
 						match batch.status {
-							Limited(progress) => {
-								reason = match progress.reason {
-									WorkLimit => ZoneWorkLimit
-									BufferLimit => ZoneBufferLimit
-								}
-								return Ok(limited({ ..state, pending: Some({ ..pending, cursor: progress.cursor }) }, steps, zone_segments, reason))
-							}
+							Limited(progress) => return Ok(
+								limited(
+									{ ..state, inclusion_pending: Some(Box.box({ ..pending, cursor: progress.cursor })) },
+									steps,
+									zone_segments,
+									match progress.reason {
+										WorkLimit => ZoneWorkLimit
+										BufferLimit => ZoneBufferLimit
+									},
+								),
+							)
 							Complete(classification) => {
 								choice = ZoneRules.Classification.choose(classification, { occurrence: state.context.occurrence, gap: state.context.gap })?
 								occurrence : Occurrence
 								occurrence = { source: pending.source, choice, rules: state.context.rules }
-								anchor_index = if pending.source == state.rule.anchor {
-									Some(state.buffer.len())
-								} else {
-									state.anchor_index
+								state = { ..state, inclusion_pending: None, inclusion_index: state.inclusion_index + 1, zone_buffered: 0 }
+								if !excluded(state.rule.exclusions, pending.source) {
+									return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: 0, status: Item({ occurrence, cursor: state }) })
 								}
-								phase = if state.rule.positions.is_empty() {
-									Emit({ index: 0, advance: Bool.False })
-								} else {
-									Build
-								}
-								state = { ..state, buffer: state.buffer.append(occurrence), anchor_index, pending: None, zone_buffered: 0, phase }
 							}
 						}
 					}
 					None => {}
 				}
+				match state.held {
+					None => if !state.rule_ended {
+						batch = next_rule(state, { ..limits, max_steps: limits.max_steps - steps, max_zone_segments: limits.max_zone_segments - zone_segments })?
+						steps = steps + batch.steps
+						zone_segments = zone_segments + batch.zone_segments
+						match batch.status {
+							Limited(progress) => return Ok(limited(progress.cursor, steps, zone_segments, progress.reason))
+							End => {
+								state = { ..state, rule_ended: Bool.True, buffer: [], pending: None, zone_buffered: 0 }
+							}
+							Item(item) => {
+								state = { ..item.cursor, held: Some(Box.box(item.occurrence)) }
+							}
+						}
+					}
+					Some(_) => {}
+				}
+				explicit = state.rule.inclusions.get(state.inclusion_index)
+				match (state.held, explicit) {
+					(None, Err(_)) => return Ok(ended(state, steps, zone_segments))
+					(None, Ok(source)) => if !before(source, state.window.end) {
+						return Ok(ended(state, steps, zone_segments))
+					}
+					_ => {}
+				}
 				if steps == limits.max_steps {
 					return Ok(limited(state, steps, zone_segments, WorkLimit))
 				}
 				steps = steps + 1
-				match state.phase {
-					Emit(emission) => {
-						if emission.index == state.buffer.len() {
-							state = {
-								..state,
-								buffer: [],
-								phase: if emission.advance {
-									Advance
+				match state.held {
+					Some(boxed) => {
+						occurrence = Box.unbox(boxed)
+						use_rule = match explicit {
+							Err(_) => Bool.True
+							Ok(source) => !before(source, occurrence.source)
+						}
+						if use_rule {
+							index = match explicit {
+								Ok(source) => if LocalDateTime.same_position(source, occurrence.source) {
+									state.inclusion_index + 1
 								} else {
-									Build
-								},
+									state.inclusion_index
+								}
+								Err(_) => state.inclusion_index
 							}
-						} else {
-							occurrence = buffer_at(state.buffer, emission.index)
-							state = { ..state, phase: Emit({ ..emission, index: emission.index + 1 }) }
-							if selected(state.rule.positions, emission.index, state.buffer.len()) and !before(occurrence.source, state.rule.anchor) {
-								match state.rule.termination {
-									Until(end) => if before(end, occurrence.source) {
-										return Ok(ended(state, steps, zone_segments))
-									}
-									_ => {}
-								}
-								if !before(occurrence.source, state.window.end) {
-									return Ok(ended(state, steps, zone_segments))
-								}
-								state = { ..state, count: state.count + 1 }
-								if !before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) {
-									return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
-								}
-							}
+							state = { ..state, held: None, inclusion_index: index }
+							return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
 						}
 					}
-					Advance => {
-						boundary = state.period_end
-						if !before(boundary, state.window.end) {
-							return Ok(ended(state, steps, zone_segments))
-						}
-						match state.rule.termination {
-							Until(end) => if before(end, boundary) {
-								return Ok(ended(state, steps, zone_segments))
-							}
-							_ => {}
-						}
-						match state.rule.schedule {
-							Subdaily(pattern) => if !SubdailyPattern.starts_before(pattern, state.period + 1, state.window.end) {
-								return Ok(ended(state, steps, zone_segments))
-							}
-							Calendar(_) => {}
-						}
-						frame = timed_frame(state.rule, state.period + 1)?
-						state = { ..state, period: state.period + 1, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, phase: Build, anchor_index: None }
+					None => {}
+				}
+				source = match explicit {
+					Ok(value) => value
+					Err(_) => crash "merge has an inclusion"
+				}
+				if before(source, state.window.start) {
+					state = { ..state, inclusion_index: state.inclusion_index + 1 }
+				} else {
+					if buffered_count(state) == limits.max_buffered {
+						return Ok(limited(state, steps, zone_segments, BufferLimit))
 					}
-					Build => {
-						if state.day == state.end_day {
-							if !state.rule.positions.is_empty() and state.period == 0 {
-								match state.anchor_index {
-									Some(index) => if !selected(state.rule.positions, index, state.buffer.len()) {
-										return Err(UnsynchronizedStart)
-									}
-									None => return Err(UnsynchronizedStart)
-								}
-							}
-							state = { ..state, phase: Emit({ index: 0, advance: Bool.True }) }
-						} else {
-							match state.day_selected {
-								Unknown => {
-									date = GregorianDate.from_civil_day(CivilDay.from_day_number(state.day))?
-									matches = matches_day(state.rule, state.period, date)?
-									state = {
-										..state,
-										day_selected: if matches {
-											Yes
-										} else {
-											No
-										},
-									}
-								}
-								No => {
-									state = next_day(state)
-								}
-								Yes => {
-									if state.clock_index == state.clock_end {
-										state = next_day(state)
-									}
-										else {
-											source = local_at(state.day, clock_at(state.rule.clocks, state.clock_index))?
-											if state.rule.positions.is_empty() {
-												if !before(source, state.window.end) {
-													return Ok(ended(state, steps, zone_segments))
-												}
-												match state.rule.termination {
-													Until(end) => if before(end, source) {
-														return Ok(ended(state, steps, zone_segments))
-													}
-													_ => {}
-												}
-											}
-											if state.rule.positions.is_empty() and before(source, state.rule.anchor) {
-												state = { ..state, clock_index: state.clock_index + 1 }
-											}
-												else {
-													if state.buffer.len() == limits.max_buffered {
-														return Ok(limited(state, steps, zone_segments, BufferLimit))
-													}
-													pending = ZoneRules.classification_cursor(state.context.rules, source)?
-													state = { ..state, clock_index: state.clock_index + 1, pending: Some({ source, cursor: pending }) }
-												}
-										}
-								}
-							}
-						}
-					}
+					pending = ZoneRules.classification_cursor(state.context.rules, source)?
+					state = { ..state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
 				}
 			}
-			crash "Timed recurrence loop returns an outcome"
+			crash "merge loop returns an outcome"
 		}
 
 		## Budgets apply to the entire batch, not separately to each output.
@@ -419,10 +366,22 @@ buffer_at = |buffer, index| match List.get(buffer, index) {
 	Err(_) => crash "Timed buffer index invariant"
 }
 
-buffered_count = |state| state.buffer.len() + match state.pending {
+buffered_count = |state| state.buffer.len() + (match state.pending {
 	None => 0
 	Some(_) => 1
-}
+}) + (match state.inclusion_pending {
+	None => 0
+	Some(_) => 1
+}) + (
+	if state.buffer.is_empty() {
+		match state.held {
+			None => 0
+			Some(_) => 1
+		}
+	} else {
+		0
+	}
+)
 
 limited = |state, steps, zone_segments, reason| { steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Limited({ cursor: state, reason }) }
 
@@ -991,4 +950,260 @@ expect {
 		Err(Ambiguous) => Bool.True
 		_ => Bool.False
 	}
+}
+
+# Internal rule execution: only Cursor.next performs inclusion merging.
+
+next_rule : TimedRecurrence.Cursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
+next_rule = |initial, limits| {
+	var state = initial
+	var steps = 0.U64
+	var zone_segments = 0.U64
+	while True {
+		if buffered_count(state) > limits.max_buffered {
+			return Ok(limited(state, steps, zone_segments, BufferLimit))
+		}
+		match state.rule.termination {
+			Count(maximum) => if state.count == maximum {
+				return Ok(ended(state, steps, zone_segments))
+			}
+			_ => {}
+		}
+		match state.pending {
+			Some(pending) => {
+				batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - zone_segments, max_candidates: limits.max_zone_candidates })?
+				zone_segments = zone_segments + batch.segments
+				state = { ..state, zone_buffered: batch.buffered }
+				match batch.status {
+					Limited(progress) => {
+						reason = match progress.reason {
+							WorkLimit => ZoneWorkLimit
+							BufferLimit => ZoneBufferLimit
+						}
+						return Ok(limited({ ..state, pending: Some({ ..pending, cursor: progress.cursor }) }, steps, zone_segments, reason))
+					}
+					Complete(classification) => {
+						choice = ZoneRules.Classification.choose(classification, { occurrence: state.context.occurrence, gap: state.context.gap })?
+						occurrence : TimedRecurrence.Occurrence
+						occurrence = { source: pending.source, choice, rules: state.context.rules }
+						anchor_index = if pending.source == state.rule.anchor {
+							Some(state.buffer.len())
+						} else {
+							state.anchor_index
+						}
+						phase = if state.rule.positions.is_empty() {
+							Emit({ index: 0, advance: Bool.False })
+						} else {
+							Build
+						}
+						state = { ..state, buffer: state.buffer.append(occurrence), anchor_index, pending: None, zone_buffered: 0, phase }
+					}
+				}
+			}
+			None => {}
+		}
+		if steps == limits.max_steps {
+			return Ok(limited(state, steps, zone_segments, WorkLimit))
+		}
+		steps = steps + 1
+		match state.phase {
+			Emit(emission) => {
+				if emission.index == state.buffer.len() {
+					state = {
+						..state,
+						buffer: [],
+						phase: if emission.advance {
+							Advance
+						} else {
+							Build
+						},
+					}
+				} else {
+					occurrence = buffer_at(state.buffer, emission.index)
+					state = { ..state, phase: Emit({ ..emission, index: emission.index + 1 }) }
+					if selected(state.rule.positions, emission.index, state.buffer.len()) and !before(occurrence.source, state.rule.anchor) {
+						match state.rule.termination {
+							Until(end) => if before(end, occurrence.source) {
+								return Ok(ended(state, steps, zone_segments))
+							}
+							_ => {}
+						}
+						if !before(occurrence.source, state.window.end) {
+							return Ok(ended(state, steps, zone_segments))
+						}
+						state = { ..state, count: state.count + 1 }
+						if !before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) {
+							return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
+						}
+					}
+				}
+			}
+			Advance => {
+				boundary = state.period_end
+				if !before(boundary, state.window.end) {
+					return Ok(ended(state, steps, zone_segments))
+				}
+				match state.rule.termination {
+					Until(end) => if before(end, boundary) {
+						return Ok(ended(state, steps, zone_segments))
+					}
+					_ => {}
+				}
+				match state.rule.schedule {
+					Subdaily(pattern) => if !SubdailyPattern.starts_before(pattern, state.period + 1, state.window.end) {
+						return Ok(ended(state, steps, zone_segments))
+					}
+					Calendar(_) => {}
+				}
+				frame = timed_frame(state.rule, state.period + 1)?
+				state = { ..state, period: state.period + 1, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, phase: Build, anchor_index: None }
+			}
+			Build => {
+				if state.day == state.end_day {
+					if !state.rule.positions.is_empty() and state.period == 0 {
+						match state.anchor_index {
+							Some(index) => if !selected(state.rule.positions, index, state.buffer.len()) {
+								return Err(UnsynchronizedStart)
+							}
+							None => return Err(UnsynchronizedStart)
+						}
+					}
+					state = { ..state, phase: Emit({ index: 0, advance: Bool.True }) }
+				} else {
+					match state.day_selected {
+						Unknown => {
+							date = GregorianDate.from_civil_day(CivilDay.from_day_number(state.day))?
+							matches = matches_day(state.rule, state.period, date)?
+							state = {
+								..state,
+								day_selected: if matches {
+									Yes
+								} else {
+									No
+								},
+							}
+						}
+						No => {
+							state = next_day(state)
+						}
+						Yes => {
+							if state.clock_index == state.clock_end {
+								state = next_day(state)
+							}
+								else {
+									source = local_at(state.day, clock_at(state.rule.clocks, state.clock_index))?
+									if state.rule.positions.is_empty() {
+										if !before(source, state.window.end) {
+											return Ok(ended(state, steps, zone_segments))
+										}
+										match state.rule.termination {
+											Until(end) => if before(end, source) {
+												return Ok(ended(state, steps, zone_segments))
+											}
+											_ => {}
+										}
+									}
+									if state.rule.positions.is_empty() and before(source, state.rule.anchor) {
+										state = { ..state, clock_index: state.clock_index + 1 }
+									}
+										else {
+											if state.buffer.len() == limits.max_buffered {
+												return Ok(limited(state, steps, zone_segments, BufferLimit))
+											}
+											pending = ZoneRules.classification_cursor(state.context.rules, source)?
+											state = { ..state, clock_index: state.clock_index + 1, pending: Some({ source, cursor: pending }) }
+										}
+								}
+						}
+					}
+				}
+			}
+		}
+	}
+	crash "Timed recurrence loop returns an outcome"
+}
+
+sorted_positions : List(LocalDateTime) -> List(LocalDateTime)
+sorted_positions = |labels| {
+	sorted = labels.sort_with(
+		|a, b| match LocalDateTime.compare_position(a, b) {
+			LT => Before
+			EQ => Same
+			GT => After
+		},
+	)
+	var exclusions = []
+	var previous = None
+	for label in sorted {
+		distinct = match previous {
+			None => Bool.True
+			Some(value) => !LocalDateTime.same_position(value, label)
+		}
+		if distinct {
+			exclusions = exclusions.append(label)
+		}
+		previous = Some(label)
+	}
+	exclusions
+}
+
+# R11/R12: explicit starts precede DTSTART and outlive COUNT; duplicates and
+# exclusions operate on the merged positions, and one-unit resumes agree.
+test_inclusion_cursor = |_| {
+	clock = clock_from_number(0)
+	start = |day| Ok({ date: GregorianDate.from_fields({ year: 1970, month: 1, day })?, clock })
+	anchor = start(2)?
+	raw = TimedRecurrence.new(anchor, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
+	included = TimedRecurrence.with_inclusions(raw, [start(4)?, start(2)?, start(1)?, start(4)?, start(5)?])?
+	rule = TimedRecurrence.with_exclusions(included, [local_at(1, clock)?])?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(518400000000))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	TimedRecurrence.cursor(rule, { start: local_at(0, clock)?, end: local_at(4, clock)? }, { rules, occurrence: RequireUnique, gap: RejectGap })
+}
+
+test_inclusions = |budget| {
+	var cursor = test_inclusion_cursor({})?
+	var observed = []
+	var calls = 0.U64
+	while calls < 1000 {
+		batch = TimedRecurrence.Cursor.next(cursor, budget)?
+		if batch.steps > budget.max_steps or batch.zone_segments > budget.max_zone_segments {
+			return Ok(Bool.False)
+		}
+		match batch.status {
+			End => return Ok(observed == [0.I64, 172800000000, 259200000000])
+			Limited(progress) => {
+				cursor = progress.cursor
+			}
+			Item(item) => {
+				observed = observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(item.occurrence)))
+				cursor = item.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	Ok(Bool.False)
+}
+
+expect test_inclusions({ max_steps: 1, max_buffered: 2, max_zone_segments: 1, max_zone_candidates: 1 }) == Ok(Bool.True)
+expect test_inclusions({ max_steps: 100, max_buffered: 2, max_zone_segments: 100, max_zone_candidates: 1 }) == Ok(Bool.True)
+
+expect {
+	initial = test_inclusion_cursor({})?
+	full = { max_steps: 100.U64, max_buffered: 2.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
+	var valid = Bool.True
+	for work in [{ ..full, max_steps: 0 }, { ..full, max_buffered: 0 }, { ..full, max_buffered: 1 }, { ..full, max_zone_segments: 0 }, { ..full, max_zone_candidates: 0 }] {
+		paused = TimedRecurrence.Cursor.next(initial, work)?
+		rest = match paused.status {
+			Limited(progress) => progress.cursor
+			_ => crash "merge needs more budget"
+		}
+		completed = TimedRecurrence.Cursor.collect(rest, { work: full, max_occurrences: 10 })?
+		observed = completed.occurrences.map(|value| PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
+		valid = valid and observed == [0.I64, 172800000000, 259200000000] and match completed.status {
+			Complete => Bool.True
+			_ => Bool.False
+		}
+	}
+	valid
 }

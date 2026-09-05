@@ -6,8 +6,8 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
-- Timed-series inclusions, including an explicit decision on RDATE PERIOD
-  support and per-inclusion duration identity. Reuse CalendarPattern,
+- Per-inclusion duration overrides and RDATE PERIOD adaptation, including
+  conflict handling for multiple durations at one source position. Reuse CalendarPattern,
   SubdailyPattern, ClockPattern, TimedOccurrence and ZoneRules. Apply the RFC
   timed profile's before-gap offset and first-fold policies (verified erratum 4271); only invalid
   calendar dates are discarded. BYSETPOS must see full timed candidate periods.
