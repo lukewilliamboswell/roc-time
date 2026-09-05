@@ -16,6 +16,7 @@ ZoneRules :: {
 	Transition : { at : PosixBoundary, offset : FixedOffset }
 	OffsetBounds : { minimum : I32, maximum : I32 }
 	Resolution : [Gap, Unique(PosixBoundary), Fold(List(PosixBoundary))]
+	OccurrencePolicy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)]
 
 	new : Str, Str, PosixSpan, FixedOffset, List(Transition) -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, ..])
 	new = |name, version, validity, initial, transitions| new_bounded(name, version, validity, initial, transitions, { minimum: I32.lowest, maximum: I32.highest })
@@ -106,6 +107,54 @@ ZoneRules :: {
 				_ => Fold(matches)
 			},
 		)
+	}
+
+	## Choose explicitly; gaps never silently move to another local label.
+	resolve_occurrence : ZoneRules, LocalDateTime, OccurrencePolicy -> Try(PosixBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, ..])
+	resolve_occurrence = |rules, local, policy| {
+		classification = resolve(rules, local)?
+		match classification {
+			Gap => Err(Gap)
+			Unique(boundary) => match policy {
+				MatchingOffset(expected) => if offset_at(rules, boundary)? == expected {
+					Ok(boundary)
+				} else {
+					Err(OffsetConflict)
+				}
+				_ => Ok(boundary)
+			}
+			Fold(boundaries) => match policy {
+				RequireUnique => Err(Ambiguous)
+				First => match List.get(boundaries, 0) {
+					Ok(boundary) => Ok(boundary)
+					Err(_) => crash "internal nonempty fold invariant"
+				}
+				Last => match List.get(boundaries, List.len(boundaries) - 1) {
+					Ok(boundary) => Ok(boundary)
+					Err(_) => crash "internal nonempty fold invariant"
+				}
+				MatchingOffset(expected) => {
+					candidate = match FixedOffset.resolve(expected, local) {
+						Ok(value) => value
+						Err(_) => return Err(OffsetConflict)
+					}
+					for boundary in boundaries {
+						if boundary == candidate {
+							return Ok(boundary)
+						}
+					}
+					Err(OffsetConflict)
+				}
+			}
+		}
+	}
+
+	## Appointment between independently chosen occurrences, not a selection.
+	appointment : ZoneRules, LocalDateTime, OccurrencePolicy, LocalDateTime, OccurrencePolicy -> Try(PosixSpan, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, EmptySpan, ReversedBounds, ..])
+	appointment = |rules, start, start_policy, end, end_policy| {
+		lower = resolve_occurrence(rules, start, start_policy)?
+		upper = resolve_occurrence(rules, end, end_policy)?
+		PosixSpan.new(lower, upper)
 	}
 
 	## Preimage of the half-open local selection; never an endpoint hull.

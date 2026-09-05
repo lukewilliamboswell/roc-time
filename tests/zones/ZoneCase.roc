@@ -66,6 +66,29 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		if ZoneRules.resolve(rules, local) != Ok(classification) {
 			crash "zone resolution differs from independent timeline enumeration"
 		}
+		match expected {
+			[] => {
+				if ZoneRules.resolve_occurrence(rules, local, First) != Err(Gap) {
+					crash "gap silently shifted"
+				}
+			}
+			[only] => {
+				if ZoneRules.resolve_occurrence(rules, local, RequireUnique) != Ok(only) {
+					crash "unique occurrence policy"
+				}
+			}
+			_ => {
+				if ZoneRules.resolve_occurrence(rules, local, RequireUnique) != Err(Ambiguous) {
+					crash "fold silently chosen"
+				}
+			}
+		}
+		for occurrence in expected {
+			seconds = I64.div_trunc_by(input.number - PosixBoundary.to_microseconds(occurrence), 1000000).to_i32_wrap()
+			if ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(seconds))) != Ok(occurrence) {
+				crash "asserted offset chose wrong occurrence"
+			}
+		}
 		end_number = input.number + 500000
 		end_fields = if end_number < 0 {
 			{ year: 1969.I64, month: 12.U8, day: 31.U8 }

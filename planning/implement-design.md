@@ -90,7 +90,10 @@ preimages now preserve clipped segment coverage and prove finite-domain
 completeness, with skipped-day, triple-fold and exact validity-end fixtures plus
 generated membership comparisons. The full pinned integration command passed
 after selection implementation on 2026-09-05: all nine 10,000-run campaigns,
-both external calendar oracles and all four bundled applications. Explicit occurrence policies, resolved snapshot
+both external calendar oracles and all four bundled applications. Explicit occurrence policies now distinguish unique/first/last/matching-offset
+selection, reject gaps and validate appointment endpoint order. Triple-fold
+fixtures distinguish the appointment hull from disconnected selection coverage;
+generated policies use independently enumerated occurrences. Resolved snapshot
 provenance and external rule-data adapters remain next; lookup is currently a
 bounded linear scan whose performance still needs R15 evidence. The full pinned
 integration command passed after this addition on 2026-09-05, including all eight

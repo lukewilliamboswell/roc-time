@@ -355,8 +355,26 @@ at most one matching position. Segment order produces sorted distinct results.
 implicitly. Work is O(n) in transitions with O(k) output for k matches, plus
 bounded calendar conversions. Synthetic direct-timeline enumeration anchors
 classification independently of inverse conversion; three-fold and finite-edge
-counterexamples are retained. Explicit occurrence policies and snapshot
-provenance remain separate implementation work.
+counterexamples are retained. Snapshot provenance remains separate implementation
+work.
+
+`resolve_occurrence` requires an explicit policy: `RequireUnique`, `First`,
+`Last`, or `MatchingOffset(offset)`. First/last refer to chronological order
+across every fold occurrence, including folds with more than two results.
+`MatchingOffset` validates the local-minus-POSIX relationship and rejects a
+conflict; it never substitutes an occurrence with another offset. Every policy
+returns `Gap` for a nonexistent local label. Gap shifting is not implemented
+and cannot be inferred from a fold-choice policy. Completeness/range errors
+from classification remain errors before any choice is made.
+
+`appointment` takes independent start/end occurrence policies, then validates
+the resulting POSIX span. Equal or reversed resolved endpoints fail. Its result
+may include timeline positions excluded by a local selection between the same
+labels: this is the intentional appointment-versus-selection distinction.
+No requirement that local field order match timeline order is imposed across
+a fold. Cross-zone callers resolve each operand with its own rules before
+constructing compatible-axis spans. Choice and matching cost O(n + k), with
+no repeated rule lookup per fold member.
 
 `ZoneRules.select(rules, start, end)` computes the preimage of a nonempty
 half-open local range, comparing its boundaries by civil position rather than

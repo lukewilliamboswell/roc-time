@@ -131,11 +131,26 @@ ZoneRulesTests :: [].{
 		)?
 		local = local_label(2500000)?
 		end = local_label(2750000)?
+		var policies_valid = Bool.True
+		if ZoneRules.resolve_occurrence(rules, local, RequireUnique) != Err(Ambiguous) or
+			ZoneRules.resolve_occurrence(rules, local, First) != Ok(point(-1500000)) or
+				ZoneRules.resolve_occurrence(rules, local, Last) != Ok(point(2500000)) or
+					ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(2))) != Ok(point(500000)) or
+						ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(1))) != Err(OffsetConflict) {
+			policies_valid = Bool.False
+		}
+		appointment = ZoneRules.appointment(rules, local, First, end, Last)?
+		whole = PosixSpan.new(point(-1500000), point(2750000))?
+		if appointment != whole or
+			ZoneRules.appointment(rules, local, Last, end, First) != Err(ReversedBounds) or
+				ZoneRules.appointment(rules, local, First, local, First) != Err(EmptySpan) {
+			policies_valid = Bool.False
+		}
 		selected = ZoneRules.select(rules, local, end)?
 		a = PosixSpan.new(point(-1500000), point(-1250000))?
 		b = PosixSpan.new(point(500000), point(750000))?
 		c = PosixSpan.new(point(2500000), point(2750000))?
-		ZoneRules.resolve(rules, local) == Ok(Fold([point(-1500000), point(500000), point(2500000)])) and
+		policies_valid and ZoneRules.resolve(rules, local) == Ok(Fold([point(-1500000), point(500000), point(2500000)])) and
 			selected == Coverage.from_spans([a, b, c]) and
 				ZoneRules.select(rules, local, local) == Err(EmptySelection) and
 					ZoneRules.select(rules, end, local) == Err(ReversedSelection)
