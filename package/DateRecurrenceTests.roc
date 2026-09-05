@@ -184,6 +184,160 @@ status = |anchor, options| match DateRecurrence.new(anchor, options) {
 	Err(error) => Err(error)
 }
 
+# next has three outcomes: an item, proven end, or a resumable work limit.
+expect {
+	rule = DateRecurrence.new(date(2025, 1, 31), { ..spec, termination: Count(1) })?
+	cursor = DateRecurrence.cursor(rule, window)?
+	zero = DateRecurrence.Cursor.next(cursor, { max_steps: 0, max_buffered: 366 })?
+	match zero.status {
+		Limited(progress) => {
+			first = DateRecurrence.Cursor.next(progress.cursor, { max_steps: 1000, max_buffered: 366 })?
+			match first.status {
+				Item(item) => {
+					last = DateRecurrence.Cursor.next(item.cursor, { max_steps: 0, max_buffered: 366 })?
+					item.date == date(2025, 1, 31) and progress.reason == WorkLimit and
+						last.status == End and last.steps == 0
+				}
+				_ => False
+			}
+		}
+		_ => False
+	}
+}
+
+# Stop on an inclusion before the anchor, then a duplicate inclusion/rule
+# date. Both merge inputs must advance exactly once before yielding control.
+expect {
+	rule = DateRecurrence.new(date(2025, 1, 31), { ..spec, inclusions: [date(2025, 1, 1), date(2025, 1, 31)] })?
+	cursor = DateRecurrence.cursor(rule, window)?
+	first = DateRecurrence.Cursor.fold(cursor, limits, "", |text, value| Stop("${text}${GregorianDate.to_fields(value).day.to_str()}"))?
+	match first.status {
+		Stopped(after_first) => {
+			second = DateRecurrence.Cursor.fold(after_first, limits, first.value, |text, value| Stop("${text},${GregorianDate.to_fields(value).day.to_str()}"))?
+			match second.status {
+				Stopped(after_second) => first.value == "1" and second.value == "1,31" and
+					first.occurrences == 1 and second.occurrences == 1 and
+						resume_all(after_second, limits)? == [date(2025, 3, 31), date(2025, 5, 31)]
+				_ => False
+			}
+		}
+		_ => False
+	}
+}
+
+# A stopped final callback does not claim completion by looking ahead.
+# Resuming the exhausted cursor must not invoke the visitor again.
+expect {
+	rule = DateRecurrence.new(date(2025, 1, 31), { ..spec, termination: Count(1) })?
+	cursor = DateRecurrence.cursor(rule, window)?
+	batch = DateRecurrence.Cursor.fold(cursor, limits, 10.U64, |total, _| Stop(total + 1))?
+	match batch.status {
+		Stopped(remaining) => {
+			last = DateRecurrence.Cursor.fold(remaining, limits, batch.value, |_, _| crash "Visitor called after exhaustion")?
+			match last.status {
+				Complete => batch.value == 11 and last.value == 11 and last.occurrences == 0
+				_ => False
+			}
+		}
+		_ => False
+	}
+}
+
+# A non-list accumulator and one-step budgets preserve visitor state; limits
+# count engine work and visitor calls separately from the series COUNT.
+expect {
+	rule = DateRecurrence.new(date(2025, 1, 31), { ..spec, exclusions: [date(2025, 3, 31)] })?
+	var current = DateRecurrence.cursor(rule, window)?
+	var sum = 100.U64
+	var finished = False
+	var batches = 0.U64
+	while finished == False and batches < 1000 {
+		batch = DateRecurrence.Cursor.fold(current, { ..limits, max_steps: 1, max_occurrences: 1 }, sum, |total, value| Continue(total + GregorianDate.to_fields(value).month.to_u64()))?
+		sum = batch.value
+		if batch.steps > 1 or batch.occurrences > 1 {
+			crash "Fold exceeded budget"
+		}
+		match batch.status {
+			Complete => {
+				finished = True
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+			Stopped(_) => crash "Visitor never stops"
+		}
+		batches = batches + 1
+	}
+	finished and sum == 106
+}
+
+# Iter chunks preserve partial/complete outcomes and standard Iter composition.
+expect {
+	rule = DateRecurrence.new(date(2025, 1, 31), spec)?
+	cursor = DateRecurrence.cursor(rule, window)?
+	var dates = []
+	var completed = False
+	for result in DateRecurrence.Cursor.chunks(cursor, { ..limits, max_steps: 7, max_occurrences: 1 }) {
+		batch = result?
+		if completed == True {
+			crash "Item emitted after Complete"
+		}
+		dates = dates.concat(batch.dates)
+		match batch.status {
+			Complete => {
+				completed = True
+			}
+			Limited(_) => {}
+		}
+	}
+	completed == True and dates == complete(rule, window)?
+}
+
+# An insufficient budget produces a visible terminal Limited item, not an
+# endlessly repeated empty chunk or apparent successful exhaustion.
+expect {
+	rule = DateRecurrence.new(date(2025, 1, 31), spec)?
+	cursor = DateRecurrence.cursor(rule, window)?
+	var count = 0.U64
+	var retained = None
+	for result in DateRecurrence.Cursor.chunks(cursor, { ..limits, max_buffered: 0 }) {
+		batch = result?
+		match batch.status {
+			Limited(progress) => {
+				retained = Some(progress.cursor)
+			}
+			Complete => crash "Buffer exhaustion reported as complete"
+		}
+		count = count + 1
+	}
+	match retained {
+		Some(remaining) => count == 1 and resume_all(remaining, limits)? == complete(rule, window)?
+		None => False
+	}
+}
+
+# take_first(0) must not execute a range-failing future period. Consuming the
+# iterator exposes that failure exactly once after its preceding date batch.
+expect {
+	rule = DateRecurrence.new(date(2147483647, 11, 1), { ..spec, termination: Forever })?
+	cursor = DateRecurrence.cursor(rule, { start: date(2147483647, 11, 1), end: date(2147483647, 12, 2) })?
+	stream = DateRecurrence.Cursor.chunks(cursor, { ..limits, max_steps: 35 })
+	empty_count = stream.take_first(0).fold(0.U64, |n, _| n + 1)
+	var failures = 0.U64
+	for result in stream {
+		match result {
+			Err(OutOfRange) => {
+				failures = failures + 1
+			}
+			Ok(batch) => match batch.status {
+				Limited(_) => {}
+				Complete => crash "Out-of-range query reported as complete"
+			}
+		}
+	}
+	empty_count == 0 and failures == 1
+}
+
 expect {
 	anchor = date(2025, 1, 20)
 	pattern = { ..spec.pattern, by_day: [{ ordinal: 0, weekday: Monday }] }

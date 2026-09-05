@@ -18,8 +18,8 @@ finite immutable zone rules and event/coverage distinctions.
   checks; do not introduce a separate parser execution engine.
 - Independently generated JSONL cases, RFC examples, synthetic zone transitions,
   bounded fuzz models, invalid-input/domain checks and realistic applications.
-- Add next/fold conveniences over bounded cursor execution and all-day event
-  materialization with explicit duration, series identity and zone context.
+- Add all-day event materialization with explicit duration, series identity and
+  zone context.
 
 ## Decisions and acceptance still needed
 

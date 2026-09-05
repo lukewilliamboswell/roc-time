@@ -28,6 +28,10 @@ decoders, and the named-case replay checks validate that contract.
 | `recurrence-v1` | R11–R12/R14: 2024–2025 monthly schedules on day 31 or the last Monday, intervals 1–3, COUNT 1–6, duplicate inclusions, exclusions and query starts in every month. An independent month-table/weekday walk builds the finite set before query filtering. Native resumptions with 1–128 work steps and one output slot, and equivalent parsed RFC date values, must yield exactly that set. Duplicate COUNT parts must fail. Fixed tests add UNTIL, positive positions, zero/reduced buffer limits and provider endpoints. |
 | `zones-v1` | R07: two synthetic transitions imported through the structural database adapter, offsets -2 through 2 seconds, local labels within a complete finite rule domain and arbitrary microsecond fractions; classification, explicit occurrence policies, snapshot provenance/re-resolution and half-second selection membership compared with independent timeline-cell enumeration. Fixed fixtures add three-occurrence folds, a skipped local day and incomplete-domain errors. |
 
+The recurrence target also compares `next`, stopped/resumed scalar folds and
+Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
+Each traversal must preserve the same dates and respect work/output budgets.
+
 Bounds apply before production calls. None of the targets discards expected
 structured error paths. The small-domain coverage oracle complements full-range
 boundary/span checks and deterministic extreme-width tests in `CoverageTests`.

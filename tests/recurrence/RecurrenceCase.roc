@@ -176,6 +176,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 						}
 						Limited(_) => crash "Parsed recurrence unexpectedly limited"
 					}
+					check_consumers(cursor, limits, normalized)
 					return Fuzz.keep
 				}
 				Limited(progress) => {
@@ -185,6 +186,111 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			batches = batches + 1
 		}
 		crash "Recurrence resumption failed to progress"
+	}
+}
+
+check_consumers = |initial, limits, expected| {
+	var current = initial
+	var observed = []
+	var calls = 0.U64
+	var done = False
+	while done == False and calls < 5000 {
+		result = match DateRecurrence.Cursor.next(current, { max_steps: limits.max_steps, max_buffered: limits.max_buffered }) {
+			Ok(value) => value
+			Err(_) => crash "Next failed within the reference range"
+		}
+		if result.steps > limits.max_steps or result.buffered > limits.max_buffered {
+			crash "Next exceeded its budget"
+		}
+		match result.status {
+			End => {
+				done = True
+			}
+			Item(item) => {
+				observed = observed.append(item.date)
+				current = item.cursor
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	if done == False or observed != expected {
+		crash "Next differs from finite calendar model"
+	}
+	current = initial
+	calls = 0
+	done = False
+	var value = { count: 0.U64, weighted: 0.U64 }
+	while done == False and calls < 5000 {
+		result = match DateRecurrence.Cursor.fold(
+			current,
+			limits,
+			value,
+			|acc, candidate| {
+				fields = GregorianDate.to_fields(candidate)
+				count = acc.count + 1
+				updated = { count, weighted: acc.weighted + count * (fields.month.to_u64() * 31 + fields.day.to_u64()) }
+				if U64.mod_by(count, 2) == 0 {
+					Stop(updated)
+				} else {
+					Continue(updated)
+				}
+			},
+		) {
+			Ok(batch) => batch
+			Err(_) => crash "Fold failed within the reference range"
+		}
+		if result.steps > limits.max_steps or result.occurrences > limits.max_occurrences or result.buffered > limits.max_buffered {
+			crash "Fold exceeded its budget"
+		}
+		value = result.value
+		match result.status {
+			Complete => {
+				done = True
+			}
+			Stopped(remaining) => {
+				current = remaining
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	var weighted = 0.U64
+	var index = 1.U64
+	for candidate in expected {
+		fields = GregorianDate.to_fields(candidate)
+		weighted = weighted + index * (fields.month.to_u64() * 31 + fields.day.to_u64())
+		index = index + 1
+	}
+	if done == False or value.count != expected.len() or value.weighted != weighted {
+		crash "Stopped fold differs from calendar model"
+	}
+	var chunked = []
+	var complete = False
+	var chunks = 0.U64
+	for result in DateRecurrence.Cursor.chunks(initial, limits) {
+		batch = match result {
+			Ok(chunk) => chunk
+			Err(_) => crash "Chunk iterator failed in reference range"
+		}
+		if complete == True or chunks >= 5000 {
+			crash "Invalid chunk iterator termination"
+		}
+		chunked = chunked.concat(batch.dates)
+		match batch.status {
+			Complete => {
+				complete = True
+			}
+			Limited(_) => {}
+		}
+		chunks = chunks + 1
+	}
+	if complete == False or chunked != expected {
+		crash "Chunk iterator differs from calendar model"
 	}
 }
 

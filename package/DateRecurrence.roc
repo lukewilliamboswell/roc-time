@@ -30,6 +30,18 @@ DateRecurrence :: {
 		buffered : U64,
 		status : [Complete, Limited({ cursor : Cursor, reason : Limit })],
 	}
+	FoldBatch(acc) : {
+		value : acc,
+		occurrences : U64,
+		steps : U64,
+		buffered : U64,
+		status : [Complete, Limited({ cursor : Cursor, reason : Limit }), Stopped(Cursor)],
+	}
+	Next : {
+		steps : U64,
+		buffered : U64,
+		status : [End, Item({ date : GregorianDate, cursor : Cursor }), Limited({ cursor : Cursor, reason : Limit })],
+	}
 
 	## O(366*s + n log n) construction, where s is selector count and n is the
 	## number of explicit dates. Each supplied list is limited to 4096 entries.
@@ -113,24 +125,42 @@ DateRecurrence :: {
 		## Shared cursors may copy a period buffer; no scan hides inside one step.
 		collect : Cursor, Limits -> Try(Batch, [OutOfRange, ..])
 		collect = |initial, limits| {
+			batch = fold(initial, limits, [], |dates, date| Continue(dates.append(date)))?
+			status = match batch.status {
+				Complete => Complete
+				Limited(progress) => Limited(progress)
+				Stopped(_) => crash "Collection visitor never stops"
+			}
+			Ok({ dates: batch.value, steps: batch.steps, buffered: batch.buffered, status })
+		}
+
+		## Fold visits ordered, deduplicated dates after exclusions and query
+		## filtering. Stop(value) consumes that date and returns its exact next
+		## cursor, without searching ahead. Stopped never claims completeness.
+		## max_occurrences limits visitor calls; steps account for engine work,
+		## not the caller's visitor. No intermediate output list is constructed.
+		## Resume with the returned cursor and value to preserve the accumulator.
+		fold : Cursor, Limits, acc, (acc, GregorianDate -> [Continue(acc), Stop(acc)]) -> Try(FoldBatch(acc), [OutOfRange, ..])
+		fold = |initial, limits, initial_value, visit| {
 			var state = initial
-			var dates = []
+			var value = initial_value
+			var occurrences = 0.U64
 			var steps = 0.U64
 			while True {
 				if buffered_count(state) > limits.max_buffered {
-					return Ok(limited(state, dates, steps, BufferLimit))
+					return Ok(limited(state, value, occurrences, steps, BufferLimit))
 				}
 				explicit = List.get(state.rule.inclusions, state.inclusion)
 				if state.phase == Done and state.pending == None {
 					match explicit {
-						Err(_) => return Ok({ dates, steps, buffered: buffered_count(state), status: Complete })
+						Err(_) => return Ok({ value, occurrences, steps, buffered: buffered_count(state), status: Complete })
 						Ok(date) => if date >= state.window.end {
-							return Ok({ dates, steps, buffered: buffered_count(state), status: Complete })
+							return Ok({ value, occurrences, steps, buffered: buffered_count(state), status: Complete })
 						}
 					}
 				}
 				if steps == limits.max_steps {
-					return Ok(limited(state, dates, steps, WorkLimit))
+					return Ok(limited(state, value, occurrences, steps, WorkLimit))
 				}
 				steps = steps + 1
 				# Merge only once the next rule date is known (or exhausted).
@@ -146,11 +176,8 @@ DateRecurrence :: {
 						(None, Err(_)) => crash "Completed merge handled above"
 					}
 					visible = choice >= state.window.start and choice < state.window.end and !contains(state.rule.exclusions, choice)
-					if visible and dates.len() == limits.max_occurrences {
-						return Ok(limited(state, dates, steps, OutputLimit))
-					}
-					if visible {
-						dates = dates.append(choice)
+					if visible and occurrences == limits.max_occurrences {
+						return Ok(limited(state, value, occurrences, steps, OutputLimit))
 					}
 					if state.pending == Some(choice) {
 						state = { ..state, pending: None }
@@ -160,6 +187,15 @@ DateRecurrence :: {
 							state = { ..state, inclusion: state.inclusion + 1 }
 						}
 						Err(_) => {}
+					}
+					if visible {
+						occurrences = occurrences + 1
+						match visit(value, choice) {
+							Continue(updated) => {
+								value = updated
+							}
+							Stop(updated) => return Ok({ value: updated, occurrences, steps, buffered: buffered_count(state), status: Stopped(state) })
+						}
 					}
 				} else {
 					match state.phase {
@@ -183,7 +219,7 @@ DateRecurrence :: {
 								date = from_number(scan.day)?
 								if CalendarPattern.matches(state.rule.pattern, state.period, date)? {
 									if state.buffer.len() == limits.max_buffered {
-										return Ok(limited(state, dates, steps, BufferLimit))
+										return Ok(limited(state, value, occurrences, steps, BufferLimit))
 									}
 									state = { ..state, buffer: state.buffer.append(date) }
 								}
@@ -243,6 +279,54 @@ DateRecurrence :: {
 			crash "Recurrence loop returns a batch"
 		}
 
+		## Return one date without looking for the following date. End is proven
+		## exhaustion; Limited needs more work/capacity and is not end-of-series.
+		next : Cursor, { max_steps : U64, max_buffered : U64 } -> Try(Next, [OutOfRange, ..])
+		next = |initial, budget| {
+			batch = fold(initial, { max_steps: budget.max_steps, max_buffered: budget.max_buffered, max_occurrences: 1 }, None, |_, date| Stop(Some(date)))?
+			status = match batch.status {
+				Complete => End
+				Limited(progress) => Limited(progress)
+				Stopped(remaining) => match batch.value {
+					Some(date) => Item({ date, cursor: remaining })
+					None => crash "Next visitor stops with a date"
+				}
+			}
+			Ok({ steps: batch.steps, buffered: batch.buffered, status })
+		}
+
+		## Lazy Roc iterator of bounded batches. Each advance performs one collect;
+		## no series expansion happens while constructing this iterator.
+		## Complete, Limited and errors remain visible items. Iter exhaustion is
+		## transport exhaustion, not proof that the temporal query completed.
+		## Positive work/output limits continue automatically. BufferLimit or a
+		## zero work/output budget emits one terminal Limited item; its cursor can
+		## be resumed explicitly with larger limits. Errors are emitted once.
+		## Retaining chunks/rest iterators can retain their captured buffers.
+		chunks : Cursor, Limits -> Iter(Try(Batch, [OutOfRange]))
+		chunks = |initial, limits| Iter.custom(
+			Active(initial),
+			Unknown,
+			|state| match state {
+				Finished => Err(NoMore)
+				Active(current) => {
+					result = collect(current, limits)
+					remaining = match result {
+						Err(_) => Finished
+						Ok(batch) => match batch.status {
+							Complete => Finished
+							Limited(progress) => if progress.reason == BufferLimit or limits.max_steps == 0 or limits.max_occurrences == 0 {
+								Finished
+							} else {
+								Active(progress.cursor)
+							}
+						}
+					}
+					Ok((result, remaining))
+				}
+			},
+		)
+
 		to_inspect : Cursor -> Str
 		to_inspect = |state| "DateRecurrence.Cursor(period=${state.period.to_str()}, counted=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
 	}
@@ -270,9 +354,10 @@ selected = |positions, index, count| {
 	found
 }
 
-limited : DateRecurrence.Cursor, List(GregorianDate), U64, DateRecurrence.Limit -> DateRecurrence.Batch
-limited = |cursor, dates, steps, reason| {
-	dates,
+limited : DateRecurrence.Cursor, acc, U64, U64, DateRecurrence.Limit -> DateRecurrence.FoldBatch(acc)
+limited = |cursor, value, occurrences, steps, reason| {
+	value,
+	occurrences,
 	steps,
 	buffered: buffered_count(cursor),
 	status: Limited({ cursor, reason }),

@@ -310,6 +310,21 @@ Adapters declare their recurrence semantics. In particular, RFC 5545 invalid gen
 
 Source occurrence identity survives until a caller requests coverage. Enumeration contracts state ordering and duplicate behavior, especially when zone transitions map local candidates unexpectedly. Coverage construction performs any required sorting and coalescing; it never trusts recurrence order without a guarantee.
 
+Streaming traversal is distinct from materialization. Use Roc's `Iter` for lazy
+sequence composition where its items preserve the operation's outcomes. A
+fallible or budgeted stream exposes errors and incomplete evaluation explicitly;
+iterator exhaustion alone is not proof of a complete temporal answer. Bounded
+chunks carry the same interpretation and series state across their boundaries.
+Do not silently retry a non-progressing limit forever or turn it into successful
+exhaustion. Chunk boundaries have no temporal meaning.
+
+Callers can consume individual occurrences or fold directly into an accumulator
+without constructing an output list. Collecting chunks, sorting arbitrary input
+and constructing a complete canonical coverage value are explicit materializing
+operations. Iterating an existing finite coverage value traverses stored spans;
+it does not make their storage lazy. Account separately for retained inputs,
+per-period candidate buffers, output chunks and retained cursor/iterator snapshots.
+
 Uncertain expressions remain uncertain. “One of these days” is different from “all of these days,” and an approximate date is not automatically a wider certain interval. A query distinguishes definite, possible, and impossible relationships where its model supports them. An unsupported reasoning problem is an explicit outcome, not a fabricated certainty.
 
 For a supported evidence model, “definite” means true for every admissible interpretation; “possible” means true for at least one but not all; “impossible” means true for none. Inconsistent evidence is an error, not vacuous certainty. Merely parsing an approximate qualifier does not supply a numerical tolerance or a probability model.

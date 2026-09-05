@@ -33,28 +33,34 @@ observe = |input| {
 		Ok(value) => value
 		Err(_) => crash "Invalid oracle query"
 	}
-	var current = initial
 	var result = ["ok"]
 	var batches = 0.U64
-	while batches < 10000 {
+	var complete = False
+	for outcome in DateRecurrence.Cursor.chunks(initial, { max_steps: 17, max_buffered: 366, max_occurrences: 1 }) {
 		# Also exercise process-independent immutable resumptions, with one output
 		# slot and a limit that regularly splits calendar periods.
-		batch = match DateRecurrence.Cursor.collect(current, { max_steps: 17, max_buffered: 366, max_occurrences: 1 }) {
+		batch = match outcome {
 			Ok(value) => value
 			Err(_) => crash "Oracle query outside provider range"
+		}
+		if complete == True or batches >= 10000 {
+			crash "Oracle chunk termination failure"
 		}
 		for value in batch.dates {
 			result = result.append(display(value))
 		}
 		match batch.status {
-			Complete => return Str.join_with(result, "\t")
-			Limited(progress) => {
-				current = progress.cursor
+			Complete => {
+				complete = True
 			}
+			Limited(_) => {}
 		}
 		batches = batches + 1
 	}
-	crash "Oracle cursor did not finish"
+	if complete == False {
+		crash "Oracle cursor did not finish"
+	}
+	Str.join_with(result, "\t")
 }
 
 values = |text| if text == "-" {
