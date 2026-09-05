@@ -11,7 +11,7 @@ DispatchDeadlines :: [].{
 	upcoming = |rules, window| {
 		date = GregorianDate.from_fields({ year: 2025, month: 1, day: 27 })?
 		clock = ClockTime.from_fields({ hour: 17, minute: 0, second: 0, microsecond: 0 })?
-		rule = TimedRecurrence.new(
+		base_rule = TimedRecurrence.new(
 			{ date, clock },
 			{
 				calendar: { ..CalendarPattern.defaults(Monthly), by_day: [{ ordinal: 0, weekday: Monday }] },
@@ -20,6 +20,8 @@ DispatchDeadlines :: [].{
 				by_set_pos: [-1],
 			},
 		)?
+		# Waiving January does not add a replacement deadline in May.
+		rule = TimedRecurrence.with_exclusions(base_rule, [LocalDateTime.new(CalendarDate.from_gregorian(date), clock)])?
 		cursor = TimedRecurrence.cursor(rule, window, { rules, occurrence: RequireUnique, gap: RejectGap })?
 		batch = TimedRecurrence.Cursor.collect(
 			cursor,

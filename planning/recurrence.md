@@ -6,7 +6,7 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
-- Timed-series inclusions, exclusions and occurrence durations, including an
+- Timed-series inclusions and occurrence durations, including an
   explicit decision on RDATE PERIOD support. Reuse CalendarPattern,
   SubdailyPattern, ClockPattern and ZoneRules. Apply the RFC timed profile's
   before-gap offset and first-fold policies (verified erratum 4271); only invalid
@@ -16,7 +16,9 @@ finite immutable zone rules and event/coverage distinctions.
   through those operations; query restriction never restarts series COUNT.
 - Extend RFC 5545 adaptation to timed values, omitted yearly defaults and
   declared serialization/persistence. Keep its explicit profile and UNTIL type
-  checks; do not introduce a separate parser execution engine.
+  checks; do not introduce a separate parser execution engine. Settle UTC EXDATE
+  matching against gap-adjusted sources before mapping it to native source
+  exclusions: projecting an adjusted boundary cannot recover its original label.
 - Independently generated JSONL cases, RFC examples, synthetic zone transitions,
   bounded fuzz models, invalid-input/domain checks and realistic applications.
 

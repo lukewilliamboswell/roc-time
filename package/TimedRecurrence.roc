@@ -17,7 +17,8 @@ import ZoneRules
 ## COUNT includes chosen source occurrences before the query window; UNTIL is
 ## inclusive in local position. Daily through yearly periods use Gregorian
 ## selectors via new; new_subdaily supplies hourly, minutely or secondly
-## periods. Exceptions and durations are not exposed.
+## periods. Source exclusions are applied after interpretation and COUNT;
+## they do not bypass gap/fold validation. Inclusions and durations are not exposed.
 ## Clock candidates are ordered by source label. BYSETPOS indexes that full
 ## period after explicit interpretation, without deduplicating equal boundaries.
 ## Construction retains at most 4096 positions and bounded field selectors.
@@ -26,7 +27,7 @@ import ZoneRules
 ## Without positions, buffering holds one occurrence. With positions it holds
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
-TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16) }.{
+TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime) }.{
 	Termination : [Forever, Count(U64), Until(LocalDateTime)]
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
@@ -38,7 +39,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if !CalendarPattern.matches(calendar, 0, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos })
+		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [] })
 	}
 	SubdailySpec : { pattern : SubdailyPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
@@ -51,7 +52,39 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if !SubdailyPattern.matches_date(pattern, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos })
+		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [] })
+	}
+
+	## Replace the source-position exclusion set; an empty list clears it.
+	## Equal local positions match across supported calendar descriptions.
+	## Do not confuse source equality with equal resolved boundaries in a gap.
+	## At most 4096 inputs; O(n log n) normalization, O(log n) membership.
+	## Existing cursors retain their original immutable rule and exclusion set.
+	with_exclusions : TimedRecurrence, List(LocalDateTime) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	with_exclusions = |rule, labels| {
+		if labels.len() > 4096 {
+			return Err(TooManySelectors)
+		}
+		sorted = labels.sort_with(
+			|a, b| match LocalDateTime.compare_position(a, b) {
+				LT => Before
+				EQ => Same
+				GT => After
+			},
+		)
+		var exclusions = []
+		var previous = None
+		for label in sorted {
+			distinct = match previous {
+				None => Bool.True
+				Some(value) => !LocalDateTime.same_position(value, label)
+			}
+			if distinct {
+				exclusions = exclusions.append(label)
+			}
+			previous = Some(label)
+		}
+		Ok({ ..rule, exclusions })
 	}
 
 	Window : { start : LocalDateTime, end : LocalDateTime }
@@ -186,7 +219,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 									return Ok(ended(state, steps, zone_segments))
 								}
 								state = { ..state, count: state.count + 1 }
-								if !before(occurrence.source, state.window.start) {
+								if !before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) {
 									return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
 								}
 							}
@@ -453,14 +486,14 @@ expect {
 # 02:00 (exact) to the same boundary. Both source appointments count.
 test_gap_series = |positions, budget| test_series(positions, budget, 3600, First)
 
-test_series = |positions, budget, offset, policy| test_series_with_pauses(positions, budget, offset, policy, [])
+test_series = |positions, budget, offset, policy| test_series_with_pauses(positions, budget, offset, policy, [], [])
 
-test_series_with_pauses = |positions, budget, offset, policy, pauses| {
+test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
 	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
 	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
-	rule = TimedRecurrence.new(
+	base_rule = TimedRecurrence.new(
 		{ date, clock },
 		{
 			calendar: CalendarPattern.defaults(Daily),
@@ -469,6 +502,7 @@ test_series_with_pauses = |positions, budget, offset, policy, pauses| {
 			by_set_pos: positions,
 		},
 	)?
+	rule = TimedRecurrence.with_exclusions(base_rule, exclusions)?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
 	rules = ZoneRules.new_bounded(
 		"Synthetic/Forward",
@@ -582,7 +616,7 @@ expect {
 		{ ..budget, max_buffered: 1 },
 		{ ..budget, max_buffered: 0 },
 	]
-	result = test_series_with_pauses([1, -1], budget, 3600, First, pauses)?
+	result = test_series_with_pauses([1, -1], budget, 3600, First, pauses, [])?
 	expected = test_gap_series([1, -1], budget)?
 	result.valid and expected.valid and result.sources == expected.sources and result.boundaries == expected.boundaries and result.adjusted == expected.adjusted
 }
@@ -886,4 +920,75 @@ expect {
 test_subdaily_status = |start, pattern| match TimedRecurrence.new_subdaily(start, { pattern, termination: Forever, by_set_pos: [] }) {
 	Ok(_) => Ok({})
 	Err(error) => Err(error)
+}
+
+excluded : List(LocalDateTime), LocalDateTime -> Bool
+excluded = |labels, source| {
+	var lower = 0.U64
+	var upper = labels.len()
+	while lower < upper {
+		middle = lower + U64.div_trunc_by(upper - lower, 2)
+		label = label_at(labels, middle)
+		if before(label, source) {
+			lower = middle + 1
+		} else {
+			upper = middle
+		}
+	}
+	lower < labels.len() and LocalDateTime.same_position(label_at(labels, lower), source)
+}
+
+label_at = |labels, index| match List.get(labels, index) {
+	Ok(value) => value
+	Err(_) => crash "exclusion index invariant"
+}
+
+expect {
+	gap_label = local_at(0, clock_from_number(3600000000))?
+	exact_label = local_at(0, clock_from_number(7200000000))?
+	budget = { max_steps: 1.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 2.U64 }
+	without_gap = test_series_with_pauses([], budget, 3600, First, [], [gap_label, gap_label])?
+	without_exact = test_series_with_pauses([], budget, 3600, First, [], [exact_label])?
+	without_gap.valid and without_exact.valid and without_gap.boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)] and without_gap.boundaries == without_exact.boundaries and without_gap.adjusted == [False, False] and without_exact.adjusted == [False, True]
+}
+
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = local_at(1, clock)?
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(86400000000))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	context = { rules, occurrence: RequireUnique, gap: RejectGap }
+	original = TimedRecurrence.cursor(rule, { start, end }, context)?
+	other_description = LocalDateTime.in_calendar(start, Julian)?
+	later = local_at(0, clock_from_number(7200000000))?
+	excluded_rule = TimedRecurrence.with_exclusions(rule, [later, other_description, start, later])?
+	excluded_cursor = TimedRecurrence.cursor(excluded_rule, { start, end }, context)?
+	cleared_rule = TimedRecurrence.with_exclusions(excluded_rule, [])?
+	cleared_cursor = TimedRecurrence.cursor(cleared_rule, { start, end }, context)?
+	limits = { work: { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }, max_occurrences: 4.U64 }
+	removed = TimedRecurrence.Cursor.collect(excluded_cursor, limits)?
+	original_result = TimedRecurrence.Cursor.collect(original, limits)?
+	cleared_result = TimedRecurrence.Cursor.collect(cleared_cursor, limits)?
+	too_many = match TimedRecurrence.with_exclusions(rule, List.repeat(start, 4097)) {
+		Err(TooManySelectors) => Bool.True
+		_ => Bool.False
+	}
+	too_many and removed.occurrences.is_empty() and (match removed.status {
+		Complete => Bool.True
+		Limited(_) => Bool.False
+	}) and original_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start] and cleared_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start]
+}
+
+expect {
+	source = local_at(0, clock_from_number(0))?
+	result = test_series_with_pauses([], { max_steps: 100, max_buffered: 1, max_zone_segments: 100, max_zone_candidates: 2 }, -3600, RequireUnique, [], [source])
+	# Exclusions operate after interpretation; they cannot hide a missing
+	# occurrence policy while determining the counted candidate sequence.
+	match result {
+		Err(Ambiguous) => Bool.True
+		_ => Bool.False
+	}
 }

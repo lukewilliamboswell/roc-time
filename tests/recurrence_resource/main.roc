@@ -312,7 +312,37 @@ main! = |args| {
 		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before] }
+	var exclusions = []
+	var exclusion_index = 1.I64
+	exclusion_count = if year > 2001 {
+		4096.I64
+	} else {
+		16.I64
+	}
+	while exclusion_index <= exclusion_count {
+		exclusions = exclusions.append(LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture(exclusion_index * 1000000)))
+		exclusion_index = exclusion_index + 1
+	}
+	exclusion_rule = match TimedRecurrence.with_exclusions(timed_rule, exclusions) {
+		Ok(value) => value
+		Err(_) => crash "resource exclusion set"
+	}
+	exclusion_before = Host.allocated_bytes!({})
+	exclusion_cursor = match TimedRecurrence.cursor(exclusion_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "resource exclusion cursor"
+	}
+	exclusion_first = match TimedRecurrence.Cursor.next(exclusion_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "resource exclusion prefix"
+	}
+	exclusion_after = Host.allocated_bytes!({})
+	Host.assert!(exclusion_first.steps <= 8 and exclusion_first.zone_segments == 1 and exclusion_after - exclusion_before <= ceiling)
+	match exclusion_first.status {
+		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		_ => Host.assert!(False)
+	}
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {

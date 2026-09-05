@@ -388,7 +388,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 			9
 		},
 	)
-	rule = match TimedRecurrence.new(
+	base_rule = match TimedRecurrence.new(
 		{ date: anchor, clock: anchor_clock },
 		{
 			calendar: pattern,
@@ -403,6 +403,18 @@ check_timed = |input, anchor, pattern, window, dates| {
 	) {
 		Ok(value) => value
 		Err(_) => crash "timed construction"
+	}
+	excluded_label = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
+	rule = match TimedRecurrence.with_exclusions(
+		base_rule,
+		if input.exclude_anchor {
+			[excluded_label, excluded_label]
+		} else {
+			[]
+		},
+	) {
+		Ok(value) => value
+		Err(_) => crash "timed exclusions"
 	}
 	start = local(window.start, 0)
 	end = local(window.end, 0)
@@ -423,7 +435,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		for hour in hours {
 			if count < input.count.to_u64() {
 				count = count + 1
-				if candidate >= window.start and candidate < window.end {
+				if candidate >= window.start and candidate < window.end and (!input.exclude_anchor or !LocalDateTime.same_position(local(candidate, hour), excluded_label)) {
 					expected_sources = expected_sources.append(local(candidate, hour))
 					fields = GregorianDate.to_fields(candidate)
 					var days = if fields.year == 2024 {
@@ -559,7 +571,7 @@ check_subdaily = |input| {
 		Err(_) => crash "subdaily query"
 	}
 	end = local(date(1970, 1, 3), 0)
-	rule = match TimedRecurrence.new_subdaily(
+	base_rule = match TimedRecurrence.new_subdaily(
 		{ date: anchor, clock: anchor_clock },
 		{
 			pattern: {
@@ -582,6 +594,10 @@ check_subdaily = |input| {
 	) {
 		Ok(value) => value
 		Err(_) => crash "subdaily grid construction"
+	}
+	rule = match TimedRecurrence.with_exclusions(base_rule, [start]) {
+		Ok(value) => value
+		Err(_) => crash "subdaily exclusions"
 	}
 	window_start = if input.exclude_anchor {
 		query
@@ -607,7 +623,7 @@ check_subdaily = |input| {
 			seconds = I64.mod_by(candidate, 60)
 			if candidate >= anchor_second and (mode != 2 or seconds == 10 or seconds == 50) and count < input.count.to_u64() {
 				count = count + 1
-				if !input.exclude_anchor or candidate >= anchor_second + 30 {
+				if candidate != anchor_second and (!input.exclude_anchor or candidate >= anchor_second + 30) {
 					expected = expected.append(candidate * 1000000 + fraction)
 				}
 			}

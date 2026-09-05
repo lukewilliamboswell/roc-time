@@ -11,7 +11,7 @@ main! = |_args| {
 	start = DispatchDeadlines.midnight(2025, 3, 1)?
 	end = DispatchDeadlines.midnight(2025, 5, 1)?
 	deadlines = DispatchDeadlines.upcoming(rules, { start, end })?
-	echo!("Remaining deadlines for the four-month dispatch contract\nFinal Monday, final pickup slot; March and April 2025\n")
+	echo!("Remaining deadlines for the four-month dispatch contract\nFinal Monday, final pickup slot; March and April 2025\nJanuary waived; the original contract still ends in April.\n")
 	for deadline in deadlines {
 		match DispatchDeadlines.report(deadline) {
 			Ok(text) => echo!(text)
