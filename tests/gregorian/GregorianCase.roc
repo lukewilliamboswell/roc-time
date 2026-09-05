@@ -38,7 +38,7 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 			crash "R05 validated field round trip"
 		}
 		# Independent next-day model: advance fields by calendar month lengths,
-		# rather than using the production year-count formula or inverse search.
+		# rather than using the production year-count formula or inverse decomposition.
 		if input.number < 784351576776 {
 			length = days_in_month(fields.year, fields.month)
 			next = if fields.day < length {

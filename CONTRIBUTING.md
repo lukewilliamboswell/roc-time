@@ -29,6 +29,7 @@ third-party Python dependencies.
 | `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
 | `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
+| `measure_gregorian.py` | Measure validated date construction and coordinate round trips with checked checksums |
 | `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `measure_zone_package.py` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
@@ -357,3 +358,10 @@ are separate costs; a static name alone does not prove unused-zone elimination.
 Use `update_example_urls.py --zone-bundle-url` alongside `--bundle-url` when
 updating both independently versioned dependencies. Example
 bundle checks rewrite both core and optional-data dependencies to local URLs.
+
+Run `ROC=/path/to/pinned/roc python3 scripts/measure_gregorian.py` for the
+Gregorian conversion microbenchmark (LLVM speed, one million dates, three
+warmups and fifteen samples). Run it without concurrent test or build jobs.
+The fields and roundtrip workloads include process startup and final formatting;
+raw timings and machine/compiler metadata stay under `.roc-time-tmp/`. This is
+not an allocation measurement or a general library ranking.

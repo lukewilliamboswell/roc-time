@@ -115,7 +115,7 @@ def refresh() -> None:
             "https://github.com/python/cpython/blob/v3.14.3/Modules/_datetimemodule.c",
             "https://github.com/python/cpython/blob/v3.14.3/LICENSE"],
         "license": "Reference runtime: PSF License; generated numerical observations, no implementation code copied",
-        "independence": "Forward complete-year formula shared; inverse cycle decomposition differs from production search. Cycle extension outside years1..9999 is derived model evidence, not direct datetime support.",
+        "independence": "A January-based table enumerated with CPython datetime supplies both directions; production uses arithmetic rather than this table. Cycle extension outside years1..9999 is derived model evidence, not direct datetime support.",
     }
     (DATA / "gregorian-manifest.toml").write_text("\n".join(f"{key} = {json.dumps(value)}" for key, value in manifest.items()) + "\n")
     print(f"Refreshed {len(cases)} cases; verified {manifest['overlap_dates_verified']} shared-domain dates")

@@ -46,29 +46,38 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		if number < year_start(-2147483648) or number >= year_start(2147483648) {
 			return Err(OutOfRange)
 		}
-		# Search a bounded provider range, not the distance from the epoch.
-		var lower = -2147483648.I64
-		var upper = 2147483648.I64
-		while upper - lower > 1 {
-			middle = lower + I64.div_trunc_by(upper - lower, 2)
-			if year_start(middle) <= number {
-				lower = middle
-			} else {
-				upper = middle
-			}
+		# March-based Gregorian eras, adapted from Howard Hinnant's
+		# civil_from_days (2021-09-01), donated to the public domain:
+		# https://howardhinnant.github.io/date_algorithms.html#civil_from_days
+		# Validate before shifting: arbitrary CivilDay inputs may be I64 extremes.
+		# The provider range keeps every intermediate within I64.
+		shifted = number + 719468
+		era = I64.div_floor_by(shifted, 146097)
+		era_day = shifted - era * 146097 # 0..146096, including negative eras
+		era_year = I64.div_trunc_by(era_day - I64.div_trunc_by(era_day, 1460) + I64.div_trunc_by(era_day, 36524) - I64.div_trunc_by(era_day, 146096), 365)
+		year_day = era_day - (365 * era_year + I64.div_trunc_by(era_year, 4) - I64.div_trunc_by(era_year, 100))
+		march_month = I64.div_trunc_by(5 * year_day + 2, 153)
+		month_number = march_month + if march_month < 10 {
+			3
+		} else {
+			-9
 		}
-		var remaining = number - year_start(lower)
-		var month = 1.U8
-		while remaining >= U8.to_i64(month_length(lower, month)) {
-			remaining = remaining - U8.to_i64(month_length(lower, month))
-			month = month + 1
+		day_number = year_day - I64.div_trunc_by(153 * march_month + 2, 5) + 1
+		year = era * 400 + era_year + if month_number <= 2 {
+			1
+		} else {
+			0
 		}
-		# The selected year contains number; remaining is in 0..30, month in 1..12.
-		day_of_month = match I64.to_u8_try(remaining + 1) {
+		# The decomposition guarantees month 1..12 and day 1..31.
+		month = match I64.to_u8_try(month_number) {
 			Ok(value) => value
-			Err(_) => crash "Gregorian decomposition invariant"
+			Err(_) => crash "Gregorian month decomposition invariant"
 		}
-		Ok(Date({ year: lower, month, day: day_of_month }))
+		day_of_month = match I64.to_u8_try(day_number) {
+			Ok(value) => value
+			Err(_) => crash "Gregorian day decomposition invariant"
+		}
+		Ok(Date({ year, month, day: day_of_month }))
 	}
 
 	to_hash : GregorianDate, Hasher -> Hasher
@@ -92,6 +101,8 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	is_eq : GregorianDate, GregorianDate -> Bool
 	is_eq = |Date(a), Date(b)| a.year == b.year and a.month == b.month and a.day == b.day
 
+	expect from_civil_day(CivilDay.from_day_number(I64.lowest)) == Err(OutOfRange)
+	expect from_civil_day(CivilDay.from_day_number(I64.highest)) == Err(OutOfRange)
 	expect from_fields({ year: 1900, month: 2, day: 29 }) == Err(InvalidDay)
 	expect from_fields({ year: 2000, month: 0, day: 1 }) == Err(InvalidMonth)
 	expect from_fields({ year: 2147483648, month: 1, day: 1 }) == Err(OutOfRange)
@@ -158,16 +169,12 @@ expect {
 			}
 			var day = 1.U8
 			while day <= length {
-				# Translate each enumerated day to the previous cycle as well;
-				# this crosses year zero without using a floor-division oracle.
-				for offset in [-400.I64, 0] {
+				# Translate the enumerated cycle across year zero and near both
+				# provider extremes using the independently counted cycle length.
+				for offset in [-2147483600.I64, -400, 0, 2147483200] {
 					fields = { year: year + offset, month, day }
 					coordinate = CivilDay.from_day_number(
-						number + if offset == 0 {
-							0
-						} else {
-							-146097
-						},
+						number + I64.div_trunc_by(offset, 400) * 146097,
 					)
 					date = GregorianDate.from_fields(fields)
 					valid = valid and GregorianDate.from_civil_day(coordinate) == date
