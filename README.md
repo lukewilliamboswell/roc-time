@@ -57,6 +57,11 @@ property values under its declared profile. It does not parse complete ICS
 documents or timed rules; affected yearly rules require explicit fields where
 omitted defaults remain unsupported.
 
+[AllDayOccurrence](package/AllDayOccurrence.roc) resolves an identified calendar
+date and civil-day duration against explicit zone rules, with resumable work
+limits. Clock changes can alter its coordinate width; a skipped date retains
+the occurrence's identity with empty coverage.
+
 ## Acknowledgements
 
 The design of `roc-time` is inspired by [Kip Cole's Tempo](https://github.com/elixir-tempo/tempo),

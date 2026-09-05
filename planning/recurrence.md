@@ -18,8 +18,9 @@ finite immutable zone rules and event/coverage distinctions.
   checks; do not introduce a separate parser execution engine.
 - Independently generated JSONL cases, RFC examples, synthetic zone transitions,
   bounded fuzz models, invalid-input/domain checks and realistic applications.
-- Add all-day event materialization with explicit duration, series identity and
-  zone context.
+- Compose date recurrence with all-day occurrence cursors, retaining pending
+  occurrences across date-work and zone-work limits. Add a realistic application
+  that consumes these bounded occurrences with explicit civil duration and IDs.
 
 ## Decisions and acceptance still needed
 

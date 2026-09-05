@@ -1,4 +1,5 @@
 import fuzz.Fuzz
+import time.AllDayOccurrence
 import time.CalendarDate
 import time.ClockTime
 import time.Coverage
@@ -38,7 +39,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Ok(value) => value
 			Err(_) => crash "fixture clock rejected"
 		}
-		rules = make_rules(input.first, input.second)
+		rules = make_rules(input.first, input.second, -10, 10)
 		local = LocalDateTime.new(date, clock)
 		# Enumerate the timeline in one-second cells. Offset is a direct
 		# piecewise fixture definition, not the production inverse algorithm.
@@ -93,7 +94,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			if ResolvedBoundary.boundary(snapshot) != occurrence or ResolvedBoundary.source(snapshot) != local {
 				crash "snapshot lost resolution evidence"
 			}
-			updated = ResolvedBoundary.reresolve(snapshot, make_rules(0, 0))
+			updated = ResolvedBoundary.reresolve(snapshot, make_rules(0, 0, -10, 10))
 			if seconds == 0 {
 				match updated {
 					Ok(value) => if ResolvedBoundary.boundary(value) != point(input.number) {
@@ -189,13 +190,45 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			}
 			probe_second = probe_second + 1
 		}
+		day_rules = make_rules(input.first, input.second, -86400, 172800)
+		# Use epoch day for probes around both boundaries.
+		epoch = epoch_date(1970)
+		day_cursor = match AllDayOccurrence.cursor(input.number, epoch, 1, day_rules) {
+			Ok(value) => value
+			Err(_) => crash "day cursor"
+		}
+		day_batch = match AllDayOccurrence.Cursor.collect(day_cursor, { max_segments: 3, max_members: 3 }) {
+			Ok(value) => value
+			Err(_) => crash "day resolution"
+		}
+		match day_batch.status {
+			Limited(_) => crash "day incomplete"
+			Complete(occurrence) => {
+				if AllDayOccurrence.id(occurrence) != input.number or AllDayOccurrence.date(occurrence) != epoch {
+					crash "day identity changed"
+				}
+				for probe in [input.number, 86400000000 + input.number] {
+					offset = if probe < 0 {
+						0.I32
+					} else if probe < 4000000 {
+						input.first
+					} else {
+						input.second
+					}
+					label = probe + offset.to_i64() * 1000000
+					if Coverage.contains(AllDayOccurrence.coverage(occurrence), point(probe)) != (label >= 0 and label < 86400000000) {
+						crash "day preimage differs from timeline oracle"
+					}
+				}
+			}
+		}
 		Fuzz.keep
 	}
 }
 
 point = |number| PosixBoundary.from_microseconds(number)
 
-make_rules = |first, second| match ZoneRules.from_database({
+make_rules = |first, second, lower, upper| match ZoneRules.from_database({
 	schema: 1,
 	axis: "posix-seconds-1970",
 	requested_name: "Synthetic/Alias",
@@ -204,8 +237,8 @@ make_rules = |first, second| match ZoneRules.from_database({
 	source_digest: "generated-fixture",
 	profile: "synthetic-bounded",
 	future_handling: "expanded-through-validity",
-	start_second: -10,
-	end_second: 10,
+	start_second: lower,
+	end_second: upper,
 	initial_offset: 0,
 	minimum_offset: -2,
 	maximum_offset: 2,
@@ -213,4 +246,9 @@ make_rules = |first, second| match ZoneRules.from_database({
 }) {
 	Ok(value) => value
 	Err(_) => crash "fixture database import rejected"
+}
+
+epoch_date = |year| match CalendarDate.from_fields(Gregorian, { year, month: 1, day: 1 }) {
+	Ok(value) => value
+	Err(_) => crash "epoch fixture"
 }
