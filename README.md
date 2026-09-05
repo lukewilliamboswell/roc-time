@@ -85,6 +85,11 @@ compile-failure tests, and executable examples. It exercises semantic laws and
 independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
+The [oracle strategy](docs/oracles.md) anchors these properties in independently
+sourced expectations and reference models, so mutually consistent bugs and
+incorrect semantic choices can be challenged. It documents the proposed
+cross-language harness separately from the evidence already implemented.
+
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage and Gregorian roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)

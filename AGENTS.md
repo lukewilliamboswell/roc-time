@@ -61,6 +61,15 @@ At completion, move enduring decisions into `design.md` and useful verification 
 
 Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and resource measurements. A passing campaign establishes evidence for its tested properties and budget, not exhaustive correctness, allocation bounds, or portability to untested backends.
 
+## Oracle evidence
+
+Oracles are central to semantic verification. Follow the [oracle harness strategy](docs/oracles.md) when adding temporal behavior or changing an algorithm. Establish the intended caller meaning from the design and primary evidence, then compare the public API against independently sourced expectations or a deliberately different bounded model. Round trips and agreement between libraries can preserve the same incorrect interpretation.
+
+- Record what makes each oracle independent, its supported semantic intersection, shared assumptions and remaining gaps. Distinguish sourced facts, external-library outputs and model-derived extensions; never claim an oracle supports a domain it cannot represent.
+- Pin source revisions, data, generators and adapters with provenance, integrity hashes and applicable notices. Review expected-result refreshes; never derive or automatically bless expectations from the package under test. Keep normal replay deterministic and independent of the host's clock, zone database or live network data.
+- Make comparison failures, missing results and setup failures fail visibly. Validate the harness with deliberately wrong results and malformed output. Minimize disagreements without discarding their preconditions, resolve them against the contract rather than majority vote, and preserve readable regressions.
+- Treat functional comparisons, compile-time domain safety and measured resource behavior as distinct evidence. Report exact coverage and limitations; implementation work and outstanding harness acceptance belong in the active plan.
+
 ## Performance discipline
 
 - Measure construction, interpretation, core computation, and formatting separately, as well as end to end. Report compiler, backend, target, workload, ownership/sharing, warmup, samples, and observable outputs.

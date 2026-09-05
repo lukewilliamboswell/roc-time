@@ -405,6 +405,16 @@ Property-based testing is a core source of that evidence. Applicable temporal la
 
 Generated testing complements fixed semantic scenarios, static domain checks, and measured resource behavior. A bounded search does not prove exhaustive correctness or backend portability. The roc-fuzz workflow and integration status belong in [AGENTS.md](AGENTS.md#property-based-testing) and the [implementation plan](planning/implement-design.md#roc-fuzz-integration); the temporal contracts below remain independent of the test runner.
 
+Semantic acceptance also requires an oracle argument: why the expected result
+represents the intended temporal meaning, where that expectation is independent
+of the implementation, and which domains it actually covers. Round trips and
+agreement between implementations are insufficient when they share the same
+mistaken convention or algorithm. Sourced convention fixtures, independent
+models and differential implementations provide complementary evidence; their
+limitations and disagreements must remain visible. The durable harness strategy
+belongs in [Oracle verification](docs/oracles.md), with implementation gaps
+tracked in the active plan.
+
 | ID | Required observable behavior |
 |---|---|
 | R01 — precision and range | Preserve microsecond distinctions at zero, negative coordinates, and supported extremes. Reject sub-microsecond input by default. Reject overflow in conversion, exclusive-upper-bound construction, subtraction, and total-width accumulation; never wrap or saturate silently. |
