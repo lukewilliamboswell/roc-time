@@ -31,6 +31,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Voyage briefing](examples/voyage/main.roc) | Supply a ship's clock schedule and review a rules update while retaining the saved booking |
 | [Equipment inspections](examples/inspections/main.roc) | Schedule four inspections on the last Tuesday every three months, with explicit evaluation limits |
 | [Service calendar](examples/maintenance/main.roc) | Import date-only recurrence values and review rescheduled visits without restarting the original series count |
+| [Dispatch deadlines](examples/dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:
@@ -44,6 +45,7 @@ roc examples/staffing/main.roc
 roc examples/voyage/main.roc
 roc examples/inspections/main.roc
 roc examples/maintenance/main.roc
+roc examples/dispatch_deadlines/main.roc
 ```
 
 The availability example resolves dated bookings with explicit offsets before

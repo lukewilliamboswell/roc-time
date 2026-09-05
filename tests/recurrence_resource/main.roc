@@ -1,6 +1,9 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.CalendarPattern
+import time.TimedRecurrence
+import time.CalendarDate
+import time.LocalDateTime
 import time.DateRecurrence
 import time.GregorianDate
 import time.AllDayRecurrence
@@ -208,7 +211,38 @@ main! = |args| {
 	first_clock = ClockPattern.iter(clock_pattern).take_first(1).fold(None, |_, value| Some(value))
 	clock_after = Host.allocated_bytes!({})
 	Host.assert!(ClockPattern.count(clock_pattern) == 86400 and first_clock == Some(clock_anchor) and clock_after - clock_before <= ceiling)
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before] }
+	# All 86400 daily clocks over the vast domain remain candidates, not a
+	# materialized product. Construction is outside this consumption scope.
+	timed_rule = match TimedRecurrence.new(
+		{ date: anchor, clock: clock_anchor },
+		{
+			calendar: CalendarPattern.defaults(Daily),
+			clocks: { hours, minutes: parts, seconds: parts },
+			termination: Forever,
+			by_set_pos: [],
+		},
+	) {
+		Ok(value) => value
+		Err(_) => crash "timed resource rule"
+	}
+	timed_start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_anchor)
+	timed_end = LocalDateTime.new(CalendarDate.from_gregorian(end), clock_anchor)
+	timed_before = Host.allocated_bytes!({})
+	timed_cursor = match TimedRecurrence.cursor(timed_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "timed resource cursor"
+	}
+	timed_first = match TimedRecurrence.Cursor.next(timed_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "timed resource prefix"
+	}
+	timed_after = Host.allocated_bytes!({})
+	Host.assert!(timed_first.steps <= 8 and timed_first.zone_segments == 1 and timed_after - timed_before <= ceiling)
+	match timed_first.status {
+		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		_ => Host.assert!(False)
+	}
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {

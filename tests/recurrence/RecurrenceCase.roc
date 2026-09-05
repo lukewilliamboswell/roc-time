@@ -1,4 +1,8 @@
 import fuzz.Fuzz
+import time.TimedRecurrence
+import time.CalendarDate
+import time.ClockTime
+import time.LocalDateTime
 import time.AllDayRecurrence
 import time.AllDayOccurrence
 import time.Coverage
@@ -141,6 +145,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				month = month + 1
 			}
 		}
+		check_timed(input, anchor, pattern, window, expected)
 		# Direct ordered set model; deliberately not the cursor's two-stream merge.
 		var normalized = []
 		for candidate in expected.concat(inclusions).sort_with(
@@ -370,3 +375,112 @@ fixture_rules = |upper| {
 		Err(_) => crash "rules"
 	}
 }
+
+# This model expands a fixed two-clock grid over the independently calculated
+# dates. COUNT is applied before the query window. Last-Monday BYSETPOS selects
+# the last clock of the last Monday, rather than both clocks on that date.
+check_timed = |input, anchor, pattern, window, dates| {
+	anchor_clock = clock(
+		if input.last_monday {
+			17
+		} else {
+			9
+		},
+	)
+	rule = match TimedRecurrence.new(
+		{ date: anchor, clock: anchor_clock },
+		{
+			calendar: pattern,
+			clocks: { hours: [17, 9, 17], minutes: [], seconds: [] },
+			termination: Count(input.count.to_u64()),
+			by_set_pos: if input.last_monday {
+				[-1]
+			} else {
+				[]
+			},
+		},
+	) {
+		Ok(value) => value
+		Err(_) => crash "timed construction"
+	}
+	start = local(window.start, 0)
+	end = local(window.end, 0)
+	rules = fixture_rules(2000000000000000)
+	var current = match TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "timed window"
+	}
+	var expected_sources = []
+	var expected_boundaries = []
+	var count = 0.U64
+	for candidate in dates {
+		hours = if input.last_monday {
+			[17.U8]
+		} else {
+			[9.U8, 17]
+		}
+		for hour in hours {
+			if count < input.count.to_u64() {
+				count = count + 1
+				if candidate >= window.start and candidate < window.end {
+					expected_sources = expected_sources.append(local(candidate, hour))
+					fields = GregorianDate.to_fields(candidate)
+					var days = if fields.year == 2024 {
+						0.I64
+					} else {
+						366.I64
+					}
+					var month = 1.U8
+					while month < fields.month {
+						days = days + month_length(fields.year, month).to_i64()
+						month = month + 1
+					}
+					days = days + fields.day.to_i64() - 1
+					# 2024-01-01T00:00Z is Unix second 1704067200.
+					expected_boundaries = expected_boundaries.append(PosixBoundary.from_microseconds((1704067200 + days * 86400 + hour.to_i64() * 3600) * 1000000))
+				}
+			}
+		}
+	}
+	var sources = []
+	var boundaries = []
+	var calls = 0.U64
+	while calls < 10000 {
+		batch = match TimedRecurrence.Cursor.next(current, { max_steps: input.work.to_u64(), max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "timed interpretation"
+		}
+		if batch.steps > input.work.to_u64() or batch.zone_segments > 1 or batch.buffered > 10 or batch.zone_buffered > 1 {
+			crash "timed budget exceeded"
+		}
+		match batch.status {
+			End => {
+				if sources != expected_sources or boundaries != expected_boundaries {
+					crash "timed recurrence differs from independent clock/calendar grid"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				current = progress.cursor
+			}
+			Item(item) => {
+				sources = sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
+				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
+					Exact => {}
+					BeforeGap(_) => crash "UTC adjustment"
+				}
+				current = item.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "timed resumption did not finish"
+}
+
+clock = |hour| match ClockTime.from_fields({ hour, minute: 0, second: 0, microsecond: 0 }) {
+	Ok(value) => value
+	Err(_) => crash "model clock"
+}
+
+local = |date_value, hour| LocalDateTime.new(CalendarDate.from_gregorian(date_value), clock(hour))

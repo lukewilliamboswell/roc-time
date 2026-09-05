@@ -238,7 +238,10 @@ asserted offset from the resulting 17- or 8193-occurrence fold must allocate
 nothing. The synthetic offsets deliberately repeat one local clock range.
 Clock-pattern traversal separately consumes one candidate from all 86400
 hour/minute/second combinations after selector construction; its byte ceiling
-catches eager materialization of the clock candidates.
+catches eager materialization of the clock candidates. The timed cursor then
+combines that full clock grid with the vast daily series and resolves just its
+first occurrence under explicit candidate, buffer and zone budgets. Rule
+construction remains outside this consumption measurement.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory
