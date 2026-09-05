@@ -8,6 +8,7 @@ package
 		ClockTime,
 		LocalDateTime,
 		FixedOffset,
+		ZoneRules,
 		GregorianDate,
 		JulianDate,
 		PosixBoundary,

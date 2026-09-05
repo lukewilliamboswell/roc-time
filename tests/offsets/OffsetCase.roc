@@ -1,6 +1,8 @@
 import fuzz.Fuzz
 import time.FixedOffset
 import time.PosixBoundary
+import time.PosixSpan
+import time.ZoneRules
 
 endpoint = Fuzz.map2(
 	Fuzz.u8_in(0, 7),
@@ -25,6 +27,29 @@ OffsetCase := { number : I64, seconds : I32 }.{
 	check = |input| {
 		boundary = PosixBoundary.from_microseconds(input.number)
 		offset = FixedOffset.from_seconds(input.seconds)
+		span = rule_span(I64.lowest, I64.highest)
+		rules = match ZoneRules.new(
+			"Synthetic/Step",
+			"v1",
+			span,
+			FixedOffset.from_seconds(0),
+			[
+				{ at: PosixBoundary.from_microseconds(0), offset },
+			],
+		) {
+			Ok(value) => value
+			Err(_) => crash "valid synthetic rules rejected"
+		}
+		expected_offset = if input.number == I64.highest {
+			Err(OutsideValidity)
+		} else if input.number < 0 {
+			Ok(FixedOffset.from_seconds(0))
+		} else {
+			Ok(offset)
+		}
+		if ZoneRules.offset_at(rules, boundary) != expected_offset {
+			crash "rule lookup disagrees with independent step function"
+		}
 		for calendar in [Gregorian, Julian] {
 			local = match FixedOffset.project(offset, boundary, calendar) {
 				Ok(value) => value
@@ -45,4 +70,9 @@ OffsetCase := { number : I64, seconds : I32 }.{
 		}
 		Fuzz.keep
 	}
+}
+
+rule_span = |lower, upper| match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
+	Ok(value) => value
+	Err(_) => crash "valid synthetic rule range rejected"
 }

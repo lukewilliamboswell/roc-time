@@ -321,6 +321,21 @@ zone name, transition lookup, leap-second resolution or unknown-offset sentinel.
 The sign convention is anchored by [RFC 3339 section 4.2](https://www.rfc-editor.org/rfc/rfc3339#section-4.2);
 this is conversion evidence, not a claim to implement its parser.
 
+`ZoneRules` stores a caller-supplied immutable name, version, finite POSIX
+validity span, initial offset and ordered transition list. Name and version
+must be nonempty; they label supplied data and do not trigger a registry lookup
+or certify that the data matches an external authority. Transitions must be
+strictly ordered and strictly inside the validity span. The initial offset
+applies at the lower bound; each transition's new offset applies at its exact
+boundary. The upper validity bound is excluded. `offset_at` returns
+`OutsideValidity` beyond those bounds, never an extrapolated offset or a gap.
+The current constructor and worst-case lookup cost O(n) for n transitions;
+immutable lists may share backing storage. No cache or mutable provider state
+is introduced. A name/version pair alone is not a content identity for future
+caches: different supplied rule contents must not share cached interpretation.
+Synthetic fixtures specify their entire timeline rather than relying on host
+zone data. Local resolution and selection preimages remain separate operations.
+
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 
 Distinguish **an appointment between chosen boundary occurrences** from **all positions whose local labels fall in a selection**. The former resolves each endpoint under explicit gap/fold policies and validates their order. The latter computes the preimage of the civil selection under zone rules and may yield empty or disconnected coverage. Taking the earliest start and latest end would incorrectly fill gaps between repeated local-time ranges. Calendar-day selection uses this set interpretation; a skipped civil day yields empty coverage. Fixed-offset conversion is the simple special case.

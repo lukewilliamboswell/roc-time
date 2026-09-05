@@ -76,7 +76,14 @@ is separate from text-format restrictions. RFC 3339's offset-sign example anchor
 the convention; generated full-range checks cover both calendars, exact inverses
 and final overflow. The pinned full integration command passed on 2026-09-05:
 eight 10,000-run campaigns, both calendar oracle gates and four bundled apps.
-Named rules, validity windows, gaps/folds and snapshot provenance remain next.
+`ZoneRules` now validates immutable finite tables, transition ordering and
+metadata, and provides offset lookup with explicit validity errors. Synthetic
+multi-transition fixtures and generated step-function comparisons establish
+boundary behavior. Local gaps/folds, selection preimages, resolved snapshot
+provenance and external rule-data adapters remain next; lookup is currently a
+bounded linear scan whose performance still needs R15 evidence. The full pinned
+integration command passed after this addition on 2026-09-05, including all eight
+10,000-run campaigns, both external calendar oracles and four bundled apps.
 
 Implement immutable zone fixtures and resolution (R07–R09), keeping boundary
 appointments distinct from local selections. Include independent transition
