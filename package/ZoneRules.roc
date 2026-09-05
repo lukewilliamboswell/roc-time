@@ -208,6 +208,25 @@ ZoneRules :: {
 	## Preimage of the half-open local selection; never an endpoint hull.
 	select : ZoneRules, LocalDateTime, LocalDateTime -> Try(Coverage, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
 	select = |rules, start, end| {
+		cursor = selection_cursor(rules, start, end)?
+		batch = SelectionCursor.collect(cursor, { max_segments: U64.highest, max_members: U64.highest })?
+		match batch.status {
+			Complete(coverage) => Ok(coverage)
+			Limited(_) => crash "Finite allocated zone table exhausted U64 limits"
+		}
+	}
+
+	SelectionLimits : { max_segments : U64, max_members : U64 }
+	SelectionBatch : {
+		segments : U64,
+		buffered : U64,
+		status : [Complete(Coverage), Limited({ cursor : SelectionCursor, reason : [WorkLimit, BufferLimit] })],
+	}
+
+	## Prove the full inverse range is covered before any segment is evaluated.
+	## The opaque cursor binds the immutable rules and original local selection.
+	selection_cursor : ZoneRules, LocalDateTime, LocalDateTime -> Try(SelectionCursor, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
+	selection_cursor = |rules, start, end| {
 		match LocalDateTime.compare_position(start, end) {
 			EQ => return Err(EmptySelection)
 			GT => return Err(ReversedSelection)
@@ -219,21 +238,72 @@ ZoneRules :: {
 		if earliest < PosixSpan.start(rules.validity) or latest_end > PosixSpan.end(rules.validity) {
 			return Err(OutsideValidity)
 		}
-		var spans = []
-		var lower = PosixSpan.start(rules.validity)
-		var offset = rules.initial
-		for transition in rules.transitions {
-			spans = append_selected(spans, lower, transition.at, offset, start, end)?
-			lower = transition.at
-			offset = transition.offset
+		Ok({ rules, start, end, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, builder: Coverage.SortedBuilder.empty, done: Bool.False })
+	}
+
+	SelectionCursor :: {
+		rules : ZoneRules,
+		start : LocalDateTime,
+		end : LocalDateTime,
+		index : U64,
+		lower : PosixBoundary,
+		offset : FixedOffset,
+		builder : Coverage.SortedBuilder,
+		done : Bool,
+	}.{
+		context : SelectionCursor -> { rules : ZoneRules, start : LocalDateTime, end : LocalDateTime }
+		context = |cursor| { rules: cursor.rules, start: cursor.start, end: cursor.end }
+
+		## One segment unit performs fixed offset arithmetic and one ordered
+		## builder append. Rejected/empty segments still consume work. Shared
+		## output appends can copy up to max_members retained spans. Zero budgets
+		## return Limited; no incomplete coverage is exposed as a complete value.
+		collect : SelectionCursor, SelectionLimits -> Try(SelectionBatch, [OutOfRange, ..])
+		collect = |initial, limits| {
+			var cursor = initial
+			var segments = 0.U64
+			while True {
+				buffered = Coverage.SortedBuilder.member_count(cursor.builder)
+				if buffered > limits.max_members {
+					return Ok({ segments, buffered, status: Limited({ cursor, reason: BufferLimit }) })
+				}
+				if cursor.done {
+					return Ok({ segments, buffered, status: Complete(Coverage.SortedBuilder.to_coverage(cursor.builder)) })
+				}
+				if segments == limits.max_segments {
+					return Ok({ segments, buffered, status: Limited({ cursor, reason: WorkLimit }) })
+				}
+				transition = List.get(cursor.rules.transitions, cursor.index)
+				upper = match transition {
+					Ok(value) => value.at
+					Err(_) => PosixSpan.end(cursor.rules.validity)
+				}
+				span = selected_span(cursor.lower, upper, cursor.offset, cursor.start, cursor.end)?
+				segments = segments + 1
+				match span {
+					None => {}
+					Some(value) => {
+						appended = match Coverage.SortedBuilder.append_bounded(cursor.builder, value, limits.max_members) {
+							Ok(result) => result
+							Err(_) => crash "Zone segments preserve output start order"
+						}
+						match appended {
+							Full => return Ok({ segments, buffered, status: Limited({ cursor, reason: BufferLimit }) })
+							Added(builder) => {
+								cursor = { ..cursor, builder }
+							}
+						}
+					}
+				}
+				cursor = match transition {
+					Ok(value) => { ..cursor, index: cursor.index + 1, lower: upper, offset: value.offset }
+					Err(_) => { ..cursor, done: Bool.True }
+				}
+			}
+			crash "Selection loop returns a batch"
 		}
-		spans = append_selected(spans, lower, PosixSpan.end(rules.validity), offset, start, end)?
-		# Each span is clipped to an ordered disjoint timeline segment.
-		# Sorted construction merges touch without sorting or filling gaps.
-		match Coverage.from_sorted_spans(spans) {
-			Ok(coverage) => Ok(coverage)
-			Err(_) => crash "internal zone segment ordering invariant"
-		}
+		to_inspect : SelectionCursor -> Str
+		to_inspect = |cursor| "ZoneRules.SelectionCursor(segment=${cursor.index.to_str()}, members=${Coverage.SortedBuilder.member_count(cursor.builder).to_str()})"
 	}
 
 	expect {
@@ -277,7 +347,7 @@ ZoneRules :: {
 	}
 }
 
-append_selected = |spans, lower, upper, offset, start, end| {
+selected_span = |lower, upper, offset, start, end| {
 	candidate_start = FixedOffset.resolve(offset, start)?
 	candidate_end = FixedOffset.resolve(offset, end)?
 	clipped_start = if candidate_start > lower {
@@ -296,9 +366,9 @@ append_selected = |spans, lower, upper, offset, start, end| {
 			Ok(value) => value
 			Err(_) => crash "internal clipped zone span invariant"
 		}
-		Ok(spans.append(span))
+		Ok(Some(span))
 	} else {
-		Ok(spans)
+		Ok(None)
 	}
 }
 

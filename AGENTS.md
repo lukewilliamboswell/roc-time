@@ -77,6 +77,8 @@ Use at least one oracle when adding temporal behavior or changing an algorithm; 
 
 ## Performance discipline
 
+- For bounded or lazy APIs, add a regression with a large logical domain and a small consumption budget. Measure construction and first consumption separately; verify early stop, incomplete outcomes and resumption. Pair resource assertions with semantic observations and a failing control. Distinguish input storage, temporary buffers, materialized output and retained snapshots. An `Iter` signature or self-reported work count alone does not establish incremental execution; use allocation observations and bounded subprocess execution to catch hidden eager work.
+
 - Measure construction, interpretation, core computation, and formatting separately, as well as end to end. Report compiler, backend, target, workload, ownership/sharing, warmup, samples, and observable outputs.
 - Use the custom test fixture platform for executable allocation assertions and trace marks around observable operations. State counter scope and ownership; allocation/reallocation call counts and cumulative requested bytes are not live or retained memory. Keep runtime inputs and consume outputs so optimization cannot erase the workload. Verify failing assertions: optimized builds can remove `expect`, so use the always-active hosted assertion for optimized resource gates.
 - Measure allocations and retained memory separately from time and process RSS. Inspect generated layout or instrument the platform before claiming exact record size or zero allocations.

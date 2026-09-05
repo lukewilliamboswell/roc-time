@@ -135,6 +135,34 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Ok(value) => value
 			Err(_) => crash "complete local selection rejected"
 		}
+		var cursor = match ZoneRules.selection_cursor(rules, local, LocalDateTime.new(end_date, end_clock)) {
+			Ok(value) => value
+			Err(_) => crash "selection cursor rejected fixture"
+		}
+		var completed = Bool.False
+		for _ in [0, 1, 2] {
+			batch = match ZoneRules.SelectionCursor.collect(cursor, { max_segments: 1, max_members: 3 }) {
+				Ok(value) => value
+				Err(_) => crash "selection cursor failed"
+			}
+			if batch.segments > 1 {
+				crash "selection work budget exceeded"
+			}
+			match batch.status {
+				Complete(value) => {
+					if value != selected {
+						crash "chunk boundaries changed selection"
+					}
+					completed = Bool.True
+				}
+				Limited(progress) => {
+					cursor = progress.cursor
+				}
+			}
+		}
+		if !completed {
+			crash "three segments did not complete"
+		}
 		snapshot = match ResolvedSelection.resolve(rules, local, LocalDateTime.new(end_date, end_clock)) {
 			Ok(value) => value
 			Err(_) => crash "complete selection snapshot rejected"

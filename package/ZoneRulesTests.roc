@@ -12,6 +12,53 @@ import ZoneRules
 ## Independent bounded timeline enumeration for R07 classification.
 ZoneRulesTests :: [].{
 	expect {
+		# Three distinct preimages; a one-member buffer must stop and resume
+		# without losing the segment that could not be appended.
+		span = PosixSpan.new(point(-10000000), point(10000000))?
+		rules = ZoneRules.new_bounded(
+			"Synthetic/Chunked",
+			"v1",
+			span,
+			FixedOffset.from_seconds(4),
+			[
+				{ at: point(0), offset: FixedOffset.from_seconds(2) },
+				{ at: point(1000000), offset: FixedOffset.from_seconds(0) },
+			],
+			{ minimum: 0, maximum: 4 },
+		)?
+		initial = ZoneRules.selection_cursor(rules, local_label(2500000)?, local_label(2750000)?)?
+		zero = ZoneRules.SelectionCursor.collect(initial, { max_segments: 0, max_members: 1 })?
+		zero_valid = match zero.status {
+			Limited(progress) => progress.reason == WorkLimit and zero.segments == 0
+			_ => False
+		}
+		first = ZoneRules.SelectionCursor.collect(initial, { max_segments: 1, max_members: 1 })?
+		match first.status {
+			Complete(_) => False
+			Limited(progress) => {
+				blocked = ZoneRules.SelectionCursor.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
+				match blocked.status {
+					Complete(_) => False
+					Limited(retry) => {
+						finished = ZoneRules.SelectionCursor.collect(retry.cursor, { max_segments: 2, max_members: 3 })?
+						match finished.status {
+							Limited(_) => False
+							Complete(coverage) => {
+								a = PosixSpan.new(point(-1500000), point(-1250000))?
+								b = PosixSpan.new(point(500000), point(750000))?
+								c = PosixSpan.new(point(2500000), point(2750000))?
+								zero_valid and first.segments == 1 and blocked.segments == 1 and
+									retry.reason == BufferLimit and finished.segments == 2 and
+										coverage == Coverage.from_spans([a, b, c])
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	expect {
 		span = PosixSpan.new(point(-10000000000), point(10000000000))?
 		old_rules = ZoneRules.new_bounded("Synthetic/Changed", "v1", span, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 3600 })?
 		# Deliberately reuse the same name/version with different contents:

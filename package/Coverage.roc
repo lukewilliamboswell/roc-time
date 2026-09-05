@@ -30,21 +30,62 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Validate start ordering in O(n); merge overlap and touch.
 	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput, ..])
 	from_sorted_spans = |input| {
-		var previous = None
-		var builder = { done: [], pending: None }
+		var builder = SortedBuilder.empty
 		for span in input {
-			match previous {
-				None => {}
-				Some(boundary) => {
-					if PosixBoundary.compare(boundary, PosixSpan.start(span)) == GT {
-						return Err(UnsortedInput)
-					}
-				}
-			}
-			previous = Some(PosixSpan.start(span))
-			builder = push(builder, span)
+			builder = SortedBuilder.append(builder, span)?
 		}
-		Ok(Spans(finish(builder)))
+		Ok(SortedBuilder.to_coverage(builder))
+	}
+
+	## Incremental construction from start-ordered spans, including across input
+	## chunks. Retains canonical output plus one pending span, not all raw input.
+	## This materializes coverage; it is not a lazy output iterator. Retaining a
+	## builder/snapshot can cause subsequent List appends to copy shared storage.
+	SortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary)] }.{
+		empty : SortedBuilder
+		empty = { state: { done: [], pending: None }, previous: None }
+		member_count : SortedBuilder -> U64
+		member_count = |builder| builder.state.done.len() + match builder.state.pending {
+			None => 0
+			Some(_) => 1
+		}
+
+		## Constant comparison work; owned append is amortized, shared append may
+		## copy retained output. Equal starts are valid; decreasing starts fail.
+		append : SortedBuilder, PosixSpan -> Try(SortedBuilder, [UnsortedInput, ..])
+		append = |builder, span| match append_bounded(builder, span, U64.highest)? {
+			Added(updated) => Ok(updated)
+			Full => crash "Allocated span list cannot exhaust U64 member count"
+		}
+
+		## Full leaves the input builder unchanged and performs no output append.
+		## The limit counts canonical members, so touching/overlapping input can
+		## still merge at capacity. An already larger builder also returns Full.
+		append_bounded : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full], [UnsortedInput, ..])
+		append_bounded = |builder, span, limit| {
+			match builder.previous {
+				Some(previous) => if previous > PosixSpan.start(span) {
+					return Err(UnsortedInput)
+				}
+				None => {}
+			}
+			adds_member = match builder.state.pending {
+				None => Bool.True
+				Some(previous) => PosixSpan.start(span) > PosixSpan.end(previous)
+			}
+			count = member_count(builder)
+			if count > limit or (adds_member and count == limit) {
+				return Ok(Full)
+			}
+			Ok(Added({ state: push(builder.state, span), previous: Some(PosixSpan.start(span)) }))
+		}
+
+		## No revalidation or sorting. Appending the pending member can copy a
+		## shared list; this does not detach earlier snapshots' backing storage.
+		to_coverage : SortedBuilder -> Coverage
+		to_coverage = |builder| Spans(finish(builder.state))
+		to_inspect : SortedBuilder -> Str
+		to_inspect = |builder| "Coverage.SortedBuilder(members=${member_count(builder).to_str()})"
 	}
 
 	## Returns the canonical spans. Roc may share their backing storage.

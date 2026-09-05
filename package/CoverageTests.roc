@@ -5,6 +5,32 @@ import PosixSpan
 
 CoverageTests :: {}.{}
 
+# Capacity counts canonical members, so touching chunks can merge at capacity.
+expect {
+	a = PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(10))?
+	b = PosixSpan.new(PosixBoundary.from_microseconds(10), PosixBoundary.from_microseconds(12))?
+	c = PosixSpan.new(PosixBoundary.from_microseconds(14), PosixBoundary.from_microseconds(15))?
+	first = Coverage.SortedBuilder.append(Coverage.SortedBuilder.empty, a)?
+	snapshot = Coverage.SortedBuilder.to_coverage(first)
+	match Coverage.SortedBuilder.append_bounded(first, b, 1)? {
+		Full => False
+		Added(second) => {
+			blocked = match Coverage.SortedBuilder.append_bounded(second, c, 1)? {
+				Full => True
+				_ => False
+			}
+			# A merged hull must not hide decreasing original input starts.
+			unsorted = match Coverage.SortedBuilder.append(second, a) {
+				Err(UnsortedInput) => True
+				_ => False
+			}
+			third = Coverage.SortedBuilder.append(second, c)?
+			blocked and unsorted and snapshot == Coverage.from_spans([a]) and
+				Coverage.SortedBuilder.to_coverage(third) == Coverage.from_spans([a, b, c])
+		}
+	}
+}
+
 # All 16 subsets of [-2, 2), independently represented by four integer bits.
 from_mask = |mask| {
 	var spans = []
