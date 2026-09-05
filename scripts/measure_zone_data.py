@@ -5,6 +5,9 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
+import sys
+
+sys.dont_write_bytecode = True
 
 from generate_zone_oracle import WHEEL_SHA256
 
