@@ -3,12 +3,7 @@
 A date and time package for [Roc](https://www.roc-lang.org).
 
 > [!NOTE]
-> This package is a work in progress. Its initial kernel provides exact POSIX
-> boundaries, coordinate displacements, nonempty half-open spans, and canonical
-> coverage algebra, proleptic Gregorian/Julian civil-day conversion, and explicit Gregorian
-> calendar arithmetic. Named-zone rules support explicit gap/fold handling, local selections
-> and immutable resolutions. Date-only recurrence supports bounded, resumable queries.
-> Broader parsing, timed recurrence and reasoning remain in development.
+> This package is a work in progress. APIs may change as the capabilities below evolve.
 
 ## Documentation
 
@@ -16,6 +11,24 @@ Read [design.md](design.md) for the intended architecture, temporal model, and p
 It includes proposed Roc usages and explicit acceptance requirements.
 
 See [lukewilliamboswell.github.io/roc-time/](https://lukewilliamboswell.github.io/roc-time/)
+
+## Roadmap
+
+The direction is a practical toolkit for dates, availability and schedules, with
+explicit interpretation and bounded queries. Checked items are available today;
+unchecked items are planned.
+
+- [x] Exact microsecond boundaries, interval relations and coverage set operations.
+- [x] Gregorian/Julian dates and explicit calendar arithmetic.
+- [x] Gap/fold handling, local selections and an optional time-zone database.
+- [x] Bounded, resumable date and timed schedules, identified appointments and a date-only RFC recurrence adapter.
+- [ ] Broader RFC recurrence import, including timed rules and period-valued additions.
+- [ ] Richer temporal descriptions: partial dates, uncertainty and bounded reasoning.
+- [ ] ISO 8601 / EDTF / IXDTF parsing and serialization in explicitly supported profiles.
+- [ ] Semantic explanations, versioned persistence and broader calendar support.
+
+Usability, independent correctness checks and predictable resource use remain
+part of every stage. See the [design](design.md) for the enduring contracts.
 
 ## Examples
 
