@@ -2,6 +2,7 @@ import fuzz.Fuzz
 import time.CalendarPattern
 import time.DateRecurrence
 import time.GregorianDate
+import time.RfcDateRule
 
 # R11–R12: a finite calendar-table model, independent of CalendarPattern and
 # cursor execution. Enumerate 2024–2025 before applying count/union/exclusions.
@@ -56,6 +57,40 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			Err(_) => crash "Valid generated recurrence rejected"
 		}
 		window = { start: date(2024, input.query_month, 1), end: date(2026, 1, 1) }
+		text = "FREQ=MONTHLY;COUNT=${input.count.to_str()};INTERVAL=${input.interval.to_str()}${
+			if input.last_monday {
+				";BYDAY=MO;BYSETPOS=-1"
+			} else {
+				""
+			}
+		}"
+		anchor_text = if input.last_monday {
+			"20240129"
+		} else {
+			"20240131"
+		}
+		parts = {
+			start: anchor_text,
+			rule: text,
+			inclusions: ["20240204,20240331", anchor_text, "20240204"],
+			exclusions: if input.exclude_anchor {
+				[anchor_text, "20240331"]
+			} else {
+				["20240331"]
+			},
+		}
+		parsed = match RfcDateRule.parse(parts) {
+			Ok(value) => value
+			Err(_) => crash "Valid RFC date rule rejected"
+		}
+		match RfcDateRule.parse({ ..parts, rule: "${text};COUNT=1" }) {
+			Err(Duplicate("COUNT")) => {}
+			_ => crash "Duplicate rule part accepted"
+		}
+		parsed_cursor = match DateRecurrence.cursor(parsed, window) {
+			Ok(value) => value
+			Err(_) => crash "Valid parsed query rejected"
+		}
 		cursor = match DateRecurrence.cursor(rule, window) {
 			Ok(value) => value
 			Err(_) => crash "Valid query rejected"
@@ -130,6 +165,16 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				Complete => {
 					if observed != normalized {
 						crash "Recurrence differs from finite calendar model"
+					}
+					parsed_batch = match DateRecurrence.Cursor.collect(parsed_cursor, { max_steps: 10000, max_buffered: 366, max_occurrences: 100 }) {
+						Ok(value) => value
+						Err(_) => crash "Parsed recurrence failed"
+					}
+					match parsed_batch.status {
+						Complete => if parsed_batch.dates != normalized {
+							crash "RFC adapter differs from calendar model"
+						}
+						Limited(_) => crash "Parsed recurrence unexpectedly limited"
 					}
 					return Fuzz.keep
 				}

@@ -228,7 +228,7 @@ def command(args: list[str], cwd: Path, label: str) -> str:
 def replay(name: str, workers: int = 4) -> None:
     driver = ROOT / f"tests/oracle_{name}"
     manifest = tomllib.loads((DATA / f"{name}-manifest.toml").read_text())
-    expected_profile = {"zones": "zones-tzdata-2025b-v2", "calendar_pattern": "gregorian-calendar-patterns-v1"}.get(name, PROFILE.replace("gregorian", name))
+    expected_profile = {"zones": "zones-tzdata-2025b-v2", "calendar_pattern": "gregorian-calendar-patterns-v1", "rfc_date": "rfc5545-date-values-v1"}.get(name, PROFILE.replace("gregorian", name))
     if manifest["profile"] != expected_profile or manifest["version"] != 2 or manifest["corpus_format"] != "jsonl-v1":
         raise ValueError("Unsupported oracle profile")
     corpus = DATA / f"{name}.jsonl"
@@ -248,6 +248,10 @@ def replay(name: str, workers: int = 4) -> None:
         gaps = DATA / 'calendar_pattern-reference-gaps.jsonl'
         if manifest['reference_gap_sha256'] != digest(gaps) or len(gaps.read_text().splitlines()) != manifest['reference_gap_count']:
             raise ValueError('Pattern reference-gap evidence changed')
+    elif name == "rfc_date":
+        oracle_replay.validate_rfc_date_cases(cases)
+        if manifest['generator_sha256'] != digest(ROOT / 'scripts/generate_rfc_date_oracle.py'):
+            raise ValueError('RFC date generator changed: refresh the reviewed corpus')
     else:
         oracle_replay.validate_calendar_cases(cases)
     roc = os.environ.get("ROC", "roc")
@@ -306,7 +310,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh", action="store_true", help="Explicitly regenerate reviewed calendar expectations (zones use generate_zone_oracle.py)")
     parser.add_argument("--workers", type=int, default=4, help="Bounded native case workers (1..16)")
-    parser.add_argument("--oracle", choices=("gregorian", "julian", "zones", "calendar_pattern"), help="Replay one corpus")
+    parser.add_argument("--oracle", choices=("gregorian", "julian", "zones", "calendar_pattern", "rfc_date"), help="Replay one corpus")
     args = parser.parse_args()
     try:
         if args.refresh:
@@ -315,7 +319,7 @@ if __name__ == "__main__":
         else:
             import fixture_platform
             fixture_platform.build_host()
-            for name in ((args.oracle,) if args.oracle else ("gregorian", "julian", "zones", "calendar_pattern")):
+            for name in ((args.oracle,) if args.oracle else ("gregorian", "julian", "zones", "calendar_pattern", "rfc_date")):
                 replay(name, args.workers)
     except (ValueError, KeyError, OSError) as error:
         raise SystemExit(str(error)) from error

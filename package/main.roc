@@ -6,6 +6,7 @@ package
 		CalendarArithmetic,
 		CalendarPattern,
 		DateRecurrence,
+		RfcDateRule,
 		CivilDay,
 		ClockTime,
 		LocalDateTime,

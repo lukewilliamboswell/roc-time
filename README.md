@@ -30,6 +30,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |
 | [Voyage briefing](examples/voyage/main.roc) | Supply a ship's clock schedule and review a rules update while retaining the saved booking |
 | [Equipment inspections](examples/inspections/main.roc) | Schedule four inspections on the last Tuesday every three months, with explicit evaluation limits |
+| [Service calendar](examples/maintenance/main.roc) | Import date-only recurrence values and review rescheduled visits without restarting the original series count |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:
@@ -42,13 +43,19 @@ roc examples/calendar_conversion/main.roc
 roc examples/staffing/main.roc
 roc examples/voyage/main.roc
 roc examples/inspections/main.roc
+roc examples/maintenance/main.roc
 ```
 
 The availability example resolves dated bookings with explicit offsets before
 subtracting their coverage. The recorder example uses resolved POSIX coordinates.
-The invoice example uses civil dates without assuming a timezone. General parsing
-will be demonstrated as it lands. Named-zone applications can add the
+The invoice example uses civil dates without assuming a timezone. The service-calendar
+example imports date-only recurrence values. Named-zone applications can add the
 [optional zone database](tzdb/README.md); the core does not bundle it.
+
+[RfcDateRule](package/RfcDateRule.roc) accepts extracted date-only recurrence
+property values under its declared profile. It does not parse complete ICS
+documents or timed rules; affected yearly rules require explicit fields where
+omitted defaults remain unsupported.
 
 ## Acknowledgements
 

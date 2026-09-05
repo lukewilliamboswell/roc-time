@@ -13,8 +13,9 @@ finite immutable zone rules and event/coverage distinctions.
 - Extend immutable resumptions to timed interpretation inputs, preserving the
   date cursor's work/buffer/output accounting. Resume must produce exactly
   uninterrupted results; query restriction never restarts series COUNT.
-- RFC 5545 text adaptation into the same validated forms, with explicit profile,
-  unsupported scopes and UNTIL type checks. No separate parser execution engine.
+- Extend RFC 5545 adaptation to timed values, omitted yearly defaults and
+  declared serialization/persistence. Keep its explicit profile and UNTIL type
+  checks; do not introduce a separate parser execution engine.
 - Independently generated JSONL cases, RFC examples, synthetic zone transitions,
   bounded fuzz models, invalid-input/domain checks and realistic applications.
 - Add next/fold conveniences over bounded cursor execution and all-day event
@@ -33,10 +34,13 @@ conformance: §3.3.10's invalid-generated-time exclusion and its reference to
 explicit DATE-TIME interpretation need an explicit adopted interpretation.
 Settle exception duration identity, RDATE PERIOD support and subdaily buffering
 limits before exposing those adapter operations. Unsupported scopes stay errors.
-Verify adapter-specific omitted-field defaults separately: RFC/JSCalendar and
-dateutil do not agree on every YEARLY BYMONTHDAY/BYWEEKNO default. The candidate
-layer's native defaults are explicit in CalendarPattern; adapters must inject
-their chosen standard's defaults rather than infer conformance from dateutil.
+Resolve omitted-field defaults before widening `rfc5545-date-values-v1`:
+RFC 5545 §3.3.10's derivation prose/table, RFC 8984 §4.3.3's explicit defaults
+and dateutil disagree for YEARLY BYMONTHDAY without BYMONTH and BYWEEKNO without
+BYDAY. The adapter currently requires those explicit fields in the affected
+combinations. Identify primary clarification and differential evidence rather
+than silently copying JSCalendar or dateutil behavior into the RFC profile.
+The candidate layer's native defaults remain explicit in CalendarPattern.
 
 Extend date-only executable scenarios to the adapter and timed paths: January
 31 → March 31 → May 31 for COUNT=3, with original COUNT retained under March

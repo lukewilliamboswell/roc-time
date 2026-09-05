@@ -128,6 +128,25 @@ def validate_pattern_cases(cases: list[dict]) -> None:
             raise ValueError('Invalid pattern membership bitmap')
 
 
+def validate_rfc_date_cases(cases: list[dict]) -> None:
+    for case in cases:
+        inputs, expected = case['input'], case['expected']
+        if case['operation'] != 'rfc_date' or len(inputs) != 6:
+            raise ValueError('Invalid RFC date oracle operation/arity')
+        for value in (inputs[0], inputs[4], inputs[5]):
+            if not re.fullmatch(r'[0-9]{8}', value):
+                raise ValueError('Invalid RFC date oracle date transport')
+        if not inputs[1] or any(ord(char) < 33 or ord(char) > 126 for char in inputs[1]):
+            raise ValueError('Invalid RFC date oracle rule transport')
+        for value in inputs[2:4]:
+            if value != '-' and not re.fullmatch(r'[0-9]{8}(,[0-9]{8})*', value):
+                raise ValueError('Invalid RFC date oracle inclusion/exclusion transport')
+        if (not expected or expected[0] != 'ok'
+                or any(not re.fullmatch(r'[0-9]{8}', value) for value in expected[1:])
+                or expected[1:] != sorted(set(expected[1:]))):
+            raise ValueError('Invalid RFC date oracle observation')
+
+
 def compare(case: dict, output: str) -> None:
     expected = "\t".join([case["id"], *case["expected"]]) + "\n"
     if output != expected:

@@ -63,11 +63,11 @@ At least one oracle is required for temporal implementation work. Run:
 ROC=/path/to/pinned/roc python3 scripts/oracles.py --workers 4
 ```
 
-The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone and 448 calendar-pattern
+The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone, 448 calendar-pattern and 512 RFC date-rule
 observations stored as JSONL under `tests/oracles/`. Each native fixture is
 compiled once. Python validates the corpus, passes only inputs as arguments to
 bounded parallel processes, and compares exact observations in corpus order.
-Use `--oracle gregorian`, `julian`, `zones` or `calendar_pattern` to select one corpus. Full-corpus expected
+Use `--oracle gregorian`, `julian`, `zones`, `calendar_pattern` or `rfc_date` to select one corpus. Full-corpus expected
 results stay in the Python harness. Small typed scenarios retain
 interpreter coverage and comparator regression checks.
 
@@ -96,6 +96,15 @@ using the exact dateutil and six wheel names/hashes in the generator and
 replay needs neither the reference dependencies nor network access. This corpus
 does not yet establish timed recurrence, COUNT, BYSETPOS, exclusion or cursor
 semantics. Do not infer those from a passing calendar-candidate check.
+
+The RFC date-rule corpus uses dateutil's text parser and recurrence-set evaluator
+for 16 date-only templates, with COUNT/UNTIL, signed selectors, inclusions,
+exclusions and query windows. Replay drives the public parser and native cursor
+with 17 work steps and one output slot per batch. Regenerate with
+`python3 scripts/generate_rfc_date_oracle.py /path/to/wheel-directory` using the
+same pinned dateutil/six wheels. The manifest records its semantic intersection;
+it excludes timed rules, week-number selectors and disputed omitted yearly
+fields. Fixed parser tests cover malformed inputs and profile boundaries.
 
 Gregorian expectations come from CPython 3.14.3 `datetime` for years 1–9999 and
 a 400-year table model outside that range. The model extension is not direct

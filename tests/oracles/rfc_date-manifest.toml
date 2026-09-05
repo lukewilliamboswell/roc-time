@@ -1,0 +1,15 @@
+version = 2
+corpus_format = "jsonl-v1"
+profile = "rfc5545-date-values-v1"
+case_count = 512
+corpus_sha256 = "911257cf31405be6025eb67bdc9d8b41e214a08b370a83fa816e6621c02e5fef"
+smoke_case_count = 8
+smoke_sha256 = "8f718064160e4dcde47191e6dc431d987deb927b3493e5b612b5812f26fcfd7a"
+generator_sha256 = "f959734172d73ff13abe01df5b5ebbfd99d48f749995ebcdc7398d2e6e8c87ac"
+reference = "python-dateutil 2.9.0.post0 with six 1.17.0, CPython 3.14.3"
+seed = 20260905
+source_wheels = ["python_dateutil-2.9.0.post0-py2.py3-none-any.whl", "six-1.17.0-py2.py3-none-any.whl"]
+source_sha256 = ["a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"]
+sources = ["https://pypi.org/project/python-dateutil/2.9.0.post0/", "https://pypi.org/project/six/1.17.0/", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.8.5"]
+license = "Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT."
+independence = "dateutil parses and expands indexed calendar masks; Roc parses into DateRecurrence and scans bounded calendar periods. Shared Gregorian conventions. Synchronized DTSTART, DATE-valued rules only, 16 templates; no timed semantics, BYWEEKNO, disputed implicit yearly fields or complete RFC conformance claim."
