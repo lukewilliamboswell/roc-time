@@ -28,9 +28,9 @@ the text adapter must separately declare its representable year profile.
 Selectors are bounded and validated once. A period spanning outside the provider
 range returns OutOfRange rather than silently clipping.
 
-Compose timed periods with bounded boundary classification and its before-gap
-transition evidence. Define an explicit error for multiple gap witnesses in
-synthetic rules; do not choose a transition arbitrarily. Do not hide a full
+Compose timed periods with bounded boundary classification and explicit
+occurrence selection; preserve gap-adjustment evidence and AmbiguousGap errors.
+Do not hide a full
 transition-table scan inside one recurrence work unit. Use RFC 5545 §3.3.5's New York 2007 gap/fold examples
 and verified erratum 4271 as conformance fixtures. Settle BYSETPOS ordering and
 deduplication when different source labels map to the same boundary after gap

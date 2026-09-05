@@ -136,6 +136,7 @@ ZoneRules :: {
 	}
 
 	GapTransition : { at : PosixBoundary, before : FixedOffset, after : FixedOffset }
+	BoundaryChoice : { boundary : PosixBoundary, adjustment : [Exact, BeforeGap(GapTransition)] }
 	Classification :: { rules : ZoneRules, local : LocalDateTime, resolution : Resolution, gaps : List(GapTransition) }.{
 		resolution : Classification -> Resolution
 		resolution = |value| value.resolution
@@ -148,6 +149,71 @@ ZoneRules :: {
 		## A synthetic table can contain several; never silently select one.
 		gap_transitions : Classification -> List(GapTransition)
 		gap_transitions = |value| value.gaps
+
+		## Apply explicit policies to complete evidence, without rescanning rules.
+		## First/last/gap choice is constant work; matching an asserted offset is
+		## O(log n) in fold occurrences. Gap adjustment retains its transition.
+		## MatchingOffset checks the pre-gap offset for an explicit gap adjustment.
+		choose : Classification, { occurrence : OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] } -> Try(BoundaryChoice, [Gap, Ambiguous, AmbiguousGap, OffsetConflict, OutOfRange, ..])
+		choose = |value, policy| {
+			match value.resolution {
+				Gap => {
+					if policy.gap == RejectGap {
+						return Err(Gap)
+					}
+					transition = match value.gaps {
+						[only] => only
+						[] => crash "Complete gap classification crosses a forward transition"
+						_ => return Err(AmbiguousGap)
+					}
+					match policy.occurrence {
+						MatchingOffset(expected) => if expected != transition.before {
+							return Err(OffsetConflict)
+						}
+						_ => {}
+					}
+					boundary = FixedOffset.resolve(transition.before, value.local)?
+					Ok({ boundary, adjustment: BeforeGap(transition) })
+				}
+				Unique(boundary) => {
+					match policy.occurrence {
+						MatchingOffset(expected) => if FixedOffset.resolve(expected, value.local) != Ok(boundary) {
+							return Err(OffsetConflict)
+						}
+						_ => {}
+					}
+					Ok({ boundary, adjustment: Exact })
+				}
+				Fold(boundaries) => {
+					boundary = match policy.occurrence {
+						RequireUnique => return Err(Ambiguous)
+						First => classification_boundary_at(boundaries, 0)
+						Last => classification_boundary_at(boundaries, boundaries.len() - 1)
+						MatchingOffset(expected) => {
+							candidate = match FixedOffset.resolve(expected, value.local) {
+								Ok(found) => found
+								Err(_) => return Err(OffsetConflict)
+							}
+							var lower = 0.U64
+							var upper = boundaries.len()
+							while lower < upper {
+								middle = lower + U64.div_trunc_by(upper - lower, 2)
+								if classification_boundary_at(boundaries, middle) < candidate {
+									lower = middle + 1
+								} else {
+									upper = middle
+								}
+							}
+							if lower == boundaries.len() or classification_boundary_at(boundaries, lower) != candidate {
+								return Err(OffsetConflict)
+							}
+							candidate
+						}
+					}
+					Ok({ boundary, adjustment: Exact })
+				}
+			}
+		}
 		to_inspect : Classification -> Str
 		to_inspect = |value| {
 			kind = match value.resolution {
@@ -246,40 +312,19 @@ ZoneRules :: {
 	## Choose explicitly; gaps never silently move to another local label.
 	resolve_occurrence : ZoneRules, LocalDateTime, OccurrencePolicy -> Try(PosixBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, ..])
 	resolve_occurrence = |rules, local, policy| {
-		classification = resolve(rules, local)?
-		match classification {
-			Gap => Err(Gap)
-			Unique(boundary) => match policy {
-				MatchingOffset(expected) => if offset_at(rules, boundary)? == expected {
-					Ok(boundary)
-				} else {
-					Err(OffsetConflict)
-				}
-				_ => Ok(boundary)
-			}
-			Fold(boundaries) => match policy {
-				RequireUnique => Err(Ambiguous)
-				First => match List.get(boundaries, 0) {
-					Ok(boundary) => Ok(boundary)
-					Err(_) => crash "internal nonempty fold invariant"
-				}
-				Last => match List.get(boundaries, List.len(boundaries) - 1) {
-					Ok(boundary) => Ok(boundary)
-					Err(_) => crash "internal nonempty fold invariant"
-				}
-				MatchingOffset(expected) => {
-					candidate = match FixedOffset.resolve(expected, local) {
-						Ok(value) => value
-						Err(_) => return Err(OffsetConflict)
-					}
-					for boundary in boundaries {
-						if boundary == candidate {
-							return Ok(boundary)
-						}
-					}
-					Err(OffsetConflict)
-				}
-			}
+		cursor = classification_cursor(rules, local)?
+		batch = ClassificationCursor.collect(cursor, { max_segments: U64.highest, max_candidates: U64.highest })?
+		value = match batch.status {
+			Complete(result) => result
+			Limited(_) => crash "Finite zone classification exhausted U64"
+		}
+		match Classification.choose(value, { occurrence: policy, gap: RejectGap }) {
+			Ok(choice) => Ok(choice.boundary)
+			Err(AmbiguousGap) => crash "RejectGap does not choose gap transitions"
+			Err(Gap) => Err(Gap)
+			Err(Ambiguous) => Err(Ambiguous)
+			Err(OffsetConflict) => Err(OffsetConflict)
+			Err(OutOfRange) => Err(OutOfRange)
 		}
 	}
 
@@ -543,11 +588,45 @@ expect {
 				Limited(_) => False
 				Complete(value) => zero_valid and progress.reason == BufferLimit and limited.segments == 3 and finished.segments == 2 and
 					ZoneRules.Classification.resolution(value) == Gap and ZoneRules.Classification.local(value) == local and
-						ZoneRules.Classification.gap_transitions(value) == [
-							{ at: point(0), before: FixedOffset.from_seconds(0), after: FixedOffset.from_seconds(2) },
-							{ at: point(200000), before: FixedOffset.from_seconds(-2), after: FixedOffset.from_seconds(2) },
-						]
+						ZoneRules.Classification.choose(value, { occurrence: First, gap: UseOffsetBeforeGap }) == Err(AmbiguousGap) and
+							ZoneRules.Classification.gap_transitions(value) == [
+								{ at: point(0), before: FixedOffset.from_seconds(0), after: FixedOffset.from_seconds(2) },
+								{ at: point(200000), before: FixedOffset.from_seconds(-2), after: FixedOffset.from_seconds(2) },
+							]
 			}
 		}
 	}
+}
+
+classification_boundary_at = |boundaries, index| match List.get(boundaries, index) {
+	Ok(value) => value
+	Err(_) => crash "Classification match index invariant"
+}
+
+expect {
+	point = PosixBoundary.from_microseconds
+	validity = PosixSpan.new(point(-10000000), point(10000000))?
+	local = FixedOffset.project(FixedOffset.from_seconds(0), point(1000000), Gregorian)?
+	var valid = Bool.True
+	for (before, after) in [(0.I32, 2.I32), (2, 0)] {
+		rules = ZoneRules.new_bounded("Synthetic/Choice", "v1", validity, FixedOffset.from_seconds(before), [{ at: point(0), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 })?
+		cursor = ZoneRules.classification_cursor(rules, local)?
+		batch = ZoneRules.ClassificationCursor.collect(cursor, { max_segments: 2, max_candidates: 2 })?
+		value = match batch.status {
+			Complete(found) => found
+			Limited(_) => crash "fixture classification incomplete"
+		}
+		if before == 0 {
+			choice = ZoneRules.Classification.choose(value, { occurrence: First, gap: UseOffsetBeforeGap })?
+			valid = valid and choice == { boundary: point(1000000), adjustment: BeforeGap({ at: point(0), before: FixedOffset.from_seconds(0), after: FixedOffset.from_seconds(2) }) } and
+				ZoneRules.Classification.choose(value, { occurrence: First, gap: RejectGap }) == Err(Gap) and
+					ZoneRules.Classification.choose(value, { occurrence: MatchingOffset(FixedOffset.from_seconds(2)), gap: UseOffsetBeforeGap }) == Err(OffsetConflict)
+		} else {
+			valid = valid and ZoneRules.Classification.choose(value, { occurrence: First, gap: RejectGap }) == Ok({ boundary: point(-1000000), adjustment: Exact }) and
+				ZoneRules.Classification.choose(value, { occurrence: Last, gap: RejectGap }) == Ok({ boundary: point(1000000), adjustment: Exact }) and
+					ZoneRules.Classification.choose(value, { occurrence: MatchingOffset(FixedOffset.from_seconds(0)), gap: RejectGap }) == Ok({ boundary: point(1000000), adjustment: Exact }) and
+						ZoneRules.Classification.choose(value, { occurrence: MatchingOffset(FixedOffset.from_seconds(1)), gap: RejectGap }) == Err(OffsetConflict)
+		}
+	}
+	valid
 }

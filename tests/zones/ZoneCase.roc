@@ -86,6 +86,30 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					if ZoneRules.Classification.resolution(value) != classification {
 						crash "resumed classification differs from timeline oracle"
 					}
+					if expected == [] {
+						var pre_gap_offsets = []
+						if input.number >= 0 and input.number < input.first.to_i64() * 1000000 {
+							pre_gap_offsets = pre_gap_offsets.append(0.I32)
+						}
+						if input.number >= 4000000 + input.first.to_i64() * 1000000 and input.number < 4000000 + input.second.to_i64() * 1000000 {
+							pre_gap_offsets = pre_gap_offsets.append(input.first)
+						}
+						chosen = ZoneRules.Classification.choose(value, { occurrence: First, gap: UseOffsetBeforeGap })
+						match pre_gap_offsets {
+							[before] => {
+								match chosen {
+									Ok(choice) => if choice.boundary != point(input.number - before.to_i64() * 1000000) {
+										crash "gap adjustment differs from fixture offset"
+									}
+									Err(_) => crash "single gap rejected"
+								}
+							}
+							[] => crash "complete gap lacks a crossing"
+							_ => if chosen != Err(AmbiguousGap) {
+								crash "multiple gaps silently chosen"
+							}
+						}
+					}
 					classified = Bool.True
 				}
 				Limited(progress) => {

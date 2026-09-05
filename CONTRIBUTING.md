@@ -233,6 +233,9 @@ and zone cursors, with a separate traffic ceiling and the same vast date horizon
 Boundary classification is measured separately on 16- and 8192-transition
 synthetic tables. Table construction is outside that scope; one segment of
 classification must remain incomplete and have identical allocation traffic.
+After full classification outside the measured choice scope, selecting an
+asserted offset from the resulting 17- or 8193-occurrence fold must allocate
+nothing. The synthetic offsets deliberately repeat one local clock range.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory
