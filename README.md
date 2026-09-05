@@ -8,12 +8,6 @@ A date and time package for [Roc](https://www.roc-lang.org).
 > coverage algebra, proleptic Gregorian/Julian civil-day conversion, and explicit Gregorian
 > calendar arithmetic. Zone interpretation and the remaining design are still being implemented.
 
-“POSIX” names a time scale here, not an operating-system requirement: its
-coordinates count microseconds from 1970-01-01 and do not represent leap seconds
-separately. The core is pure Roc, and civil dates use a separate domain. Broad
-platform support is the goal; native Apple Silicon macOS is verified so far,
-while Windows, Linux runtime, and Wasm evidence remain incomplete.
-
 ## Documentation
 
 Read [design.md](design.md) for the intended architecture, temporal model, and performance objectives.
