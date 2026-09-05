@@ -221,6 +221,10 @@ in dev and speed builds. Runtime horizons ending in years 2001 and 2,000,000,000
 must produce the same first occurrence and identical requested-byte traffic.
 Iterator construction, one-batch consumption and an early-stopping scalar fold
 each have a 4096-byte traffic ceiling; resumption must yield the second date.
+A query starting near the end of each horizon must return `Limited(WorkLimit)`
+under a one-step search budget. Fully consuming a zero-work iterator must yield
+exactly one incomplete outcome and terminate. Both operations have separately
+measured traffic ceilings, including when there is no nearby visible occurrence.
 A five-second process deadline catches catastrophic hidden traversal, and a
 zero-byte ceiling must fail through the hosted assertion. These are regression
 bounds for this shared-cursor workload, not exact allocation or retained-memory

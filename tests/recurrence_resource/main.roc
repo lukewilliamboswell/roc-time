@@ -74,7 +74,50 @@ main! = |args| {
 		}
 		_ => Host.assert!(False)
 	}
-	{ bytes: "prefix=1,resume=2\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed] }
+	# Query far after DTSTART: budget candidate work even when no result is
+	# nearby. Searching for the first visible date must not hide a long scan.
+	later = fixture_date(year - 1, 2)
+	delayed = match DateRecurrence.cursor(rule, { start: later, end }) {
+		Ok(value) => value
+		Err(_) => crash "delayed cursor"
+	}
+	search_before = Host.allocated_bytes!({})
+	searched = match DateRecurrence.Cursor.next(delayed, { max_steps: 1, max_buffered: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "bounded search failed"
+	}
+	search_after = Host.allocated_bytes!({})
+	Host.assert!(searched.steps == 1 and search_after - search_before <= ceiling)
+	match searched.status {
+		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
+		_ => Host.assert!(False)
+	}
+	# Consume the entire zero-work stream. It must expose one incomplete
+	# outcome, then stop; endlessly retrying its cursor would hit the deadline.
+	zero_before = Host.allocated_bytes!({})
+	zero_count = DateRecurrence.Cursor.chunks(delayed, { max_steps: 0, max_buffered: 1, max_occurrences: 1 }).fold(
+		0.U64,
+		|n, result| {
+			match result {
+				Ok(batch) => {
+					if batch.steps != 0 or batch.dates != [] {
+						crash "zero-work cursor advanced"
+					}
+					match batch.status {
+						Limited(progress) => if progress.reason != WorkLimit {
+							crash "wrong zero-work outcome"
+						}
+						Complete => crash "zero-work query falsely completed"
+					}
+				}
+				Err(_) => crash "zero-work stream failed"
+			}
+			n + 1
+		},
+	)
+	zero_after = Host.allocated_bytes!({})
+	Host.assert!(zero_count == 1 and zero_after - zero_before <= ceiling)
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
