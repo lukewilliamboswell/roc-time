@@ -13,7 +13,7 @@
 1. Identify the affected requirement IDs and a realistic caller scenario. State input domain, successful result, failure cases, range, and expected cost before implementing.
 2. Try to break the proposal. Include a smallest counterexample involving an endpoint, an ambiguous interpretation, sharing/allocation, or a limit as appropriate. Resolve material findings in the design or implementation; record outstanding task-specific findings in an existing plan when useful.
 3. Implement a vertical slice through the real package. Validate public construction once, then preserve invariants internally. Avoid a second interpretation engine for a new parser or adapter.
-4. Add meaningful executable evidence: a scenario fixture, an algebraic property, an independent reference model, or a compile-failure case. Tests that only restate the implementation are insufficient for semantic claims.
+4. Add meaningful executable evidence using the property-based testing method below, alongside scenario fixtures and compile-failure cases as applicable. Tests that only restate the implementation are insufficient for semantic claims.
 5. Run the relevant checks, then report exact commands, results, limitations, and remaining questions. Update an existing task plan when relevant. Mark work complete only when its acceptance criteria are met.
 
 Resolve routine engineering choices within the authorized task. These rules do not introduce an approval step for ordinary edits. If a design contract needs to change, update the design and explain the semantic consequence alongside the implementation rather than silently weakening it.
@@ -39,11 +39,27 @@ At completion, move enduring decisions into `design.md` and useful verification 
 
 ## Examples and evidence
 
+- Maintain `examples/` as focused, realistic applications demonstrating public package capabilities from a caller's perspective. Cover the implemented capabilities broadly across the collection while keeping each application centered on one useful task. Prefer clear inputs, meaningful results and ergonomic flow over assertion-heavy demonstrations; test fixtures, exhaustive cases and harnesses belong under `tests/`.
+- Give each application its own folder and name its entrypoint `main.roc`, for example `examples/coverage/main.roc`. Put most pure domain logic in a separate capitalized type module; keep the app root focused on inputs, effects and presentation. Use the same layout for test applications so multiple app or test roots can drive pure cores. Type modules expose a matching nominal type and associated items, as described in the [Roc language reference](https://github.com/roc-lang/roc/blob/main/docs/langref/modules.md#type-modules).
+- When moving or adding example applications, update recursive discovery, bundle copying, release URL rewriting and documentation links. Verify the multi-file application against both the local package and its distributable bundle.
 - Label future API snippets as proposed. Formatting/parsing acceptance proves syntax only. Stubs or mocks of the intended library do not prove that a usage works.
 - When a feature lands, promote its design scenario to an executable example or test using the actual public modules. Keep documentation and implementation synchronized.
 - Use fixed zone/calendar fixtures with provenance. Include synthetic transition fixtures for edge cases; do not depend on the host's current database.
 - Use Tempo as a source of ideas and differential cases, not the sole correctness oracle. Retain credit to Kip Cole and contributors. Record upstream file/revision and applicable notices when adapting implementation code.
 - For compile-failure tests, check the intended diagnostic; a failure caused by an unrelated missing import is not evidence of domain safety.
+
+## Property-based testing
+
+[roc-fuzz](https://github.com/lukewilliamboswell/roc-fuzz) is the default property-based testing platform for temporal implementation work. For changes to temporal semantics, add or extend a test root under `tests/` through the real public modules. Where generated testing is unsuitable, explain the alternative executable evidence. The platform release URL and integrity metadata are pinned in `tests/fuzz/dependency.json`; each fuzz test must use that exact URL. Update the pin and test declarations together when deliberately upgrading the dependency. `scripts/fuzz.py` is the single runner for builds, replay, bounded searches, and failure-lifecycle checks. See [README](README.md#tests) for commands and [the implementation plan](planning/implement-design.md#roc-fuzz-integration) for remaining evidence work.
+
+- State the applicable requirement IDs, input domain, property preconditions, and independent oracle or semantic law. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
+- Generate useful valid inputs directly and deliberately include signed limits, adjacent endpoints, empty collections, duplicates, and touching/overlapping spans as applicable. Exercise owned, shared, and sliced collections where ownership can affect behavior. Small exhaustive models complement exploration across the full supported range.
+- Test malformed public inputs for the required structured errors. Reject a generated input only when it is outside the property's domain; do not discard expected error paths or turn ordinary public errors into harness crashes.
+- Check inverse and round-trip preconditions explicitly. Checked arithmetic may overflow in an intermediate step; clamped calendar arithmetic is not invertible; semantic round trips need not preserve source spelling. Pair algebraic laws with independent models or sourced fixtures so mutually consistent bugs can be detected.
+- Reproduce and minimize failures, then preserve a readable deterministic regression using public APIs. Retain useful minimized raw inputs with target/generator, compiler, and roc-fuzz revisions needed for replay. Keep disposable campaigns, binaries, downloads, and raw exploratory output under `.roc-time-tmp/`; curated regression inputs and their provenance belong in versioned tests.
+- Run affected targets with explicit finite budgets and replay their saved regressions. Record exact commands, revisions, backend/target, seed, budgets, and results. Normal CI must build targets, replay curated regressions, and run bounded searches on supported hosts; longer campaigns supplement that gate, with scheduled automation tracked in the implementation plan. Unsupported hosts and failed setup remain explicit limitations.
+
+Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and resource measurements. A passing campaign establishes evidence for its tested properties and budget, not exhaustive correctness, allocation bounds, or portability to untested backends.
 
 ## Performance discipline
 
@@ -59,4 +75,4 @@ For code changes, run the affected module's `roc check`/`roc test` and executabl
 
 For documentation-only changes, review contracts and examples, check local links and Mermaid structure, and use the pinned formatter to validate new Roc sketch syntax. Do not run unrelated benchmarks or claim unimplemented sketches were typechecked. Keep unresolved API choices explicit; do not fill the package with scaffolding to make documentation appear executable.
 
-Keep changes scoped. Do not commit, publish, or contact upstream contributors unless requested. A final handoff states what changed, what was verified, and which material questions remain open.
+Keep changes scoped. When commits are requested, create clean, coherent commits at verified milestones as work progresses; do not defer all changes to one final commit. Do not commit, publish, or contact upstream contributors unless requested. A final handoff states what changed, what was verified, and which material questions remain open.

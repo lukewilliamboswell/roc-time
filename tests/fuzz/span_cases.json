@@ -1,0 +1,132 @@
+[
+  {
+    "file": "relation-after",
+    "relation": "after",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": -2,
+      "d": -1
+    }
+  },
+  {
+    "file": "relation-before",
+    "relation": "before",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 4,
+      "d": 5
+    }
+  },
+  {
+    "file": "relation-contains",
+    "relation": "contains",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 1,
+      "d": 2
+    }
+  },
+  {
+    "file": "relation-during",
+    "relation": "during",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": -1,
+      "d": 4
+    }
+  },
+  {
+    "file": "relation-equal",
+    "relation": "equal",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 0,
+      "d": 3
+    }
+  },
+  {
+    "file": "relation-finished_by",
+    "relation": "finished_by",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 1,
+      "d": 3
+    }
+  },
+  {
+    "file": "relation-finishes",
+    "relation": "finishes",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": -1,
+      "d": 3
+    }
+  },
+  {
+    "file": "relation-meets",
+    "relation": "meets",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 3,
+      "d": 4
+    }
+  },
+  {
+    "file": "relation-met_by",
+    "relation": "met_by",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": -1,
+      "d": 0
+    }
+  },
+  {
+    "file": "relation-overlapped_by",
+    "relation": "overlapped_by",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": -1,
+      "d": 2
+    }
+  },
+  {
+    "file": "relation-overlaps",
+    "relation": "overlaps",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 2,
+      "d": 4
+    }
+  },
+  {
+    "file": "relation-started_by",
+    "relation": "started_by",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 0,
+      "d": 2
+    }
+  },
+  {
+    "file": "relation-starts",
+    "relation": "starts",
+    "input": {
+      "a": 0,
+      "b": 3,
+      "c": 0,
+      "d": 4
+    }
+  }
+]

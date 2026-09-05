@@ -62,7 +62,11 @@ def main() -> None:
     os.environ["ROC_TIME_TMPDIR"] = str(tmp_base)
     os.environ["ROC"] = ROC
 
-    run([ROC, "version"])
+    version = run([ROC, "version"], capture=True).stdout.strip()
+    print(version, flush=True)
+    pinned = (ROOT / ".roc-version").read_text().strip()
+    if version != f"Roc compiler version {pinned}":
+        raise SystemExit(f"Expected compiler {pinned}; set ROC to the pinned executable")
 
     heading("Checking package...")
     run([ROC, "check", "package/main.roc"])
@@ -72,8 +76,14 @@ def main() -> None:
     for module in modules:
         run([ROC, "test", str(module.relative_to(ROOT))])
 
+    heading("Checking domain and representation compile failures...")
+    run([sys.executable, "scripts/test_compile_failures.py"])
+
+    heading("Running bounded semantic fuzz checks and regression replay...")
+    run([sys.executable, "scripts/fuzz.py", "--operation", "all"])
+
     heading("Checking scripts and examples...")
-    for example in sorted((ROOT / "examples").glob("*.roc")):
+    for example in sorted((ROOT / "examples").rglob("main.roc")):
         run([ROC, "check", str(example.relative_to(ROOT))])
 
     heading("Generating package docs...")

@@ -1,5 +1,8 @@
 package
 	[
-		Time,
+		PosixBoundary,
+		PosixSpan,
+		PosixDelta,
+		Coverage,
 	]
 	{}

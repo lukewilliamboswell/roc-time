@@ -96,6 +96,26 @@ Adding a civil day preserves the intended calendar operation across offset trans
 
 ## Microseconds and physical representation
 
+### Implemented coordinate profile
+
+`PosixBoundary` uses the POSIX epoch 1970-01-01T00:00:00Z with exact signed
+I64 microseconds, including both integer endpoints. This numerical profile does
+not claim a calendar/provider range. Leap seconds have no distinct representation.
+`PosixDelta` is a signed coordinate displacement, not a physical SI elapsed
+quantity. `difference(a, b)` computes a minus b with checked subtraction.
+`PosixSpan.coordinate_width` returns that same coordinate quantity and may fail
+even when a span's two boundaries fit. No time-scale conversion data is used or
+implied. Numeric nanosecond and Dec conversion supports `RejectSubmicrosecond`,
+`Floor` (toward negative infinity), `Ceiling` (toward positive infinity),
+`TowardZero`, and `NearestTiesEven`. Exact input remains the default for
+`from_nanoseconds`; its `from_nanoseconds_with_rounding` companion takes an explicit
+policy. `from_seconds` requires a policy. Rounding operates on the scaled integer
+before narrowing to I64, so overflow is determined by the rounded result.
+`PosixSpan.from_seconds` first rejects equal/reversed source endpoints, applies
+the same explicit policy to both, and rejects a collapsed result as `EmptySpan`.
+These numeric conversions do not imply support for sub-microsecond calendar
+resolution.
+
 The public semantic contract requires exact microsecond boundaries and arithmetic throughout the documented range, including negative coordinates. Range limits and overflow are explicit; precision must not degrade for distant dates.
 
 **Resolved boundaries use signed I64 microseconds.** Elapsed quantities also use signed I64 microseconds, with distinct nominal types. A finite span stores two boundaries. Dec seconds remain an exact input/output convenience, not the core storage format.
@@ -145,6 +165,19 @@ flowchart LR
 ```
 
 Coverage has one canonical form: finite nonempty spans, sorted by start, with overlaps and touching spans merged. Empty coverage is valid. This makes extent equality independent of construction order or original segmentation.
+
+The implemented `Coverage` is opaque and specialized to the POSIX axis. Its
+`from_spans` constructor accepts validated `PosixSpan` values and cannot fail;
+`from_sorted_spans` additionally checks nondecreasing starts and returns
+`UnsortedInput` on a violation. `member_count` counts canonical members, and
+`coordinate_width` returns a checked `PosixDelta`. `overlapping_spans` and
+`fold_overlaps` return whole overlapping members; `intersection` is the operation
+for clipped extents. `complement_within` requires one explicit finite span and
+seeks to the first relevant member before emitting gaps. `to_spans` may share
+the immutable backing list; it makes no promise to detach retained storage.
+The executable [coverage example](examples/coverage/main.roc) exercises resolved
+availability; parsing offsets and event identity in the broader motivating
+scenario remain separate implementation work.
 
 The default storage is a flat Roc `List` of compact span records. Sorted disjoint spans have increasing starts and ends. Binary search can locate the first span whose end exceeds a query's start, followed by a scan until starts reach the query's end. A coverage overlap query therefore does not require an interval tree.
 
@@ -224,6 +257,10 @@ booking_availability = |_| {
 Expected coverage is `[09:00, 10:00)` and `[12:00, 17:00)` UTC on that day: two windows, six hours of coordinate width. The appointments remain two events even though their busy coverage becomes one span. Replacing the explicit offset with `Europe/Paris` requires supplied zone rules; an offset literal alone makes no promise about future dates in that city.
 
 ### Preserve one-microsecond boundaries
+
+This scenario now runs against the package in
+[examples/sample_windows/main.roc](examples/sample_windows/main.roc), including native
+execution against a bundled package. The sketch below isolates the boundary behavior demonstrated by that application.
 
 ```roc
 adjacent_samples = |_| {
@@ -340,6 +377,10 @@ Measure latency, throughput, allocation count, allocated bytes, and retained mem
 ## Acceptance requirements
 
 The identifiers below are stable requirements, not a claim that implementation tests exist. Implementation changes must identify the tests or examples that demonstrate their applicable requirements. An implemented feature is complete only when its applicable requirements have executable evidence.
+
+Property-based testing is a core source of that evidence. Applicable temporal laws must be exercised over generated inputs through the real public modules, including deliberate boundary cases and explicit error behavior. Properties state their supported domain and preconditions. Independent small-domain models and sourced fixtures anchor correctness beyond algebraic self-consistency; discovered counterexamples become durable deterministic regressions. Where generated testing is unsuitable, identify the alternative executable evidence.
+
+Generated testing complements fixed semantic scenarios, static domain checks, and measured resource behavior. A bounded search does not prove exhaustive correctness or backend portability. The roc-fuzz workflow and integration status belong in [AGENTS.md](AGENTS.md#property-based-testing) and the [implementation plan](planning/implement-design.md#roc-fuzz-integration); the temporal contracts below remain independent of the test runner.
 
 | ID | Required observable behavior |
 |---|---|

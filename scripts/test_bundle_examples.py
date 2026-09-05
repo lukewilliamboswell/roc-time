@@ -84,7 +84,7 @@ def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str) -> list[P
     shutil.copytree(ROOT / "examples", target_dir)
 
     examples = []
-    for example in sorted(target_dir.glob("*.roc")):
+    for example in sorted(target_dir.rglob("main.roc")):
         if example.name in SKIPPED_EXAMPLES:
             print(f"Skipping {example.name}: {SKIPPED_EXAMPLES[example.name]}.")
             continue
@@ -119,7 +119,7 @@ def build_and_run_examples(examples: list[Path], build_dir: Path) -> None:
     exe_suffix = ".exe" if os.name == "nt" else ""
 
     for example in examples:
-        output = build_dir / f"{example.stem}{exe_suffix}"
+        output = build_dir / f"{example.parent.name}{exe_suffix}"
         run([ROC, "build", example.name, f"--output={output}", "--no-cache"], cwd=example.parent)
         run([str(output)])
 

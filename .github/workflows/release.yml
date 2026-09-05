@@ -245,7 +245,7 @@ jobs:
 
       - name: Validate updated examples
         run: |
-          for example in examples/*.roc; do
+          for example in examples/*/main.roc; do
             roc check "$example" --no-cache
           done
 

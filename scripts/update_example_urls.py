@@ -11,7 +11,7 @@ PACKAGE_DEPENDENCY_RE = re.compile(r'(?m)^(\s*time:\s*)"[^"]+"')
 
 
 def update_examples(examples_dir: Path, bundle_url: str) -> list[Path]:
-    examples = sorted(examples_dir.glob("*.roc"))
+    examples = sorted(examples_dir.rglob("main.roc"))
     if not examples:
         raise SystemExit(f"No Roc examples found in {examples_dir}")
 
