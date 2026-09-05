@@ -741,7 +741,15 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	)
 	expected_sources = expected.map(|item| item.source)
 	expected_boundaries = expected.map(|item| item.boundary)
-	var current = match TimedSchedule.new(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	anchor_source = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
+	extra_source = local(date(2024, 2, 4), 9)
+	# The generator constrains work to 1..128.
+	short : TimedOccurrence.Duration
+	short = Coordinate(PosixDelta.from_microseconds(work.to_i64_wrap() * 3600000000))
+	extra : TimedOccurrence.Duration
+	extra = Calendar({ delta: CalendarDelta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
+	overrides = [{ source: anchor_source, duration: short }, { source: extra_source, duration: extra }, { source: anchor_source, duration: short }]
+	var current = match TimedSchedule.new_with_overrides(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "schedule construction"
 	}
@@ -764,8 +772,15 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 				Ok(value) => value
 				Err(_) => crash "missing expected boundary"
 			}
+			expected_width = if expected_source == anchor_source {
+				work.to_i64_wrap() * 3600000000
+			} else if expected_source == extra_source {
+				172800000000.I64
+			} else {
+				90000000000.I64
+			}
 			identity = TimedOccurrence.id(occurrence)
-			if identity.series != 42 or identity.source != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(90000000000)) {
+			if identity.series != 42 or identity.source != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(expected_width)) {
 				crash "schedule differs from independent UTC grid"
 			}
 			index = index + 1

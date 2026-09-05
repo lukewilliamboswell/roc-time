@@ -32,7 +32,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Equipment inspections](examples/inspections/main.roc) | Schedule four inspections on the last Tuesday every three months, with explicit evaluation limits |
 | [Service calendar](examples/maintenance/main.roc) | Import date-only recurrence values and review rescheduled visits without restarting the original series count |
 | [Dispatch deadlines](examples/dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
-| [Equipment loans](examples/equipment_loans/main.roc) | Keep monthly loan starts on the 31st while clamping calendar-month return dates and accounting for clock changes |
+| [Equipment loans](examples/equipment_loans/main.roc) | Keep monthly loans on the 31st, clamp return dates across clock changes, and add an extra one-week booking |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:
