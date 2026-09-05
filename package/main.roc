@@ -5,6 +5,7 @@ package
 		CalendarDelta,
 		CalendarArithmetic,
 		CalendarPattern,
+		DateRecurrence,
 		CivilDay,
 		ClockTime,
 		LocalDateTime,

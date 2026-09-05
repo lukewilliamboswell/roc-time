@@ -6,21 +6,19 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
-- Date-only series with inclusive date UNTIL, positive COUNT, explicit dates and
-  exclusions, ordered deduplication and stable source identity. Reject a DTSTART
-  that does not match its rule instead of assigning meaning to the RFC's
-  undefined case.
 - Local/UTC timed series, subdaily frequencies and time selectors. Reuse calendar
   candidates from CalendarPattern and ZoneRules; handle generated gaps before consuming COUNT.
   BYSETPOS belongs after full candidate generation/interpretation, not in a
   date-only filter reused by timed rules.
-- Immutable resumptions carrying rule, query and interpretation inputs. Account
-  for examined candidates, buffered candidates and output. Resume must produce
-  exactly uninterrupted results; query restriction never restarts series COUNT.
+- Extend immutable resumptions to timed interpretation inputs, preserving the
+  date cursor's work/buffer/output accounting. Resume must produce exactly
+  uninterrupted results; query restriction never restarts series COUNT.
 - RFC 5545 text adaptation into the same validated forms, with explicit profile,
   unsupported scopes and UNTIL type checks. No separate parser execution engine.
 - Independently generated JSONL cases, RFC examples, synthetic zone transitions,
   bounded fuzz models, invalid-input/domain checks and realistic applications.
+- Add next/fold conveniences over bounded cursor execution and all-day event
+  materialization with explicit duration, series identity and zone context.
 
 ## Decisions and acceptance still needed
 
@@ -40,11 +38,12 @@ dateutil do not agree on every YEARLY BYMONTHDAY/BYWEEKNO default. The candidate
 layer's native defaults are explicit in CalendarPattern; adapters must inject
 their chosen standard's defaults rather than infer conformance from dateutil.
 
-Acceptance includes January 31 → March 31 → May 31 for COUNT=3; a March query
-retains the original count; excluding March does not add July. Test positive and
-negative BYSETPOS over complete periods, WKST/year boundaries, duplicate dates,
-all budget exhaustion points and resumptions, changing rule data, finite bounds
-and provider extremes. No unbounded scan may occur inside a single cursor step.
+Extend date-only executable scenarios to the adapter and timed paths: January
+31 → March 31 → May 31 for COUNT=3, with original COUNT retained under March
+queries and exclusions. Verify BYSETPOS over full interpreted periods, WKST/year
+boundaries, duplicate dates, all budget exhaustion points and resumptions,
+changing rule data, finite bounds and provider extremes. No unbounded scan may
+occur inside a single cursor step.
 
 Remove completed deliverables from this task and delete the plan when acceptance
 is met. Contracts belong in design.md; evidence belongs in executable tests.

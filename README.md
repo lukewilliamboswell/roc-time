@@ -7,7 +7,8 @@ A date and time package for [Roc](https://www.roc-lang.org).
 > boundaries, coordinate displacements, nonempty half-open spans, and canonical
 > coverage algebra, proleptic Gregorian/Julian civil-day conversion, and explicit Gregorian
 > calendar arithmetic. Named-zone rules support explicit gap/fold handling, local selections
-> and immutable resolutions. Broader parsing, recurrence and reasoning remain in development.
+> and immutable resolutions. Date-only recurrence supports bounded, resumable queries.
+> Broader parsing, timed recurrence and reasoning remain in development.
 
 ## Documentation
 
@@ -28,7 +29,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |
 | [Voyage briefing](examples/voyage/main.roc) | Supply a ship's clock schedule and review a rules update while retaining the saved booking |
-| [Equipment inspections](examples/inspections/main.roc) | Select the last Tuesday in four explicitly requested three-monthly calendar periods |
+| [Equipment inspections](examples/inspections/main.roc) | Schedule four inspections on the last Tuesday every three months, with explicit evaluation limits |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:
