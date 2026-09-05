@@ -216,6 +216,17 @@ inputs and consumed outputs. Separate input construction, algorithm and output
 formatting when measuring. Resource evidence is specific to compiler, backend,
 input size and ownership; do not generalize one passing probe to all operations.
 
+The same command runs [recurrence prefix resource checks](tests/recurrence_resource/main.roc)
+in dev and speed builds. Runtime horizons ending in years 2001 and 2,000,000,000
+must produce the same first occurrence and identical requested-byte traffic.
+Iterator construction, one-batch consumption and an early-stopping scalar fold
+each have a 4096-byte traffic ceiling; resumption must yield the second date.
+A five-second process deadline catches catastrophic hidden traversal, and a
+zero-byte ceiling must fail through the hosted assertion. These are regression
+bounds for this shared-cursor workload, not exact allocation or retained-memory
+contracts. Review ceiling changes against measured operations and ownership;
+do not raise them merely to make a regression pass.
+
 The host is test-only and adds no package dependency. Apple Silicon native
 execution is verified. Linux x86-64/musl is configured with pinned linker inputs;
 other targets remain unsupported by this fixture host. Provenance and licenses

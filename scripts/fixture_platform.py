@@ -93,6 +93,35 @@ def verify_probe(target: str) -> None:
                 raise RuntimeError("Optimized expect behavior changed; review the fixture contract")
     print("PASS fixture host: dev/speed counters, traces, assertions and expect control")
 
+
+def verify_recurrence(target: str) -> None:
+    """Huge logical domains, bounded prefixes; deadlines catch hidden scans."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/recurrence_resource/main.roc"
+    for action in ("check", "test"):
+        subprocess.run([roc, action, source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"recurrence-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        observations = []
+        for year in (2001, 2000000000):
+            result = subprocess.run([binary, str(year), "4096"], capture_output=True, timeout=5)
+            if result.returncode or result.stdout != b"prefix=1,resume=2\n":
+                raise RuntimeError(f"{mode}: recurrence prefix failed: {result.stderr!r}")
+            match = re.search(rb" work=(\d+),(\d+),(\d+)\n$", result.stderr)
+            if match is None:
+                raise RuntimeError(f"{mode}: missing recurrence resource observations")
+            observations.append(tuple(int(value) for value in match.groups()))
+        if observations[0] != observations[1]:
+            raise RuntimeError(f"{mode}: prefix allocation traffic depends on horizon: {observations}")
+        # Same operation, deliberately impossible traffic ceiling: verify the
+        # resource assertion remains active, rather than only checking output.
+        failed = subprocess.run([binary, "2000000000", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: recurrence allocation negative control failed")
+        print(f"PASS recurrence {mode}: short/vast horizon requested bytes {observations[0]}; negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -100,5 +129,6 @@ if __name__ == "__main__":
     selected_target = build_host()
     if options.verify:
         verify_probe(selected_target)
+        verify_recurrence(selected_target)
     else:
         print(selected_target)
