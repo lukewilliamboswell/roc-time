@@ -12,6 +12,10 @@ expect Time.hello("World") == "Hello, World!"
 
 ## Documentation
 
+Read [design.md](design.md) for the intended architecture, temporal model, and performance objectives.
+It includes proposed Roc usages and explicit acceptance requirements. Contributor methodology
+lives in [AGENTS.md](AGENTS.md).
+
 See [lukewilliamboswell.github.io/roc-time/](https://lukewilliamboswell.github.io/roc-time/)
 
 Locally generate versioned docs using `python3 scripts/docs.py 0.1.0`.
@@ -19,6 +23,14 @@ Locally generate versioned docs using `python3 scripts/docs.py 0.1.0`.
 ## Examples
 
 Run an example with `roc examples/hello.roc`.
+
+## Acknowledgements
+
+The design of `roc-time` is inspired by [Kip Cole's Tempo](https://github.com/elixir-tempo/tempo),
+especially its model of calendar values as intervals, calendar-aware durations,
+and temporal set algebra. Thank you to Kip and Tempo's contributors for that foundation.
+See the [Tempo documentation](https://hexdocs.pm/ex_tempo/) and our [design](design.md)
+for the ideas being adapted to Roc.
 
 ## Scripts
 
