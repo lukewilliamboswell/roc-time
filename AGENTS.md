@@ -67,6 +67,7 @@ Use at least one oracle when adding temporal behavior or changing an algorithm; 
 
 - Record what makes each oracle independent, its supported semantic intersection, shared assumptions and remaining gaps. Distinguish sourced facts, external-library outputs and model-derived extensions; never claim an oracle supports a domain it cannot represent.
 - Pin source revisions, data, generators and adapters with provenance, integrity hashes and applicable notices. Review expected-result refreshes; never derive or automatically bless expectations from the package under test. Keep normal replay deterministic and independent of the host's clock, zone database or live network data.
+- Prefer checked-in Roc fixture modules generated from the reference sources when expectations are representable as typed values. Compare them directly through public APIs; avoid runtime JSON parsing or regenerating source during ordinary replay. Keep the generator and provenance so refreshes remain reproducible and reviewable.
 - Make comparison failures, missing results and setup failures fail visibly. Validate the harness with deliberately wrong results and malformed output. Minimize disagreements without discarding their preconditions, resolve them against the contract rather than majority vote, and preserve readable regressions.
 - Treat functional comparisons, compile-time domain safety and measured resource behavior as distinct evidence. Report exact coverage and limitations; implementation work and outstanding harness acceptance belong in the active plan.
 

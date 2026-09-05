@@ -6,8 +6,7 @@ import Cases
 import GregorianOracle
 
 main! = |_args| {
-	for input in Cases.inputs {
-		echo!("${GregorianOracle.observe(input)}\n")
-	}
+	count = GregorianOracle.verify(Cases.inputs, 4096)?
+	echo!("PASS ${count.to_str()} oracle cases\n")
 	Ok({})
 }

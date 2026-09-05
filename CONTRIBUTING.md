@@ -50,7 +50,7 @@ See the [contributor method](AGENTS.md#property-based-testing).
 
 At least one oracle is required for temporal implementation work. Run
 `ROC=/path/to/pinned/roc python3 scripts/oracles.py` to compare 4,096 Gregorian
-observations against saved expectations. The full test command includes this
+observations against checked-in generated Roc expectations. The full test command includes this
 gate. Expectations come from CPython 3.14.3 `datetime` within years 1–9999 and a
 400-year table model beyond that range; model-derived BCE/extreme-year cases
 are not direct Python conformance evidence. The external forward formula shares
@@ -58,15 +58,17 @@ our year-counting approach, so sequential tests and reviewed conventions remain
 necessary alongside differential agreement.
 
 The gate checks each public conversion independently, plus malformed fields and
-provider limits. Inputs go to a native Roc driver; expected values stay in
-Python. Missing, duplicate, malformed or wrong outputs, driver failures and
-budget overruns fail the gate. Normal replay reads versioned data and needs no
+provider limits. Generated `tests/oracle_gregorian/Cases.roc` contains typed inputs and expected
+results derived solely from the external references. A native Roc driver
+compares them directly: normal replay performs no JSON case parsing or case
+source generation. The compiler rejects malformed fixture types; wrong values,
+missing/duplicate case identities, driver failures and budget overruns fail the gate. Normal replay reads versioned data and needs no
 live reference service. Each stage is limited to 120 seconds and 1 MiB of output.
 Reports and generated inputs stay under `.roc-time-tmp/oracles/`.
 
-Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.json`.
+Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml`.
 To deliberately refresh expectations, use CPython 3.14.3 and run
-`python3 scripts/oracles.py --refresh`, then review the corpus and manifest diff.
+`python3 scripts/oracles.py --refresh`, then review the generated Roc module and manifest diff.
 Generation checks the table model against all 3,652,059 dates in Python's domain.
 Never regenerate expected values from roc-time output or bless a mismatch.
 

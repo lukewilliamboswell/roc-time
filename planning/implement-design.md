@@ -73,10 +73,12 @@ provider endpoints. CPython 3.14.3 generates direct expectations for years
 1–9999; a table of its 2000–2399 cycle supplies explicitly derived expectations
 outside that range. Generation verifies both directions over all 3,652,059
 shared-domain dates. Runtime uses the real public package and a native driver;
-expected values remain outside Roc. Commands and limitations are in CONTRIBUTING.md.
+checked-in `Cases.roc` contains typed inputs and reference-derived expectations,
+compared directly by the native driver without JSON case parsing. Commands and limitations are in CONTRIBUTING.md.
 The full pinned integration command passed on 2026-09-05, including comparator
 corruption checks, a failing-driver control and all 4,096 native observations
-(0.43 seconds for check/build/run on Apple Silicon macOS).
+(0.68 seconds for check/test/build/run on Apple Silicon macOS after switching
+to generated Roc fixtures).
 
 CPython's forward formula shares our January-based leap counting, while its
 inverse uses cycle decomposition rather than our binary search. Keep the
