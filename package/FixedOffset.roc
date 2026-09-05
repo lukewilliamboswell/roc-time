@@ -55,6 +55,22 @@ FixedOffset :: [Seconds(I32)].{
 	}
 
 	expect {
+		# RFC 5545 §3.3.5 and verified erratum 4271: New York's nonexistent
+		# 2007-03-11 02:30 uses the pre-gap -05:00 offset, yielding 07:30 UTC
+		# (03:30 under -04:00). This validates conversion primitives, not an
+		# implemented automatic gap policy or timed recurrence adapter.
+		# https://www.rfc-editor.org/errata/eid4271
+		date = CalendarDate.from_fields(Gregorian, { year: 2007, month: 3, day: 11 })?
+		clock = ClockTime.from_fields({ hour: 2, minute: 30, second: 0, microsecond: 0 })?
+		utc_clock = ClockTime.from_fields({ hour: 7, minute: 30, second: 0, microsecond: 0 })?
+		adjusted_clock = ClockTime.from_fields({ hour: 3, minute: 30, second: 0, microsecond: 0 })?
+		original = LocalDateTime.new(date, clock)
+		boundary = resolve(from_seconds(-18000), original)?
+		boundary == resolve(from_seconds(0), LocalDateTime.new(date, utc_clock))? and
+			project(from_seconds(-14400), boundary, Gregorian)? == LocalDateTime.new(date, adjusted_clock)
+	}
+
+	expect {
 		local = project(from_seconds(0), PosixBoundary.from_microseconds(-1), Gregorian)?
 		CalendarDate.to_fields(LocalDateTime.date(local)) == { year: 1969, month: 12, day: 31 } and
 			ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local)) == 86399999999

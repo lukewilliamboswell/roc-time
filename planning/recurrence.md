@@ -7,9 +7,10 @@ finite immutable zone rules and event/coverage distinctions.
 ## Deliverables
 
 - Local/UTC timed series, subdaily frequencies and time selectors. Reuse calendar
-  candidates from CalendarPattern and ZoneRules; handle generated gaps before consuming COUNT.
-  BYSETPOS belongs after full candidate generation/interpretation, not in a
-  date-only filter reused by timed rules.
+  candidates from CalendarPattern and ZoneRules. Apply the RFC timed profile's
+  explicit before-gap offset and first-fold policies (verified erratum 4271);
+  only invalid calendar dates are discarded. BYSETPOS must see the full timed
+  candidate set, not a date-only filter reused by timed rules.
 - Extend immutable resumptions to timed interpretation inputs, preserving the
   date cursor's work/buffer/output accounting. Resume must produce exactly
   uninterrupted results; query restriction never restarts series COUNT.
@@ -27,9 +28,12 @@ the text adapter must separately declare its representable year profile.
 Selectors are bounded and validated once. A period spanning outside the provider
 range returns OutOfRange rather than silently clipping.
 
-Settle gap/BYSETPOS ordering against primary evidence before claiming timed RFC
-conformance: §3.3.10's invalid-generated-time exclusion and its reference to
-explicit DATE-TIME interpretation need an explicit adopted interpretation.
+Implement bounded boundary classification with before-gap transition evidence
+before composing timed periods. Do not hide a full transition-table scan inside
+one recurrence work unit. Use RFC 5545 §3.3.5's New York 2007 gap/fold examples
+and verified erratum 4271 as conformance fixtures. Settle BYSETPOS ordering and
+deduplication when different source labels map to the same boundary after gap
+adjustment; retain source identity rather than inferring it from coverage.
 Settle exception duration identity, RDATE PERIOD support and subdaily buffering
 limits before exposing those adapter operations. Unsupported scopes stay errors.
 Resolve omitted-field defaults before widening `rfc5545-date-values-v1`:

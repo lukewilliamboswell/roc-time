@@ -308,6 +308,15 @@ A materialization outcome is either `Complete` or `Limited`, with partial output
 
 Adapters declare their recurrence semantics. In particular, RFC 5545 invalid generated dates are skipped and do not consume COUNT; COUNT belongs to the series rather than restarting at a query window, and exclusions do not replenish it. This is different from repeatedly adding a month with a clamping policy. DTSTART, UNTIL inclusivity/type, BY-rule ordering, and exclusions are conformance requirements of the adapter. [RFC 5545 recurrence rules](https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10), [recurrence-set construction](https://www.rfc-editor.org/rfc/rfc5545.html#section-3.8.5.1).
 
+The RFC timed profile follows verified erratum 4271: a generated nonexistent
+local clock label uses the offset before the gap, rather than being discarded
+like an invalid calendar date. A repeated label selects its first occurrence.
+These are explicit adapter semantics, not defaults of the core resolver.
+Preserve the original local label separately from the resulting boundary;
+gap adjustment must not silently rewrite source occurrence identity.
+[RFC 5545 DATE-TIME interpretation](https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.5),
+[verified erratum 4271](https://www.rfc-editor.org/errata/eid4271).
+
 Source occurrence identity survives until a caller requests coverage. Enumeration contracts state ordering and duplicate behavior, especially when zone transitions map local candidates unexpectedly. Coverage construction performs any required sorting and coalescing; it never trusts recurrence order without a guarantee.
 
 Streaming traversal is distinct from materialization. Use Roc's `Iter` for lazy
