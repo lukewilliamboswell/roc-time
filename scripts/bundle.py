@@ -36,16 +36,19 @@ def package_files(package_dir: Path) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
+    parser.add_argument("--package-dir", type=Path, default=ROOT / "package")
     args, extra = parser.parse_known_args()
 
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    package_dir = ROOT / "package"
+    package_dir = args.package_dir.resolve()
     cmd = [
         roc_command(),
         "bundle",
         *package_files(package_dir),
+        *sorted(p.name for p in package_dir.glob("*.txt")),
+        *sorted(p.name for p in package_dir.glob("manifest.json")),
         "--output-dir",
         str(output_dir.resolve()),
         *extra,

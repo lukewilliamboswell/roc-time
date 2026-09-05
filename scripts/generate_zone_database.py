@@ -148,6 +148,8 @@ def generate(wheel, output, encoding="records"):
                     zi_sha256=hashlib.sha256(zi).hexdigest(), zone_names=len(names), canonical_zones=len(unique),
                     offset_comparisons=checks, start_second=START, end_second=END,
                     transition_expectations=expectations,
+                    names={name: next(target for target, module in unique.items() if module == selected) for name, selected in names.items()},
+                    files={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(output.iterdir()) if p.is_file()},
                     limitation="Offset-only finite profile; no abbreviation/DST-status API. Python footer expansion compared with C ZoneInfo using common pinned data; not an independent tzdb authority.")
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     return names

@@ -24,6 +24,7 @@ third-party Python dependencies.
 | Script | Purpose |
 | --- | --- |
 | `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
+| `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
@@ -203,3 +204,16 @@ Compare the complete provider workload when evaluating these encodings. Output
 includes source integrity metadata and applicable notices. This generator does
 not publish a release; provider integration tests and bundled application
 examples remain necessary before distribution.
+
+The default test gate replays the committed `tzdb/package/` without the wheel or
+CPython generation pin. Refresh into a new ignored directory, review semantic
+changes, then replace the committed generated pack and its manifest together.
+Bundle the companion separately:
+
+```sh
+python3 scripts/bundle.py --package-dir tzdb/package --output-dir .roc-time-tmp/zone-bundle
+```
+
+Use `update_example_urls.py --zone-bundle-url` alongside `--bundle-url` when
+updating both independently versioned dependencies. Example
+bundle checks rewrite both core and optional-data dependencies to local URLs.

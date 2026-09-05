@@ -79,7 +79,7 @@ def start_server(directory: Path) -> tuple[http.server.ThreadingHTTPServer, str]
     return server, f"http://127.0.0.1:{port}"
 
 
-def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str) -> list[Path]:
+def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str, zone_url: str) -> list[Path]:
     target_dir = examples_dir / "examples"
     shutil.copytree(ROOT / "examples", target_dir)
 
@@ -98,6 +98,7 @@ def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str) -> list[P
         if count != 1:
             raise SystemExit(f"{example.name} does not declare the expected time package dependency")
 
+        rewritten = re.sub(r'(?m)^(\s*zones:\s*)"[^"]+"', lambda match: f'{match.group(1)}"{zone_url}"', rewritten)
         example.write_text(rewritten, encoding="utf-8")
         examples.append(example)
 
@@ -153,10 +154,15 @@ def main() -> None:
             bundle_path = bundle_dir / source_bundle.name
             shutil.copy2(source_bundle, bundle_path)
 
+        zone_result = run([sys.executable, "scripts/bundle.py", "--package-dir", str(ROOT / "tzdb/package"), "--output-dir", str(bundle_dir)])
+        zone_match = re.search(r"^Created:\s+(.+\.tar\.zst)\s*$", zone_result.stdout, re.MULTILINE)
+        if zone_match is None:
+            raise SystemExit("Could not find zone bundle output")
+        zone_bundle = Path(zone_match.group(1))
         server, base_url = start_server(bundle_dir)
         try:
             bundle_url = f"{base_url}/{bundle_path.name}"
-            examples = copy_examples_with_bundle_url(examples_dir, bundle_url)
+            examples = copy_examples_with_bundle_url(examples_dir, bundle_url, f"{base_url}/{zone_bundle.name}")
 
             print(f"Testing examples with bundled package: {bundle_url}")
             run_example_checks(examples)
