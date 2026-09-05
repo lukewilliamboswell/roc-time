@@ -2,7 +2,7 @@
 
 `roc-time` models human time as calendar meaning and computable spans. It takes [Kip Cole's Tempo](https://github.com/elixir-tempo/tempo) as its starting point and expresses its interval-oriented ideas through small, explicit Roc types and a compact, pure computational core.
 
-This document describes the intended architecture, not the current implementation. It governs semantic boundaries, dependencies, and performance expectations. Compiler-specific observations and benchmark results inform implementation decisions without becoming permanent architectural assumptions.
+This document describes the intended architecture, not the current implementation. It governs semantic boundaries, dependencies, and performance expectations. Change it only when requirements change or evidence invalidates an architectural assumption. Implementation progress, API inventories, verification results and development history do not belong here.
 
 Contributor methodology belongs in [AGENTS.md](AGENTS.md). Proposed API examples below specify intended usage and observable behavior; they do not claim that the package already implements the proposed modules.
 
@@ -110,7 +110,7 @@ Adding a civil day preserves the intended calendar operation across offset trans
 
 ## Microseconds and physical representation
 
-### Implemented coordinate profile
+### Coordinate contract
 
 `PosixBoundary` uses the POSIX epoch 1970-01-01T00:00:00Z with exact signed
 I64 microseconds, including both integer endpoints. This numerical profile does
@@ -136,7 +136,7 @@ The public semantic contract requires exact microsecond boundaries and arithmeti
 
 Assume 64-bit machines as the default deployment target. I64 microseconds provide exact arithmetic over approximately ±292,000 years from the epoch. This is a pragmatic general-purpose time model for scheduling, civil time, and historical applications, rather than a specialized high-resolution timestamp system.
 
-**Nanosecond support was deliberately rejected for the core.** Retaining a broad date range at nanosecond precision would require the larger representation we considered; I64 nanoseconds instead restrict the range to roughly ±292 years. I64 microseconds halve boundary and span payloads compared with Dec or I128, and follow [Tempo's microsecond precision](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/lib/tempo/microsecond.ex) more closely. This aligns the resolution with the reference implementation without copying its storage layout or claiming complete API compatibility.
+**Nanosecond support was deliberately rejected for the core.** Retaining a broad date range at nanosecond precision would require a larger representation; I64 nanoseconds instead restrict the range to roughly ±292 years. I64 microseconds halve boundary and span payloads compared with Dec or I128, and follow [Tempo's microsecond precision](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/lib/tempo/microsecond.ex) more closely. This aligns the resolution with the reference implementation without copying its storage layout or claiming complete API compatibility.
 
 The tradeoff is explicit: distinct sub-microsecond timestamps cannot always be represented distinctly. Such input is rejected by default; rounding requires an explicit policy. No parallel nanosecond core is planned. A specialized type can be considered later for a demonstrated use case without complicating the common representation now.
 
@@ -147,7 +147,7 @@ The tradeoff is explicit: distinct sub-microsecond timestamps cannot always be r
 | Finite span | Two I64 boundaries | 16 |
 | Coverage elements | Flat list of spans | 16 per capacity slot |
 
-These are numerical payload sizes. Collection headers, allocation overhead, and collection-level context are additional; verify final Roc layouts when implementing the types. Keep axis and interpretation context outside each span payload, enforcing compatibility through nominal types and collection boundaries. A million spans require 16 MB of numeric payload, compared with 32 MB for the previously considered 128-bit boundaries; this is a storage reduction, not a measured throughput claim.
+These are numerical payload sizes. Collection headers, allocation overhead, and collection-level context are additional; verify final Roc layouts when implementing the types. Keep axis and interpretation context outside each span payload, enforcing compatibility through nominal types and collection boundaries. A million spans require 16 MB of numeric payload, compared with 32 MB for 128-bit boundaries; this is a storage reduction, not a measured throughput claim.
 
 The representation is private and must satisfy these rules:
 
@@ -180,18 +180,7 @@ flowchart LR
 
 Coverage has one canonical form: finite nonempty spans, sorted by start, with overlaps and touching spans merged. Empty coverage is valid. This makes extent equality independent of construction order or original segmentation.
 
-The implemented `Coverage` is opaque and specialized to the POSIX axis. Its
-`from_spans` constructor accepts validated `PosixSpan` values and cannot fail;
-`from_sorted_spans` additionally checks nondecreasing starts and returns
-`UnsortedInput` on a violation. `member_count` counts canonical members, and
-`coordinate_width` returns a checked `PosixDelta`. `overlapping_spans` and
-`fold_overlaps` return whole overlapping members; `intersection` is the operation
-for clipped extents. `complement_within` requires one explicit finite span and
-seeks to the first relevant member before emitting gaps. `to_spans` may share
-the immutable backing list; it makes no promise to detach retained storage.
-The executable [coverage example](examples/coverage/main.roc) exercises resolved
-availability; parsing offsets and event identity in the broader motivating
-scenario remain separate implementation work.
+Coverage queries distinguish whole overlapping members from clipped intersections. Complement requires an explicit finite universe. Public construction establishes canonical invariants once; internal operations preserve them. Immutable results may share backing storage, so an extracted list or retained slice need not detach its allocation.
 
 The default storage is a flat Roc `List` of compact span records. Sorted disjoint spans have increasing starts and ends. Binary search can locate the first span whose end exceeds a query's start, followed by a scan until starts reach the query's end. A coverage overlap query therefore does not require an interval tree.
 
@@ -205,204 +194,25 @@ Operations that retain provenance must define how contributors combine and how s
 
 The calendar layer converts between validated civil fields and a shared civil-day axis within its supported range. Gregorian conversion is the initial foundation; additional calendars implement the same conceptual contract without imposing their complexity on span algebra.
 
-The initial Gregorian provider uses astronomical year numbering (year zero is
-1 BCE), with years -2147483648 through 2147483647 inclusive. All months and valid
-days in those years are supported. This explicit 32-bit year domain contains
-the entire I64 POSIX microsecond date range while leaving ample I64 headroom for
-calendar conversion. It does not extend any zone provider's range.
-`GregorianDate` validates fields once and preserves their day resolution.
-`CivilDay` is a separate opaque signed I64 day coordinate, with zero denoting
-Gregorian 1970-01-01; it is neither a UTC midnight nor an elapsed duration.
-Gregorian conversion accepts day numbers -784353015833 through 784351576776.
-Dates describe civil extents `[day, day + 1)`; mapping those extents to a timeline
-requires explicit zone interpretation. Numeric civil coordinates outside this
-provider range remain representable, but Gregorian interpretation returns
-`OutOfRange`.
+### Calendar and local coordinates
 
-Conversion counts complete Gregorian years using floor division and walks at
-most eleven preceding months. Inverse conversion uses at most 32 binary-search
-probes for the year and eleven month advances. Negative-year floor division and
-400-year periodicity follow the proleptic convention described in
-[Howard Hinnant's calendar derivation](https://howardhinnant.github.io/date_algorithms.html).
-The implementation uses January-based year counting rather than that source's
-March-based conversion code. The Julian profile below supplies cross-calendar
-fixtures; Gregorian support alone does not establish R06.
+Calendar providers publish their supported ranges, numbering conventions and day boundaries. Gregorian and Julian profiles use proleptic rules and astronomical years, including year zero as 1 BCE; neither infers regional historical reforms. A shared civil-day axis uses Gregorian 1970-01-01 as day zero, also Julian 1969-12-19. It labels civil days, not UTC midnights, elapsed durations or astronomical noon-based Julian Days. Conversion checks the destination provider's range. Equal-day descriptions in different calendars have equal extents but distinct description identity.
 
-`JulianDate` adds the proleptic Julian profile with the same astronomical year
-range, -2147483648 through 2147483647. Every year divisible by four is a leap
-year, including year zero; no historical intercalation irregularities or
-regional reform are inferred. Its shared civil-day range is -784369121962
-through 784367682901. Julian 1969-12-19 and Gregorian 1970-01-01 both denote
-day zero. This integer axis labels civil days with midnight boundaries, not
-the noon-based astronomical Julian Day numbering system. Mapping these days
-to a resolved timeline still requires explicit zone interpretation.
+A local clock label is distinct from both elapsed time and a resolved boundary. Attaching a date does not select a zone or occurrence, nor prematurely restrict the description to the finite timeline range. Local-position comparison uses civil day and clock position; description equality additionally preserves calendar identity. Calendar conversion preserves the clock label. Unsupported leap-second or end-of-day notation requires an explicit adapter contract, never silent normalization.
 
-`Calendar` selects the supported `Gregorian` or `Julian` profile. Its case-sensitive
-names are `gregorian` and `julian`; every other name returns
-`UnsupportedCalendar(name)`. `CalendarDate` retains a validated calendar-tagged
-description, converts through `CivilDay`, and checks the destination provider's
-range. `same_day` compares one-day extents on that axis; `is_eq` compares
-descriptions, including calendar identity. Equal-day descriptions in different
-calendars therefore have equal extents but unequal descriptions. Hashing follows
-description equality. This initial dispatcher makes no claim to support
-location-dependent or sunset-based calendars; they remain unsupported rather
-than silently receiving midnight or Gregorian semantics. Gregorian arithmetic
-remains explicitly specialized, with no automatic conversion of Julian input.
+Calendar arithmetic declares its calendar, component order and destination policy. Ordered years, months and days are not interchangeable with a combined month count: clamping 2020-02-29 by one year, one month and one day gives 2021-03-29, whereas combining the first two components into thirteen months retains day 29. Each component must remain within the provider range, even if later components would cancel an overflow. A multi-month step chooses its destination once rather than repeatedly repairing intervening months. Reject, clamp and carry are distinct policies; carrying January 31 into February counts from February's first day and can reach March 3.
 
-The [archive application](examples/calendar_conversion/main.roc) converts an
-explicit source calendar while retaining its original description. Oracle
-fixtures use the independent March-based Julian formulas and the 1582-10-05
-Julian / 1582-10-15 Gregorian equal-day anchor from
-[Hinnant's derivation](https://howardhinnant.github.io/date_algorithms.html).
-The [US Naval Observatory](https://aa.usno.navy.mil/faq/calendars) supplies the
-calendar rule distinction. The generator retains attribution for Hinnant's
-public-domain formulas; production uses January counting and bounded inverse
-search. Its cost bounds match the Gregorian provider and do not depend on the
-distance from the epoch.
+Fixed offsets state a local-minus-timeline sign convention and whole-second units. Resolving subtracts the offset; projecting adds it and requires a destination calendar. Conversion checks the final coordinate range without premature narrowing, and negative calendar decomposition uses floor division. A mathematical offset domain is not a claim that every value is a real-world zone offset or valid format token. Unknown-offset assertions require a separate representation. [RFC 3339 section 4.2](https://www.rfc-editor.org/rfc/rfc3339#section-4.2).
 
-`CalendarDelta` holds signed I64 years, months and civil days. The implemented
-`CalendarArithmetic.shift_day` is specialized to Gregorian dates and applies
-years, then months, then days. Each year/month component chooses its destination
-once, rather than repeatedly repairing every intervening month. The explicit
-`Reject` policy returns `InvalidDestination` with the attempted fields;
-`Clamp` chooses the destination month's last valid day; `Carry` counts the
-original day number forward from the destination month's first day. Thus
-2025-01-31 plus one month carries to March 3, including when the same February
-destination is reached by subtracting a month from March 31.
+### Finite zone interpretation
 
-Each component's resulting date must be inside the provider range. An
-out-of-range intermediate year is an error even if later months would cancel
-it. Gregorian month-index calculations use bounded I128 intermediates to handle
-full-I64 components before checked narrowing; date storage and civil coordinates
-remain I64. Day shifts are checked civil-coordinate additions, not elapsed-time
-or timezone operations. Work is bounded by the provider's conversion cost,
-independent of the component magnitudes. No allocation or latency claim follows
-without the separate R15 measurements.
+Zone rules are immutable data with source identity, version, finite validity, initial offset and ordered transitions. The initial offset applies at the lower bound; a transition's new offset applies at its exact boundary; the upper validity bound is excluded. Invalid ordering, malformed metadata and out-of-validity lookup produce structured errors. Names and versions label data; they neither trigger a registry lookup nor certify content identity.
 
-For example, clamping 2020-02-29 by one year, one month, and one day gives
-2021-03-29: the year step first selects February 28. Combining the first two
-components into thirteen months would instead retain day 29 and is not this
-operation's contract. The independent field-walking oracle in
-`tests/arithmetic/` checks this ordering and destination policies without using
-the production day-axis conversion or month-index arithmetic.
+Local boundary classification must prove completeness before returning unique, gap or fold. For a local label L and authoritative offset bounds [minimum, maximum], every possible inverse candidate lies in [L - maximum, L - minimum]. If that range exceeds the finite axis or available rules, interpretation fails even when one visible occurrence exists. Bounds must cover possible offsets outside the loaded window, not merely observed table entries. Without a narrower provider guarantee, use the full declared offset domain.
 
-`ClockTime` validates a local clock label with hour 0–23, minute and second
-0–59, and microsecond 0–999999. Its nominal microseconds-since-midnight
-coordinate lies in [0, 86400000000); it is not elapsed time or a POSIX boundary.
-Second 60 returns `UnsupportedLeapSecond`; other malformed fields return their
-specific field error. Hour 24 is rejected rather than silently changing dates.
-Construction and field extraction cost constant work. An exhaustive independent
-field-counter model checks every second at fractional endpoints; generated
-checks exercise arbitrary fractions and adjacent labels. Date attachment and
-zone resolution remain separate operations.
+Each constant-offset timeline segment contributes at most one inverse occurrence. Preserve all distinct occurrences in chronological order; a fold need not contain only two. Occurrence choice is explicit: require uniqueness, choose first or last, or require a matching asserted offset. An offset conflict does not fall back to another occurrence. A fold policy does not imply a gap-shifting policy.
 
-`LocalDateTime` combines a validated `CalendarDate` and `ClockTime` without
-selecting a zone or occurrence. Its range is its calendar provider's full range;
-construction does not prematurely narrow it to the resolved POSIX range.
-Calendar conversion preserves the clock label and validates the target range.
-`same_position` and `compare_position` compare civil day then clock, while
-ordinary equality and hashing retain calendar description identity. Equal local
-positions can resolve to different occurrences in a fold, so this comparison
-makes no timeline claim. There are no implicit conversions to POSIX boundaries.
-Construction and comparison use constant work apart from the bounded calendar
-conversion; no date-by-microsecond multiplication is needed for comparison.
-
-`FixedOffset` is an explicit whole-second local-minus-POSIX offset, stored as
-I32. Its mathematical profile accepts every I32 value; this is not a claim
-that every value is a real-world zone offset or accepted by a text format.
-Format adapters apply their own stated restrictions. `resolve` subtracts the
-offset from a validated local label and returns `OutOfRange` if the final POSIX
-microsecond coordinate does not fit I64. `project` adds the offset and requires
-an explicit destination calendar. Both supported calendar ranges contain every
-projected I64 POSIX boundary for every I32 offset. Intermediate arithmetic uses
-I128, with floor division before the epoch; resolved storage remains I64.
-The conversion is constant work plus bounded calendar conversion. There is no
-zone name, transition lookup, leap-second resolution or unknown-offset sentinel.
-The sign convention is anchored by [RFC 3339 section 4.2](https://www.rfc-editor.org/rfc/rfc3339#section-4.2);
-this is conversion evidence, not a claim to implement its parser.
-
-`ZoneRules` stores a caller-supplied immutable name, version, finite POSIX
-validity span, initial offset and ordered transition list. Name and version
-must be nonempty; they label supplied data and do not trigger a registry lookup
-or certify that the data matches an external authority. Transitions must be
-strictly ordered and strictly inside the validity span. The initial offset
-applies at the lower bound; each transition's new offset applies at its exact
-boundary. The upper validity bound is excluded. `offset_at` returns
-`OutsideValidity` beyond those bounds, never an extrapolated offset or a gap.
-The current constructor and worst-case lookup cost O(n) for n transitions;
-immutable lists may share backing storage. No cache or mutable provider state
-is introduced. A name/version pair alone is not a content identity for future
-caches: different supplied rule contents must not share cached interpretation.
-Synthetic fixtures specify their entire timeline rather than relying on host
-zone data. The external zone oracle additionally uses pinned IANA 2025b
-TZif data distributed in the Python tzdata 2025.2 wheel. Generated Roc fixtures
-cover Lord Howe's 2024 half-hour transitions and Apia's 2011 skipped day;
-CPython's fold/UTC-round-trip reference supplies expected local occurrences.
-The generator validates each exported finite rule table against every second
-of its source window, including future-rule footer expansion. Offset bounds
-cover all source TZif types plus the checked footer offsets, not merely observed
-window entries. Source hashes, wheel pin, notices and independence limits live
-in `tests/oracles/zones-manifest.toml` and CONTRIBUTING.md. This evidence does not
-implement a TZif loader, a zone registry or current-law network lookup.
- `resolve` classifies a local boundary as `Unique`, `Gap`, or `Fold` only after
-proving all possible inverse candidates lie within supplied rule validity.
-`new_bounded` accepts an inclusive whole-second offset range guaranteed by the
-provider, including outside the loaded table. Every supplied offset is checked
-against that range; reversed bounds fail. Do not derive this guarantee from
-observed table entries alone: unknown past/future entries may differ. `new`
-uses the entire I32 range when no narrower guarantee is supplied.
-
-For a local label L and declared offsets [minimum, maximum], possible candidates
-lie in [L - maximum, L - minimum]. Both extremes must fit the POSIX representation
-and lie within the table; otherwise resolution returns `OutOfRange` or
-`OutsideValidity`, even if an in-table occurrence is visible. This conservative
-rule prevents false unique/gap results near missing data. Tight authoritative
-bounds permit practical finite fixtures without hidden extrapolation.
-
-Within a complete query domain, each constant-offset timeline segment contributes
-at most one matching position. Segment order produces sorted distinct results.
-`Fold` retains every occurrence, not just two; no occurrence is selected
-implicitly. Work is O(n) in transitions with O(k) output for k matches, plus
-bounded calendar conversions. Synthetic direct-timeline enumeration anchors
-classification independently of inverse conversion; three-fold and finite-edge
-counterexamples are retained. Snapshot provenance is preserved by the
-resolved wrappers described below.
-
-`resolve_occurrence` requires an explicit policy: `RequireUnique`, `First`,
-`Last`, or `MatchingOffset(offset)`. First/last refer to chronological order
-across every fold occurrence, including folds with more than two results.
-`MatchingOffset` validates the local-minus-POSIX relationship and rejects a
-conflict; it never substitutes an occurrence with another offset. Every policy
-returns `Gap` for a nonexistent local label. Gap shifting is not implemented
-and cannot be inferred from a fold-choice policy. Completeness/range errors
-from classification remain errors before any choice is made.
-
-`appointment` takes independent start/end occurrence policies, then validates
-the resulting POSIX span. Equal or reversed resolved endpoints fail. Its result
-may include timeline positions excluded by a local selection between the same
-labels: this is the intentional appointment-versus-selection distinction.
-No requirement that local field order match timeline order is imposed across
-a fold. Cross-zone callers resolve each operand with its own rules before
-constructing compatible-axis spans. Choice and matching cost O(n + k), with
-no repeated rule lookup per fold member.
-
-`ZoneRules.select(rules, start, end)` computes the preimage of a nonempty
-half-open local range, comparing its boundaries by civil position rather than
-calendar description equality. Equal/reversed positions return `EmptySelection`
-or `ReversedSelection`. Each constant-offset segment receives the translated
-selection, clipped to that segment's timeline extent. Ordered construction merges
-touching pieces while retaining gaps; it does not resolve two occurrences and
-take their hull. Work is O(n + k) with O(k) result storage for n transitions and
-k contributed spans, apart from bounded calendar conversion cost.
-
-Completeness requires the earliest possible start and latest possible exclusive
-end to fit the finite axis and rule validity. The excluded end may equal the
-upper validity boundary; exceeding it returns `OutsideValidity`. No implicit
-clipping to the provider domain is allowed. A proven skipped local day returns
-empty coverage. Synthetic dateline, triple-fold and finite-end fixtures anchor
-these cases; generated timeline membership independently checks arbitrary
-microsecond selections. This operation does not select appointment occurrences
-or introduce any gap/fold default.
+An appointment resolves its two boundaries under independently supplied policies and validates their timeline order. Local field order need not match that order across a fold. A local selection instead translates and clips its half-open range against every constant-offset segment, retaining disconnected coverage. It must not take the hull of chosen endpoint occurrences. Completeness includes the earliest possible start and latest possible exclusive end; that end may equal the upper validity boundary. Missing data is never silently clipped into a complete answer. A proven skipped day is empty coverage, not an interpretation failure.
 
 ### Zone database distribution
 
@@ -443,41 +253,10 @@ finite work/range limits or explicitly remain unsupported; never extrapolate a
 final offset or silently truncate history. Historical coverage is the selected
 IANA profile's evidence, not a claim of complete historical truth.
 
-The schema-1 import boundary is implemented as `ZoneRules.from_database`.
-`ZoneRules.Database` is a structural record alias, so a supplier need not import
-roc-time to construct matching values. Schema 1 requires axis
-`posix-seconds-1970` and future handling `expanded-through-validity`; unsupported
-versions, axes or future-rule modes fail explicitly. Start/end/transition seconds
-use I64; offsets and global offset bounds use I32 seconds. Scaling to the core's
-microseconds uses I128 intermediates and checked final I64 conversion. Normal
-rule constructors then enforce finite nonempty validity, transition ordering and
-offset bounds. Import costs O(n) work/storage for n transition records.
+A documented global-data default includes compatibility aliases. Optional subset packs state their omissions and horizon explicitly. Choose payload encoding from measured acquisition, compiler and runtime costs for core-only, one-zone and dynamic-name applications; unused-data elimination must not be assumed to remove download or compilation costs. Representation is an implementation choice, not a reason to couple every core user to a database.
 
-Requested and canonical names remain distinct. `ZoneRules.provenance` distinguishes
-manually supplied rules from database-sourced rules and retains the requested
-name, canonical name, source digest and profile; `version` retains the source
-release. Empty source identifiers/profile/requested name fail validation. The
-source digest is preserved metadata, not authentication of the record's contents
-or a substitute for content identity. Acquisition/generation verifies original
-source bytes; the adapter validates the supplied semantic data. Existing snapshots
-retain this provenance through their immutable rules. Alias lookup itself,
-unknown-zone/subset handling and future-rule expansion still belong to the
-forthcoming provider.
+Source digests are provenance, not authentication of arbitrary supplied records or substitutes for content identity. Acquisition verifies source bytes; adaptation validates semantic data. Preserve requested aliases separately from canonical identity.
 
-The optional package is not yet implemented. Before publishing, measure download
-archive, uncompressed source/data, compiler time and peak memory, linked native
-and supported Wasm sizes, and retained runtime data separately for no-zone,
-one-zone and dynamic-name applications. Dead-code elimination cannot be assumed
-to remove dependency download or compiler costs. A documented global-data default including compatibility aliases
-is preferable to silent regional omissions or cutoffs; add subset packs only with clear profiles and
-measured benefit. Named-zone examples must demonstrate both the first-party
-provider and replacement with supplied application data.
-
-Size alone is not a reason to reject a global data package. The pinned tzdata
-2025.2 distribution measured 347,839 bytes as a wheel; its 598 TZif entries total
-345,403 uncompressed bytes. These are source-distribution measurements, not Roc
-bundle or runtime costs. Reproduce them with `scripts/measure_zone_data.py`;
-keep representation tradeoffs tied to the fuller benchmark matrix above.
 [IANA's theory](https://data.iana.org/time-zones/tzdb/theory.html) qualifies
 historical coverage, including pre-1970 and `backzone` data. Pin the source/build
 profile and applicable notices, as described by
@@ -511,27 +290,9 @@ flowchart TD
 
 Arrows here point from a consumer to its dependency. The application acquires clock readings and interpretation data and supplies them to the library. The core has no dependency on the application, adapters, or interpretation providers. Providers are explicit data and operations, not a global registry. Their exact Roc signatures should allow specialization and avoid repeated dynamic dispatch in inner loops.
 
-`ResolvedBoundary` stores a validated occurrence with its original local label,
-explicit occurrence policy, applied offset and exact immutable `ZoneRules`.
-`ResolvedSelection` stores complete coverage with its original local boundaries
-and exact rules. Their constructors invoke the existing resolution operations;
-callers cannot pair an arbitrary result with unrelated interpretation evidence.
-Result accessors read stored values and never look up offsets or re-resolve.
-`reresolve` explicitly applies new rules to the original source and policy,
-returning a new snapshot or the normal structured error. A newly conflicting
-offset assertion remains a conflict rather than silently changing the policy.
+A resolved snapshot binds its result to its original description, explicit policies and exact immutable interpretation data. Construction prevents pairing arbitrary results with unrelated evidence. Accessors read stored results without resolving again. Re-resolution applies new data explicitly, preserving the original source and policies and returning a new snapshot or structured error. A newly conflicting offset assertion remains a conflict.
 
-Boundary `same_position` and selection `same_extent` compare stored compatible
-POSIX results independently of provider metadata. Snapshots intentionally have
-no implied equality between their complete provenance records. They retain rule
-contents even when callers reuse a name/version for different data. No cache
-keys or content hashes are inferred from those labels. Snapshot inspection uses
-bounded semantic previews and does not walk the rule table or re-resolve.
-Immutable rule/list storage can be shared; keeping a snapshot can retain its
-entire source rule table. No exact allocation or retained-memory claim is made
-without R15 measurement. Constructors cost the underlying resolution plus one
-offset lookup for boundary provenance; result access is constant work, while
-extent comparison has the coverage equality cost.
+Compatible-axis position and extent comparison ignore provenance differences. Snapshots retain actual interpretation data even when names and versions are reused; labels alone are insufficient cache keys. Sharing can retain a whole rule table, so snapshot memory costs include retained source data.
 
 Resolved values are snapshots of a particular interpretation. Updating zone or calendar data does not mutate their meaning. Re-resolving an expression is a distinct operation. Caches must be tied to the source description, relevant policies, and provider identity/version. No unbounded global cache is required by the library.
 
@@ -556,17 +317,17 @@ For a supported evidence model, “definite” means true for every admissible i
 ## Standards adapters and semantic preservation
 
 Broad standards coverage is an intended capability, not a current conformance
-claim. Maintain an edition/profile matrix as adapters land; syntax acceptance,
+claim. Each adapter declares its edition and supported profile; syntax acceptance,
 semantic preservation, interpretation, formatting and persistence need separate
 evidence. Native lossless persistence is distinct from standards interchange.
 
-| Target | Required scope distinction | Current evidence |
-|---|---|---|
-| ISO 8601-1:2019 | Name adopted amendments and exact supported date/time forms | No implemented text adapter |
-| ISO 8601-2:2019 and Amendment 1:2025 | Part 2 exceeds EDTF; canonical expressions and arithmetic require edition-specific contracts | Catalogue reviewed; full normative clauses and clause-level tests remain required |
-| EDTF, Library of Congress published specification, Levels 0–2 | Preserve independent endpoint resolution, component qualifications, masks, sets, seasons and significant digits | Semantic requirements below; no implemented adapter |
-| IXDTF, RFC 9557 (2024) with RFC 3339 base semantics | Preserve offset assertions and annotation interpretation independently of syntax | Fixed-offset conversion evidence only; no implemented adapter |
-| RFC 5545 (2009) recurrence profile | Standard series rules distinct from native recurrence extensions | Required series semantics above; implementation remains pending |
+| Target | Required scope distinction |
+|---|---|
+| ISO 8601-1:2019 | Name adopted amendments and exact supported date/time forms |
+| ISO 8601-2:2019 and Amendment 1:2025 | Part 2 exceeds EDTF; canonical expressions and arithmetic require edition-specific contracts |
+| EDTF, Library of Congress published specification, Levels 0–2 | Preserve independent endpoint resolution, component qualifications, masks, sets, seasons and significant digits |
+| IXDTF, RFC 9557 (2024) with RFC 3339 base semantics | Preserve offset assertions and annotation interpretation independently of syntax |
+| RFC 5545 (2009) recurrence profile | Standard series rules distinct from native recurrence extensions |
 
 [ISO's Part 2 catalogue](https://www.iso.org/standard/70908.html) identifies
 Amendment 1:2025. Public abstracts do not prove clause-level conformance. Obtain
@@ -616,7 +377,7 @@ explicit. Preserve the semantic distinction in formatting and persistence.
 
 ### Calendar capabilities and cross-zone algebra
 
-The implemented Gregorian/Julian `{year, month, day}` shape is not a universal
+The Gregorian/Julian `{year, month, day}` shape is not a universal
 calendar-provider interface. Providers separately declare conversion, year/month
 advancement, stable month identity, era conventions and day-boundary context.
 A leap-month calendar's ordinal month can differ from its stable month identity;
@@ -635,22 +396,7 @@ coverage even if independently chosen presentation differs. Disconnected repeate
 intervening gaps; skipped dates can produce empty complete coverage only
 when rules establish that result.
 
-### Review evidence and acceptance counterexamples
-
-Tempo remains an inspiration and differential source, not the conformance
-oracle. Its [conformance guide at revision e8a074ed](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/guides/iso8601-conformance.md)
-qualifies the broad support claim with fractional truncation, offset-token
-conflation and cross-endpoint validation gaps. This is a documentation review,
-not an independently executed audit of Tempo. roc-time retains its own checked
-precision and semantic contracts.
-
-Before claiming R07/R13/R14/R16 adapter coverage, promote the concrete examples
-above to executable cases: resolution distinctions; uncertain mixed-resolution
-endpoints; scoped qualifiers and masked alternatives; IXDTF offset assertion,
-calendar presentation and critical/duplicate annotations; provider-range errors;
-and commutative cross-zone coverage under independently chosen display contexts.
-These cases are currently requirements, not passing tests. They supplement the
-stable acceptance IDs below rather than replacing their wider obligations.
+Conformance follows the adopted standards and semantic contracts, not agreement with another library's support claim. Precision distinctions, uncertain endpoints, scoped qualifications, annotation assertions and cross-zone context are independent obligations.
 
 ## Motivating Roc usage
 
@@ -660,9 +406,7 @@ These are **proposed API sketches**, using Roc records, tag unions, pure functio
 
 Two appointments specified in different offsets must subtract correctly from a UTC work window. Formatting does not participate in the subtraction.
 
-This scenario now runs with typed local dates and explicit offsets in
-[the room availability application](examples/coverage/main.roc). The parsing API
-below remains proposed; the executable uses the same public coverage kernel.
+
 
 ```roc
 booking_availability = |_| {
@@ -679,9 +423,7 @@ Expected coverage is `[09:00, 10:00)` and `[12:00, 17:00)` UTC on that day: two 
 
 ### Preserve one-microsecond boundaries
 
-This scenario now runs against the package in
-[examples/sample_windows/main.roc](examples/sample_windows/main.roc), including native
-execution against a bundled package. The sketch below isolates the boundary behavior demonstrated by that application.
+
 
 ```roc
 adjacent_samples = |_| {
@@ -714,9 +456,7 @@ With a rules fixture containing Melbourne's transition from UTC+10 to UTC+11 on 
 
 ### Make month-end policy visible
 
-The [invoice application](examples/invoice/main.roc) now executes this scenario
-through `GregorianDate`, `CalendarDelta`, and `CalendarArithmetic`. The sketch
-below retains the proposed broader `Civil` vocabulary.
+
 
 ```roc
 next_invoice_date = |_| {
@@ -773,9 +513,7 @@ Use nominal types for semantic distinctions, records for fixed data, and tag uni
 
 Keep common operations specialized over compact numeric values. Avoid a universal record containing optional parser fields, recurrence rules, zone strings, metadata, and cached endpoints. Rich types are appropriate at the expression boundary; small types are appropriate in the kernel.
 
-The implemented ordered scalar domains (`CivilDay`, `GregorianDate`,
-`PosixBoundary`, and `PosixDelta`) support Roc comparison operators within the
-same nominal type. Spans and coverage deliberately have no arbitrary total-order
+Ordered scalar domains support Roc comparison operators within the same nominal type when that order has temporal meaning. Spans and coverage deliberately have no arbitrary total-order
 operator: use their temporal relations or set operations. Scalars, spans and
 canonical coverage expose hashing consistent with equality for dictionary/set
 keys; hash values are not a persistence format. Coverage iteration visits whole
@@ -798,19 +536,14 @@ identify the nominal domain, meaningful fields or expression kind, and relevant
 unresolved state. It must not expose only an opaque backing number or imply that
 a local label is already a timeline instant. Preserve exact seconds and
 microseconds in displayed scalar fields. The hook serves `Str.inspect` and
-debugging; verify the pinned compiler's actual `dbg` path when extending it.
-The pinned interpreter and native executable both dispatch `dbg` and
-`Str.inspect` through `PosixBoundary.to_inspect`; this is evidence for those
-paths, not an untested-backend guarantee.
+debugging.
 Inspection text is neither a stable interchange format nor necessarily a
 parseable literal.
 
 Provide a separate explicit explanation facility for callers asking what a
 description means and what further interpretation it needs. This is semantic
 help suitable for an interactive tool or application, distinct from localized
-date/time formatting and versioned serialization. The facility is **required
-future API**, not implemented by the existing inspection hooks; public names
-and concrete result types will be settled with its executable slice.
+date/time formatting and versioned serialization. Explanation and inspection share semantic facts but have distinct cost and output contracts.
 
 Use one source of typed semantic facts for concise inspection and detailed
 explanation. Facts distinguish the original description and resolution,
@@ -840,12 +573,7 @@ work/output limits; report truncation separately from semantic evaluation
 completeness. Cost is bounded by visited description/result nodes and rendered
 text, not the number of instants or potential occurrences denoted. Exact totals
 may be shown when already available; otherwise say they were not computed.
-`Coverage.to_inspect` now shows at most four canonical spans, an O(1) member
-count and an explicit omitted count. It indexes only those preview members; it
-does not scan the remainder, calculate width or materialize a detached full list.
-Its scalar span previews preserve both exact I64 endpoints. Nested expression
-and embedded-text budgets remain requirements for future types. Locale and terminal/HTML styling are explicit rendering choices;
-the default diagnostic needs neither ambient locale nor terminal capability.
+Locale and terminal/HTML styling are explicit rendering choices; the default diagnostic needs neither ambient locale nor terminal capability.
 
 Tempo provides useful precedent: its separate
 [explanation structure and renderers](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/lib/explain.ex)
@@ -854,7 +582,7 @@ serve different uses. We retain that separation while requiring explicit
 interpretation and bounded work. Explanation must not introduce Tempo's implicit
 iteration granularity into roc-time's explicit walk contract.
 
-Future executable acceptance cases (R01–R02, R07–R09, R12–R16):
+Semantic examples (R01–R02, R07–R09, R12–R16):
 
 - A Gregorian masked year `156X` reports the years 1560–1569 as admissible
   values, retaining its unknown digit. Any `[1560-01-01, 1570-01-01)` summary
@@ -880,7 +608,7 @@ Future executable acceptance cases (R01–R02, R07–R09, R12–R16):
 
 ## Performance objectives
 
-These are engineering targets and review criteria, not claims about the placeholder implementation. Let `n` and `m` be input span counts and `k` the number of output spans or matches. Complexity assumes compatible resolved domains and constant-cost endpoint comparison.
+These are engineering targets and review criteria, not measured implementation claims. Let `n` and `m` be input span counts and `k` the number of output spans or matches. Complexity assumes compatible resolved domains and constant-cost endpoint comparison.
 
 | Operation | Target |
 |---|---|
@@ -900,22 +628,7 @@ Measure latency, throughput, allocation count, allocated bytes, and retained mem
 
 ## Acceptance requirements
 
-The identifiers below are stable requirements, not a claim that implementation tests exist. Implementation changes must identify the tests or examples that demonstrate their applicable requirements. An implemented feature is complete only when its applicable requirements have executable evidence.
-
-Property-based testing is a core source of that evidence. Applicable temporal laws must be exercised over generated inputs through the real public modules, including deliberate boundary cases and explicit error behavior. Properties state their supported domain and preconditions. Independent small-domain models and sourced fixtures anchor correctness beyond algebraic self-consistency; discovered counterexamples become durable deterministic regressions. Where generated testing is unsuitable, identify the alternative executable evidence.
-
-Generated testing complements fixed semantic scenarios, static domain checks, and measured resource behavior. A bounded search does not prove exhaustive correctness or backend portability. The roc-fuzz workflow and integration status belong in [AGENTS.md](AGENTS.md#property-based-testing) and the [implementation plan](planning/implement-design.md#roc-fuzz-integration); the temporal contracts below remain independent of the test runner.
-
-Semantic acceptance also requires an oracle argument: why the expected result
-represents the intended temporal meaning, where that expectation is independent
-of the implementation, and which domains it actually covers. Round trips and
-agreement between implementations are insufficient when they share the same
-mistaken convention or algorithm. Sourced convention fixtures, independent
-models and differential implementations provide complementary evidence; their
-limitations and disagreements must remain visible. Every temporal implementation must use at least one oracle appropriate to its
-claim. The working Gregorian gate compares public conversion results against
-external and explicitly model-derived expectations; commands and evidence limits
-are documented in [CONTRIBUTING.md](CONTRIBUTING.md#tests). Track remaining evidence gaps in the active plan.
+These stable identifiers define observable acceptance contracts. Semantic claims require independently justified expectations appropriate to their domain; self-consistent round trips alone cannot establish the intended meaning. Contributor verification procedures belong in [AGENTS.md](AGENTS.md), not this architecture.
 
 | ID | Required observable behavior |
 |---|---|
@@ -938,7 +651,7 @@ are documented in [CONTRIBUTING.md](CONTRIBUTING.md#tests). Track remaining evid
 
 Cross-cutting failure behavior: public data errors are returned through `Try` with actionable structured information. A result that requires more interpretation, unsupported functionality, exhausted work, and an empty answer remain distinguishable. Private invariant violations may be programmer errors; malformed user input must not reach them.
 
-Before a public temporal API is released, the coordinate profile, supported calendar range, gap/fold policies, recurrence profile, and persistence contract must be settled and documented. The storage choice is settled; these remaining semantic choices must be resolved explicitly rather than introduced as undocumented defaults. Scope can be delivered incrementally without describing an unimplemented capability as supported.
+Before a public temporal API is released, the coordinate profile, supported calendar range, gap/fold policies, recurrence profile, and persistence contract must be settled and documented. Semantic choices must be explicit rather than introduced as undocumented defaults. Scope can be delivered incrementally without describing an unimplemented capability as supported.
 
 Build outward from the exact span and coverage kernel, then calendar interpretation and arithmetic, recurrence, adapters, and reasoning. No advanced feature should require making basic interval operations depend on its machinery. Contributor review and validation procedures live in [AGENTS.md](AGENTS.md); changes to interpretation, precision, range, or persistence remain changes to this design's semantic contract.
 
