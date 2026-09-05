@@ -61,4 +61,65 @@ GregorianOracle := [Forward(I64, U8, U8), Inverse(I64)].{
 	}
 	expect self_check({})
 
+	## Harness argv is validated independently of temporal constructor failures.
+	run_args : List(Str) -> Str
+	run_args = |args| {
+		id = argument(args, 1)
+		_validated_id = match U64.from_str(id) {
+			Ok(n) => n
+			Err(_) => crash "Invalid oracle case id"
+		}
+		operation = argument(args, 2)
+		input = match operation {
+			"forward" => {
+				if args.len() != 6 {
+					crash "Invalid forward argument count"
+				}
+				year = match I64.from_str(argument(args, 3)) {
+					Ok(n) => n
+					Err(_) => crash "Invalid year"
+				}
+				month = match U8.from_str(argument(args, 4)) {
+					Ok(n) => n
+					Err(_) => crash "Invalid month input"
+				}
+				day = match U8.from_str(argument(args, 5)) {
+					Ok(n) => n
+					Err(_) => crash "Invalid day input"
+				}
+				Forward(year, month, day)
+			}
+			"inverse" => {
+				if args.len() != 4 {
+					crash "Invalid inverse argument count"
+				}
+				number = match I64.from_str(argument(args, 3)) {
+					Ok(n) => n
+					Err(_) => crash "Invalid day number"
+				}
+				Inverse(number)
+			}
+			_ => crash "Unsupported oracle operation"
+		}
+		observation = match observe(input) {
+			DayNumber(n) => "ok\t${n.to_str()}"
+			DateFields(y, m, d) => "ok\t${y.to_str()}\t${m.to_str()}\t${d.to_str()}"
+			Failure(error) => {
+				label = match error {
+					OutOfRange => "OutOfRange"
+					InvalidMonth => "InvalidMonth"
+					InvalidDay => "InvalidDay"
+				}
+				"error\t${label}"
+			}
+		}
+		"${id}\t${observation}\n"
+	}
+
+	argument : List(Str), U64 -> Str
+	argument = |args, index| match args.get(index) {
+		Ok(value) => value
+		Err(_) => crash "Missing oracle argument"
+	}
+
 }

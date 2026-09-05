@@ -28,6 +28,7 @@ third-party Python dependencies.
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
+| `fixture_platform.py` | Build the instrumented test host and verify resource assertions/trace effects |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
@@ -55,36 +56,47 @@ compile-failure tests, and executable examples. It exercises semantic laws and
 independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
-At least one oracle is required for temporal implementation work. Run
-`ROC=/path/to/pinned/roc python3 scripts/oracles.py` to compare 4,096 Gregorian and 4,096 Julian
-observations, plus 2,592 zone observations, against checked-in generated Roc expectations. The full test command includes this
-gate. Expectations come from CPython 3.14.3 `datetime` within years 1–9999 and a
-400-year table model beyond that range; model-derived BCE/extreme-year cases
-are not direct Python conformance evidence. The external forward formula shares
-our year-counting approach, so sequential tests and reviewed conventions remain
-necessary alongside differential agreement.
+At least one oracle is required for temporal implementation work. Run:
 
-The gate checks each public conversion independently, plus malformed fields and
-provider limits. Generated `tests/oracle_gregorian/Cases.roc` contains typed inputs and expected
-results derived solely from the external references. The Roc driver runs under
-both the interpreter and native execution, comparing them directly: normal replay performs no JSON case parsing or case
-source generation. The compiler rejects malformed fixture types; wrong values,
-missing/duplicate case identities, driver failures and budget overruns fail the gate. Normal replay reads versioned data and needs no
-live reference service. Each stage is limited to 120 seconds and 1 MiB of output.
-Reports and generated inputs stay under `.roc-time-tmp/oracles/`.
+```sh
+ROC=/path/to/pinned/roc python3 scripts/oracles.py --workers 4
+```
+
+The default gate includes 4,096 Gregorian, 4,096 Julian and 2,592 zone
+observations stored as JSONL under `tests/oracles/`. Each native fixture is
+compiled once. Python validates the corpus, passes only inputs as arguments to
+bounded parallel processes, and compares exact observations in corpus order.
+Use `--oracle gregorian`, `julian` or `zones` to select one corpus. Full-corpus expected
+results stay in the Python harness. Small typed scenarios retain
+interpreter coverage and comparator regression checks.
+
+Corpora are hash-checked and schema-validated. Missing, duplicate or reordered
+identities, wrong values, malformed output, failed processes and missing host
+metrics fail replay. Each process has a five-second timeout and a 16 KiB output
+budget; compilation stages allow 120 seconds and 1 MiB. Up to 16 workers are
+supported, with four by default. Failure inputs/output and deterministic result
+records are saved under `.roc-time-tmp/oracles/`. Per-case records include host
+allocation traffic, which includes argument decoding and result formatting;
+use explicit in-fixture counter snapshots to isolate an algorithm.
+
+Gregorian expectations come from CPython 3.14.3 `datetime` for years 1–9999 and
+a 400-year table model outside that range. The model extension is not direct
+Python support. The forward formula shares our year-counting approach, so
+sequential tests and sourced conventions remain necessary alongside agreement.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
 Howard Hinnant’s attributed public-domain March-based formulas, independent of
 production January counting; the 1582 equal-day fixture anchors the epochs.
 To deliberately refresh expectations, use CPython 3.14.3 and run
-`python3 scripts/oracles.py --refresh`, then review the generated Roc module and manifest diff.
+`python3 scripts/oracles.py --refresh`, then review the JSONL and manifest diff.
 Generation checks the table model against all 3,652,059 dates in Python's domain.
 Never regenerate expected values from roc-time output or bless a mismatch.
 
 Zone provenance is in `tests/oracles/zones-manifest.toml`. The pinned tzdata
 2025.2 wheel contains IANA 2025b data; its URL and SHA-256 are recorded there.
 The generator uses `ZoneInfo.from_file`, never the host database, and writes
+`tests/oracles/zones.jsonl` plus small typed smoke/rule fixtures in
 `tests/oracle_zones/Cases.roc`. To refresh with CPython 3.14.3, download that exact
 wheel under `.roc-time-tmp/` and run:
 
@@ -143,6 +155,44 @@ TARGET replay minimized
 `--operation lifecycle` exercises these commands automatically, checks failing
 exit status and artifact creation, minimizes to one byte, then verifies the
 fixed harness against the saved regression.
+
+## Instrumented fixture platform
+
+Install Zig 0.16.0 (`ZIG` can select its executable) alongside the pinned Roc
+compiler. The default gate builds the host and verifies its controls:
+
+```sh
+ROC=/path/to/pinned/roc python3 scripts/fixture_platform.py --verify
+```
+
+The [resource probe](tests/platform_probe/main.roc) uses the copied roc-pdf host
+foundation with allocation counters, numeric trace marks and hosted assertions.
+`Host.allocation_count!` counts allocation and reallocation calls;
+`allocated_bytes!` counts full requested sizes, including reallocations;
+`deallocation_count!` counts deallocation calls. Counters reset after host argv
+construction. Totals include result construction and may include argv disposal,
+but are reported before returned values are freed. They are neither live-byte
+measurements nor a balanced allocation/free ledger.
+
+Take snapshots before and after an operation to assert its allocation cost.
+Counter queries and `Host.mark!` make no Roc allocations. Marks emit
+`ROC_TRACE protocol=1` records with a numeric ID and allocation count; the exported
+host symbol and preserved debug information provide a starting point for sampling
+profilers or breakpoints. Profiling sessions still need an explicit workload and
+measurement method; marker I/O is not free.
+
+Dev builds exercise `expect` failures. The pinned optimized backend removes
+`expect`, so resource assertions needed in optimized runs use `Host.assert!`.
+The host makes both supported assertion failures return nonzero; negative
+controls test that behavior. Keep tested operations observable using runtime
+inputs and consumed outputs. Separate input construction, algorithm and output
+formatting when measuring. Resource evidence is specific to compiler, backend,
+input size and ownership; do not generalize one passing probe to all operations.
+
+The host is test-only and adds no package dependency. Apple Silicon native
+execution is verified. Linux x86-64/musl is configured with pinned linker inputs;
+other targets remain unsupported by this fixture host. Provenance and licenses
+are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 ## Packaging
 

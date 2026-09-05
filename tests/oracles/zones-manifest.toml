@@ -1,8 +1,11 @@
-version = 1
-profile = "zones-tzdata-2025b-v1"
+version = 2
+corpus_format = "jsonl-v1"
+profile = "zones-tzdata-2025b-v2"
 case_count = 2592
-corpus_sha256 = "037759ada3955ee0dd8f8c703c6729555c94f02bcf4fe54f68a5da403f4d13bc"
-generator_sha256 = "e4c5a82aeb01c9e7e24ab0436bd352b3fc328b079277871f0097637d5c3141e5"
+corpus_sha256 = "b7545e7d11de195b6cf1a0cc4ffd388c0b8a9828f54d00388f9529002c63778f"
+smoke_sha256 = "cd12731a487ebd9f8e0482840f32ab6ff60022d906f34b1c7925eca04c982978"
+smoke_case_count = 18
+generator_sha256 = "38c4cd3fe4defc03c3e89c264bd5699a3b914b9af31e2c4fb6261c27ab01f3e0"
 wheel_url = "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl"
 wheel_sha256 = "1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8"
 reference = "CPython 3.14.3 ZoneInfo.from_file; tzdata 2025.2 (IANA 2025b)"

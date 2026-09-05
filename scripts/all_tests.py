@@ -90,6 +90,12 @@ def main() -> None:
     heading("Running bounded semantic fuzz checks and regression replay...")
     run([sys.executable, "scripts/fuzz.py", "--operation", "all"])
 
+    heading("Verifying the instrumented fixture platform...")
+    run([sys.executable, "scripts/fixture_platform.py", "--verify"])
+
+    heading("Checking JSONL replay failure and concurrency controls...")
+    run([sys.executable, "scripts/test_oracle_replay.py"])
+
     heading("Comparing public APIs with oracle expectations...")
     run([sys.executable, "scripts/oracles.py"])
 

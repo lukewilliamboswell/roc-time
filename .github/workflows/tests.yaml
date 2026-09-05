@@ -19,6 +19,12 @@ jobs:
         id: roc-version
         run: echo "nightly-tag=$(< .roc-version)" >> "$GITHUB_OUTPUT"
 
+      - name: Install Zig for the instrumented test host
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
+        with:
+          version: 0.16.0
+          use-cache: false
+
       - name: Install Roc
         uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
         with:

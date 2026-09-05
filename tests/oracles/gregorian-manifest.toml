@@ -1,8 +1,11 @@
-version = 1
+version = 2
+corpus_format = "jsonl-v1"
 profile = "gregorian-i32-years-civil-day-1970-v1"
-corpus_sha256 = "86a36d40129f5176e5b56916f8c802030a9d94565be0163d768cc1a8d2f570dc"
+corpus_sha256 = "fc431f751031dc10b5910a5d0ead1dedfcb24ad5918903f4ce273f5fddfc41ac"
 generator_version = 1
-generator_sha256 = "013260bca92013d2d003d08d253644a0753fd0a869d764fae9e0cfeec95a6e0e"
+generator_sha256 = "92505231e6b9fdc753a726ad747459a32d078aaf8ab93797e5c3cf9d346bcab6"
+smoke_case_count = 128
+smoke_sha256 = "699a5e1a21354add454fd37181c1ab9e71dbae886b7b90185cf922613bcc170f"
 reference = "CPython 3.14.3 datetime"
 seed = 20260905
 command = "python3 scripts/oracles.py --refresh"

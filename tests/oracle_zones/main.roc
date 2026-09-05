@@ -1,11 +1,11 @@
 app [main!] {
-	time: "../../package/main.roc",
+	fixture: "fixture.roc",
 }
-import Cases
-import ZoneOracle
+import fixture.Cases
+import fixture.ZoneOracle
 
 main! = |_args| {
-	count = ZoneOracle.verify(Cases.fixtures, Cases.inputs, 2592)?
+	count = ZoneOracle.verify(Cases.fixtures, Cases.inputs, Cases.inputs.len())?
 	echo!("PASS ${count.to_str()} oracle cases\n")
 	Ok({})
 }

@@ -67,6 +67,61 @@ ZoneOracle :: [].{
 		Ok(visited)
 	}
 
+	## The JSONL harness sends validated scalar arguments; the public temporal
+	## constructors still validate calendar fields and rule interpretation.
+	run_args = |args, fixtures| {
+		if args.len() != 11 or argument(args, 2) != "resolve" {
+			crash "Invalid zone oracle transport"
+		}
+		id = argument(args, 1)
+		_id_number = match U64.from_str(id) {
+			Ok(n) => n
+			Err(_) => crash "Invalid case identity"
+		}
+		result = execute(args, fixtures)
+		match result {
+			Ok(candidates) => {
+				var text = "${id}\tok"
+				for candidate in candidates {
+					text = "${text}\t${candidate.to_str()}"
+				}
+				"${text}\n"
+			}
+			Err(error) => "${id}\terror\t${Str.inspect(error)}\n"
+		}
+	}
+
+	execute = |args, fixtures| {
+		if args.len() != 11 or argument(args, 2) != "resolve" {
+			return Err(InvalidArguments)
+		}
+		index = U64.from_str(argument(args, 3))?
+		year = I64.from_str(argument(args, 4))?
+		month = U8.from_str(argument(args, 5))?
+		day = U8.from_str(argument(args, 6))?
+		hour = U8.from_str(argument(args, 7))?
+		minute = U8.from_str(argument(args, 8))?
+		second = U8.from_str(argument(args, 9))?
+		microsecond = U32.from_str(argument(args, 10))?
+		fixture = fixtures.get(index)?
+		rules = rules_for(fixture)?
+		date = CalendarDate.from_fields(Gregorian, { year, month, day })?
+		clock = ClockTime.from_fields({ hour, minute, second, microsecond })?
+		resolution = ZoneRules.resolve(rules, LocalDateTime.new(date, clock))?
+		Ok(
+			match resolution {
+				Gap => []
+				Unique(boundary) => [PosixBoundary.to_microseconds(boundary)]
+				Fold(boundaries) => boundaries.map(PosixBoundary.to_microseconds)
+			},
+		)
+	}
+
+	argument = |args, index| match args.get(index) {
+		Ok(value) => value
+		Err(_) => crash "Missing zone oracle argument"
+	}
+
 	expect {
 		fixture : Fixture
 		fixture = { name: "Synthetic/Comparator", source_digest: "fixture-v1", lower: -1000000, upper: 1000000, initial: 0, minimum: 0, maximum: 0, transitions: [] }
