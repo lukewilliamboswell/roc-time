@@ -272,6 +272,16 @@ operation's contract. The independent field-walking oracle in
 `tests/arithmetic/` checks this ordering and destination policies without using
 the production day-axis conversion or month-index arithmetic.
 
+`ClockTime` validates a local clock label with hour 0–23, minute and second
+0–59, and microsecond 0–999999. Its nominal microseconds-since-midnight
+coordinate lies in [0, 86400000000); it is not elapsed time or a POSIX boundary.
+Second 60 returns `UnsupportedLeapSecond`; other malformed fields return their
+specific field error. Hour 24 is rejected rather than silently changing dates.
+Construction and field extraction cost constant work. An exhaustive independent
+field-counter model checks every second at fractional endpoints; generated
+checks exercise arbitrary fractions and adjacent labels. Date attachment and
+zone resolution remain separate operations.
+
 Zone resolution maps local values using a supplied ruleset. A local boundary may have one matching position, be ambiguous, or lie in a gap. Policies and structured outcomes expose those cases. Resolving both boundaries of a calendar span must also validate the resulting span: exceptional civil dates can be skipped or altered by zone transitions.
 
 Distinguish **an appointment between chosen boundary occurrences** from **all positions whose local labels fall in a selection**. The former resolves each endpoint under explicit gap/fold policies and validates their order. The latter computes the preimage of the civil selection under zone rules and may yield empty or disconnected coverage. Taking the earliest start and latest end would incorrectly fill gaps between repeated local-time ranges. Calendar-day selection uses this set interpretation; a skipped civil day yields empty coverage. Fixed-offset conversion is the simple special case.

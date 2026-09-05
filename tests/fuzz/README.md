@@ -1,6 +1,6 @@
 # Temporal property targets
 
-The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, and `tests/calendars/main.roc`
+The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, and `tests/clock/main.roc`
 import the real public package and the content-addressed
 [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0).
 `dependency.json` records the release commit and independently verified SHA-256.
@@ -21,6 +21,7 @@ decoders, and the named-case replay checks validate that contract.
 | `gregorian-v1` | R05: full Gregorian provider day range with endpoint/year-zero bias; coordinate and field round trips, independent next-day field progression, malformed fields and out-of-provider coordinates. Fixed tests separately enumerate all 292,194 days in years -400 through 399 against a sequential day counter. |
 | `arithmetic-v1` | R05: full provider years with endpoint/year-zero bias; years ±2, months ±24 and days ±60 against a field-walking oracle for Reject/Clamp/Carry; I64 extreme components assert range failures. The model shares Gregorian month/leap conventions but neither production civil conversion nor month-index arithmetic. |
 | `calendars-v1` | R06: full Julian provider coordinates with endpoint/epoch bias; cross-calendar shared-day equality vs description identity, Gregorian overlap range errors, Julian four-year periodicity, unsupported-name rejection. Independent generated Julian oracle modules anchor the conversion algorithm. |
+| `clock-v1` | R01/R07/R08: numeric positions from -1 through 86400000000; explicit range errors, field reconstruction, microsecond adjacency and ordering. An exhaustive field-counter oracle independently checks all 86,400 seconds at three fractional positions. |
 
 Bounds apply before production calls. None of the targets discards expected
 structured error paths. The small-domain coverage oracle complements full-range
@@ -71,7 +72,7 @@ as a roc-time bug. The lifecycle check repeats these assertions in normal CI.
 
 ## Verified execution
 
-On Apple Silicon macOS, all six targets built from the release URL, replayed
+On Apple Silicon macOS, all seven targets built from the release URL, replayed
 the curated inputs, and passed 10,000 runs each with seed 1, 5-second maximum,
 256-byte input maximum, 256 MB RSS limit, and 2-second per-input timeout.
 Coverage counters were present. Exact runnable commands live in CONTRIBUTING.md

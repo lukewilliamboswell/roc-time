@@ -55,6 +55,16 @@ The pinned full integration command passed on 2026-09-05, including both static-
 dispatch execution paths, all five 10,000-run campaigns, the external conversion
 oracle, and all three bundled applications.
 
+The zone input foundation now includes opaque `ClockTime`, explicit field and
+leap-second errors, constant-cost coordinate conversion, and an independent
+odometer oracle covering 259,200 labels. The `clock-v1` generated target checks
+arbitrary fractions and adjacent labels. This does not implement resolution;
+local date attachment, immutable zone rules and transition interpretation remain.
+The full pinned integration command passed on 2026-09-05 with all seven
+10,000-run campaigns, both oracle gates and all four bundled applications.
+The interpreter required shared-memory access outside the sandbox; the successful
+rerun supplies runtime evidence. Formatting and diff checks also passed.
+
 Implement immutable zone fixtures and resolution (R07–R09), keeping boundary
 appointments distinct from local selections. Include independent transition
 evidence, provider validity limits and provenance; never infer host zone data.

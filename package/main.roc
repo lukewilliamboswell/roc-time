@@ -5,6 +5,7 @@ package
 		CalendarDelta,
 		CalendarArithmetic,
 		CivilDay,
+		ClockTime,
 		GregorianDate,
 		JulianDate,
 		PosixBoundary,
