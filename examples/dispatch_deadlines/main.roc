@@ -1,6 +1,6 @@
 app [main!] {
-	time: "../../package/main.roc",
-	zones: "../../tzdb/package/main.roc",
+	time: "https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc1/roc-time-2T6KR7B59FhCSNghyPAgP2j61YiU1F537CkB6UFUwzfY.tar.zst",
+	zones: "https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc1/roc-time-tzdb-5xpCNbPVbrBRi2GC7kKEg91eQVjLQrkAb5F1FHy4THgD.tar.zst",
 }
 import DispatchDeadlines
 import zones.Database
