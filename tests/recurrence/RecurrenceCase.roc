@@ -118,49 +118,49 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			Err(_) => crash "Valid query rejected"
 		}
 		# A published fact seeds weekday walking: 2024-01-01 was Monday.
-		var elapsed = 0.U64
-		var month_index = 0.U64
-		var counted = 0.U64
-		var expected = []
+		var $elapsed = 0.U64
+		var $month_index = 0.U64
+		var $counted = 0.U64
+		var $expected = []
 		for year in [2024.I64, 2025] {
-			var month = 1.U8
-			while month <= 12 {
-				length = month_length(year, month)
-				var last_monday = 0.U8
-				var day = 1.U8
-				while day <= length {
-					if U64.mod_by(elapsed + day.to_u64() - 1, 7) == 0 {
-						last_monday = day
+			var $month = 1.U8
+			while $month <= 12 {
+				length = month_length(year, $month)
+				var $last_monday = 0.U8
+				var $day = 1.U8
+				while $day <= length {
+					if U64.mod_by($elapsed + $day.to_u64() - 1, 7) == 0 {
+						$last_monday = $day
 					}
-					day = day + 1
+					$day = $day + 1
 				}
-				if U64.mod_by(month_index, input.interval.to_u64()) == 0 and counted < input.count.to_u64() {
+				if U64.mod_by($month_index, input.interval.to_u64()) == 0 and $counted < input.count.to_u64() {
 					if input.last_monday or length == 31 {
-						expected = expected.append(
+						$expected = $expected.append(
 							date(
 								year,
-								month,
+								$month,
 								if input.last_monday {
-									last_monday
+									$last_monday
 								} else {
 									31
 								},
 							),
 						)
-						counted = counted + 1
+						$counted = $counted + 1
 					}
 				}
-				elapsed = elapsed + length.to_u64()
-				month_index = month_index + 1
-				month = month + 1
+				$elapsed = $elapsed + length.to_u64()
+				$month_index = $month_index + 1
+				$month = $month + 1
 			}
 		}
 		check_boundary_cutoff(input)
 		check_subdaily(input)
-		check_timed(input, anchor, pattern, window, expected)
+		check_timed(input, anchor, pattern, window, $expected)
 		# Direct ordered set model; deliberately not the cursor's two-stream merge.
-		var normalized = []
-		for candidate in expected.concat(inclusions).sort_with(
+		var $normalized = []
+		for candidate in $expected.concat(inclusions).sort_with(
 			|a, b| if a < b {
 				Before
 			} else if a > b {
@@ -169,26 +169,26 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				Same
 			},
 		) {
-			if candidate >= window.start and candidate < window.end and !exclusions.contains(candidate) and !normalized.contains(candidate) {
-				normalized = normalized.append(candidate)
+			if candidate >= window.start and candidate < window.end and !exclusions.contains(candidate) and !$normalized.contains(candidate) {
+				$normalized = $normalized.append(candidate)
 			}
 		}
 		limits = { max_steps: input.work.to_u64(), max_buffered: 366.U64, max_occurrences: 1.U64 }
-		var current = cursor
-		var observed = []
-		var batches = 0.U64
-		while batches < 5000 {
-			batch = match DateRecurrence.Cursor.collect(current, limits) {
+		var $current = cursor
+		var $observed = []
+		var $batches = 0.U64
+		while $batches < 5000 {
+			batch = match DateRecurrence.Cursor.collect($current, limits) {
 				Ok(value) => value
 				Err(_) => crash "Supported recurrence failed"
 			}
 			if batch.steps > limits.max_steps or batch.buffered > limits.max_buffered or batch.dates.len() > 1 {
 				crash "Recurrence exceeded budget"
 			}
-			observed = observed.concat(batch.dates)
+			$observed = $observed.concat(batch.dates)
 			match batch.status {
 				Complete => {
-					if observed != normalized {
+					if $observed != $normalized {
 						crash "Recurrence differs from finite calendar model"
 					}
 					parsed_batch = match DateRecurrence.Cursor.collect(parsed_cursor, { max_steps: 10000, max_buffered: 366, max_occurrences: 100 }) {
@@ -196,32 +196,32 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 						Err(_) => crash "Parsed recurrence failed"
 					}
 					match parsed_batch.status {
-						Complete => if parsed_batch.dates != normalized {
+						Complete => if parsed_batch.dates != $normalized {
 							crash "RFC adapter differs from calendar model"
 						}
 						Limited(_) => crash "Parsed recurrence unexpectedly limited"
 					}
-					check_consumers(cursor, limits, normalized)
-					check_all_day(rule, window, normalized)
+					check_consumers(cursor, limits, $normalized)
+					check_all_day(rule, window, $normalized)
 					return Fuzz.keep
 				}
 				Limited(progress) => {
-					current = progress.cursor
+					$current = progress.cursor
 				}
 			}
-			batches = batches + 1
+			$batches = $batches + 1
 		}
 		crash "Recurrence resumption failed to progress"
 	}
 }
 
 check_consumers = |initial, limits, expected| {
-	var current = initial
-	var observed = []
-	var calls = 0.U64
-	var done = False
-	while done == False and calls < 5000 {
-		result = match DateRecurrence.Cursor.next(current, { max_steps: limits.max_steps, max_buffered: limits.max_buffered }) {
+	var $current = initial
+	var $observed = []
+	var $calls = 0.U64
+	var $done = False
+	while $done == False and $calls < 5000 {
+		result = match DateRecurrence.Cursor.next($current, { max_steps: limits.max_steps, max_buffered: limits.max_buffered }) {
 			Ok(value) => value
 			Err(_) => crash "Next failed within the reference range"
 		}
@@ -230,30 +230,30 @@ check_consumers = |initial, limits, expected| {
 		}
 		match result.status {
 			End => {
-				done = True
+				$done = True
 			}
 			Item(item) => {
-				observed = observed.append(item.date)
-				current = item.cursor
+				$observed = $observed.append(item.date)
+				$current = item.cursor
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
-	if done == False or observed != expected {
+	if $done == False or $observed != expected {
 		crash "Next differs from finite calendar model"
 	}
-	current = initial
-	calls = 0
-	done = False
-	var value = { count: 0.U64, weighted: 0.U64 }
-	while done == False and calls < 5000 {
+	$current = initial
+	$calls = 0
+	$done = False
+	var $value = { count: 0.U64, weighted: 0.U64 }
+	while $done == False and $calls < 5000 {
 		result = match DateRecurrence.Cursor.fold(
-			current,
+			$current,
 			limits,
-			value,
+			$value,
 			|acc, candidate| {
 				fields = GregorianDate.to_fields(candidate)
 				count = acc.count + 1
@@ -271,51 +271,51 @@ check_consumers = |initial, limits, expected| {
 		if result.steps > limits.max_steps or result.occurrences > limits.max_occurrences or result.buffered > limits.max_buffered {
 			crash "Fold exceeded its budget"
 		}
-		value = result.value
+		$value = result.value
 		match result.status {
 			Complete => {
-				done = True
+				$done = True
 			}
 			Stopped(remaining) => {
-				current = remaining
+				$current = remaining
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
-	var weighted = 0.U64
-	var index = 1.U64
+	var $weighted = 0.U64
+	var $index = 1.U64
 	for candidate in expected {
 		fields = GregorianDate.to_fields(candidate)
-		weighted = weighted + index * (fields.month.to_u64() * 31 + fields.day.to_u64())
-		index = index + 1
+		$weighted = $weighted + $index * (fields.month.to_u64() * 31 + fields.day.to_u64())
+		$index = $index + 1
 	}
-	if done == False or value.count != expected.len() or value.weighted != weighted {
+	if $done == False or $value.count != expected.len() or $value.weighted != $weighted {
 		crash "Stopped fold differs from calendar model"
 	}
-	var chunked = []
-	var complete = False
-	var chunks = 0.U64
+	var $chunked = []
+	var $complete = False
+	var $chunks = 0.U64
 	for result in DateRecurrence.Cursor.chunks(initial, limits) {
 		batch = match result {
 			Ok(chunk) => chunk
 			Err(_) => crash "Chunk iterator failed in reference range"
 		}
-		if complete == True or chunks >= 5000 {
+		if $complete == True or $chunks >= 5000 {
 			crash "Invalid chunk iterator termination"
 		}
-		chunked = chunked.concat(batch.dates)
+		$chunked = $chunked.concat(batch.dates)
 		match batch.status {
 			Complete => {
-				complete = True
+				$complete = True
 			}
 			Limited(_) => {}
 		}
-		chunks = chunks + 1
+		$chunks = $chunks + 1
 	}
-	if complete == False or chunked != expected {
+	if $complete == False or $chunked != expected {
 		crash "Chunk iterator differs from calendar model"
 	}
 }
@@ -339,14 +339,14 @@ month_length = |year, month| match month {
 # 86400-second selection for each generated date, with a stable source ID.
 check_all_day = |rule, window, expected| {
 	rules = fixture_rules(2000000000000000)
-	var current = match AllDayRecurrence.new(42.U64, rule, window, 1, rules) {
+	var $current = match AllDayRecurrence.new(42.U64, rule, window, 1, rules) {
 		Ok(value) => value
 		Err(_) => crash "all-day construction"
 	}
-	var observed = []
-	var calls = 0.U64
-	while calls < 5000 {
-		batch = match AllDayRecurrence.next(current, { max_date_steps: 7, max_date_buffered: 366, max_zone_segments: 1, max_zone_members: 1 }) {
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 5000 {
+		batch = match AllDayRecurrence.next($current, { max_date_steps: 7, max_date_buffered: 366, max_zone_segments: 1, max_zone_members: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "all-day next"
 		}
@@ -355,24 +355,24 @@ check_all_day = |rule, window, expected| {
 		}
 		match batch.status {
 			End => {
-				if observed != expected {
+				if $observed != expected {
 					crash "all-day dates differ from calendar oracle"
 				}
 				return {}
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 			Item(item) => {
 				identity = AllDayOccurrence.id(item.occurrence)
 				if identity.series != 42 or Coverage.coordinate_width(AllDayOccurrence.coverage(item.occurrence)) != Ok(PosixDelta.from_microseconds(86400000000)) {
 					crash "all-day identity or width"
 				}
-				observed = observed.append(identity.date)
-				current = item.cursor
+				$observed = $observed.append(identity.date)
+				$current = item.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "all-day resumption did not finish"
 }
@@ -431,13 +431,13 @@ check_timed = |input, anchor, pattern, window, dates| {
 	start = local(window.start, 0)
 	end = local(window.end, 0)
 	rules = fixture_rules(2000000000000000)
-	var current = match TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	var $current = match TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "timed window"
 	}
-	var expected_sources = []
-	var expected_boundaries = []
-	var count = 0.U64
+	var $expected_sources = []
+	var $expected_boundaries = []
+	var $count = 0.U64
 	for candidate in dates {
 		hours = if input.last_monday {
 			[17.U8]
@@ -445,36 +445,36 @@ check_timed = |input, anchor, pattern, window, dates| {
 			[9.U8, 17]
 		}
 		for hour in hours {
-			if count < input.count.to_u64() {
-				count = count + 1
+			if $count < input.count.to_u64() {
+				$count = $count + 1
 				if candidate >= window.start and candidate < window.end and (!input.exclude_anchor or !LocalDateTime.same_position(local(candidate, hour), excluded_label)) {
-					expected_sources = expected_sources.append(local(candidate, hour))
+					$expected_sources = $expected_sources.append(local(candidate, hour))
 					fields = GregorianDate.to_fields(candidate)
-					var days = if fields.year == 2024 {
+					var $days = if fields.year == 2024 {
 						0.I64
 					} else {
 						366.I64
 					}
-					var month = 1.U8
-					while month < fields.month {
-						days = days + month_length(fields.year, month).to_i64()
-						month = month + 1
+					var $month = 1.U8
+					while $month < fields.month {
+						$days = $days + month_length(fields.year, $month).to_i64()
+						$month = $month + 1
 					}
-					days = days + fields.day.to_i64() - 1
+					$days = $days + fields.day.to_i64() - 1
 					# 2024-01-01T00:00Z is Unix second 1704067200.
-					expected_boundaries = expected_boundaries.append(PosixBoundary.from_microseconds((1704067200 + days * 86400 + hour.to_i64() * 3600) * 1000000))
+					$expected_boundaries = $expected_boundaries.append(PosixBoundary.from_microseconds((1704067200 + $days * 86400 + hour.to_i64() * 3600) * 1000000))
 				}
 			}
 		}
 	}
-	check_timed_batches(current, input.work.to_u64(), expected_sources, expected_boundaries)
-	check_schedule(rule, { start, end }, rules, input.work.to_u64(), expected_sources, expected_boundaries, anchor, anchor_clock, input.exclude_anchor, input)
+	check_timed_batches($current, input.work.to_u64(), $expected_sources, $expected_boundaries)
+	check_schedule(rule, { start, end }, rules, input.work.to_u64(), $expected_sources, $expected_boundaries, anchor, anchor_clock, input.exclude_anchor, input)
 
-	var sources = []
-	var boundaries = []
-	var calls = 0.U64
-	while calls < 10000 {
-		batch = match TimedRecurrence.Cursor.next(current, { max_steps: input.work.to_u64(), max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	var $sources = []
+	var $boundaries = []
+	var $calls = 0.U64
+	while $calls < 10000 {
+		batch = match TimedRecurrence.Cursor.next($current, { max_steps: input.work.to_u64(), max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "timed interpretation"
 		}
@@ -483,26 +483,26 @@ check_timed = |input, anchor, pattern, window, dates| {
 		}
 		match batch.status {
 			End => {
-				if sources != expected_sources or boundaries != expected_boundaries {
+				if $sources != $expected_sources or $boundaries != $expected_boundaries {
 					crash "timed recurrence differs from independent clock/calendar grid"
 				}
 				return {}
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 			Item(item) => {
 				check_duration(item.occurrence, input.work)
-				sources = sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
-				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				$sources = $sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
+				$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
 				match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
 					Exact => {}
 					BeforeGap(_) => crash "UTC adjustment"
 				}
-				current = item.cursor
+				$current = item.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "timed resumption did not finish"
 }
@@ -515,13 +515,13 @@ clock = |hour| match ClockTime.from_fields({ hour, minute: 0, second: 0, microse
 local = |date_value, hour| LocalDateTime.new(CalendarDate.from_gregorian(date_value), clock(hour))
 
 check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
-	var current = initial
-	var sources = []
-	var boundaries = []
-	var calls = 0.U64
-	while calls < 10000 {
+	var $current = initial
+	var $sources = []
+	var $boundaries = []
+	var $calls = 0.U64
+	while $calls < 10000 {
 		batch = match TimedRecurrence.Cursor.collect(
-			current,
+			$current,
 			{
 				work: { max_steps: work, max_buffered: 10, max_zone_segments: 2, max_zone_candidates: 1 },
 				max_occurrences: 2,
@@ -534,21 +534,21 @@ check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
 			crash "timed batch exceeded shared work or output budget"
 		}
 		for occurrence in batch.occurrences {
-			sources = sources.append(TimedRecurrence.Occurrence.source(occurrence))
-			boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(occurrence))
+			$sources = $sources.append(TimedRecurrence.Occurrence.source(occurrence))
+			$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(occurrence))
 		}
 		match batch.status {
 			Complete => {
-				if sources != expected_sources or boundaries != expected_boundaries {
+				if $sources != expected_sources or $boundaries != expected_boundaries {
 					crash "timed batches differ from calendar grid"
 				}
 				return {}
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "timed batches did not finish"
 }
@@ -619,15 +619,15 @@ check_subdaily = |input| {
 	} else {
 		start
 	}
-	var current = match TimedRecurrence.cursor(rule, { start: window_start, end }, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
+	var $current = match TimedRecurrence.cursor(rule, { start: window_start, end }, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily grid cursor"
 	}
-	var expected = []
-	var count = 0.U64
-	var index = 0.I64
-	while index < 1000 and count < input.count.to_u64() {
-		base = I64.div_trunc_by(anchor_second, unit) * unit + index * input.interval.to_i64() * unit
+	var $expected = []
+	var $count = 0.U64
+	var $index = 0.I64
+	while $index < 1000 and $count < input.count.to_u64() {
+		base = I64.div_trunc_by(anchor_second, unit) * unit + $index * input.interval.to_i64() * unit
 		offsets = match mode {
 			0 => [10.I64, 50, 1810, 1850]
 			1 => [10.I64, 50]
@@ -636,22 +636,22 @@ check_subdaily = |input| {
 		for offset in offsets {
 			candidate = base + offset
 			seconds = I64.mod_by(candidate, 60)
-			if candidate >= anchor_second and (mode != 2 or seconds == 10 or seconds == 50) and count < input.count.to_u64() {
-				count = count + 1
+			if candidate >= anchor_second and (mode != 2 or seconds == 10 or seconds == 50) and $count < input.count.to_u64() {
+				$count = $count + 1
 				if candidate != anchor_second and (!input.exclude_anchor or candidate >= anchor_second + 30) {
-					expected = expected.append(candidate * 1000000 + fraction)
+					$expected = $expected.append(candidate * 1000000 + fraction)
 				}
 			}
 		}
-		index = index + 1
+		$index = $index + 1
 	}
-	if count != input.count.to_u64() {
+	if $count != input.count.to_u64() {
 		crash "finite subdaily model too short"
 	}
-	var observed = []
-	var calls = 0.U64
-	while calls < 10000 {
-		batch = match TimedRecurrence.Cursor.collect(current, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 2 }) {
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 10000 {
+		batch = match TimedRecurrence.Cursor.collect($current, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 2 }) {
 			Ok(value) => value
 			Err(_) => crash "subdaily grid execution"
 		}
@@ -659,20 +659,20 @@ check_subdaily = |input| {
 			crash "subdaily grid budget"
 		}
 		for occurrence in batch.occurrences {
-			observed = observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
+			$observed = $observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
 		}
 		match batch.status {
 			Complete => {
-				if observed != expected {
+				if $observed != $expected {
 					crash "subdaily differs from integer-second model"
 				}
 				return {}
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "subdaily grid resumption did not terminate"
 }
@@ -745,24 +745,24 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		Ok(value) => value
 		Err(_) => crash "schedule inclusions"
 	}
-	var expected = []
-	var position = 0.U64
+	var $expected = []
+	var $position = 0.U64
 	for source in base_sources {
-		boundary = match base_boundaries.get(position) {
+		boundary = match base_boundaries.get($position) {
 			Ok(value) => value
 			Err(_) => crash "model boundary"
 		}
-		expected = expected.append({ source, boundary })
-		position = position + 1
+		$expected = $expected.append({ source, boundary })
+		$position = $position + 1
 	}
 	for inclusion in inclusions {
 		source = LocalDateTime.new(CalendarDate.from_gregorian(inclusion.date), inclusion.clock)
-		var duplicate = Bool.False
-		for item in expected {
-			duplicate = duplicate or LocalDateTime.same_position(item.source, source)
+		var $duplicate = Bool.False
+		for item in $expected {
+			$duplicate = $duplicate or LocalDateTime.same_position(item.source, source)
 		}
 		removed = exclude_anchor and inclusion.date == anchor and inclusion.clock == anchor_clock
-		if !duplicate and !removed and LocalDateTime.compare_position(source, window.start) != LT and LocalDateTime.compare_position(source, window.end) == LT {
+		if !$duplicate and !removed and LocalDateTime.compare_position(source, window.start) != LT and LocalDateTime.compare_position(source, window.end) == LT {
 			fields = GregorianDate.to_fields(inclusion.date)
 			days = if fields.month == 1 {
 				fields.day.to_i64() - 1
@@ -770,10 +770,10 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 				31 + fields.day.to_i64() - 1
 			}
 			micros = (1704067200 + days * 86400) * 1000000 + ClockTime.to_microseconds_since_midnight(inclusion.clock)
-			expected = expected.append({ source, boundary: PosixBoundary.from_microseconds(micros) })
+			$expected = $expected.append({ source, boundary: PosixBoundary.from_microseconds(micros) })
 		}
 	}
-	expected = expected.sort_with(
+	$expected = $expected.sort_with(
 		|a, b| if a.boundary < b.boundary {
 			Before
 		} else if a.boundary > b.boundary {
@@ -782,8 +782,8 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 			Same
 		},
 	)
-	expected_sources = expected.map(|item| item.source)
-	expected_boundaries = expected.map(|item| item.boundary)
+	expected_sources = $expected.map(|item| item.source)
+	expected_boundaries = $expected.map(|item| item.boundary)
 	anchor_source = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
 	extra_source = local(date(2024, 2, 4), 9)
 	# The generator constrains work to 1..128.
@@ -812,7 +812,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		AtLocal({ source: local(date(2024, 2, 6), 9), occurrence: First, gap: UseOffsetBeforeGap })
 	}
 	overrides = [{ source: anchor_source, ending: short_ending }, { source: extra_source, ending: extra_ending }, { source: anchor_source, ending: short_ending }]
-	var current = if exclude_anchor {
+	var $current = if exclude_anchor {
 		match TimedSchedule.new_with_endings(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
 			Ok(value) => value
 			Err(_) => crash "schedule construction"
@@ -849,10 +849,10 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		}
 	}
 
-	var index = 0.U64
-	var calls = 0.U64
-	while calls < 10000 {
-		batch = match TimedSchedule.collect(current, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+	var $index = 0.U64
+	var $calls = 0.U64
+	while $calls < 10000 {
+		batch = match TimedSchedule.collect($current, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "schedule collection"
 		}
@@ -860,11 +860,11 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 			crash "schedule exceeded shared budget"
 		}
 		for occurrence in batch.occurrences {
-			expected_source = match expected_sources.get(index) {
+			expected_source = match expected_sources.get($index) {
 				Ok(value) => value
 				Err(_) => crash "extra schedule occurrence"
 			}
-			expected_boundary = match expected_boundaries.get(index) {
+			expected_boundary = match expected_boundaries.get($index) {
 				Ok(value) => value
 				Err(_) => crash "missing expected boundary"
 			}
@@ -879,20 +879,20 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 			if identity.series != 42 or identity.source != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(expected_width)) {
 				crash "schedule differs from independent UTC grid"
 			}
-			index = index + 1
+			$index = $index + 1
 		}
 		match batch.status {
 			Complete => {
-				if index != expected_sources.len() {
+				if $index != expected_sources.len() {
 					crash "schedule lost occurrences"
 				}
 				return {}
 			}
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "schedule failed to make bounded progress"
 }
@@ -934,7 +934,7 @@ check_boundary_cutoff = |input| {
 		Ok(value) => value
 		Err(_) => crash "grid rules"
 	}
-	var expected = []
+	var $expected = []
 	for half_hour in [0.I64, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] {
 		source = half_hour * 1800000000
 		boundary = if offset > 0 and source >= 10800000000 {
@@ -945,35 +945,35 @@ check_boundary_cutoff = |input| {
 			source
 		}
 		if boundary <= cutoff {
-			expected = expected.append({ source, boundary })
+			$expected = $expected.append({ source, boundary })
 		}
 	}
-	var cursor = match TimedRecurrence.cursor(rule, { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, { rules, occurrence: First, gap: UseOffsetBeforeGap }) {
+	var $cursor = match TimedRecurrence.cursor(rule, { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, { rules, occurrence: First, gap: UseOffsetBeforeGap }) {
 		Ok(value) => value
 		Err(_) => crash "grid cursor"
 	}
-	var observed = []
-	var calls = 0.U64
-	while calls < 500 {
-		batch = match TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 500 {
+		batch = match TimedRecurrence.Cursor.collect($cursor, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "grid cutoff execution"
 		}
 		for value in batch.occurrences {
-			observed = observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))), boundary: PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)) })
+			$observed = $observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))), boundary: PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)) })
 		}
 		match batch.status {
 			Complete => {
-				if observed != expected {
+				if $observed != $expected {
 					crash "UTC cutoff differs from piecewise offset grid"
 				}
 				return {}
 			}
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "cutoff grid did not terminate under finite resumption budget"
 }
@@ -1025,26 +1025,26 @@ check_date_explanation = |rule, input, anchor| {
 		recurrence_fact(source, 1) != RecurrenceTermination(Count(input.count.to_u64())) {
 		crash "Date recurrence explanation lost source semantics or pre-exclusion COUNT"
 	}
-	var index = 2.U64
+	var $index = 2.U64
 	for selector in selectors {
-		if recurrence_fact(source, index) != RecurrenceSelector(selector) {
+		if recurrence_fact(source, $index) != RecurrenceSelector(selector) {
 			crash "Date recurrence selector changed"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
 	for exception in inclusions {
-		if recurrence_fact(source, index) != RecurrenceException({ kind: Inclusion, source: Date(exception) }) {
+		if recurrence_fact(source, $index) != RecurrenceException({ kind: Inclusion, source: Date(exception) }) {
 			crash "Normalized date inclusion changed"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
 	for exception in exclusions {
-		if recurrence_fact(source, index) != RecurrenceException({ kind: Exclusion, source: Date(exception) }) {
+		if recurrence_fact(source, $index) != RecurrenceException({ kind: Exclusion, source: Date(exception) }) {
 			crash "Normalized date exclusion changed"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
-	if Explanation.fact_count(source) != index {
+	if Explanation.fact_count(source) != $index {
 		crash "Unexpected date recurrence facts"
 	}
 	check_recurrence_rendering(source)
@@ -1070,20 +1070,20 @@ check_timed_explanation = |rule, input, anchor| {
 	if recurrence_fact(source, 2) != RecurrencePolicy({ context: Required, occurrence: CallerSupplied, gap: CallerSupplied }) {
 		crash "Native timed recurrence invented interpretation policies"
 	}
-	var index = 3.U64
+	var $index = 3.U64
 	for selector in selectors {
-		if recurrence_fact(source, index) != RecurrenceSelector(selector) {
+		if recurrence_fact(source, $index) != RecurrenceSelector(selector) {
 			crash "Effective sorted clock/calendar selector changed"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
 	for exception in exclusions {
-		if recurrence_fact(source, index) != RecurrenceException({ kind: Exclusion, source: Local(exception) }) {
+		if recurrence_fact(source, $index) != RecurrenceException({ kind: Exclusion, source: Local(exception) }) {
 			crash "Normalized local exclusion changed"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
-	if Explanation.fact_count(source) != index {
+	if Explanation.fact_count(source) != $index {
 		crash "Unexpected timed recurrence facts"
 	}
 	check_recurrence_rendering(source)
@@ -1152,12 +1152,12 @@ check_rfc_explanation = |input| {
 			recurrence_fact(source, 11) != RecurrenceException({ kind: Exclusion, source: Local(anchor) }) or Explanation.fact_count(source) != 12 {
 			crash "RFC explicit inclusion and exclusion declaration lost"
 		}
-		var selector_index = 6.U64
+		var $selector_index = 6.U64
 		for selector in [Hour(0), Minute(0), Second(0), Microsecond(0)] {
-			if recurrence_fact(source, selector_index) != RecurrenceSelector(selector) {
+			if recurrence_fact(source, $selector_index) != RecurrenceSelector(selector) {
 				crash "RFC inherited clock fields changed"
 			}
-			selector_index = selector_index + 1
+			$selector_index = $selector_index + 1
 		}
 		check_recurrence_rendering(source)
 	}
@@ -1183,34 +1183,34 @@ check_subdaily_explanation = |rule, input, anchor, mode| {
 		recurrence_fact(source, 1) != RecurrenceTermination(Count(input.count.to_u64())) {
 		crash "Subdaily explanation changed anchored grid, microseconds or COUNT"
 	}
-	var index = 3.U64
-	var hour = 0.U8
-	while hour < 24 {
-		if recurrence_fact(source, index) != RecurrenceSelector(Hour(hour)) {
+	var $index = 3.U64
+	var $hour = 0.U8
+	while $hour < 24 {
+		if recurrence_fact(source, $index) != RecurrenceSelector(Hour($hour)) {
 			crash "Omitted subdaily hour must allow every hour"
 		}
-		hour = hour + 1
-		index = index + 1
+		$hour = $hour + 1
+		$index = $index + 1
 	}
-	var minute = 0.U8
-	while minute < 60 {
-		if mode != 0 or minute == 0 or minute == 30 {
-			if recurrence_fact(source, index) != RecurrenceSelector(Minute(minute)) {
+	var $minute = 0.U8
+	while $minute < 60 {
+		if mode != 0 or $minute == 0 or $minute == 30 {
+			if recurrence_fact(source, $index) != RecurrenceSelector(Minute($minute)) {
 				crash "Subdaily minute limitation/expansion changed"
 			}
-			index = index + 1
+			$index = $index + 1
 		}
-		minute = minute + 1
+		$minute = $minute + 1
 	}
 	for second in [10.U8, 50] {
-		if recurrence_fact(source, index) != RecurrenceSelector(Second(second)) {
+		if recurrence_fact(source, $index) != RecurrenceSelector(Second(second)) {
 			crash "Subdaily second selectors changed"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
-	if recurrence_fact(source, index) != RecurrenceSelector(Microsecond(input.work.to_u32())) or
-		recurrence_fact(source, index + 1) != RecurrenceException({ kind: Exclusion, source: Local(anchor) }) or
-			Explanation.fact_count(source) != index + 2 {
+	if recurrence_fact(source, $index) != RecurrenceSelector(Microsecond(input.work.to_u32())) or
+		recurrence_fact(source, $index + 1) != RecurrenceException({ kind: Exclusion, source: Local(anchor) }) or
+			Explanation.fact_count(source) != $index + 2 {
 		crash "Subdaily explanation lost exact anchor fraction or source exclusion"
 	}
 	check_recurrence_rendering(source)

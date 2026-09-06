@@ -15,6 +15,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_DEPENDENCY_RE = re.compile(r'(?m)^(\s*time:\s*)"[^"]+"')
 SKIPPED_EXAMPLES: dict[str, str] = {}
@@ -96,29 +98,10 @@ def start_server(directory: Path, requests: list[str] | None = None) -> tuple[ht
 
 
 def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str, zone_url: str) -> list[Path]:
-    target_dir = examples_dir / "examples"
-    shutil.copytree(ROOT / "examples", target_dir)
-
-    examples = []
-    for example in sorted(target_dir.rglob("main.roc")):
-        if example.name in SKIPPED_EXAMPLES:
-            print(f"Skipping {example.name}: {SKIPPED_EXAMPLES[example.name]}.")
-            continue
-
-        source = example.read_text(encoding="utf-8")
-        rewritten, count = PACKAGE_DEPENDENCY_RE.subn(
-            lambda match: f'{match.group(1)}"{bundle_url}"',
-            source,
-            count=1,
-        )
-        if count != 1:
-            raise SystemExit(f"{example.name} does not declare the expected time package dependency")
-
-        rewritten = re.sub(r'(?m)^(\s*zones:\s*)"[^"]+"', lambda match: f'{match.group(1)}"{zone_url}"', rewritten)
-        example.write_text(rewritten, encoding="utf-8")
-        examples.append(example)
-
-    return examples
+    from roc_version import package_pin
+    from update_example_urls import copy_examples
+    return copy_examples(examples_dir / "examples", bundle_url, zone_url,
+                         compiler=package_pin(ROOT))
 
 
 def run_example_checks(examples: list[Path], *, env: dict[str, str] | None = None) -> None:
@@ -126,14 +109,14 @@ def run_example_checks(examples: list[Path], *, env: dict[str, str] | None = Non
         run([ROC, "check", example.name, "--no-cache"], cwd=example.parent, env=env)
 
 
-def run_example_apps(examples: list[Path], *, env: dict[str, str] | None = None) -> None:
+def run_example_apps(examples: list[Path], *, env: dict[str, str] | None = None, expected_dir: Path | None = None) -> None:
     for example in examples:
         result = run([ROC, example.name, "--no-cache"], cwd=example.parent, env=env)
-        check_output(example, result.stdout)
+        check_output(example, result.stdout, expected_dir=expected_dir)
 
 
-def check_output(example: Path, actual: str) -> None:
-    expected = ROOT / "tests" / "examples" / f"{example.parent.name}.txt"
+def check_output(example: Path, actual: str, *, expected_dir: Path | None = None) -> None:
+    expected = (expected_dir or ROOT / "tests" / "examples") / f"{example.parent.name}.txt"
     if example.parent.name in {"booking_exchange", "archive_search", "staffing"} and not expected.is_file():
         raise SystemExit(f"Missing required output fixture: {expected}")
     if expected.exists() and actual != expected.read_text(encoding="utf-8"):

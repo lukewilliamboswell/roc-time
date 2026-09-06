@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pinned roc-fuzz builds, bounded campaigns, replay, and failure-lifecycle checks."""
 from __future__ import annotations
+from roc_version import package_pin
 
 import argparse
 import hashlib
@@ -50,7 +51,7 @@ def environment() -> str | None:
     if target is None:
         print(f"UNVERIFIED: roc-fuzz does not support configured host {host}; no fuzz checks ran")
         return None
-    expected = "Roc compiler version " + (ROOT / ".roc-version").read_text().strip()
+    expected = "Roc compiler version " + package_pin(ROOT)
     version = command([ROC, "version"]).strip()
     if version != expected:
         raise SystemExit(f"Expected {expected}, got {version}; select the compiler with ROC")
@@ -119,7 +120,7 @@ def campaign(name: str, binary: Path, args: argparse.Namespace) -> None:
     for raw in curated_inputs(name):
         shutil.copyfile(raw, corpus / raw.name)
     metadata = {
-        "compiler": (ROOT / ".roc-version").read_text().strip(),
+        "compiler": package_pin(ROOT),
         "platform": json.loads((DATA / "dependency.json").read_text()),
         "host": [platform.system(), platform.machine()],
         "backend": "LLVM speed --fuzz",

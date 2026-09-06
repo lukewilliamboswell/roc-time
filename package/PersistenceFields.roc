@@ -19,48 +19,48 @@ PersistenceFields := [].{
 				Ok(v) => v
 				Err(e) => return Err(Encoding(e))
 			}
-			var rest = match opened {
+			var $rest = match opened {
 				Uncounted(s) => s
 				Counted(_) => return Err(UnsupportedContainer)
 			}
-			var entries = []
-			var done = Bool.False
-			while !done {
-				next = match Encoding.parse_list_next(encoding, rest) {
+			var $entries = []
+			var $done = Bool.False
+			while !$done {
+				next = match Encoding.parse_list_next(encoding, $rest) {
 					Ok(v) => v
 					Err(e) => return Err(Encoding(e))
 				}
 				match next {
 					Done(s) => {
-						rest = s
-						done = True
+						$rest = s
+						$done = True
 					}
 					Item(s) => {
-						if entries.len() >= max_fields {
+						if $entries.len() >= max_fields {
 							return Err(TooManyFields)
 						}
 						field = match Encoding.parse_str(encoding, s) {
 							Ok(v) => v
 							Err(e) => return Err(Encoding(e))
 						}
-						entries = entries.append(field.value)
+						$entries = $entries.append(field.value)
 						after = match Encoding.parse_list_after_item(encoding, field.rest) {
 							Ok(v) => v
 							Err(e) => return Err(Encoding(e))
 						}
 						match after {
 							Continue(s2) => {
-								rest = s2
+								$rest = s2
 							}
 							Done(s2) => {
-								rest = s2
-								done = True
+								$rest = s2
+								$done = True
 							}
 						}
 					}
 				}
 			}
-			Ok({ value: entries, rest })
+			Ok({ value: $entries, rest: $rest })
 		}
 	}
 }

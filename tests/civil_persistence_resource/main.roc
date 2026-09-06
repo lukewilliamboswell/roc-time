@@ -89,14 +89,14 @@ main! = |args| {
 	loaded = Host.allocated_bytes!({})
 	Host.assert!(decoded == stored and loaded - encoded <= ceiling)
 	snapshot = Persistence.value(decoded)
-	var i = 0.U32
-	while i < 100000 {
+	var $i = 0.U32
+	while $i < 100000 {
 		match snapshot {
 			ResolvedBoundary(value) => Host.assert!(ResolvedBoundary.boundary(value) == PosixBoundary.from_microseconds(0) and ResolvedBoundary.policy(value) == First)
 			ResolvedSelection(value) => Host.assert!(Coverage.member_count(ResolvedSelection.coverage(value)) == count.to_u64() + 1 and Coverage.contains(ResolvedSelection.coverage(value), PosixBoundary.from_microseconds(count.to_i64() * 1000000)) and !Coverage.contains(ResolvedSelection.coverage(value), PosixBoundary.from_microseconds(1)))
 			_ => Host.assert!(False)
 		}
-		i = i + 1
+		$i = $i + 1
 	}
 	queried = Host.allocated_bytes!({})
 	Host.assert!(queried == loaded)

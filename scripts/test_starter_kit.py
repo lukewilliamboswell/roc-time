@@ -14,6 +14,7 @@ import zipfile
 
 sys.dont_write_bytecode = True
 from starter_kit import build, validate_url
+from roc_version import package_pin
 from test_bundle_examples import ROOT, ROC, REHEARSAL_VERSION, bare_asset_name, release_asset_name, start_server
 
 STARTERS = ("booking_exchange", "archive_search", "staffing")
@@ -25,7 +26,11 @@ def invoke(kit, cache, command, starter, *, expected=None, diagnostic=None, roc=
                             cwd=Path(tempfile.gettempdir()).resolve(), env=env,
                             capture_output=True, text=True, timeout=120)
     if diagnostic is not None:
-        if result.returncode == 0 or diagnostic not in result.stdout + result.stderr:
+        # Roc wraps long paths in diagnostics, including within a filename.
+        # Match the same specific diagnostic independently of display wrapping.
+        observed = "".join((result.stdout + result.stderr).split())
+        required = "".join(diagnostic.split())
+        if result.returncode == 0 or required not in observed:
             raise RuntimeError(f"Expected {diagnostic!r}: {result.stdout}\n{result.stderr}")
     elif result.returncode or (expected is not None and result.stdout != expected):
         raise RuntimeError(f"Starter {command}/{starter} failed: {result.stdout}\n{result.stderr}")
@@ -102,7 +107,7 @@ def main():
                 zipped.extractall(work / "extracted")
             kit = work / "extracted/roc-time-starter"
             metadata = json.loads((kit / "manifest.json").read_text())
-            if metadata["compiler"] != (ROOT / ".roc-version").read_text().strip():
+            if metadata["compiler"] != package_pin(ROOT):
                 raise RuntimeError("starter compiler pin differs from package")
             from update_example_urls import update_examples
             update_examples(kit / "examples", core_url, zone_url)
@@ -111,7 +116,14 @@ def main():
             for starter in STARTERS:
                 expected = (ROOT / f"tests/examples/{starter}.txt").read_text()
                 invoke(kit, work / "cache", "check", starter)
-                invoke(kit, work / "cache", "run", starter, expected=expected)
+                # This is the documented first-use path: Roc directly, without
+                # relying on the optional Python wrapper to rebind dependencies.
+                direct = subprocess.run([ROC, "main.roc"],
+                                        cwd=kit / "examples" / starter,
+                                        env={**os.environ, "XDG_CACHE_HOME": str(work / "cache")},
+                                        capture_output=True, text=True, timeout=120)
+                if direct.returncode or direct.stdout != expected:
+                    raise RuntimeError(f"Direct Roc starter failed: {starter}: {direct.stdout}\n{direct.stderr}")
                 invoke(kit, work / "cache", "build", starter)
                 binary = kit / "build" / starter
                 result = subprocess.run([str(binary)], cwd=outside, capture_output=True,

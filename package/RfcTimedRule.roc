@@ -44,12 +44,12 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 		if parts.inclusions.len() > 4096 or parts.exclusions.len() > 4096 or parts.periods.len() > 4096 {
 			return Err(TooLarge)
 		}
-		var remaining = 65536.U64
+		var $remaining = 65536.U64
 		for text in [parts.start, parts.rule, parts.duration].concat(parts.inclusions).concat(parts.exclusions).concat(parts.periods) {
-			if text.count_utf8_bytes() > remaining {
+			if text.count_utf8_bytes() > $remaining {
 				return Err(TooLarge)
 			}
-			remaining = remaining - text.count_utf8_bytes()
+			$remaining = $remaining - text.count_utf8_bytes()
 		}
 		start = timestamp(parts.start, "DTSTART")?
 		expected_form = match parts.mode {
@@ -110,10 +110,10 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 			Ok(value) => value
 			Err(_) => return Err(TooLarge)
 		}
-		var periods = []
+		var $periods = []
 		for entry in parts.periods {
 			for text in entry.split_on(",") {
-				if periods.len() == 4096 {
+				if $periods.len() == 4096 {
 					return Err(TooLarge)
 				}
 				period = match RfcPeriod.parse(text) {
@@ -123,10 +123,10 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 				if RfcDateTime.form(RfcPeriod.start(period)) != expected_form {
 					return Err(Unsupported("mixed PERIOD and DTSTART forms"))
 				}
-				periods = periods.append(period)
+				$periods = $periods.append(period)
 			}
 		}
-		Ok({ rule: filtered, duration, periods, mode: parts.mode })
+		Ok({ rule: filtered, duration, periods: $periods, mode: parts.mode })
 	}
 
 	## Explicit context for the selected mode. Floating values are bound by the
@@ -209,20 +209,20 @@ timestamp = |text, part| match RfcDateTime.parse(text) {
 
 timestamps : List(Str), Str, RfcDateTime.Form -> Try(List(RfcDateTime), RfcTimedRule.Error)
 timestamps = |entries, part, form| {
-	var values = []
+	var $values = []
 	for entry in entries {
 		for text in entry.split_on(",") {
-			if values.len() == 4096 {
+			if $values.len() == 4096 {
 				return Err(TooLarge)
 			}
 			value = timestamp(text, part)?
 			if RfcDateTime.form(value) != form {
 				return Err(Unsupported("mixed ${part} and DTSTART forms"))
 			}
-			values = values.append(value)
+			$values = $values.append(value)
 		}
 	}
-	Ok(values)
+	Ok($values)
 }
 
 test_parts = |start, rule, mode| { start, rule, mode, duration: "P1D", inclusions: [], exclusions: [], periods: [] }
@@ -238,22 +238,22 @@ test_observe = |parts, context, lower, upper| {
 		Err(error) => return Err(Parse(error))
 	}
 	window = { start: RfcDateTime.local_label(test_timestamp(lower)), end: RfcDateTime.local_label(test_timestamp(upper)) }
-	var cursor = RfcTimedRule.schedule(42.U64, parsed, window, context)?
-	var occurrences = []
-	var calls = 0.U64
-	while calls < 2000 {
-		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 3, max_buffered: 32, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
+	var $cursor = RfcTimedRule.schedule(42.U64, parsed, window, context)?
+	var $occurrences = []
+	var $calls = 0.U64
+	while $calls < 2000 {
+		batch = match TimedSchedule.collect($cursor, { work: { max_steps: 3, max_buffered: 32, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(error) => return Err(Execution(error))
 		}
-		occurrences = occurrences.concat(batch.occurrences)
+		$occurrences = $occurrences.concat(batch.occurrences)
 		match batch.status {
-			Complete => return Ok(occurrences)
+			Complete => return Ok($occurrences)
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	Err(FixtureDidNotTerminate)
 }
@@ -274,24 +274,24 @@ expect {
 expect {
 	validity = PosixSpan.new(RfcDateTime.utc_boundary(test_timestamp("19970901T000000Z"))?, RfcDateTime.utc_boundary(test_timestamp("19970904T000000Z"))?)?
 	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
-	var valid = Bool.True
+	var $valid = Bool.True
 	for case in [{ until: "19970902T210000Z", expected: [9.U8, 12, 15] }, { until: "19970902T170000Z", expected: [9, 12] }, { until: "19970902T190000Z", expected: [9, 12, 15] }] {
 		parts = { ..test_parts("19970902T090000", "FREQ=HOURLY;INTERVAL=3;UNTIL=${case.until}", Zoned), duration: "PT1H" }
 		values = test_observe(parts, Local(rules), "19970902T000000", "19970903T000000")?
-		valid = valid and values.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)))).hour) == case.expected
+		$valid = $valid and values.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)))).hour) == case.expected
 	}
-	valid
+	$valid
 }
 
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for parts in [test_parts("20250101T090000Z", "FREQ=DAILY;UNTIL=20250102T090000", Utc), test_parts("20250101T090000", "FREQ=DAILY;UNTIL=20250102T090000Z", Floating), test_parts("20250101T090000", "FREQ=DAILY;UNTIL=20250102T090000", Zoned), test_parts("20250101T090000Z", "FREQ=DAILY", Zoned)] {
-		valid = valid and match RfcTimedRule.parse(parts) {
+		$valid = $valid and match RfcTimedRule.parse(parts) {
 			Err(Incompatible(_)) => Bool.True
 			_ => Bool.False
 		}
 	}
-	valid
+	$valid
 }
 expect {
 	parts = { ..test_parts("20070311T023000", "FREQ=HOURLY;COUNT=2", Zoned), exclusions: ["20070311T073000Z"] }

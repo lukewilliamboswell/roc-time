@@ -18,7 +18,7 @@ jobs:
           persist-credentials: false
       - name: Read Roc version
         id: roc-version
-        run: echo "nightly-tag=$(< .roc-version)" >> "$GITHUB_OUTPUT"
+        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
       - name: Install Roc
         uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
         with:

@@ -1,33 +1,47 @@
-# Maintenance release pilot
+# Compiler-support release pilot
 
-Objective: pilot shared main-development and `release/roc-0.1.x` compiler-support guidance
-from roc-automation without implying an LTS or response-time commitment.
+Validate a repeatable development and supported-compiler workflow across
+roc-automation and roc-time, including published multi-file examples, package
+bundles, release notes and documentation. This is a workflow experiment, not a
+claim that upstream has released stable Roc.
+
+Pilot inputs:
+
+- `roc-0.1.x` simulates the supported compiler branch using
+  `nightly-2026-09-05-b195f5b`.
+- Development uses `nightly-2026-09-06-d85e877`.
+- Compiler pins live in app/package/platform headers. Published examples retain
+  their supported compiler and immutable package URLs while development tests
+  rebind temporary copies to the checkout.
+- Package versions are independent of compiler lines. Published changes receive
+  new immutable releases; existing release contents must not be replaced.
 
 Remaining deliverables:
 
-- When upstream stable releases become available, remove the explicit nightly
-  bootstrap publication opt-in and configure the stable compiler installer.
-- Establish an actual upstream Roc release and verified compiler installer before
-  creating a versioned compiler-support branch; an existing nightly pin is not
-  evidence of stable compiler compatibility.
-- Review the shared roc-automation PRs and the roc-time pilot PRs before merging.
-- Run the pilot checks in GitHub, including a validation-only dispatch on the
-  compiler-support branch after a suitable upstream release exists; do not create another release to test CI.
-- Enable nightly bot PR creation and establish required checks through the
-  repository's reviewed settings policy before claiming unattended operation.
-- Verify one nightly candidate, no-op and failure report. Review-only bot PRs
-  currently receive linked validation runs; required-status attachment must be
-  verified separately before relying on it for protected merges.
-- Merge or recover the existing rc1 documentation follow-up so later site
-  deployments retain its versioned pages.
+- Create and push `roc-0.1.x` from the verified pilot changes with the September 5
+  package pins; preserve September 6 on the development branch. Obtain actual
+  GitHub validation evidence for both workflows before publication.
+- Exercise the new `0.1.0-rc2` candidate release from `roc-0.1.x`, then verify its
+  actual published URLs, notes, direct `roc main.roc` multi-file applications,
+  documentation deployment and follow-up PR.
+- Review/integrate the pilot PRs and the release follow-up without downgrading
+  development package pins. Close the superseded rc1 follow-up after its docs
+  are preserved. Public examples currently reference rc1, whose unprefixed
+  mutable bindings warn under the September 5 compiler: promote the verified
+  new release URLs before claiming that public path works on the pilot compiler.
+- Verify a nightly update edits only the configured development headers while
+  leaving example pins unchanged, including success/no-op/failure evidence.
+  Keep automatic merging disabled and respect repository protection/review.
+- Resolve or explicitly report `roc bump` limitations: these compilers reject
+  prerelease values for `--expect`, and extracting the rc1 public API reports
+  its unexposed `PersistenceEnvelope.Error`. Do not call this a passing API diff.
+- Finish reusable guidance with live acceptance and the transition to actual
+  upstream stable releases. Remove the explicit simulated-compiler mapping at
+  that transition.
 
-A compiler-support branch identifies an upstream Roc compiler compatibility line;
-package releases are independently versioned and immutable. Support duration,
-backport scope and any funded LTS are separate policies. Publication remains an
-explicit action after exact candidate and bundle verification. Until versioned
-upstream releases exist, an explicit bootstrap opt-in permits the exact nightly
-pin on `main`. The intended future policy requires a supported stable compiler
-for every package publication, even when development moves ahead. No automatic
-cross-line compiler upgrade or merge bypass is part of this pilot.
+Support duration and any funded LTS remain separate policies. Once upstream
+stable releases are adopted, publications must support a stable compiler even
+when development moves ahead. The pilot exception must remain explicit and
+scoped to its named branch and compiler.
 
-Remove this plan once the reviewed integration and live pilot are complete.
+Remove this plan once the integration and live acceptance criteria are complete.

@@ -10,27 +10,57 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
-from generate_zone_database import verify
+from generate_zone_database import verify, package_header
+from roc_version import read_pin
 from fixture_platform import build_host
 from oracle_replay import parse_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def main():
-    package = ROOT / 'tzdb/package'
+def validate_header(source, compiler):
+    if source != package_header(compiler):
+        raise ValueError("Zone package must expose only Database and pin the core compiler")
+
+
+def check_integrity(package):
     manifest = json.loads((package / 'manifest.json').read_text())
     generator = ROOT / 'scripts/generate_zone_database.py'
     if hashlib.sha256(generator.read_bytes()).hexdigest() != manifest['generator_sha256']:
         raise SystemExit('Zone generator changed: regenerate and review the committed pack')
     if (ROOT / 'tzdb/Database.roc').read_bytes() != (package / 'Database.roc').read_bytes():
         raise SystemExit('Zone implementation changed: regenerate the distributable pack')
-    expected = set(manifest['files']) | {'manifest.json'}
+    if 'main.roc' in manifest['files']:
+        raise SystemExit('Compiler header must not be part of the generated-data digests')
+    validate_header((package / 'main.roc').read_text(), read_pin(ROOT / 'package/main.roc'))
+    expected = set(manifest['files']) | {'manifest.json', 'main.roc'}
     if {p.name for p in package.iterdir()} != expected:
         raise SystemExit('Unexpected or missing generated package files')
     for name, digest in manifest['files'].items():
         if hashlib.sha256((package / name).read_bytes()).hexdigest() != digest:
             raise SystemExit(f'Zone artifact integrity mismatch: {name}')
+    return manifest
+
+
+def header_controls():
+    # Compiler upgrades preserve the generated-data manifest; the header is
+    # independently constrained so extra exports/dependencies cannot hide there.
+    for compiler in ('nightly-2026-09-05-b195f5b', 'nightly-2026-09-06-d85e877'):
+        validate_header(package_header(compiler), compiler)
+        for malformed in (package_header('0.0.0'), package_header(compiler).replace('[Database]', '[Database, Extra]'),
+                          package_header(compiler) + 'extra = 1\n', 'package [Database] {}\n'):
+            try:
+                validate_header(malformed, compiler)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('Invalid zone package header was accepted')
+
+
+def main():
+    package = ROOT / 'tzdb/package'
+    manifest = check_integrity(package)
+    header_controls()
     roc = os.environ.get('ROC', 'roc')
     if '/' in roc or '\\' in roc: roc = str(Path(roc).resolve())
     temporary = ROOT / '.roc-time-tmp'

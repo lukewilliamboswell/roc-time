@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compile and run every Roc code block in public module doc comments."""
+from roc_version import package_pin
 from pathlib import Path
 import os
 import re
@@ -11,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> None:
     roc = os.environ.get('ROC', 'roc')
     version = subprocess.check_output([roc, 'version'], text=True).strip()
-    if version != 'Roc compiler version ' + (ROOT / '.roc-version').read_text().strip():
+    if version != 'Roc compiler version ' + package_pin(ROOT):
         raise SystemExit('Set ROC to the pinned compiler')
     imports = set()
     bodies = []

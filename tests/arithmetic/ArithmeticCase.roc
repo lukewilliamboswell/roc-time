@@ -67,27 +67,27 @@ ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64,
 model : Fields, I64, I64, I64, CalendarArithmetic.Policy -> Try(Fields, [OutOfRange, InvalidDestination(Fields), ..])
 model = |fields, years, months, days, policy| {
 	after_years = repair({ year: fields.year + years, month: fields.month, day: fields.day }, policy)?
-	var next = after_years
-	var remaining = months
+	var $next = after_years
+	var $remaining = months
 	# Move month labels first; do not repeatedly clamp intermediate dates.
-	while remaining != 0 {
-		if remaining > 0 {
-			next = if next.month == 12 {
-				{ year: next.year + 1, month: 1, day: next.day }
+	while $remaining != 0 {
+		if $remaining > 0 {
+			$next = if $next.month == 12 {
+				{ year: $next.year + 1, month: 1, day: $next.day }
 			} else {
-				{ year: next.year, month: next.month + 1, day: next.day }
+				{ year: $next.year, month: $next.month + 1, day: $next.day }
 			}
-			remaining = remaining - 1
+			$remaining = $remaining - 1
 		} else {
-			next = if next.month == 1 {
-				{ year: next.year - 1, month: 12, day: next.day }
+			$next = if $next.month == 1 {
+				{ year: $next.year - 1, month: 12, day: $next.day }
 			} else {
-				{ year: next.year, month: next.month - 1, day: next.day }
+				{ year: $next.year, month: $next.month - 1, day: $next.day }
 			}
-			remaining = remaining + 1
+			$remaining = $remaining + 1
 		}
 	}
-	walk(repair(next, policy)?, days)
+	walk(repair($next, policy)?, days)
 }
 
 repair : Fields, CalendarArithmetic.Policy -> Try(Fields, [OutOfRange, InvalidDestination(Fields), ..])
@@ -108,41 +108,41 @@ repair = |fields, policy| {
 
 walk : Fields, I64 -> Try(Fields, [OutOfRange, ..])
 walk = |fields, amount| {
-	var next = fields
-	var remaining = amount
-	while remaining != 0 {
-		if remaining > 0 {
-			if next.day < month_length(next.year, next.month) {
-				next = { year: next.year, month: next.month, day: next.day + 1 }
-			} else if next.month < 12 {
-				next = { year: next.year, month: next.month + 1, day: 1 }
+	var $next = fields
+	var $remaining = amount
+	while $remaining != 0 {
+		if $remaining > 0 {
+			if $next.day < month_length($next.year, $next.month) {
+				$next = { year: $next.year, month: $next.month, day: $next.day + 1 }
+			} else if $next.month < 12 {
+				$next = { year: $next.year, month: $next.month + 1, day: 1 }
 			} else {
-				next = { year: next.year + 1, month: 1, day: 1 }
+				$next = { year: $next.year + 1, month: 1, day: 1 }
 			}
-			remaining = remaining - 1
+			$remaining = $remaining - 1
 		} else {
-			if next.day > 1 {
-				next = { year: next.year, month: next.month, day: next.day - 1 }
+			if $next.day > 1 {
+				$next = { year: $next.year, month: $next.month, day: $next.day - 1 }
 			} else {
-				year = if next.month == 1 {
-					next.year - 1
+				year = if $next.month == 1 {
+					$next.year - 1
 				} else {
-					next.year
+					$next.year
 				}
-				month = if next.month == 1 {
+				month = if $next.month == 1 {
 					12
 				} else {
-					next.month - 1
+					$next.month - 1
 				}
-				next = { year, month, day: month_length(year, month) }
+				$next = { year, month, day: month_length(year, month) }
 			}
-			remaining = remaining + 1
+			$remaining = $remaining + 1
 		}
-		if next.year < -2147483648 or next.year > 2147483647 {
+		if $next.year < -2147483648 or $next.year > 2147483647 {
 			return Err(OutOfRange)
 		}
 	}
-	Ok(next)
+	Ok($next)
 }
 
 month_length = |year, month| {

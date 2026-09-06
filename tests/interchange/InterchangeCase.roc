@@ -57,11 +57,11 @@ month_days = |year, month| if month == 2 {
 
 pad = |number, width| {
 	raw = number.to_str()
-	var result = raw
-	while result.count_utf8_bytes() < width {
-		result = "0${result}"
+	var $result = raw
+	while $result.count_utf8_bytes() < width {
+		$result = "0${$result}"
 	}
-	result
+	$result
 }
 
 check_edtf = |input, day, date_text| {
@@ -122,13 +122,13 @@ check_edtf = |input, day, date_text| {
 }
 
 check_timestamp = |input, day, date_text| {
-	var scale = 1.U32
-	var count = 0.U8
-	while count < input.digits {
-		scale = scale * 10
-		count = count + 1
+	var $scale = 1.U32
+	var $count = 0.U8
+	while $count < input.digits {
+		$scale = $scale * 10
+		$count = $count + 1
 	}
-	fraction = input.fraction % scale
+	fraction = input.fraction % $scale
 	fraction_text = if input.digits == 0 {
 		""
 	} else {
@@ -185,32 +185,32 @@ check_timestamp = |input, day, date_text| {
 	}
 	fields = GregorianDate.to_fields(parts.date)
 	clock = ClockTime.to_fields(parts.clock)
-	micros = fraction * (1000000 // scale)
+	micros = fraction * (1000000 // $scale)
 	if fields != { year: input.year.to_i64(), month: input.month, day } or
 		clock != { hour: h.to_u8_wrap(), minute: m.to_u8_wrap(), second: s.to_u8_wrap(), microsecond: micros } or
 			parts.fraction_digits != input.digits or parts.offset != expected_offset or OffsetTimestamp.new(parts) != Ok(parsed) {
 		crash "Timestamp fields differ from generated input"
 	}
-	var days = 0.I64
-	var year = 1900.U16
-	while year < input.year {
-		days = days + (
-			if month_days(year, 2) == 29 {
+	var $days = 0.I64
+	var $year = 1900.U16
+	while $year < input.year {
+		$days = $days + (
+			if month_days($year, 2) == 29 {
 				366
 			} else {
 				365
 			}
 		)
-		year = year + 1
+		$year = $year + 1
 	}
-	var month = 1.U8
-	while month < input.month {
-		days = days + month_days(input.year, month).to_i64()
-		month = month + 1
+	var $month = 1.U8
+	while $month < input.month {
+		$days = $days + month_days(input.year, $month).to_i64()
+		$month = $month + 1
 	}
 	# 1900-01-01 is 25567 whole days before the POSIX epoch (70 ordinary
 	# years plus 17 leap days); all arithmetic stays within this bounded domain.
-	elapsed_days = days + day.to_i64() - 1 - 25567
+	elapsed_days = $days + day.to_i64() - 1 - 25567
 	offset_seconds = if unasserted {
 		0.I64
 	} else {
@@ -233,15 +233,15 @@ check_malformed = |input, date_text| {
 	# Every fixed-field position is independently damaged, and every valid
 	# fixed-field prefix remains incomplete. Observe shared/sliced ASCII input.
 	bytes = "${date_text}T12:34:56Z".to_utf8()
-	var position = 0.U64
-	while position < 19 {
-		prefix = bytes.sublist({ start: 0, len: position })
-		suffix = bytes.sublist({ start: position + 1, len: bytes.len() - position - 1 })
+	var $position = 0.U64
+	while $position < 19 {
+		prefix = bytes.sublist({ start: 0, len: $position })
+		suffix = bytes.sublist({ start: $position + 1, len: bytes.len() - $position - 1 })
 		if OffsetTimestamp.parse(ascii_text(prefix)) != Err(Incomplete) or
 			OffsetTimestamp.parse(ascii_text(prefix.append(64).concat(suffix))) != Err(Malformed) {
 			crash "Timestamp fixed-field mutation or prefix misclassified"
 		}
-		position = position + 1
+		$position = $position + 1
 	}
 	invalid_day = month_days(input.year, input.month) + 1
 	invalid_date = "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}-${pad(invalid_day.to_u64(), 2)}"
@@ -515,15 +515,15 @@ check_snapshot_explanation = |snapshot, expected, presentation, budget| {
 		}
 		End => crash "Snapshot explanation omitted presentation status"
 	}
-	var index = 0.U64
-	while index < Explanation.fact_count(source) {
-		match Explanation.fact_at(source, index) {
+	var $index = 0.U64
+	while $index < Explanation.fact_count(source) {
+		match Explanation.fact_at(source, $index) {
 			Item(fact) => if SemanticFact.kind(fact) == Requirement(ZoneContext) {
 				crash "Bound snapshot was described as needing zone context again"
 			}
 			End => crash "Declared fact count exceeds available snapshot facts"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
 	full = Explanation.plain(source, { max_facts: 64, max_utf8_bytes: 16384 })
 	prefix = Explanation.plain(source, { max_facts: budget, max_utf8_bytes: 16384 })
@@ -679,7 +679,7 @@ check_transition_snapshot_persistence = |coordinate| {
 	# Both tables resolve the queried point identically. Reusing the same name,
 	# version and bounds must not erase their differing future microsecond data.
 	validity = model_span(coordinate - 1, coordinate + 4)
-	var snapshots = []
+	var $snapshots = []
 	for later_offset in [1.I32, 2] {
 		rules = match ZoneRules.new_bounded("Synthetic/Archive", "same-version", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], { minimum: 0, maximum: 2 }) {
 			Ok(value) => value
@@ -698,13 +698,13 @@ check_transition_snapshot_persistence = |coordinate| {
 			ZoneRules.validity(retained) != validity {
 			crash "Snapshot persistence preserved only the queried point, not transition/validity evidence"
 		}
-		snapshots = snapshots.append(restored)
+		$snapshots = $snapshots.append(restored)
 	}
-	first = match snapshots.get(0) {
+	first = match $snapshots.get(0) {
 		Ok(value) => value
 		Err(_) => crash "Two-table model invariant"
 	}
-	second = match snapshots.get(1) {
+	second = match $snapshots.get(1) {
 		Ok(value) => value
 		Err(_) => crash "Two-table model invariant"
 	}
@@ -814,13 +814,13 @@ check_civil_explanation = |snapshot, lower, upper, rules, members| {
 		crash "Complete coverage explanation changed independent membership or endpoint identity"
 	}
 	check_civil_context(source, 1, rules)
-	var index = 0.U64
+	var $index = 0.U64
 	for span in members {
-		expected = CoverageMember({ index, span })
-		if explanation_fact(coverage_source, index + 1) != expected or explanation_fact(source, index + 2) != expected {
+		expected = CoverageMember({ index: $index, span })
+		if explanation_fact(coverage_source, $index + 1) != expected or explanation_fact(source, $index + 2) != expected {
 			crash "Coverage explanation changed independent half-open member"
 		}
-		index = index + 1
+		$index = $index + 1
 	}
 	check_declaration_limits(coverage_source, 1)
 	check_declaration_limits(source, 1)
@@ -851,12 +851,12 @@ check_civil_explanation = |snapshot, lower, upper, rules, members| {
 					crash "Complete evaluation lost independently modeled empty/disconnected result"
 				}
 				check_civil_context(batch_source, 2, rules)
-				var member_index = 0.U64
+				var $member_index = 0.U64
 				for span in members {
-					if explanation_fact(batch_source, member_index + 3) != CoverageMember({ index: member_index, span }) {
+					if explanation_fact(batch_source, $member_index + 3) != CoverageMember({ index: $member_index, span }) {
 						crash "Complete batch explanation changed raw modeled member"
 					}
-					member_index = member_index + 1
+					$member_index = $member_index + 1
 				}
 				Complete
 			}
@@ -885,7 +885,7 @@ check_timestamp_format_limits = |input| {
 	hour = input.seconds // 3600
 	minute = (input.seconds // 60) % 60
 	second = input.seconds % 60
-	var scale = 1.U32
+	var $scale = 1.U32
 	for digits in [0.U8, 1, 2, 3, 4, 5, 6] {
 		for variant in [0.U8, 1, 2, 3] {
 			year = if (variant + input.qualifier) % 2 == 0 {
@@ -904,7 +904,7 @@ check_timestamp_format_limits = |input| {
 					} else {
 						10
 					}
-					_ => scale - 1
+					_ => $scale - 1
 				}
 			}
 			offset = match variant {
@@ -923,7 +923,7 @@ check_timestamp_format_limits = |input| {
 				Ok(value) => value
 				Err(_) => crash "Formatter boundary year fixture rejected"
 			}
-			clock = match ClockTime.from_fields({ hour: hour.to_u8_wrap(), minute: minute.to_u8_wrap(), second: second.to_u8_wrap(), microsecond: fraction * (1000000 // scale) }) {
+			clock = match ClockTime.from_fields({ hour: hour.to_u8_wrap(), minute: minute.to_u8_wrap(), second: second.to_u8_wrap(), microsecond: fraction * (1000000 // $scale) }) {
 				Ok(value) => value
 				Err(_) => crash "Formatter exact-width clock fixture rejected"
 			}
@@ -948,6 +948,6 @@ check_timestamp_format_limits = |input| {
 				crash "Formatting retained value changed its independent canonical text"
 			}
 		}
-		scale = scale * 10
+		$scale = $scale * 10
 	}
 }

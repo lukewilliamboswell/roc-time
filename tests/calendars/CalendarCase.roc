@@ -109,27 +109,27 @@ check_description = |date| {
 		Ok(value) => value
 		Err(_) => crash "Valid description month"
 	}
-	var total = 0.I64
-	var selected = 0.I64
-	var m = 1.U8
-	while m <= 12 {
-		var d = 1.U8
-		while d <= 31 {
-			match CalendarDate.from_fields(calendar, { year: fields.year, month: m, day: d }) {
+	var $total = 0.I64
+	var $selected = 0.I64
+	var $m = 1.U8
+	while $m <= 12 {
+		var $d = 1.U8
+		while $d <= 31 {
+			match CalendarDate.from_fields(calendar, { year: fields.year, month: $m, day: $d }) {
 				Ok(_) => {
-					total = total + 1
-					if m == fields.month {
-						selected = selected + 1
+					$total = $total + 1
+					if $m == fields.month {
+						$selected = $selected + 1
 					}
 				}
 				Err(InvalidDay) => {}
 				Err(_) => crash "Calendar model outside valid year"
 			}
-			d = d + 1
+			$d = $d + 1
 		}
-		m = m + 1
+		$m = $m + 1
 	}
-	for query in [{ value: year, width: total, last: fields.year == 2147483647 }, { value: month, width: selected, last: fields.year == 2147483647 and fields.month == 12 }] {
+	for query in [{ value: year, width: $total, last: fields.year == 2147483647 }, { value: month, width: $selected, last: fields.year == 2147483647 and fields.month == 12 }] {
 		match CalendarValue.local_bounds(query.value) {
 			Err(OutOfRange) => if !query.last {
 				crash "Description lost valid upper boundary"

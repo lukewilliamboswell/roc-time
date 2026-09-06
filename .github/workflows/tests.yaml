@@ -27,7 +27,7 @@ jobs:
 
       - name: Read Roc version
         id: roc-version
-        run: echo "nightly-tag=$(< .roc-version)" >> "$GITHUB_OUTPUT"
+        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
 
       - name: Install Zig for the instrumented test host
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
@@ -54,3 +54,19 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
+
+  published-examples:
+    name: Published examples with their declared compiler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read example compiler
+        id: compiler
+        run: echo "pin=$(python3 scripts/roc_version.py --entrypoint examples/booking_exchange/main.roc)" >> "$GITHUB_OUTPUT"
+      - uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
+        with:
+          version: nightly-new-compiler
+          nightly-tag: ${{ steps.compiler.outputs.pin }}
+      - run: python3 scripts/test_published_examples.py

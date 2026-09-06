@@ -61,12 +61,12 @@ problems. The engineering tasks are in [the implementation plan](planning/implem
 
 ## Try it
 
-Download the [starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc1/roc-time-starter.zip), extract it, and run `python3 run.py run booking_exchange` from its folder.
-The [release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc1) include both package URLs and a complete import example. Use
-**`nightly-2026-09-04-c125b82`**, the compiler pinned in [`.roc-version`](.roc-version).
-Download the matching archive from the [pinned compiler release](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-04-c125b82), extract it, and add its directory to PATH or use the executable’s full path. Verify the version before running an example.
+Browse the [example applications](examples/README.md). Each folder contains a
+complete application with a `main.roc` entrypoint and companion modules. Its header
+declares the exact Roc compiler and published package URLs it needs.
 
-To explore the full example collection from source:
+Download the whole application folder, or clone this repository, then run Roc
+directly with that compiler:
 
 ```sh
 git clone https://github.com/lukewilliamboswell/roc-time.git
@@ -74,6 +74,18 @@ cd roc-time
 roc version
 roc examples/booking_exchange/main.roc
 ```
+
+For this workflow pilot, the examples use
+[`nightly-2026-09-05-b195f5b`](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b)
+as a stand-in for a future supported stable compiler. Development uses a separate
+package-header pin; it can advance without changing the public examples.
+No versioned stable Roc release is implied by this experiment.
+
+The [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc1/roc-time-starter.zip)
+also contains complete applications. Follow the compiler requirements shipped
+with that release, then run `roc examples/booking_exchange/main.roc` from the
+extracted kit folder. The [release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc1)
+include both package URLs and an import example. No Python runner is required.
 
 That example reads bookings, computes available windows, saves/restores the result
 and prints canonical timestamps. For historical-date input, run

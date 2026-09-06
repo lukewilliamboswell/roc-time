@@ -79,15 +79,15 @@ normalize = |values, fallback| {
 			Same
 		},
 	)
-	var result = []
-	var previous = None
+	var $result = []
+	var $previous = None
 	for value in sorted {
-		if previous != Some(value) {
-			result = result.append(value)
+		if $previous != Some(value) {
+			$result = $result.append(value)
 		}
-		previous = Some(value)
+		$previous = Some(value)
 	}
-	result
+	$result
 }
 
 # Constructor invariants: all dimensions nonempty, index < their product,
@@ -113,11 +113,11 @@ field_at = |values, index| match List.get(values, index) {
 expect {
 	anchor = ClockTime.from_fields({ hour: 12, minute: 10, second: 15, microsecond: 2 })?
 	pattern = ClockPattern.new(anchor, { hours: [17, 9, 9], minutes: [30, 0], seconds: [] })?
-	var fields = []
+	var $fields = []
 	for clock in pattern {
-		fields = fields.append(ClockTime.to_fields(clock))
+		$fields = $fields.append(ClockTime.to_fields(clock))
 	}
-	ClockPattern.count(pattern) == 4 and fields == [
+	ClockPattern.count(pattern) == 4 and $fields == [
 		{ hour: 9, minute: 0, second: 15, microsecond: 2 },
 		{ hour: 9, minute: 30, second: 15, microsecond: 2 },
 		{ hour: 17, minute: 0, second: 15, microsecond: 2 },

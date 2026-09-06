@@ -101,7 +101,7 @@ ZoneRules :: {
 		if version.is_empty() {
 			return Err(EmptyVersion)
 		}
-		var previous = PosixSpan.start(validity)
+		var $previous = PosixSpan.start(validity)
 		for transition in transitions {
 			if FixedOffset.to_seconds(transition.offset) < bounds.minimum or FixedOffset.to_seconds(transition.offset) > bounds.maximum {
 				return Err(OffsetOutsideBounds)
@@ -109,10 +109,10 @@ ZoneRules :: {
 			if transition.at <= PosixSpan.start(validity) or transition.at >= PosixSpan.end(validity) {
 				return Err(TransitionOutsideValidity)
 			}
-			if transition.at <= previous {
+			if transition.at <= $previous {
 				return Err(UnorderedTransitions)
 			}
-			previous = transition.at
+			$previous = transition.at
 		}
 		Ok({ name, version, validity, initial, transitions, bounds, provenance: Supplied })
 	}
@@ -179,12 +179,12 @@ ZoneRules :: {
 		lower = database_boundary(data.start_second)?
 		upper = database_boundary(data.end_second)?
 		validity = PosixSpan.new(lower, upper)?
-		var transitions = []
+		var $transitions = []
 		for entry in data.transitions {
 			at = database_boundary(entry.second)?
-			transitions = transitions.append({ at, offset: FixedOffset.from_seconds(entry.offset) })
+			$transitions = $transitions.append({ at, offset: FixedOffset.from_seconds(entry.offset) })
 		}
-		rules = new_bounded(data.canonical_name, data.source_version, validity, FixedOffset.from_seconds(data.initial_offset), transitions, { minimum: data.minimum_offset, maximum: data.maximum_offset })?
+		rules = new_bounded(data.canonical_name, data.source_version, validity, FixedOffset.from_seconds(data.initial_offset), $transitions, { minimum: data.minimum_offset, maximum: data.maximum_offset })?
 		Ok({ ..rules, provenance: DatabaseSource({ requested_name: data.requested_name, canonical_name: data.canonical_name, source_digest: data.source_digest, profile: data.profile }) })
 	}
 
@@ -209,14 +209,14 @@ ZoneRules :: {
 		if boundary < PosixSpan.start(rules.validity) or boundary >= PosixSpan.end(rules.validity) {
 			return Err(OutsideValidity)
 		}
-		var offset = rules.initial
+		var $offset = rules.initial
 		for transition in rules.transitions {
 			if boundary < transition.at {
-				return Ok(offset)
+				return Ok($offset)
 			}
-			offset = transition.offset
+			$offset = transition.offset
 		}
-		Ok(offset)
+		Ok($offset)
 	}
 
 	## Complete classification only when every possible candidate is covered.
@@ -289,17 +289,17 @@ ZoneRules :: {
 								Ok(found) => found
 								Err(_) => return Err(OffsetConflict)
 							}
-							var lower = 0.U64
-							var upper = boundaries.len()
-							while lower < upper {
-								middle = lower + U64.div_trunc_by(upper - lower, 2)
+							var $lower = 0.U64
+							var $upper = boundaries.len()
+							while $lower < $upper {
+								middle = $lower + U64.div_trunc_by($upper - $lower, 2)
 								if classification_boundary_at(boundaries, middle) < candidate {
-									lower = middle + 1
+									$lower = middle + 1
 								} else {
-									upper = middle
+									$upper = middle
 								}
 							}
-							if lower == boundaries.len() or classification_boundary_at(boundaries, lower) != candidate {
+							if $lower == boundaries.len() or classification_boundary_at(boundaries, $lower) != candidate {
 								return Err(OffsetConflict)
 							}
 							candidate
@@ -354,58 +354,58 @@ ZoneRules :: {
 			# a whole cursor on each append retains an alias to its old buffer.
 			rules = initial.rules
 			local = initial.local
-			var index = initial.index
-			var lower = initial.lower
-			var offset = initial.offset
-			var matches = initial.matches
-			var gaps = initial.gaps
-			var done = initial.done
-			var segments = 0.U64
+			var $index = initial.index
+			var $lower = initial.lower
+			var $offset = initial.offset
+			var $matches = initial.matches
+			var $gaps = initial.gaps
+			var $done = initial.done
+			var $segments = 0.U64
 			while True {
-				buffered = matches.len() + gaps.len()
+				buffered = $matches.len() + $gaps.len()
 				if buffered > limits.max_candidates {
-					return Ok({ segments, buffered, status: Limited({ cursor: { rules, local, index, lower, offset, matches, gaps, done }, reason: BufferLimit }) })
+					return Ok({ segments: $segments, buffered, status: Limited({ cursor: { rules, local, index: $index, lower: $lower, offset: $offset, matches: $matches, gaps: $gaps, done: $done }, reason: BufferLimit }) })
 				}
-				if done {
-					resolution = match matches {
+				if $done {
+					resolution = match $matches {
 						[] => Gap
 						[only] => Unique(only)
-						_ => Fold(matches)
+						_ => Fold($matches)
 					}
-					return Ok({ segments, buffered, status: Complete({ rules, local, resolution, gaps }) })
+					return Ok({ segments: $segments, buffered, status: Complete({ rules, local, resolution, gaps: $gaps }) })
 				}
-				if segments == limits.max_segments {
-					return Ok({ segments, buffered, status: Limited({ cursor: { rules, local, index, lower, offset, matches, gaps, done }, reason: WorkLimit }) })
+				if $segments == limits.max_segments {
+					return Ok({ segments: $segments, buffered, status: Limited({ cursor: { rules, local, index: $index, lower: $lower, offset: $offset, matches: $matches, gaps: $gaps, done: $done }, reason: WorkLimit }) })
 				}
-				transition = rules.transitions.get(index)
+				transition = rules.transitions.get($index)
 				upper = match transition {
 					Ok(entry) => entry.at
 					Err(_) => PosixSpan.end(rules.validity)
 				}
-				candidate = FixedOffset.resolve(offset, local)?
-				matched = candidate >= lower and candidate < upper
+				candidate = FixedOffset.resolve($offset, local)?
+				matched = candidate >= $lower and candidate < upper
 				gap = match transition {
 					Ok(entry) => candidate >= upper and FixedOffset.resolve(entry.offset, local)? < upper
 					Err(_) => Bool.False
 				}
-				segments = segments + 1
+				$segments = $segments + 1
 				if (matched or gap) and buffered == limits.max_candidates {
-					return Ok({ segments, buffered, status: Limited({ cursor: { rules, local, index, lower, offset, matches, gaps, done }, reason: BufferLimit }) })
+					return Ok({ segments: $segments, buffered, status: Limited({ cursor: { rules, local, index: $index, lower: $lower, offset: $offset, matches: $matches, gaps: $gaps, done: $done }, reason: BufferLimit }) })
 				}
 				if matched {
-					matches = matches.append(candidate)
+					$matches = $matches.append(candidate)
 				}
 				match transition {
 					Ok(entry) => {
 						if gap {
-							gaps = gaps.append({ at: upper, before: offset, after: entry.offset })
+							$gaps = $gaps.append({ at: upper, before: $offset, after: entry.offset })
 						}
-						index = index + 1
-						lower = upper
-						offset = entry.offset
+						$index = $index + 1
+						$lower = upper
+						$offset = entry.offset
 					}
 					Err(_) => {
-						done = True
+						$done = True
 					}
 				}
 			}
@@ -500,55 +500,55 @@ ZoneRules :: {
 			rules = initial.rules
 			start = initial.start
 			end = initial.end
-			var index = initial.index
-			var lower = initial.lower
-			var offset = initial.offset
-			var builder = initial.builder
-			var done = initial.done
-			var segments = 0.U64
+			var $index = initial.index
+			var $lower = initial.lower
+			var $offset = initial.offset
+			var $builder = initial.builder
+			var $done = initial.done
+			var $segments = 0.U64
 			while True {
-				buffered = Coverage.SortedBuilder.member_count(builder)
+				buffered = Coverage.SortedBuilder.member_count($builder)
 				if buffered > limits.max_members {
-					return Ok({ segments, buffered, status: Limited({ cursor: { rules, start, end, index, lower, offset, builder, done }, reason: BufferLimit }) })
+					return Ok({ segments: $segments, buffered, status: Limited({ cursor: { rules, start, end, index: $index, lower: $lower, offset: $offset, builder: $builder, done: $done }, reason: BufferLimit }) })
 				}
-				if done {
-					return Ok({ segments, buffered, status: Complete(Coverage.SortedBuilder.to_coverage(builder)) })
+				if $done {
+					return Ok({ segments: $segments, buffered, status: Complete(Coverage.SortedBuilder.to_coverage($builder)) })
 				}
-				if segments == limits.max_segments {
-					return Ok({ segments, buffered, status: Limited({ cursor: { rules, start, end, index, lower, offset, builder, done }, reason: WorkLimit }) })
+				if $segments == limits.max_segments {
+					return Ok({ segments: $segments, buffered, status: Limited({ cursor: { rules, start, end, index: $index, lower: $lower, offset: $offset, builder: $builder, done: $done }, reason: WorkLimit }) })
 				}
-				transition = List.get(rules.transitions, index)
+				transition = List.get(rules.transitions, $index)
 				upper = match transition {
 					Ok(entry) => entry.at
 					Err(_) => PosixSpan.end(rules.validity)
 				}
-				span = selected_span(lower, upper, offset, start, end)?
-				segments = segments + 1
+				span = selected_span($lower, upper, $offset, start, end)?
+				$segments = $segments + 1
 				match span {
 					None => {}
 					Some(selected) => {
 						# The full result returns the unchanged builder, avoiding an
 						# alias retained solely for reconstructing a limited cursor.
-						appended = match Coverage.SortedBuilder.append_retaining(builder, selected, limits.max_members) {
+						appended = match Coverage.SortedBuilder.append_retaining($builder, selected, limits.max_members) {
 							Ok(result) => result
 							Err(_) => crash "Zone segments preserve output start order"
 						}
 						match appended {
-							Full(original) => return Ok({ segments, buffered, status: Limited({ cursor: { rules, start, end, index, lower, offset, builder: original, done }, reason: BufferLimit }) })
+							Full(original) => return Ok({ segments: $segments, buffered, status: Limited({ cursor: { rules, start, end, index: $index, lower: $lower, offset: $offset, builder: original, done: $done }, reason: BufferLimit }) })
 							Added(updated) => {
-								builder = updated
+								$builder = updated
 							}
 						}
 					}
 				}
 				match transition {
 					Ok(entry) => {
-						index = index + 1
-						lower = upper
-						offset = entry.offset
+						$index = $index + 1
+						$lower = upper
+						$offset = entry.offset
 					}
 					Err(_) => {
-						done = True
+						$done = True
 					}
 				}
 			}
@@ -574,11 +574,11 @@ ZoneRules :: {
 				{ at: PosixBoundary.from_microseconds(2), offset: initial },
 			],
 		)?
-		var valid = Bool.True
+		var $valid = Bool.True
 		for (number, expected) in [(-3.I64, 0.I32), (-2, 0), (-1, 0), (0, 1800), (1, 1800), (2, 0), (3, 0)] {
-			valid = valid and offset_at(rules, PosixBoundary.from_microseconds(number)) == Ok(FixedOffset.from_seconds(expected))
+			$valid = $valid and offset_at(rules, PosixBoundary.from_microseconds(number)) == Ok(FixedOffset.from_seconds(expected))
 		}
-		valid and offset_at(rules, PosixBoundary.from_microseconds(-4)) == Err(OutsideValidity) and
+		$valid and offset_at(rules, PosixBoundary.from_microseconds(-4)) == Err(OutsideValidity) and
 			offset_at(rules, PosixBoundary.from_microseconds(4)) == Err(OutsideValidity)
 	}
 
@@ -735,7 +735,7 @@ expect {
 	point = PosixBoundary.from_microseconds
 	validity = PosixSpan.new(point(-10000000), point(10000000))?
 	local = FixedOffset.project(FixedOffset.from_seconds(0), point(1000000), Gregorian)?
-	var valid = Bool.True
+	var $valid = Bool.True
 	for (before, after) in [(0.I32, 2.I32), (2, 0)] {
 		rules = ZoneRules.new_bounded("Synthetic/Choice", "v1", validity, FixedOffset.from_seconds(before), [{ at: point(0), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 })?
 		cursor = ZoneRules.classification_cursor(rules, local)?
@@ -746,17 +746,17 @@ expect {
 		}
 		if before == 0 {
 			choice = ZoneRules.Classification.choose(value, { occurrence: First, gap: UseOffsetBeforeGap })?
-			valid = valid and choice == { boundary: point(1000000), adjustment: BeforeGap({ at: point(0), before: FixedOffset.from_seconds(0), after: FixedOffset.from_seconds(2) }) } and
+			$valid = $valid and choice == { boundary: point(1000000), adjustment: BeforeGap({ at: point(0), before: FixedOffset.from_seconds(0), after: FixedOffset.from_seconds(2) }) } and
 				ZoneRules.Classification.choose(value, { occurrence: First, gap: RejectGap }) == Err(Gap) and
 					ZoneRules.Classification.choose(value, { occurrence: MatchingOffset(FixedOffset.from_seconds(2)), gap: UseOffsetBeforeGap }) == Err(OffsetConflict)
 		} else {
-			valid = valid and ZoneRules.Classification.choose(value, { occurrence: First, gap: RejectGap }) == Ok({ boundary: point(-1000000), adjustment: Exact }) and
+			$valid = $valid and ZoneRules.Classification.choose(value, { occurrence: First, gap: RejectGap }) == Ok({ boundary: point(-1000000), adjustment: Exact }) and
 				ZoneRules.Classification.choose(value, { occurrence: Last, gap: RejectGap }) == Ok({ boundary: point(1000000), adjustment: Exact }) and
 					ZoneRules.Classification.choose(value, { occurrence: MatchingOffset(FixedOffset.from_seconds(0)), gap: RejectGap }) == Ok({ boundary: point(1000000), adjustment: Exact }) and
 						ZoneRules.Classification.choose(value, { occurrence: MatchingOffset(FixedOffset.from_seconds(1)), gap: RejectGap }) == Err(OffsetConflict)
 		}
 	}
-	valid
+	$valid
 }
 
 expect {

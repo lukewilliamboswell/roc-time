@@ -82,50 +82,50 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 			return Err(TooLarge)
 		}
 		bytes = text.to_utf8()
-		var index = 0.U64
-		var negative = Bool.False
-		if bytes.get(index) == Ok(43) or bytes.get(index) == Ok(45) {
-			negative = bytes.get(index) == Ok(45)
-			index = index + 1
+		var $index = 0.U64
+		var $negative = Bool.False
+		if bytes.get($index) == Ok(43) or bytes.get($index) == Ok(45) {
+			$negative = bytes.get($index) == Ok(45)
+			$index = $index + 1
 		}
-		if upper(bytes.get(index) ?? 0) != 80 {
+		if upper(bytes.get($index) ?? 0) != 80 {
 			return Err(Malformed)
 		}
-		index = index + 1
-		var days = 0.I64
-		var seconds = 0.I128
-		var time = Bool.False
-		var any = Bool.False
-		var time_any = Bool.False
-		var previous = 0.U8
-		while index < bytes.len() {
-			if upper(bytes.get(index) ?? 0) == 84 {
-				if time {
+		$index = $index + 1
+		var $days = 0.I64
+		var $seconds = 0.I128
+		var $time = Bool.False
+		var $any = Bool.False
+		var $time_any = Bool.False
+		var $previous = 0.U8
+		while $index < bytes.len() {
+			if upper(bytes.get($index) ?? 0) == 84 {
+				if $time {
 					return Err(Malformed)
 				}
-				time = Bool.True
-				index = index + 1
+				$time = Bool.True
+				$index = $index + 1
 			}
-			start = index
-			var number = 0.I64
-			while index < bytes.len() {
-				byte = bytes.get(index) ?? 0
+			start = $index
+			var $number = 0.I64
+			while $index < bytes.len() {
+				byte = bytes.get($index) ?? 0
 				if byte < 48 or byte > 57 {
 					break
 				}
 				digit = (byte - 48).to_i64()
-				if number > (I64.highest - digit) // 10 {
+				if $number > (I64.highest - digit) // 10 {
 					return Err(OutOfRange)
 				}
-				number = number * 10 + digit
-				index = index + 1
+				$number = $number * 10 + digit
+				$index = $index + 1
 			}
-			if start == index {
+			if start == $index {
 				return Err(Malformed)
 			}
-			unit = upper(bytes.get(index) ?? 0)
-			index = index + 1
-			if time {
+			unit = upper(bytes.get($index) ?? 0)
+			$index = $index + 1
+			if $time {
 				rank = match unit {
 					72 => 1.U8
 					77 => 2
@@ -134,53 +134,53 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 				}
 				# RFC's dur-hour nests dur-minute, which nests dur-second.
 				# Thus H followed directly by S is not in this grammar.
-				if rank <= previous or (previous == 1 and rank == 3) {
+				if rank <= $previous or ($previous == 1 and rank == 3) {
 					return Err(Malformed)
 				}
-				previous = rank
+				$previous = rank
 				factor = match rank {
 					1 => 3600.I128
 					2 => 60
 					_ => 1
 				}
-				seconds = seconds + number.to_i128() * factor
-				time_any = Bool.True
+				$seconds = $seconds + $number.to_i128() * factor
+				$time_any = Bool.True
 			} else {
-				if any {
+				if $any {
 					return Err(Malformed)
 				}
 				match unit {
 					87 => {
-						if index != bytes.len() {
+						if $index != bytes.len() {
 							return Err(Malformed)
 						}
-						if number > I64.highest // 7 {
+						if $number > I64.highest // 7 {
 							return Err(OutOfRange)
 						}
-						days = number * 7
+						$days = $number * 7
 					}
 					68 => {
-						days = number
+						$days = $number
 					}
 					_ => return Err(Malformed)
 				}
 			}
-			any = Bool.True
+			$any = Bool.True
 		}
-		if !any or (time and !time_any) {
+		if !$any or ($time and !$time_any) {
 			return Err(Malformed)
 		}
-		if seconds > I64.highest.to_i128() // 1000000 {
+		if $seconds > I64.highest.to_i128() // 1000000 {
 			return Err(OutOfRange)
 		}
-		if negative or (days == 0 and seconds == 0) {
+		if $negative or ($days == 0 and $seconds == 0) {
 			return Err(NonPositive)
 		}
-		tail = match I128.to_i64_try(seconds) {
+		tail = match I128.to_i64_try($seconds) {
 			Ok(value) => value
 			Err(_) => return Err(OutOfRange)
 		}
-		Ok({ days, seconds: tail })
+		Ok({ days: $days, seconds: tail })
 	}
 
 	## Equality compares nominal days and coordinate seconds, without an anchor.
@@ -252,11 +252,11 @@ expect RfcDuration.components(RfcDuration.parse("P15DT5H0M20S")?) == { days: 15.
 expect RfcDuration.components(RfcDuration.parse("P7W")?) == { days: 49.I64, seconds: 0.I64 }
 expect RfcDuration.to_text(RfcDuration.parse("+p1dt2h3m4s")?) == "P1DT7384S"
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for text in ["", "P", "PT", "P1DT", "P1W1D", "P1WT1H", "PT1H1S", "PT1M1H", "PT1S1S", "P1D1D", "P1Y", "P1M", "PT1.5S", "P1D ", "P1DT1HT1M"] {
-		valid = valid and RfcDuration.parse(text) == Err(Malformed)
+		$valid = $valid and RfcDuration.parse(text) == Err(Malformed)
 	}
-	valid
+	$valid
 }
 expect RfcDuration.parse("-PT1S") == Err(NonPositive)
 expect RfcDuration.parse("P0D") == Err(NonPositive)
@@ -286,7 +286,7 @@ expect {
 		Item(item) => item.occurrence
 		_ => crash "fixture start"
 	}
-	var valid = Bool.True
+	var $valid = Bool.True
 	for case in [{ text: "P1D", hours: 23.I64 }, { text: "PT24H", hours: 24 }, { text: "P1DT1H", hours: 24 }] {
 		parsed = RfcDuration.parse(case.text)?
 		pending = TimedOccurrence.cursor({}, start, RfcDuration.to_duration(parsed))?
@@ -301,9 +301,9 @@ expect {
 				}
 			}
 		}
-		valid = valid and PosixSpan.coordinate_width(TimedOccurrence.span(result)) == Ok(PosixDelta.from_microseconds(case.hours * 3600000000))
+		$valid = $valid and PosixSpan.coordinate_width(TimedOccurrence.span(result)) == Ok(PosixDelta.from_microseconds(case.hours * 3600000000))
 	}
-	valid and RfcDuration.parse("P1D") != RfcDuration.parse("PT24H")
+	$valid and RfcDuration.parse("P1D") != RfcDuration.parse("PT24H")
 }
 
 expect {

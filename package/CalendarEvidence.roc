@@ -36,14 +36,14 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 		}
 		base = QualifiedCalendarValue.described_value(description)
 		allowed = QualifiedCalendarValue.qualifications(description).map(|item| item.scope)
-		var validated = []
-		var index = 0.U64
+		var $validated = []
+		var $index = 0.U64
 		for candidate in alternatives {
 			if CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(base))) != CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(candidate))) {
-				return Err(CalendarMismatch(index))
+				return Err(CalendarMismatch($index))
 			}
 			if CalendarValue.resolution(base) != CalendarValue.resolution(candidate) {
-				return Err(ResolutionMismatch(index))
+				return Err(ResolutionMismatch($index))
 			}
 			if !allowed.contains(Whole) {
 				base_fields = components(base)
@@ -58,32 +58,32 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 					{ scope: Fraction, changed: base_fields.clock.microsecond != fields.clock.microsecond },
 				] {
 					if pair.changed and !allowed.contains(pair.scope) {
-						return Err(UnqualifiedComponent({ index, scope: pair.scope }))
+						return Err(UnqualifiedComponent({ index: $index, scope: pair.scope }))
 					}
 				}
 			}
 			bounds = match CalendarValue.local_bounds(candidate) {
 				Ok(value) => value
-				Err(OutOfRange) => return Err(CandidateOutOfRange(index))
+				Err(OutOfRange) => return Err(CandidateOutOfRange($index))
 			}
-			validated = validated.append({ value: candidate, end: bounds.end })
-			index = index + 1
+			$validated = $validated.append({ value: candidate, end: bounds.end })
+			$index = $index + 1
 		}
-		sorted = validated.sort_with(
+		sorted = $validated.sort_with(
 			|a, b| match LocalDateTime.compare_position(CalendarValue.start_label(a.value), CalendarValue.start_label(b.value)) {
 				LT => Before
 				EQ => Same
 				GT => After
 			},
 		)
-		var canonical = []
+		var $canonical = []
 		for candidate in sorted {
-			previous = canonical.last()
+			previous = $canonical.last()
 			if previous != Ok(candidate) {
-				canonical = canonical.append(candidate)
+				$canonical = $canonical.append(candidate)
 			}
 		}
-		Ok({ description, alternatives: canonical })
+		Ok({ description, alternatives: $canonical })
 	}
 	description : CalendarEvidence -> QualifiedCalendarValue
 	description = |evidence| evidence.description
@@ -110,31 +110,31 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	Query :: { evidence : CalendarEvidence, rules : ZoneRules, point : PosixBoundary, local : LocalDateTime, index : U64, yes : Bool, no : Bool }.{
 		collect : Query, { max_alternatives : U64 } -> Batch
 		collect = |initial, limits| {
-			var state = initial
-			var examined = 0.U64
+			var $state = initial
+			var $examined = 0.U64
 			while Bool.True {
-				if state.yes and state.no {
-					return { examined, status: Complete(Possible) }
+				if $state.yes and $state.no {
+					return { examined: $examined, status: Complete(Possible) }
 				}
-				if state.index == state.evidence.alternatives.len() {
-					truth = if state.yes {
+				if $state.index == $state.evidence.alternatives.len() {
+					truth = if $state.yes {
 						Definite
 					} else {
 						Impossible
 					}
-					return { examined, status: Complete(truth) }
+					return { examined: $examined, status: Complete(truth) }
 				}
-				if examined == limits.max_alternatives {
-					return { examined, status: Limited(state) }
+				if $examined == limits.max_alternatives {
+					return { examined: $examined, status: Limited($state) }
 				}
-				candidate = match state.evidence.alternatives.get(state.index) {
+				candidate = match $state.evidence.alternatives.get($state.index) {
 					Ok(value) => value
 					Err(_) => crash "Validated evidence cursor index"
 				}
 				bounds = { start: CalendarValue.start_label(candidate.value), end: candidate.end }
-				inside = LocalDateTime.compare_position(bounds.start, state.local) != GT and LocalDateTime.compare_position(state.local, bounds.end) == LT
-				state = { ..state, index: state.index + 1, yes: state.yes or inside, no: state.no or !inside }
-				examined = examined + 1
+				inside = LocalDateTime.compare_position(bounds.start, $state.local) != GT and LocalDateTime.compare_position($state.local, bounds.end) == LT
+				$state = { ..$state, index: $state.index + 1, yes: $state.yes or inside, no: $state.no or !inside }
+				$examined = $examined + 1
 			}
 			crash "Evidence loop returns an outcome"
 		}
@@ -145,11 +145,11 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	is_eq = |a, b| a.description == b.description and a.alternatives == b.alternatives
 	to_hash : CalendarEvidence, Hasher -> Hasher
 	to_hash = |evidence, hasher| {
-		var state = evidence.description.to_hash(hasher)
+		var $state = evidence.description.to_hash(hasher)
 		for value in evidence.alternatives {
-			state = value.value.to_hash(state)
+			$state = value.value.to_hash($state)
 		}
-		evidence.alternatives.len().to_hash(state)
+		evidence.alternatives.len().to_hash($state)
 	}
 	to_inspect : CalendarEvidence -> Str
 	to_inspect = |evidence| "CalendarEvidence(alternatives=${evidence.alternatives.len().to_str()}, description=${Str.inspect(evidence.description)})"

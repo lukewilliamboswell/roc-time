@@ -101,13 +101,13 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 }
 
 all_fields = |count| {
-	var result = []
-	var value = 0.U8
-	while value < count {
-		result = result.append(value)
-		value = value + 1
+	var $result = []
+	var $value = 0.U8
+	while $value < count {
+		$result = $result.append($value)
+		$value = $value + 1
 	}
-	result
+	$result
 }
 
 narrow = |value| I128.to_i64_try(value)
@@ -118,21 +118,21 @@ date_at = |number| {
 }
 
 lower_bound = |pattern, microsecond| {
-	var lower = 0.U64
-	var upper = ClockPattern.count(pattern)
-	while lower < upper {
-		middle = lower + U64.div_trunc_by(upper - lower, 2)
+	var $lower = 0.U64
+	var $upper = ClockPattern.count(pattern)
+	while $lower < $upper {
+		middle = $lower + U64.div_trunc_by($upper - $lower, 2)
 		clock = match ClockPattern.at(pattern, middle) {
 			Ok(value) => value
 			Err(_) => crash "clock seek invariant"
 		}
 		if ClockTime.to_microseconds_since_midnight(clock) < microsecond {
-			lower = middle + 1
+			$lower = middle + 1
 		} else {
-			upper = middle
+			$upper = middle
 		}
 	}
-	lower
+	$lower
 }
 
 expect {

@@ -1,1 +1,11 @@
-{"workflows": ["tests.yaml", "release.yml"], "auto_merge": false}
+{
+  "workflows": [
+    "tests.yaml",
+    "release.yml"
+  ],
+  "auto_merge": false,
+  "compiler_roots": [
+    "package/main.roc",
+    "tzdb/package/main.roc"
+  ]
+}

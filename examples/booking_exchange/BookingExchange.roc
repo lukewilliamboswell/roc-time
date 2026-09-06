@@ -6,11 +6,11 @@ import time.Persistence
 BookingExchange :: [].{
 	available = |opening_text, booking_texts| {
 		opening = parse(opening_text)?
-		var bookings = []
+		var $bookings = []
 		for text in booking_texts {
-			bookings = bookings.append(ExactInterval.span(parse(text)?))
+			$bookings = $bookings.append(ExactInterval.span(parse(text)?))
 		}
-		computed = Coverage.complement_within(Coverage.from_spans(bookings), ExactInterval.span(opening))
+		computed = Coverage.complement_within(Coverage.from_spans($bookings), ExactInterval.span(opening))
 		# Save computed availability independently of the imported booking text.
 		# Restoring canonical coverage preserves every gap between free windows.
 		document = Persistence.to_text(Persistence.new(Coverage(computed))?)
@@ -22,7 +22,7 @@ BookingExchange :: [].{
 			Coverage(value) => value
 			_ => return Err(UnexpectedDocumentKind)
 		}
-		var output = []
+		var $output = []
 		for span in free {
 			# The application requests exact microsecond output in UTC. This
 			# does not reconstruct the original bookings from merged coverage.
@@ -30,9 +30,9 @@ BookingExchange :: [].{
 				Ok(found) => found
 				Err(error) => return Err(Output(error))
 			}
-			output = output.append(ExactInterval.to_text(value))
+			$output = $output.append(ExactInterval.to_text(value))
 		}
-		Ok(output)
+		Ok($output)
 	}
 }
 

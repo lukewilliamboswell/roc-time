@@ -332,16 +332,16 @@ expect {
 	}
 	last = TimedOccurrence.cursor("fold", start, Calendar({ ..spec, occurrence: Last }))?
 	paused = TimedOccurrence.Cursor.collect(last, { max_segments: 2, max_candidates: 1 })?
-	var valid = ambiguous
+	var $valid = ambiguous
 	pending = match paused.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == BufferLimit
+			$valid = $valid and progress.reason == BufferLimit
 			progress.cursor
 		}
 		Complete(_) => crash "fold candidates must obey capacity"
 	}
 	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
-	valid and resumed.segments == 1 and match resumed.status {
+	$valid and resumed.segments == 1 and match resumed.status {
 		Complete(value) => TimedOccurrence.id(value) == "fold" and PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(90000000000))
 		Limited(_) => Bool.False
 	}

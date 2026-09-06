@@ -60,11 +60,11 @@ observe = |input| {
 	}
 	start = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.start))
 	end = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.end))
-	var current = start
-	var bits = ""
-	var fields = ["ok", start.to_str(), end.to_str()]
-	while current < end {
-		date = match GregorianDate.from_civil_day(CivilDay.from_day_number(current)) {
+	var $current = start
+	var $bits = ""
+	var $fields = ["ok", start.to_str(), end.to_str()]
+	while $current < end {
+		date = match GregorianDate.from_civil_day(CivilDay.from_day_number($current)) {
 			Ok(value) => value
 			Err(_) => crash "Oracle day outside range"
 		}
@@ -72,23 +72,23 @@ observe = |input| {
 			Ok(value) => value
 			Err(_) => crash "Oracle match outside range"
 		}
-		bits = bits.concat(
+		$bits = $bits.concat(
 			if matched {
 				"1"
 			} else {
 				"0"
 			},
 		)
-		if bits.count_utf8_bytes() == 128 {
-			fields = fields.append(bits)
-			bits = ""
+		if $bits.count_utf8_bytes() == 128 {
+			$fields = $fields.append($bits)
+			$bits = ""
 		}
-		current = current + 1
+		$current = $current + 1
 	}
-	if !bits.is_empty() {
-		fields = fields.append(bits)
+	if !$bits.is_empty() {
+		$fields = $fields.append($bits)
 	}
-	Str.join_with(fields, "\t")
+	Str.join_with($fields, "\t")
 }
 
 at = |list, index| match list.get(index) {

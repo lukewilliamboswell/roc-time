@@ -99,17 +99,17 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 			}
 		)
 		core = bytes.sublist({ start: 0, len: size })
-		var index = 0.U64
+		var $index = 0.U64
 		for byte in core {
-			valid = if index == 4 or index == 7 {
+			valid = if $index == 4 or $index == 7 {
 				byte == 45
 			} else {
-				index < 10 and digit(byte)
+				$index < 10 and digit(byte)
 			}
 			if !valid {
 				return Err(Malformed)
 			}
-			index = index + 1
+			$index = $index + 1
 		}
 		# Incomplete means a prefix can still become a valid accepted date.
 		# Validate complete higher fields and partial digit feasibility first.
@@ -125,18 +125,18 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 			}
 			if size == 9 {
 				tens = digits(core, 8, 1).to_u8_wrap() * 10
-				var possible = Bool.False
-				var digit_value = 0.U8
-				while digit_value < 10 {
-					match CalendarDate.from_fields(Gregorian, { year: prefix_year, month: prefix_month, day: tens + digit_value }) {
+				var $possible = Bool.False
+				var $digit_value = 0.U8
+				while $digit_value < 10 {
+					match CalendarDate.from_fields(Gregorian, { year: prefix_year, month: prefix_month, day: tens + $digit_value }) {
 						Ok(_) => {
-							possible = True
+							$possible = True
 						}
 						Err(_) => {}
 					}
-					digit_value = digit_value + 1
+					$digit_value = $digit_value + 1
 				}
-				if !possible {
+				if !$possible {
 					return Err(Malformed)
 				}
 			}
@@ -272,11 +272,11 @@ excluded = |bytes| {
 # Caller has validated positions and at most four ASCII digits.
 digits : List(U8), U64, U64 -> U16
 digits = |bytes, start, len| {
-	var result = 0.U16
+	var $result = 0.U16
 	for b in bytes.sublist({ start, len }) {
-		result = result * 10 + (b - 48).to_u16()
+		$result = $result * 10 + (b - 48).to_u16()
 	}
-	result
+	$result
 }
 
 pad = |text, width| "${"0".repeat(width - text.count_utf8_bytes())}${text}"

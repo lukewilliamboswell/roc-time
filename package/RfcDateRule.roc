@@ -59,12 +59,12 @@ RfcDateRule :: [].{
 		if parts.inclusions.len() > 4096 or parts.exclusions.len() > 4096 {
 			return Err(TooLarge)
 		}
-		var remaining = 65536.U64
+		var $remaining = 65536.U64
 		for value in [parts.start, parts.rule].concat(parts.inclusions).concat(parts.exclusions) {
-			if value.count_utf8_bytes() > remaining {
+			if value.count_utf8_bytes() > $remaining {
 				return Err(TooLarge)
 			}
-			remaining = remaining - value.count_utf8_bytes()
+			$remaining = $remaining - value.count_utf8_bytes()
 		}
 		anchor = parse_date(parts.start, "DTSTART")?
 		fields = match RfcRuleParts.parse(parts.rule, Date) {
@@ -104,20 +104,20 @@ parse_date = |text, part| {
 			Err(_) => Err(Malformed(part))
 		}
 	}
-	var value = 0.I64
+	var $value = 0.I64
 	for byte in bytes {
 		if byte < 48 or byte > 57 {
 			return Err(Malformed(part))
 		}
-		value = value * 10 + byte.to_i64() - 48
+		$value = $value * 10 + byte.to_i64() - 48
 	}
-	year = I64.div_trunc_by(value, 10000)
+	year = I64.div_trunc_by($value, 10000)
 	if year == 0 {
 		return Err(OutOfRange(part))
 	}
 	# Eight decimal digits establish exact narrowing for the two-digit fields.
-	month = I64.mod_by(I64.div_trunc_by(value, 100), 100).to_u8_wrap()
-	day = I64.mod_by(value, 100).to_u8_wrap()
+	month = I64.mod_by(I64.div_trunc_by($value, 100), 100).to_u8_wrap()
+	day = I64.mod_by($value, 100).to_u8_wrap()
 	match GregorianDate.from_fields({ year, month, day }) {
 		Ok(date) => Ok(date)
 		Err(_) => Err(InvalidDate(part))
@@ -126,16 +126,16 @@ parse_date = |text, part| {
 
 parse_dates : List(Str), Str -> Try(List(GregorianDate), RfcDateRule.Error)
 parse_dates = |entries, part| {
-	var dates = []
+	var $dates = []
 	for entry in entries {
 		for value in entry.split_on(",") {
-			if dates.len() == 4096 {
+			if $dates.len() == 4096 {
 				return Err(TooLarge)
 			}
-			dates = dates.append(parse_date(value, part)?)
+			$dates = $dates.append(parse_date(value, part)?)
 		}
 	}
-	Ok(dates)
+	Ok($dates)
 }
 
 test_rfcdaterule_parts = |start, rule| { start, rule, inclusions: [], exclusions: [] }
@@ -202,29 +202,29 @@ expect {
 }
 
 expect {
-	var passed = True
+	var $passed = True
 	for text in ["FREQ=DAILY;", "FREQ=DAILY;;COUNT=2", "FREQ=DAILY;COUNT=", "FREQ=DAILY;COUNT=+2", "FREQ=DAILY;COUNT=1_0", "FREQ=DAILY;COUNT=1.0", "FREQ=DAILY;BYMONTH=001", "FREQ=DAILY;BYMONTH=+1", "FREQ=DAILY;BYDAY=+MO", "FREQ=DAILY;BYDAY=001MO", "FREQ=DAILY;BYMONTH=1,", "FREQ=DAILY\n", "FREQ= DAILy", "FREQ=DAILY;COUNT=٢"] {
 		match test_rfcdaterule_status(test_rfcdaterule_parts("20250101", text)) {
 			Err(Malformed(_)) => {}
 			_ => {
-				passed = False
+				$passed = False
 			}
 		}
 	}
-	passed
+	$passed
 }
 
 expect {
-	var passed = True
+	var $passed = True
 	for text in ["FREQ=DAILY;COUNT=0", "FREQ=DAILY;COUNT=2147483648", "FREQ=DAILY;INTERVAL=99999999999999999999999", "FREQ=DAILY;BYMONTH=13", "FREQ=MONTHLY;BYDAY=0MO", "FREQ=MONTHLY;BYMONTHDAY=-00", "FREQ=YEARLY;BYYEARDAY=367", "FREQ=YEARLY;BYWEEKNO=-54"] {
 		match test_rfcdaterule_status(test_rfcdaterule_parts("20250101", text)) {
 			Err(OutOfRange(_)) => {}
 			_ => {
-				passed = False
+				$passed = False
 			}
 		}
 	}
-	passed
+	$passed
 }
 
 expect {

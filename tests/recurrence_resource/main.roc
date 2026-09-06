@@ -152,21 +152,21 @@ main! = |args| {
 	}
 	Host.assert!(composition_after - composition_before <= ceiling)
 	# Construct the input table outside the measured classification scope.
-	var transitions = []
-	var index = 1.I64
+	var $transitions = []
+	var $index = 1.I64
 	last = if year > 2001 {
 		8192.I64
 	} else {
 		16.I64
 	}
-	while index <= last {
-		transitions = transitions.append({
-			at: PosixBoundary.from_microseconds(index * 1000000),
-			offset: FixedOffset.from_seconds(fixture_offset(-index)),
+	while $index <= last {
+		$transitions = $transitions.append({
+			at: PosixBoundary.from_microseconds($index * 1000000),
+			offset: FixedOffset.from_seconds(fixture_offset(-($index))),
 		})
-		index = index + 1
+		$index = $index + 1
 	}
-	zone_rules = classification_rules(transitions, 10000000000)
+	zone_rules = classification_rules($transitions, 10000000000)
 	local = classification_label(500000)
 	classification_before = Host.allocated_bytes!({})
 	classification_cursor = match ZoneRules.classification_cursor(zone_rules, local) {
@@ -199,18 +199,18 @@ main! = |args| {
 	}
 	choice_after = Host.allocated_bytes!({})
 	Host.assert!(choice.boundary == PosixBoundary.from_microseconds(last * 1000000 + 500000) and choice_after == choice_before)
-	var hours = []
-	var parts = []
-	var part = 0.U8
-	while part < 60 {
-		parts = parts.append(part)
-		if part < 24 {
-			hours = hours.append(part)
+	var $hours = []
+	var $parts = []
+	var $part = 0.U8
+	while $part < 60 {
+		$parts = $parts.append($part)
+		if $part < 24 {
+			$hours = $hours.append($part)
 		}
-		part = part + 1
+		$part = $part + 1
 	}
 	clock_anchor = clock_fixture(I64.rem_by(year, 1000000))
-	clock_pattern = match ClockPattern.new(clock_anchor, { hours, minutes: parts, seconds: parts }) {
+	clock_pattern = match ClockPattern.new(clock_anchor, { hours: $hours, minutes: $parts, seconds: $parts }) {
 		Ok(value) => value
 		Err(_) => crash "full clock pattern"
 	}
@@ -224,7 +224,7 @@ main! = |args| {
 		{ date: anchor, clock: clock_anchor },
 		{
 			calendar: CalendarPattern.defaults(Daily),
-			clocks: { hours, minutes: parts, seconds: parts },
+			clocks: { hours: $hours, minutes: $parts, seconds: $parts },
 			termination: Forever,
 			by_set_pos: [],
 		},
@@ -339,18 +339,18 @@ main! = |args| {
 		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
-	var exclusions = []
-	var exclusion_index = 1.I64
+	var $exclusions = []
+	var $exclusion_index = 1.I64
 	exclusion_count = if year > 2001 {
 		4096.I64
 	} else {
 		16.I64
 	}
-	while exclusion_index <= exclusion_count {
-		exclusions = exclusions.append(LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture(exclusion_index * 1000000)))
-		exclusion_index = exclusion_index + 1
+	while $exclusion_index <= exclusion_count {
+		$exclusions = $exclusions.append(LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture($exclusion_index * 1000000)))
+		$exclusion_index = $exclusion_index + 1
 	}
-	exclusion_rule = match TimedRecurrence.with_exclusions(timed_rule, exclusions) {
+	exclusion_rule = match TimedRecurrence.with_exclusions(timed_rule, $exclusions) {
 		Ok(value) => value
 		Err(_) => crash "resource exclusion set"
 	}
@@ -391,7 +391,7 @@ main! = |args| {
 	# Put the folds at the calendar end: every segment has a candidate.
 	# Completing after one segment would lose alternatives, even with a seek.
 	# Fixture transitions are 1..8192 seconds, so adding one day is exact.
-	duration_transitions = transitions.map(|transition| { at: PosixBoundary.from_microseconds(PosixBoundary.to_microseconds(transition.at) + 86400000000), offset: transition.offset })
+	duration_transitions = $transitions.map(|transition| { at: PosixBoundary.from_microseconds(PosixBoundary.to_microseconds(transition.at) + 86400000000), offset: transition.offset })
 	duration_rules = classification_rules(duration_transitions, 200000000000)
 	duration_source = duration_start(duration_rules, local)
 	duration_before = Host.allocated_bytes!({})
@@ -514,17 +514,17 @@ main! = |args| {
 
 	# Normalize the explicit input outside the measured merge. The earliest
 	# inclusion precedes DTSTART and needs interpretation beside a held start.
-	var included_starts = []
-	var included_index = 0.I64
-	while included_index < exclusion_count {
-		included_starts = included_starts.append({ date: anchor, clock: clock_fixture(included_index * 1000000) })
-		included_index = included_index + 1
+	var $included_starts = []
+	var $included_index = 0.I64
+	while $included_index < exclusion_count {
+		$included_starts = $included_starts.append({ date: anchor, clock: clock_fixture($included_index * 1000000) })
+		$included_index = $included_index + 1
 	}
 	inclusion_base = match TimedRecurrence.new({ date: anchor, clock: clock_fixture(1000000) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Forever, by_set_pos: [] }) {
 		Ok(value) => value
 		Err(_) => crash "inclusion base"
 	}
-	inclusion_rule = match TimedRecurrence.with_inclusions(inclusion_base, included_starts) {
+	inclusion_rule = match TimedRecurrence.with_inclusions(inclusion_base, $included_starts) {
 		Ok(value) => value
 		Err(_) => crash "inclusion normalization"
 	}
@@ -547,13 +547,13 @@ main! = |args| {
 
 	# Duration definitions are normalized outside consumption. Lookup must
 	# not scan or copy the whole 16/4096-entry table for each emitted start.
-	var overrides = [{ source: timed_start, duration: Coordinate(time_delta(7200000000)) }]
-	var override_index = 1.I64
-	while override_index < exclusion_count {
-		overrides = overrides.append({ source: LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture(override_index * 1000000)), duration: Coordinate(time_delta(7200000000)) })
-		override_index = override_index + 1
+	var $overrides = [{ source: timed_start, duration: Coordinate(time_delta(7200000000)) }]
+	var $override_index = 1.I64
+	while $override_index < exclusion_count {
+		$overrides = $overrides.append({ source: LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture($override_index * 1000000)), duration: Coordinate(time_delta(7200000000)) })
+		$override_index = $override_index + 1
 	}
-	overridden = match TimedSchedule.new_with_overrides(42.U64, timed_rule, { start: timed_start, end: timed_end }, Coordinate(time_delta(3600000000)), overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	overridden = match TimedSchedule.new_with_overrides(42.U64, timed_rule, { start: timed_start, end: timed_end }, Coordinate(time_delta(3600000000)), $overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "override normalization"
 	}
@@ -587,18 +587,18 @@ main! = |args| {
 		Ok(value) => PosixBoundary.to_microseconds(value)
 		Err(_) => crash "Description fixture end"
 	}
-	var description_transitions = []
-	var description_index = 1.I64
+	var $description_transitions = []
+	var $description_index = 1.I64
 	description_size = if year > 2001 {
 		4096.I64
 	} else {
 		16.I64
 	}
-	while description_index <= description_size {
-		description_transitions = description_transitions.append({ at: PosixBoundary.from_microseconds(description_start + description_index * 1000000), offset: FixedOffset.from_seconds(0) })
-		description_index = description_index + 1
+	while $description_index <= description_size {
+		$description_transitions = $description_transitions.append({ at: PosixBoundary.from_microseconds(description_start + $description_index * 1000000), offset: FixedOffset.from_seconds(0) })
+		$description_index = $description_index + 1
 	}
-	description_rules = match ZoneRules.new_bounded("Synthetic/YearSelection", "v1", description_span(description_start - 86400000000, description_end + 86400000000), FixedOffset.from_seconds(0), description_transitions, { minimum: 0, maximum: 0 }) {
+	description_rules = match ZoneRules.new_bounded("Synthetic/YearSelection", "v1", description_span(description_start - 86400000000, description_end + 86400000000), FixedOffset.from_seconds(0), $description_transitions, { minimum: 0, maximum: 0 }) {
 		Ok(value) => value
 		Err(_) => crash "Description fixture rules"
 	}
@@ -627,17 +627,17 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "Evidence description"
 	}
-	var evidence_values = []
-	var evidence_index = 0.I64
-	while evidence_index < description_size {
-		alternative = match CalendarValue.year(Gregorian, start_year + evidence_index) {
+	var $evidence_values = []
+	var $evidence_index = 0.I64
+	while $evidence_index < description_size {
+		alternative = match CalendarValue.year(Gregorian, start_year + $evidence_index) {
 			Ok(value) => value
 			Err(_) => crash "Evidence alternative"
 		}
-		evidence_values = evidence_values.append(alternative)
-		evidence_index = evidence_index + 1
+		$evidence_values = $evidence_values.append(alternative)
+		$evidence_index = $evidence_index + 1
 	}
-	evidence = match CalendarEvidence.new(evidence_description, evidence_values) {
+	evidence = match CalendarEvidence.new(evidence_description, $evidence_values) {
 		Ok(value) => value
 		Err(_) => crash "Evidence model"
 	}

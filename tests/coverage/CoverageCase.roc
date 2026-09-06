@@ -22,11 +22,11 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		# Owned construction, shared input, reversed/duplicated input, and a slice
 		# retaining a larger allocation must all have identical extents.
 		owned = Coverage.from_spans(make_spans(input.left)?)
-		var reversed = []
+		var $reversed = []
 		for span in spans {
-			reversed = List.concat([span], reversed)
+			$reversed = List.concat([span], $reversed)
 		}
-		shared = Coverage.from_spans(reversed)
+		shared = Coverage.from_spans($reversed)
 		duplicated = Coverage.from_spans(List.concat(spans, spans))
 		backing = List.concat([window], List.concat(spans, [window]))
 		sliced = List.sublist(backing, { start: 1, len: List.len(spans) })
@@ -34,11 +34,11 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		if Dict.get(Dict.insert(Dict.empty(), a, 1.U64), from_slice) != Ok(1) {
 			return Ok(Bool.False)
 		}
-		var iterated = []
+		var $iterated = []
 		for member in a {
-			iterated = iterated.append(member)
+			$iterated = $iterated.append(member)
 		}
-		if iterated != Coverage.to_spans(a) {
+		if $iterated != Coverage.to_spans(a) {
 			return Ok(Bool.False)
 		}
 		if a != owned or a != shared or a != duplicated or a != from_slice {
@@ -74,15 +74,15 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 			return Ok(Bool.False)
 		}
 		check_persistence(a, window, input)
-		var point = -9.I64
-		var width = 0.I64
-		var count = 0.U64
-		var previous = Bool.False
-		while point <= 26 {
-			in_a = occupied(input.left, point)
-			in_b = occupied(input.right, point)
-			in_window = input.window.lo <= point and point < input.window.lo + U8.to_i64(input.window.width)
-			boundary = PosixBoundary.from_microseconds(point)
+		var $point = -9.I64
+		var $width = 0.I64
+		var $count = 0.U64
+		var $previous = Bool.False
+		while $point <= 26 {
+			in_a = occupied(input.left, $point)
+			in_b = occupied(input.right, $point)
+			in_window = input.window.lo <= $point and $point < input.window.lo + U8.to_i64(input.window.width)
+			boundary = PosixBoundary.from_microseconds($point)
 			if Coverage.contains(a, boundary) != in_a or
 				Coverage.contains(union, boundary) != (in_a or in_b) or
 					Coverage.contains(intersection, boundary) != (in_a and in_b) or
@@ -91,15 +91,15 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 				return Ok(Bool.False)
 			}
 			if in_a {
-				width = width + 1
+				$width = $width + 1
 			}
-			if in_a and !previous {
-				count = count + 1
+			if in_a and !$previous {
+				$count = $count + 1
 			}
-			previous = in_a
-			point = point + 1
+			$previous = in_a
+			$point = $point + 1
 		}
-		Ok(Coverage.coordinate_width(a)? == PosixDelta.from_microseconds(width) and Coverage.member_count(a) == count)
+		Ok(Coverage.coordinate_width(a)? == PosixDelta.from_microseconds($width) and Coverage.member_count(a) == $count)
 	}
 
 	check : CoverageCase -> Fuzz.Outcome
@@ -115,42 +115,42 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 make_span = |s| PosixSpan.new(PosixBoundary.from_microseconds(s.lo), PosixBoundary.from_microseconds(s.lo + U8.to_i64(s.width)))
 
 make_spans = |specs| {
-	var spans = []
+	var $spans = []
 	for s in specs {
-		spans = List.append(spans, make_span(s)?)
+		$spans = List.append($spans, make_span(s)?)
 	}
-	Ok(spans)
+	Ok($spans)
 }
 
 # A point-membership oracle on raw generated fields, independent of coverage.
 occupied = |specs, point| {
-	var found = Bool.False
+	var $found = Bool.False
 	for s in specs {
-		found = found or (s.lo <= point and point < s.lo + U8.to_i64(s.width))
+		$found = $found or (s.lo <= point and point < s.lo + U8.to_i64(s.width))
 	}
-	found
+	$found
 }
 
 # R04/R14: scan every unit cell in the bounded generated domain and emit maximal
 # runs from the raw predicate. This oracle never normalizes native spans or
 # consults Coverage.to_spans to derive the persisted canonical payload.
 check_persistence = |coverage, window, input| {
-	var point = -9.I64
-	var previous = Bool.False
-	var start = 0.I64
-	var runs = []
-	while point <= 26 {
-		current = occupied(input.left, point)
-		if current and !previous {
-			start = point
+	var $point = -9.I64
+	var $previous = Bool.False
+	var $start = 0.I64
+	var $runs = []
+	while $point <= 26 {
+		current = occupied(input.left, $point)
+		if current and !$previous {
+			$start = $point
 		}
-		if previous and !current {
-			runs = runs.append("${start.to_str()}/${point.to_str()}")
+		if $previous and !current {
+			$runs = $runs.append("${$start.to_str()}/${$point.to_str()}")
 		}
-		previous = current
-		point = point + 1
+		$previous = current
+		$point = $point + 1
 	}
-	expected_payload = Str.join_with(runs, ";")
+	expected_payload = Str.join_with($runs, ";")
 	check_envelope(Coverage(coverage), "coverage", "posix-canonical-coverage-v1", expected_payload)
 	end = input.window.lo + input.window.width.to_i64()
 	check_envelope(PosixSpan(window), "posix-span", "posix-half-open-span-v1", "${input.window.lo.to_str()}/${end.to_str()}")

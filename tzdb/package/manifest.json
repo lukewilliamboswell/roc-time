@@ -4,7 +4,7 @@
   "encoding": "text-assets-v1",
   "wheel_url": "https://files.pythonhosted.org/packages/5c/23/c7abc0ca0a1526a0774eca151daeb8de62ec457e77262b66b359c3c7679e/tzdata-2025.2-py2.py3-none-any.whl",
   "wheel_sha256": "1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8",
-  "generator_sha256": "0517046bb4d76f41bc2904901b60674445b35de33622ac18901edc5810d97fcd",
+  "generator_sha256": "88c165bae5e069068d4b8fb04e20203e58933c268543080d8edcf547f83ca2d5",
   "zi_sha256": "786968ac34be38f7fd325b252848c25a2b2299f3ce44caea7659b0e8d492d72a",
   "zone_names": 598,
   "canonical_zones": 341,
@@ -1978,10 +1978,9 @@
     "Zulu": "Etc/UTC"
   },
   "files": {
-    "Database.roc": "71409e8ab1b7f078a1cd970929aa23b813cbfb49cbf6a895666c6e94ac7cd107",
+    "Database.roc": "5d9418cc2ce1c7fdf8a4fd25101512672e370f14d822d98e43ef27962d95985c",
     "LICENSE.txt": "33e8e5002d3512d3fcc2282b995e6bad9d334781b9c5ac31843f404900e1f3b4",
     "LICENSE_APACHE.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-    "main.roc": "7f3f74a124701e6a243a1253c3ca26d0e8b295d2a665019bdc958b9173ce83b6",
     "names.txt": "52cbb13c9a707377aeddea1f6150fbcba170a102ec0cbf1c78d0feed0c19d8fa",
     "zones.txt": "241bb6aac54ce92bea8b4d7b8d8814834b691e7a6fe120dd4683c0a06bbd40b2"
   },

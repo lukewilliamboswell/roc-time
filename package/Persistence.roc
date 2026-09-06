@@ -127,35 +127,35 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 	Error : [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
 	new : Value -> Try(Persistence, [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), TooManyMembers, ..])
 	new = |stored| {
-		var snapshot_payload = ""
+		var $snapshot_payload = ""
 		match stored {
 			ResolvedBoundary(snapshot) => {
 				encoded = match PersistenceCivil.from_boundary(snapshot) {
 					Ok(inner) => inner
 					Err(error) => return Err(InvalidCivilSnapshot(error))
 				}
-				snapshot_payload = PersistenceCivil.to_text(encoded)
+				$snapshot_payload = PersistenceCivil.to_text(encoded)
 			}
 			ResolvedSelection(snapshot) => {
 				encoded = match PersistenceCivil.from_selection(snapshot) {
 					Ok(inner) => inner
 					Err(error) => return Err(InvalidCivilSnapshot(error))
 				}
-				snapshot_payload = PersistenceCivil.to_text(encoded)
+				$snapshot_payload = PersistenceCivil.to_text(encoded)
 			}
 			IxdtfSnapshot(snapshot) => {
 				encoded = match PersistenceSnapshot.from_snapshot(snapshot) {
 					Ok(inner) => inner
 					Err(error) => return Err(InvalidSnapshot(error))
 				}
-				snapshot_payload = PersistenceSnapshot.to_text(encoded)
+				$snapshot_payload = PersistenceSnapshot.to_text(encoded)
 			}
 			Coverage(coverage) => if Coverage.member_count(coverage) > 1024 {
 				return Err(TooManyMembers)
 			}
 			_ => {}
 		}
-		Ok({ stored, snapshot_payload })
+		Ok({ stored, snapshot_payload: $snapshot_payload })
 	}
 	value : Persistence -> Value
 	value = |wrapped| wrapped.stored
@@ -274,11 +274,11 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 			CalendarValue(inner) => { kind: "calendar-value", payload: PersistenceCalendar.to_value_text(inner) }
 			QualifiedCalendarValue(inner) => { kind: "qualified-calendar-value", payload: PersistenceCalendar.to_qualified_text(inner) }
 			Coverage(inner) => {
-				var pieces = []
+				var $pieces = []
 				for span in Coverage.to_spans(inner) {
-					pieces = pieces.append(span_text(span))
+					$pieces = $pieces.append(span_text(span))
 				}
-				{ kind: "coverage", payload: Str.join_with(pieces, ";") }
+				{ kind: "coverage", payload: Str.join_with($pieces, ";") }
 			}
 		}
 		description = match metadata(kind) {
@@ -412,16 +412,16 @@ span_text = |span| "${PosixBoundary.to_microseconds(PosixSpan.start(span)).to_st
 
 parse_span : Str -> Try(PosixSpan, [MalformedSpan, IncompleteSpan, InvalidInteger, OutOfRange, InvalidSpan([EmptySpan, ReversedBounds]), ..])
 parse_span = |text| {
-	var separators = 0.U8
+	var $separators = 0.U8
 	for byte in text.to_utf8() {
 		if byte == 47 {
-			separators = separators + 1
-			if separators > 1 {
+			$separators = $separators + 1
+			if $separators > 1 {
 				return Err(MalformedSpan)
 			}
 		}
 	}
-	if separators == 0 {
+	if $separators == 0 {
 		if !text.is_empty() and text != "-" {
 			_ = integer(text)?
 		}
@@ -453,30 +453,30 @@ parse_coverage = |text| {
 	if text.is_empty() {
 		return Ok(Coverage.empty)
 	}
-	var count = 1.U64
+	var $count = 1.U64
 	# Count separators before allocating a member list or parsing any member.
 	for byte in text.to_utf8() {
 		if byte == 59 {
-			count = count + 1
-			if count > 1024 {
+			$count = $count + 1
+			if $count > 1024 {
 				return Err(TooManyMembers)
 			}
 		}
 	}
-	var members = []
-	var previous_end = None
+	var $members = []
+	var $previous_end = None
 	for member_text in text.split_on(";") {
 		span = parse_span(member_text)?
-		match previous_end {
+		match $previous_end {
 			None => {}
 			Some(end) => if PosixSpan.start(span) <= end {
 				return Err(NonCanonicalCoverage)
 			}
 		}
-		previous_end = Some(PosixSpan.end(span))
-		members = members.append(span)
+		$previous_end = Some(PosixSpan.end(span))
+		$members = $members.append(span)
 	}
-	match Coverage.from_sorted_spans(members) {
+	match Coverage.from_sorted_spans($members) {
 		Ok(coverage) => Ok(coverage)
 		Err(_) => Err(NonCanonicalCoverage)
 	}
@@ -491,13 +491,13 @@ expect {
 		Persistence.parse(Persistence.to_text(value)) == Ok(value)
 }
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for number in [I64.lowest, -1, 0, 9007199254740993, I64.highest] {
 		boundary = Persistence.new(PosixBoundary(PosixBoundary.from_microseconds(number)))?
 		delta = Persistence.new(PosixDelta(PosixDelta.from_microseconds(number)))?
-		valid = valid and boundary != delta and Persistence.parse(Persistence.to_text(boundary)) == Ok(boundary) and Persistence.parse(Persistence.to_text(delta)) == Ok(delta)
+		$valid = $valid and boundary != delta and Persistence.parse(Persistence.to_text(boundary)) == Ok(boundary) and Persistence.parse(Persistence.to_text(delta)) == Ok(delta)
 	}
-	valid
+	$valid
 }
 expect {
 	integer("9223372036854775808") == Err(OutOfRange) and integer("-9223372036854775809") == Err(OutOfRange) and
@@ -505,7 +505,7 @@ expect {
 			integer("1e3") == Err(InvalidInteger) and integer("1.0") == Err(InvalidInteger) and integer(" 1") == Err(InvalidInteger)
 }
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for stored in [
 		EdtfDate(EdtfDate.parse("1984?")?),
 		OffsetTimestamp(OffsetTimestamp.parse("2000-01-01T00:00:00.120+00:00")?),
@@ -516,9 +516,9 @@ expect {
 		RfcPeriod(RfcPeriod.parse("20000101T000000/P1D")?),
 	] {
 		value = Persistence.new(stored)?
-		valid = valid and Persistence.parse(Persistence.to_text(value)) == Ok(value)
+		$valid = $valid and Persistence.parse(Persistence.to_text(value)) == Ok(value)
 	}
-	valid
+	$valid
 }
 expect {
 	base = { format: "roc-time", version: "1", kind: "edtf-date", profile: EdtfDate.profile, axis: "none", unit: "none", payload: "not a date" }
@@ -575,15 +575,15 @@ expect {
 							parse_coverage("0/1;1/2") == Err(NonCanonicalCoverage) and parse_coverage("0/1;0/1") == Err(NonCanonicalCoverage)
 }
 expect {
-	var spans = []
-	var index = 0.I64
-	while index < 1025 {
-		span = PosixSpan.new(PosixBoundary.from_microseconds(index * 2), PosixBoundary.from_microseconds(index * 2 + 1))?
-		spans = spans.append(span)
-		index = index + 1
+	var $spans = []
+	var $index = 0.I64
+	while $index < 1025 {
+		span = PosixSpan.new(PosixBoundary.from_microseconds($index * 2), PosixBoundary.from_microseconds($index * 2 + 1))?
+		$spans = $spans.append(span)
+		$index = $index + 1
 	}
-	large = Coverage.from_spans(spans)
-	limit = Coverage.from_spans(spans.drop_last(1))
+	large = Coverage.from_spans($spans)
+	limit = Coverage.from_spans($spans.drop_last(1))
 	accepted = Persistence.new(Coverage(limit))?
 	Persistence.new(Coverage(large)) == Err(TooManyMembers) and Persistence.parse(Persistence.to_text(accepted)) == Ok(accepted) and
 		parse_coverage(Str.join_with(List.repeat("0/1", 1025), ";")) == Err(TooManyMembers)

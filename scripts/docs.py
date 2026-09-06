@@ -111,7 +111,7 @@ def main() -> None:
     marker = '<div class="main-content">'
     if page.count(marker) != 1:
         raise SystemExit("Compiler docs layout changed; review landing-page insertion")
-    guide = (source_root / "docs/overview.html").read_text()
+    guide = (source_root / "docs/overview.html").read_text().replace("{{release_version}}", version)
     page = page.replace(marker, marker + "\n" + guide, 1)
     page = page.replace('<div class="index-decoration">', '<div class="index-decoration" style="display: none">', 1)
     index.write_text(page)

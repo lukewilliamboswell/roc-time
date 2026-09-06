@@ -43,16 +43,20 @@ jobs:
 
       - name: Check release branch and candidate identity
         if: github.event_name == 'workflow_dispatch' && (!inputs.nightly_validation || inputs.release_version != '')
-        uses: lukewilliamboswell/roc-automation/actions/check-release@d1f1742959696dd29d8b0fd35f472144f9c9ec5e
+        uses: lukewilliamboswell/roc-automation/actions/check-release@5e6663c1436f038a35cc076a1b2921983e9b954c
         with:
           version: ${{ inputs.release_version }}
-          allow-default-branch: 'true'
-          # Remove when adopting upstream stable Roc releases.
-          allow-nightly-bootstrap: 'true'
+          # Pilot publication comes from the supported-compiler branch.
+          allow-default-branch: 'false'
+          allow-nightly-bootstrap: 'false'
+          compiler-root: package/main.roc
+          # Explicit simulation until upstream publishes stable Roc.
+          simulated-stable-pin: nightly-2026-09-05-b195f5b
+          simulated-stable-line: '0.1'
 
       - name: Read Roc version
         id: roc-version
-        run: echo "nightly-tag=$(< .roc-version)" >> "$GITHUB_OUTPUT"
+        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
 
       - name: Install Zig for the instrumented test host
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
@@ -154,7 +158,7 @@ jobs:
 
       - name: Read Roc version
         id: roc-version
-        run: echo "nightly-tag=$(< .roc-version)" >> "$GITHUB_OUTPUT"
+        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
 
       - name: Install Roc
         uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
@@ -247,6 +251,16 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
         run: python3 scripts/release_starter.py notes --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip --notes-path .release/release-notes.md
+
+      - name: Disclose the compiler-support simulation
+        if: github.ref == 'refs/heads/roc-0.1.x'
+        run: |
+          cat >> .release/release-notes.md <<'NOTE'
+
+          This release pilots the `roc-0.1.x` support workflow with
+          `nightly-2026-09-05-b195f5b` standing in for a future stable Roc compiler.
+          It does not claim compatibility with an upstream stable Roc 0.1 release.
+          NOTE
 
       - name: Publish release
         uses: roc-lang/release-package/actions/publish-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf

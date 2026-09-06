@@ -208,7 +208,8 @@ def main() -> None:
             link = f"https://github.com/{args.repo}/releases/download/{quote(args.version, safe='')}/roc-time-starter.zip"
             header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, archive search and staffing examples. "
                       f"Use [Roc {compiler}](https://github.com/roc-lang/nightlies/releases/tag/{compiler}); "
-                      "the kit includes complete applications and checks the compiler version before running.\n\n")
+                      "each application declares its compiler in its header. Unzip the kit, enter "
+                      "`examples/booking_exchange`, and run `roc main.roc`. Python is not required.\n\n")
             header += (
                 "## Packages\n\n"
                 f"- [roc-time — temporal types and operations]({core})\n"
@@ -216,6 +217,7 @@ def main() -> None:
                 "Copy this into `main.roc` and run `roc main.roc` with the compiler linked above:\n\n"
                 "```roc\n"
                 "app [main!] {\n"
+                f'\troc: "{compiler}",\n'
                 f'\ttime: "{core}",\n'
                 f'\tzones: "{zones}",\n'
                 "}\n"

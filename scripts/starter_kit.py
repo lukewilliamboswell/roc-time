@@ -7,8 +7,12 @@ import ipaddress
 import json
 from pathlib import Path
 import re
+import sys
 from urllib.parse import urlsplit
 import zipfile
+
+sys.dont_write_bytecode = True
+from roc_version import package_pin, replace_pin
 
 ROOT = Path(__file__).resolve().parents[1]
 STARTERS = ("booking_exchange", "archive_search", "staffing")
@@ -100,25 +104,27 @@ unless the referenced archives are already in the compiler's package cache.
 
 ## Install the pinned compiler
 
-Use **{compiler}**, recorded in `.roc-version`. Download the matching release for
+Use **{compiler}**, declared in each application’s `roc` header field. The kit’s
+`.roc-version` is a generated copy for the optional wrapper. Download the matching release for
 your operating system and CPU from the official Roc nightly releases:
 https://github.com/roc-lang/nightlies/releases/tag/{compiler}
 
-Unpack the compiler and set `ROC`
-to its executable. The wrapper checks the full `roc version` result before use.
-Python 3 is required for the wrapper. The executable must support your host.
+Unpack the compiler and put `roc` on PATH. Each application's header records
+its compiler version and package dependencies.
 
 ```sh
-export ROC=/absolute/path/to/roc
-python3 /path/to/roc-time-starter/run.py check booking_exchange
-python3 /path/to/roc-time-starter/run.py run booking_exchange
-python3 /path/to/roc-time-starter/run.py run archive_search
-python3 /path/to/roc-time-starter/run.py run staffing
-python3 /path/to/roc-time-starter/run.py build staffing
+cd roc-time-starter/examples/booking_exchange
+roc main.roc
 ```
 
-The wrapper works from any working directory. Builds go under this kit's `build/`
-directory. You can also edit and run the applications directly with the pinned Roc.
+Run `roc main.roc` inside `archive_search` or `staffing` to try the other
+applications, or `roc build main.roc` to create an executable. No Python setup
+is needed to run these Roc applications.
+
+An optional Python 3 wrapper supports `python3 run.py check booking_exchange`,
+`python3 run.py run staffing`, and `python3 run.py build staffing` from the kit
+root. It checks the compiler version and places builds under `build/`. Set
+`ROC` to an executable path when using the wrapper with a compiler off PATH.
 
 - `booking_exchange`: exchange explicit appointment timestamps and find availability.
 - `archive_search`: preserve archive date precision and qualification while searching.
@@ -137,7 +143,7 @@ def build(output: Path, bundle_url: str, zone_bundle_url: str) -> Path:
     zone_bundle_url = validate_url(zone_bundle_url)
     if bundle_url == zone_bundle_url:
         raise ValueError("core and zones must identify distinct archives")
-    compiler = (ROOT / ".roc-version").read_text().strip()
+    compiler = package_pin(ROOT)
     if not re.fullmatch(r"nightly-\d{4}-\d{2}-\d{2}-[0-9a-f]+", compiler):
         raise ValueError("unexpected compiler pin")
     files = {
@@ -159,6 +165,7 @@ def build(output: Path, bundle_url: str, zone_bundle_url: str) -> Path:
                 raise ValueError(f"symlink source is not permitted: {path}")
             source = path.read_text()
             if path.name == "main.roc":
+                source = replace_pin(source, compiler)
                 source, core_count = re.subn(r'(?m)^(\s*time:\s*)"[^"]+"', lambda match: f'{match[1]}"{bundle_url}"', source)
                 source, zone_count = re.subn(r'(?m)^(\s*zones:\s*)"[^"]+"', lambda match: f'{match[1]}"{zone_bundle_url}"', source)
                 if core_count != 1 or zone_count != (1 if starter == "staffing" else 0):

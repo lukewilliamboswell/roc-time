@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Prototype generated zone encodings and measure compiler/binary costs (not a DB release)."""
+from roc_version import package_pin
 import argparse
 import hashlib
 import io
@@ -67,7 +68,7 @@ def main(wheel, samples, encoding):
     tmp.mkdir(exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="zone-roc-measure-", dir=tmp))
     version, _ = execute([roc, "version"], work, work, "version")
-    if version.stdout.strip() != "Roc compiler version " + (ROOT / ".roc-version").read_text().strip():
+    if version.stdout.strip() != "Roc compiler version " + package_pin(ROOT):
         raise SystemExit("Wrong Roc compiler")
     entries = {}
     with zipfile.ZipFile(wheel) as archive:
@@ -91,21 +92,21 @@ def main(wheel, samples, encoding):
         bundle = next(bundle_dir.glob("*.tar.zst"))
         report["packages"][kind] = {"roc_source_bytes": sum(p.stat().st_size for p in sources), "bundle_bytes": bundle.stat().st_size, "module_count": len(sources)}
     app_body = '''main! = |args| {
- var name = "Australia/Melbourne"
- for arg in args { name = arg }
+ var $name = "Australia/Melbourne"
+ for arg in args { $name = arg }
  PAYLOAD
- var checksum = name.count_utf8_bytes().to_i64_wrap()
- for second in data.times { checksum = I64.rem_by(checksum + I64.rem_by(second, 1000003), 1000003) }
- for index in data.indices { checksum = I64.rem_by(checksum + index.to_i64(), 1000003) }
- for offset in data.offsets { checksum = I64.rem_by(checksum + offset.to_i64(), 1000003) }
- echo!("${data.times.len().to_str()}|${checksum.to_str()}|${data.footer}\\n")
+ var $checksum = $name.count_utf8_bytes().to_i64_wrap()
+ for second in data.times { $checksum = I64.rem_by($checksum + I64.rem_by(second, 1000003), 1000003) }
+ for index in data.indices { $checksum = I64.rem_by($checksum + index.to_i64(), 1000003) }
+ for offset in data.offsets { $checksum = I64.rem_by($checksum + offset.to_i64(), 1000003) }
+ echo!("${data.times.len().to_str()}|${$checksum.to_str()}|${data.footer}\\n")
  Ok({})
 }
 '''
     if encoding == "tzif":
         begin = app_body.index(" for second")
         end = app_body.index(" Ok({})", begin)
-        app_body = app_body[:begin] + ' for byte in data.bytes { checksum = I64.rem_by(checksum + byte.to_i64(), 1000003) }\n echo!("${data.bytes.len().to_str()}|${checksum.to_str()}\\n")\n' + app_body[end:]
+        app_body = app_body[:begin] + ' for byte in data.bytes { $checksum = I64.rem_by($checksum + byte.to_i64(), 1000003) }\n echo!("${data.bytes.len().to_str()}|${$checksum.to_str()}\\n")\n' + app_body[end:]
     for kind in ["core_only", "static_global", "dynamic_global", "dynamic_subset"]:
         app = work / kind
         app.mkdir()
@@ -115,7 +116,7 @@ def main(wheel, samples, encoding):
         else:
             package = "subset" if kind == "dynamic_subset" else "global"
             module = "Melbourne" if kind == "static_global" else "Lookup"
-            source = f'app [main!] {{ db: "../{package}/main.roc" }}\nimport db.{module}\n' + app_body.replace("PAYLOAD", "data = Melbourne.data" if kind == "static_global" else "data = Lookup.get(name)?")
+            source = f'app [main!] {{ db: "../{package}/main.roc" }}\nimport db.{module}\n' + app_body.replace("PAYLOAD", "data = Melbourne.data" if kind == "static_global" else "data = Lookup.get($name)?")
         app.joinpath("main.roc").write_text(source)
         execute([roc, "check", "main.roc"], app, work, f"check-{kind}")
         measurements = []

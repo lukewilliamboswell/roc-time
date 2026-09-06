@@ -201,8 +201,8 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 		if periods.len() > 4096 {
 			return Err(TooManyPeriods)
 		}
-		var starts = []
-		var overrides = []
+		var $starts = []
+		var $overrides = []
 		for period in periods {
 			compatible = match context {
 				Utc => RfcDateTime.form(period.start) == Utc
@@ -211,7 +211,7 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 			if !compatible {
 				return Err(IncompatibleContext)
 			}
-			starts = starts.append(RfcDateTime.source(period.start))
+			$starts = $starts.append(RfcDateTime.source(period.start))
 			native_ending = match period.ending {
 				Duration(value) => After(RfcDuration.to_duration(value))
 				End(value) => match context {
@@ -226,14 +226,14 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 					Local(_) => AtLocal({ source: RfcDateTime.local_label(value), occurrence: First, gap: UseOffsetBeforeGap })
 				}
 			}
-			overrides = overrides.append({ source: RfcDateTime.local_label(period.start), ending: native_ending })
+			$overrides = $overrides.append({ source: RfcDateTime.local_label(period.start), ending: native_ending })
 		}
-		combined = TimedRecurrence.add_inclusions(rule, starts)?
+		combined = TimedRecurrence.add_inclusions(rule, $starts)?
 		rules = match context {
 			Local(value) => value
 			Utc => utc_rules(I64.lowest, I64.highest)
 		}
-		TimedSchedule.new_with_endings(series, combined, window, RfcDuration.to_duration(duration), overrides, { rules, occurrence: First, gap: UseOffsetBeforeGap })
+		TimedSchedule.new_with_endings(series, combined, window, RfcDuration.to_duration(duration), $overrides, { rules, occurrence: First, gap: UseOffsetBeforeGap })
 	}
 }
 
@@ -272,24 +272,24 @@ test_period_span = |text, context, steps| {
 	end_date = CalendarArithmetic.shift_day(source.date, CalendarDelta.days(1), Reject)?
 	window = { start: RfcDateTime.local_label(RfcPeriod.start(period)), end: LocalDateTime.new(CalendarDate.from_gregorian(end_date), source.clock) }
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	var cursor = RfcPeriod.schedule(42.U64, rule, window, test_duration("PT1H"), [period, period], context)?
-	var spans = []
-	var calls = 0.U64
-	while calls < 100 {
-		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: steps, max_zone_candidates: 2 }, max_occurrences: 1 }) {
+	var $cursor = RfcPeriod.schedule(42.U64, rule, window, test_duration("PT1H"), [period, period], context)?
+	var $spans = []
+	var $calls = 0.U64
+	while $calls < 100 {
+		batch = match TimedSchedule.collect($cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: steps, max_zone_candidates: 2 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(error) => return Err(Execution(error))
 		}
 		for occurrence in batch.occurrences {
-			spans = spans.append(TimedOccurrence.span(occurrence))
+			$spans = $spans.append(TimedOccurrence.span(occurrence))
 		}
 		match batch.status {
-			Complete => return Ok(spans)
+			Complete => return Ok($spans)
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	Err(FixtureDidNotTerminate)
 }
@@ -298,12 +298,12 @@ test_period_span = |text, context, steps| {
 # https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.9
 # 18:00 to next-day 07:00 is 13 hours; the second example is 5h30m.
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for case in [{ text: "19970101T180000Z/19970102T070000Z", seconds: 46800.I64 }, { text: "19970101T180000Z/PT5H30M", seconds: 19800 }] {
 		spans = test_period_span(case.text, Utc, 1)?
-		valid = valid and spans.len() == 1 and PosixSpan.coordinate_width(spans.get(0)?) == Ok(PosixDelta.from_microseconds(case.seconds * 1000000))
+		$valid = $valid and spans.len() == 1 and PosixSpan.coordinate_width(spans.get(0)?) == Ok(PosixDelta.from_microseconds(case.seconds * 1000000))
 	}
-	valid
+	$valid
 }
 
 test_new_york = |spring| {

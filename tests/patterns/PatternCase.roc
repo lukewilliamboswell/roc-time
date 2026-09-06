@@ -39,25 +39,25 @@ PatternCase := { year : I64, month : U8, interval : U8, index : U8, weekday : U8
 			Ok(value) => value
 			Err(_) => crash "Valid pattern rejected"
 		}
-		var year = input.year
-		var month = input.month
-		var step = 0.U64
-		while step < input.index.to_u64() * input.interval.to_u64() {
-			if month == 12 {
-				year = year + 1
-				month = 1
+		var $year = input.year
+		var $month = input.month
+		var $step = 0.U64
+		while $step < input.index.to_u64() * input.interval.to_u64() {
+			if $month == 12 {
+				$year = $year + 1
+				$month = 1
 			} else {
-				month = month + 1
+				$month = $month + 1
 			}
-			step = step + 1
+			$step = $step + 1
 		}
-		var end_year = year
-		var end_month = month + 1
-		if end_month == 13 {
-			end_year = end_year + 1
-			end_month = 1
+		var $end_year = $year
+		var $end_month = $month + 1
+		if $end_month == 13 {
+			$end_year = $end_year + 1
+			$end_month = 1
 		}
-		if end_year > 2147483647 {
+		if $end_year > 2147483647 {
 			if CalendarPattern.period(pattern, input.index.to_u64()) != Err(OutOfRange) {
 				crash "Period overflow concealed"
 			}
@@ -67,34 +67,34 @@ PatternCase := { year : I64, month : U8, interval : U8, index : U8, weekday : U8
 			Ok(value) => value
 			Err(_) => crash "Supported period rejected"
 		}
-		if frame.start != date(year, month, 1) or frame.end != date(end_year, end_month, 1) {
+		if frame.start != date($year, $month, 1) or frame.end != date($end_year, $end_month, 1) {
 			crash "Period differs from field walking"
 		}
-		length = month_length(year, month)
-		var matching_days = []
-		var day = 1.U8
-		while day <= length {
-			if weekday_oracle(year, month, day) == input.weekday.to_i64() {
-				matching_days = matching_days.append(day)
+		length = month_length($year, $month)
+		var $matching_days = []
+		var $day = 1.U8
+		while $day <= length {
+			if weekday_oracle($year, $month, $day) == input.weekday.to_i64() {
+				$matching_days = $matching_days.append($day)
 			}
-			day = day + 1
+			$day = $day + 1
 		}
-		var selected_weekdays = []
-		for (value, position) in matching_days.map_with_index(|value, position| (value, position)) {
+		var $selected_weekdays = []
+		for (value, position) in $matching_days.map_with_index(|value, position| (value, position)) {
 			positive = position.to_i64_wrap() + 1
-			negative = position.to_i64_wrap() - matching_days.len().to_i64_wrap()
+			negative = position.to_i64_wrap() - $matching_days.len().to_i64_wrap()
 			if input.ordinal == 0 or input.ordinal.to_i64() == positive or input.ordinal.to_i64() == negative {
-				selected_weekdays = selected_weekdays.append(value)
+				$selected_weekdays = $selected_weekdays.append(value)
 			}
 		}
-		day = 1
-		while day <= length {
-			month_match = input.month_day.to_i64() == day.to_i64() or input.month_day.to_i64() == day.to_i64() - length.to_i64() - 1
-			expected = month_match and selected_weekdays.contains(day)
-			if CalendarPattern.matches(pattern, input.index.to_u64(), date(year, month, day)) != Ok(expected) {
+		$day = 1
+		while $day <= length {
+			month_match = input.month_day.to_i64() == $day.to_i64() or input.month_day.to_i64() == $day.to_i64() - length.to_i64() - 1
+			expected = month_match and $selected_weekdays.contains($day)
+			if CalendarPattern.matches(pattern, input.index.to_u64(), date($year, $month, $day)) != Ok(expected) {
 				crash "Date selector differs from weekday enumeration"
 			}
-			day = day + 1
+			$day = $day + 1
 		}
 		if CalendarPattern.matches(pattern, input.index.to_u64(), frame.end) != Ok(False) {
 			crash "Exclusive period end included"
@@ -134,20 +134,20 @@ weekday_oracle = |year, month, day| {
 	# 2000-01-01 was Saturday. Walk at most one Gregorian 400-year cycle;
 	# no production CivilDay conversion or floor-division year formula is used.
 	end_year = 2000 + I64.mod_by(year, 400)
-	var y = 2000.I64
-	var elapsed = 0.I64
-	while y < end_year {
-		elapsed = elapsed + if leap(y) {
+	var $y = 2000.I64
+	var $elapsed = 0.I64
+	while $y < end_year {
+		$elapsed = $elapsed + if leap($y) {
 			366
 		} else {
 			365
 		}
-		y = y + 1
+		$y = $y + 1
 	}
-	var m = 1.U8
-	while m < month {
-		elapsed = elapsed + month_length(end_year, m).to_i64()
-		m = m + 1
+	var $m = 1.U8
+	while $m < month {
+		$elapsed = $elapsed + month_length(end_year, $m).to_i64()
+		$m = $m + 1
 	}
-	I64.mod_by(5 + elapsed + day.to_i64() - 1, 7)
+	I64.mod_by(5 + $elapsed + day.to_i64() - 1, 7)
 }

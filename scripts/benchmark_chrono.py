@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Narrow, validated in-process roc-time / chrono microbenchmarks."""
+from roc_version import package_pin
 import argparse
 import datetime as dt
 import hashlib
@@ -85,8 +86,8 @@ def main():
         parser.error("iterations 1..10000000, samples 1..50, warmups 0..10")
     roc = os.environ.get("ROC", "roc")
     roc_version = subprocess.check_output([roc, "version"], text=True).strip()
-    if (ROOT / ".roc-version").read_text().strip() not in roc_version:
-        raise RuntimeError(f"compiler does not match .roc-version: {roc_version}")
+    if package_pin(ROOT) not in roc_version:
+        raise RuntimeError(f"compiler does not match the package header: {roc_version}")
     BUILD.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "CARGO_HOME": str(ROOT / ".roc-time-tmp/chrono-cargo"),
            "CARGO_TARGET_DIR": str(BUILD / "cargo-target")}

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Measure real zone packages using the instrumented, observable lookup fixture."""
 from __future__ import annotations
+from roc_version import package_pin
 
 import argparse
 import hashlib
@@ -34,7 +35,7 @@ def main() -> None:
     if '/' in roc or '\\' in roc:
         roc = str(Path(roc).resolve())
     version = subprocess.check_output([roc, 'version'], text=True).strip()
-    if version != 'Roc compiler version ' + (ROOT / '.roc-version').read_text().strip():
+    if version != 'Roc compiler version ' + package_pin(ROOT):
         raise SystemExit('Use the pinned Roc compiler')
     target = build_host()
     parent = ROOT / '.roc-time-tmp'

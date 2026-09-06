@@ -20,11 +20,11 @@ main! = |args| {
 	Host.mark!(2)
 	after = Host.allocation_count!({})
 	Host.assert!(after - before <= 1)
-	var checksum = 0.I64
-	var index = 1.I64
+	var $checksum = 0.I64
+	var $index = 1.I64
 	for transition in data.transitions {
-		checksum = checksum + index * (transition.second + transition.offset.to_i64())
-		index = index + 1
+		$checksum = $checksum + $index * (transition.second + transition.offset.to_i64())
+		$index = $index + 1
 	}
-	{ bytes: "${data.canonical_name}|${checksum.to_str()}\n".to_utf8(), work: [after - before, data.transitions.len()] }
+	{ bytes: "${data.canonical_name}|${$checksum.to_str()}\n".to_utf8(), work: [after - before, data.transitions.len()] }
 }

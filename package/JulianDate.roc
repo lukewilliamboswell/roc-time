@@ -31,13 +31,13 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	to_civil_day : JulianDate -> CivilDay
 	to_civil_day = |Date(date)| {
-		var before = 0.I64
-		var month = 1.U8
-		while month < date.month {
-			before = before + U8.to_i64(month_length(date.year, month))
-			month = month + 1
+		var $before = 0.I64
+		var $month = 1.U8
+		while $month < date.month {
+			$before = $before + U8.to_i64(month_length(date.year, $month))
+			$month = $month + 1
 		}
-		CivilDay.from_day_number(year_start(date.year) + before + U8.to_i64(date.day) - 1)
+		CivilDay.from_day_number(year_start(date.year) + $before + U8.to_i64(date.day) - 1)
 	}
 
 	from_civil_day : CivilDay -> Try(JulianDate, [OutOfRange, ..])
@@ -47,28 +47,28 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 			return Err(OutOfRange)
 		}
 		# Search a bounded provider range, not the distance from the epoch.
-		var lower = -2147483648.I64
-		var upper = 2147483648.I64
-		while upper - lower > 1 {
-			middle = lower + I64.div_trunc_by(upper - lower, 2)
+		var $lower = -2147483648.I64
+		var $upper = 2147483648.I64
+		while $upper - $lower > 1 {
+			middle = $lower + I64.div_trunc_by($upper - $lower, 2)
 			if year_start(middle) <= number {
-				lower = middle
+				$lower = middle
 			} else {
-				upper = middle
+				$upper = middle
 			}
 		}
-		var remaining = number - year_start(lower)
-		var month = 1.U8
-		while remaining >= U8.to_i64(month_length(lower, month)) {
-			remaining = remaining - U8.to_i64(month_length(lower, month))
-			month = month + 1
+		var $remaining = number - year_start($lower)
+		var $month = 1.U8
+		while $remaining >= U8.to_i64(month_length($lower, $month)) {
+			$remaining = $remaining - U8.to_i64(month_length($lower, $month))
+			$month = $month + 1
 		}
 		# The selected year contains number; remaining is in 0..30, month in 1..12.
-		day_of_month = match I64.to_u8_try(remaining + 1) {
+		day_of_month = match I64.to_u8_try($remaining + 1) {
 			Ok(value) => value
 			Err(_) => crash "Julian decomposition invariant"
 		}
-		Ok(Date({ year: lower, month, day: day_of_month }))
+		Ok(Date({ year: $lower, month: $month, day: day_of_month }))
 	}
 
 	to_hash : JulianDate, Hasher -> Hasher

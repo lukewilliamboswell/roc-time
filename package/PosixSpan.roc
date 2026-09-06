@@ -156,7 +156,7 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## One representative for each strict endpoint ordering, including inverses.
 	expect {
 		anchor = new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3))?
-		var valid = Bool.True
+		var $valid = Bool.True
 		for (lo, hi, expected) in [
 			(4.I64, 5.I64, Before),
 			(3, 4, Meets),
@@ -173,15 +173,15 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 			(-2, -1, After),
 		] {
 			other = new(PosixBoundary.from_microseconds(lo), PosixBoundary.from_microseconds(hi))?
-			valid = valid and relation(anchor, other) == expected
+			$valid = $valid and relation(anchor, other) == expected
 		}
-		valid
+		$valid
 	}
 
 	## Exhaustively compare overlap to occupied integer points on a small axis.
 	## Includes negative coordinates, touching and one-microsecond spans.
 	expect {
-		var valid = Bool.True
+		var $valid = Bool.True
 		for a in [-2.I64, -1, 0, 1] {
 			for b in [-1.I64, 0, 1, 2] {
 				for c in [-2.I64, -1, 0, 1] {
@@ -189,11 +189,11 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 						if a < b and c < d {
 							left = new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b))?
 							right = new(PosixBoundary.from_microseconds(c), PosixBoundary.from_microseconds(d))?
-							var shared = Bool.False
+							var $shared = Bool.False
 							for p in [-2.I64, -1, 0, 1, 2] {
-								shared = shared or (a <= p and p < b and c <= p and p < d)
+								$shared = $shared or (a <= p and p < b and c <= p and p < d)
 							}
-							valid = valid and overlaps(left, right) == shared
+							$valid = $valid and overlaps(left, right) == $shared
 							# Relations agree with inverse classification and overlap semantics.
 							inverse = match relation(left, right) {
 								Before => After
@@ -210,12 +210,12 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 								FinishedBy => Finishes
 								Equal => Equal
 							}
-							valid = valid and relation(right, left) == inverse
+							$valid = $valid and relation(right, left) == inverse
 						}
 					}
 				}
 			}
 		}
-		valid
+		$valid
 	}
 }

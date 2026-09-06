@@ -8,26 +8,26 @@ import time.CivilDay
 
 RecurrenceFixture := [].{
 	make = |count, finite| {
-		var dates = []
-		var starts = []
-		var texts = []
+		var $dates = []
+		var $starts = []
+		var $texts = []
 		clock = match ClockTime.from_microseconds_since_midnight(count.to_i64() - count.to_i64()) {
 			Ok(v) => v
 			Err(_) => crash "fixture clock"
 		}
-		var i = 0.U32
-		while i < count {
-			date = match GregorianDate.from_civil_day(CivilDay.from_day_number(i.to_i64())) {
+		var $i = 0.U32
+		while $i < count {
+			date = match GregorianDate.from_civil_day(CivilDay.from_day_number($i.to_i64())) {
 				Ok(v) => v
 				Err(_) => crash "fixture date"
 			}
-			dates = dates.append(date)
-			starts = starts.append({ date, clock })
+			$dates = $dates.append(date)
+			$starts = $starts.append({ date, clock })
 			fields = GregorianDate.to_fields(date)
-			texts = texts.append("${fields.year.to_str()}${pad(fields.month)}${pad(fields.day)}T000000")
-			i = i + 1
+			$texts = $texts.append("${fields.year.to_str()}${pad(fields.month)}${pad(fields.day)}T000000")
+			$i = $i + 1
 		}
-		anchor = match dates.get(0) {
+		anchor = match $dates.get(0) {
 			Ok(v) => v
 			Err(_) => crash "nonempty fixture"
 		}
@@ -44,7 +44,7 @@ RecurrenceFixture := [].{
 					Forever
 				},
 				by_set_pos: selectors,
-				inclusions: dates,
+				inclusions: $dates,
 				exclusions: [],
 			},
 		) {
@@ -67,7 +67,7 @@ RecurrenceFixture := [].{
 			Ok(v) => v
 			Err(_) => crash "native timed rule"
 		}
-		timed_rule = match TimedRecurrence.with_inclusions(timed_base, starts) {
+		timed_rule = match TimedRecurrence.with_inclusions(timed_base, $starts) {
 			Ok(v) => v
 			Err(_) => crash "timed inclusions"
 		}
@@ -79,7 +79,7 @@ RecurrenceFixture := [].{
 				"FREQ=DAILY"
 			},
 			duration: "PT1S",
-			inclusions: texts,
+			inclusions: $texts,
 			exclusions: [],
 			periods: [],
 			mode: Floating,
@@ -87,7 +87,7 @@ RecurrenceFixture := [].{
 			Ok(v) => v
 			Err(_) => crash "rfc rule"
 		}
-		{ date_rule, timed_rule, rfc_rule, dates, starts, texts, selectors, months }
+		{ date_rule, timed_rule, rfc_rule, dates: $dates, starts: $starts, texts: $texts, selectors, months }
 	}
 }
 

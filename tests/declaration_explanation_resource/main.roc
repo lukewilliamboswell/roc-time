@@ -16,13 +16,13 @@ main! = |args| {
 	source = DeclarationFixture.source(kind, days, local)
 	before = Host.allocated_bytes!({})
 	explanation = Explanation.new(source)
-	var reads = 0.U32
-	while reads < 100000 {
+	var $reads = 0.U32
+	while $reads < 100000 {
 		match Explanation.fact_at(explanation, 0) {
 			Item(fact) => Host.assert!(DeclarationFixture.matches(fact, kind, days, local))
 			End => Host.assert!(False)
 		}
-		reads = reads + 1
+		$reads = $reads + 1
 	}
 	read_after = Host.allocated_bytes!({})
 	Host.assert!(read_after == before)

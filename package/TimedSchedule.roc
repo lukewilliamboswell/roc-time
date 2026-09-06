@@ -133,23 +133,23 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Start buffers and the pending end's zone candidates have separate caps.
 	next : TimedSchedule(id), Limits -> Try(Next(id), Error)
 	next = |initial, limits| {
-		var state = initial
-		var steps = 0.U64
-		var zone_segments = 0.U64
-		if state.start_buffered > limits.max_buffered {
-			return Ok({ steps, zone_segments, start_buffered: state.start_buffered, start_zone_buffered: state.start_zone_buffered, end_buffered: state.end_buffered, status: Limited({ cursor: state, reason: StartBufferLimit }) })
+		var $state = initial
+		var $steps = 0.U64
+		var $zone_segments = 0.U64
+		if $state.start_buffered > limits.max_buffered {
+			return Ok({ steps: $steps, zone_segments: $zone_segments, start_buffered: $state.start_buffered, start_zone_buffered: $state.start_zone_buffered, end_buffered: $state.end_buffered, status: Limited({ cursor: $state, reason: StartBufferLimit }) })
 		}
-		match state.pending {
+		match $state.pending {
 			None => {
-				batch = match TimedRecurrence.Cursor.next(state.starts, limits) {
+				batch = match TimedRecurrence.Cursor.next($state.starts, limits) {
 					Ok(value) => value
 					Err(error) => return Err(error)
 				}
-				steps = batch.steps
-				zone_segments = batch.zone_segments
-				state = { ..state, start_buffered: batch.buffered, start_zone_buffered: batch.zone_buffered }
+				$steps = batch.steps
+				$zone_segments = batch.zone_segments
+				$state = { ..$state, start_buffered: batch.buffered, start_zone_buffered: batch.zone_buffered }
 				match batch.status {
-					End => return Ok({ steps, zone_segments, start_buffered: state.start_buffered, start_zone_buffered: state.start_zone_buffered, end_buffered: 0, status: End })
+					End => return Ok({ steps: $steps, zone_segments: $zone_segments, start_buffered: $state.start_buffered, start_zone_buffered: $state.start_zone_buffered, end_buffered: 0, status: End })
 					Limited(progress) => {
 						reason = match progress.reason {
 							WorkLimit => StartWorkLimit
@@ -158,64 +158,64 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 							ZoneBufferLimit => StartZoneBufferLimit
 							OutputLimit => crash "next has no output-cap limit"
 						}
-						return Ok({ steps, zone_segments, start_buffered: state.start_buffered, start_zone_buffered: state.start_zone_buffered, end_buffered: 0, status: Limited({ cursor: { ..state, starts: progress.cursor }, reason }) })
+						return Ok({ steps: $steps, zone_segments: $zone_segments, start_buffered: $state.start_buffered, start_zone_buffered: $state.start_zone_buffered, end_buffered: 0, status: Limited({ cursor: { ..$state, starts: progress.cursor }, reason }) })
 					}
 					Item(item) => {
-						identity = { series: state.series, source: TimedRecurrence.Occurrence.source(item.occurrence) }
-						pending = match TimedOccurrence.cursor_with_ending(identity, item.occurrence, ending_at(state.overrides, identity.source, state.duration)) {
+						identity = { series: $state.series, source: TimedRecurrence.Occurrence.source(item.occurrence) }
+						pending = match TimedOccurrence.cursor_with_ending(identity, item.occurrence, ending_at($state.overrides, identity.source, $state.duration)) {
 							Ok(value) => value
 							Err(error) => return Err(error)
 						}
-						state = { ..state, starts: item.cursor, pending: Some(pending) }
+						$state = { ..$state, starts: item.cursor, pending: Some(pending) }
 					}
 				}
 			}
 			Some(_) => {}
 		}
-		pending = match state.pending {
+		pending = match $state.pending {
 			Some(value) => value
 			None => crash "start supplies a pending duration"
 		}
-		batch = match TimedOccurrence.Cursor.collect(pending, { max_segments: limits.max_zone_segments - zone_segments, max_candidates: limits.max_zone_candidates }) {
+		batch = match TimedOccurrence.Cursor.collect(pending, { max_segments: limits.max_zone_segments - $zone_segments, max_candidates: limits.max_zone_candidates }) {
 			Ok(value) => value
 			Err(error) => return Err(error)
 		}
-		zone_segments = zone_segments + batch.segments
+		$zone_segments = $zone_segments + batch.segments
 		status = match batch.status {
-			Complete(occurrence) => Item({ occurrence, cursor: { ..state, pending: None, end_buffered: 0 } })
+			Complete(occurrence) => Item({ occurrence, cursor: { ..$state, pending: None, end_buffered: 0 } })
 			Limited(progress) => Limited({
-				cursor: { ..state, pending: Some(progress.cursor), end_buffered: batch.buffered },
+				cursor: { ..$state, pending: Some(progress.cursor), end_buffered: batch.buffered },
 				reason: match progress.reason {
 					WorkLimit => EndZoneWorkLimit
 					BufferLimit => EndZoneBufferLimit
 				},
 			})
 		}
-		Ok({ steps, zone_segments, start_buffered: state.start_buffered, start_zone_buffered: state.start_zone_buffered, end_buffered: batch.buffered, status })
+		Ok({ steps: $steps, zone_segments: $zone_segments, start_buffered: $state.start_buffered, start_zone_buffered: $state.start_zone_buffered, end_buffered: batch.buffered, status })
 	}
 
 	## Output capacity returns Limited without looking ahead. Candidate and
 	## zone budgets are totals across every start and end in this batch.
 	collect : TimedSchedule(id), { work : Limits, max_occurrences : U64 } -> Try(Batch(id), Error)
 	collect = |initial, limits| {
-		var current = initial
-		var occurrences = []
-		var steps = 0.U64
-		var zone_segments = 0.U64
-		while occurrences.len() < limits.max_occurrences {
-			batch = next(current, { ..limits.work, max_steps: limits.work.max_steps - steps, max_zone_segments: limits.work.max_zone_segments - zone_segments })?
-			steps = steps + batch.steps
-			zone_segments = zone_segments + batch.zone_segments
+		var $current = initial
+		var $occurrences = []
+		var $steps = 0.U64
+		var $zone_segments = 0.U64
+		while $occurrences.len() < limits.max_occurrences {
+			batch = next($current, { ..limits.work, max_steps: limits.work.max_steps - $steps, max_zone_segments: limits.work.max_zone_segments - $zone_segments })?
+			$steps = $steps + batch.steps
+			$zone_segments = $zone_segments + batch.zone_segments
 			match batch.status {
-				End => return Ok({ occurrences, steps, zone_segments, status: Complete })
-				Limited(progress) => return Ok({ occurrences, steps, zone_segments, status: Limited(progress) })
+				End => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, status: Complete })
+				Limited(progress) => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, status: Limited(progress) })
 				Item(item) => {
-					occurrences = occurrences.append(item.occurrence)
-					current = item.cursor
+					$occurrences = $occurrences.append(item.occurrence)
+					$current = item.cursor
 				}
 			}
 		}
-		Ok({ occurrences, steps, zone_segments, status: Limited({ cursor: current, reason: OutputLimit }) })
+		Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, status: Limited({ cursor: $current, reason: OutputLimit }) })
 	}
 
 	## End, errors and Limited are terminal items; resume a limited cursor
@@ -260,22 +260,22 @@ expect {
 	initial = test_schedule(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 3.U64, max_zone_candidates: 1.U64 }
 	first = TimedSchedule.collect(initial, { work, max_occurrences: 10 })?
-	var valid = first.zone_segments == 3 and first.occurrences.len() == 1
+	var $valid = first.zone_segments == 3 and first.occurrences.len() == 1
 	rest = match first.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == EndZoneWorkLimit
+			$valid = $valid and progress.reason == EndZoneWorkLimit
 			progress.cursor
 		}
 		Complete => crash "three segments cannot resolve two starts and two ends"
 	}
 	second = TimedSchedule.collect(rest, { work: { ..work, max_steps: 0, max_zone_segments: 1 }, max_occurrences: 10 })?
-	valid = valid and second.steps == 0 and second.zone_segments == 1 and second.occurrences.len() == 1
-	var starts = []
+	$valid = $valid and second.steps == 0 and second.zone_segments == 1 and second.occurrences.len() == 1
+	var $starts = []
 	for occurrence in first.occurrences.concat(second.occurrences) {
-		valid = valid and TimedOccurrence.id(occurrence).series == "service" and PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(86400000000))
-		starts = starts.append(PosixSpan.start(TimedOccurrence.span(occurrence)))
+		$valid = $valid and TimedOccurrence.id(occurrence).series == "service" and PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(86400000000))
+		$starts = $starts.append(PosixSpan.start(TimedOccurrence.span(occurrence)))
 	}
-	valid and starts == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(86400000000)] and match second.status {
+	$valid and $starts == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(86400000000)] and match second.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
 	}
@@ -285,10 +285,10 @@ expect {
 	initial = test_schedule(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
 	zero = TimedSchedule.collect(initial, { work, max_occurrences: 0 })?
-	var valid = zero.steps == 0 and zero.zone_segments == 0 and zero.occurrences.is_empty()
+	var $valid = zero.steps == 0 and zero.zone_segments == 0 and zero.occurrences.is_empty()
 	rest = match zero.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == OutputLimit
+			$valid = $valid and progress.reason == OutputLimit
 			progress.cursor
 		}
 		Complete => crash "zero output must not look ahead"
@@ -296,22 +296,22 @@ expect {
 	full = TimedSchedule.collect(rest, { work, max_occurrences: 2 })?
 	rest_after_full = match full.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == OutputLimit
+			$valid = $valid and progress.reason == OutputLimit
 			progress.cursor
 		}
 		Complete => crash "exact capacity must not look ahead"
 	}
 	ended = TimedSchedule.collect(rest_after_full, { work: { ..work, max_steps: 0, max_zone_segments: 0 }, max_occurrences: 1 })?
-	var zero_count = 0.U64
+	var $zero_count = 0.U64
 	for result in TimedSchedule.outcomes(initial, { ..work, max_steps: 0, max_zone_segments: 0 }) {
 		batch = result?
-		zero_count = zero_count + 1
-		valid = valid and match batch.status {
+		$zero_count = $zero_count + 1
+		$valid = $valid and match batch.status {
 			Limited(progress) => progress.reason == StartWorkLimit
 			_ => Bool.False
 		}
 	}
-	valid and zero_count == 1 and full.occurrences.len() == 2 and ended.occurrences.is_empty() and match ended.status {
+	$valid and $zero_count == 1 and full.occurrences.len() == 2 and ended.occurrences.is_empty() and match ended.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
 	}
@@ -322,7 +322,7 @@ expect {
 	initial = test_schedule(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
 	full = TimedSchedule.collect(initial, { work, max_occurrences: 3 })?
-	var valid = Bool.True
+	var $valid = Bool.True
 	for constrained in [
 		{ ..work, max_steps: 0 },
 		{ ..work, max_buffered: 0 },
@@ -336,20 +336,20 @@ expect {
 			_ => crash "constrained schedule must pause"
 		}
 		resumed = TimedSchedule.collect(rest, { work, max_occurrences: 3 })?
-		valid = valid and resumed.occurrences.len() == full.occurrences.len()
-		var index = 0.U64
+		$valid = $valid and resumed.occurrences.len() == full.occurrences.len()
+		var $index = 0.U64
 		for occurrence in resumed.occurrences {
-			expected = full.occurrences.get(index)?
-			valid = valid and TimedOccurrence.id(occurrence) == TimedOccurrence.id(expected)
-			valid = valid and TimedOccurrence.span(occurrence) == TimedOccurrence.span(expected)
-			index = index + 1
+			expected = full.occurrences.get($index)?
+			$valid = $valid and TimedOccurrence.id(occurrence) == TimedOccurrence.id(expected)
+			$valid = $valid and TimedOccurrence.span(occurrence) == TimedOccurrence.span(expected)
+			$index = $index + 1
 		}
-		valid = valid and match resumed.status {
+		$valid = $valid and match resumed.status {
 			Complete => Bool.True
 			_ => Bool.False
 		}
 	}
-	valid
+	$valid
 }
 
 # A valid start must not turn a failed calendar end into an empty success.
@@ -394,10 +394,10 @@ normalize_endings = |inputs| {
 			GT => After
 		},
 	)
-	var result = []
-	var previous = None
+	var $result = []
+	var $previous = None
 	for input in sorted {
-		distinct = match previous {
+		distinct = match $previous {
 			None => Bool.True
 			Some(value) => if LocalDateTime.same_position(value.source, input.source) {
 				if !same_ending_definition(value.ending, input.ending) {
@@ -409,19 +409,19 @@ normalize_endings = |inputs| {
 			}
 		}
 		if distinct {
-			result = result.append(input)
+			$result = $result.append(input)
 		}
-		previous = Some(input)
+		$previous = Some(input)
 	}
-	Ok(result)
+	Ok($result)
 }
 
 ending_at : List(TimedSchedule.EndOverride), LocalDateTime, TimedOccurrence.Duration -> TimedOccurrence.Ending
 ending_at = |overrides, source, fallback| {
-	var lower = 0.U64
-	var upper = overrides.len()
-	while lower < upper {
-		middle = lower + U64.div_trunc_by(upper - lower, 2)
+	var $lower = 0.U64
+	var $upper = overrides.len()
+	while $lower < $upper {
+		middle = $lower + U64.div_trunc_by($upper - $lower, 2)
 		entry = match overrides.get(middle) {
 			Ok(value) => value
 			Err(_) => crash "override binary search invariant"
@@ -429,10 +429,10 @@ ending_at = |overrides, source, fallback| {
 		match LocalDateTime.compare_position(entry.source, source) {
 			EQ => return entry.ending
 			LT => {
-				lower = middle + 1
+				$lower = middle + 1
 			}
 			GT => {
-				upper = middle
+				$upper = middle
 			}
 		}
 	}
@@ -461,12 +461,12 @@ same_duration_definition = |left, right| match (left, right) {
 
 test_override_sources = |_| {
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	var sources = []
+	var $sources = []
 	for day in [1.U8, 2, 3, 4] {
 		date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
-		sources = sources.append(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
+		$sources = $sources.append(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
 	}
-	Ok(sources)
+	Ok($sources)
 }
 
 # R11/R12: an extra start uses its own duration, a rule start is overridden
@@ -491,11 +491,11 @@ test_overrides = |exclude, window_day, work| {
 	calendar = Calendar({ delta: CalendarDelta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 	short : TimedOccurrence.Duration
 	short = Coordinate(PosixDelta.from_microseconds(7200000000))
-	var cursor = TimedSchedule.new_with_overrides(42.U64, rule, { start: sources.get(window_day - 1)?, end: sources.get(3)? }, Coordinate(PosixDelta.from_microseconds(86400000000)), [{ source: sources.get(2)?, duration: calendar }, { source: sources.get(1)?, duration: short }, { source: sources.get(1)?, duration: short }], { rules, occurrence: RequireUnique, gap: RejectGap })?
-	var observed = []
-	var calls = 0.U64
-	while calls < 1000 {
-		batch = match TimedSchedule.collect(cursor, { work, max_occurrences: 1 }) {
+	var $cursor = TimedSchedule.new_with_overrides(42.U64, rule, { start: sources.get(window_day - 1)?, end: sources.get(3)? }, Coordinate(PosixDelta.from_microseconds(86400000000)), [{ source: sources.get(2)?, duration: calendar }, { source: sources.get(1)?, duration: short }, { source: sources.get(1)?, duration: short }], { rules, occurrence: RequireUnique, gap: RejectGap })?
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 1000 {
+		batch = match TimedSchedule.collect($cursor, { work, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))
 		}
@@ -507,25 +507,25 @@ test_overrides = |exclude, window_day, work| {
 			if identity.series != 42 or identity.source != TimedRecurrence.Occurrence.source(TimedOccurrence.start(occurrence)) {
 				return Ok(Bool.False)
 			}
-			observed = observed.append(PosixDelta.to_microseconds(PosixSpan.coordinate_width(TimedOccurrence.span(occurrence))?))
+			$observed = $observed.append(PosixDelta.to_microseconds(PosixSpan.coordinate_width(TimedOccurrence.span(occurrence))?))
 		}
 		match batch.status {
 			Complete => {
-				var expected = []
+				var $expected = []
 				if window_day == 1 {
-					expected = expected.append(86400000000.I64)
+					$expected = $expected.append(86400000000.I64)
 				}
 				if !exclude {
-					expected = expected.append(7200000000)
+					$expected = $expected.append(7200000000)
 				}
-				expected = expected.append(172800000000)
-				return Ok(observed == expected)
+				$expected = $expected.append(172800000000)
+				return Ok($observed == $expected)
 			}
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	Ok(Bool.False)
 }

@@ -152,7 +152,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	expect from_civil_day(CivilDay.from_day_number(-784353015834)) == Err(OutOfRange)
 	expect from_civil_day(CivilDay.from_day_number(784351576777)) == Err(OutOfRange)
 	expect {
-		var valid = Bool.True
+		var $valid = Bool.True
 		for fixture in [
 			{ fields: { year: 1970.I64, month: 1.U8, day: 1.U8 }, number: 0.I64 },
 			{ fields: { year: 1, month: 1, day: 1 }, number: -719162 },
@@ -163,13 +163,13 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		] {
 			date = from_fields(fixture.fields)
 			coordinate = CivilDay.from_day_number(fixture.number)
-			valid = valid and from_civil_day(coordinate) == date
-			valid = valid and match date {
+			$valid = $valid and from_civil_day(coordinate) == date
+			$valid = $valid and match date {
 				Ok(value) => CivilDay.is_eq(to_civil_day(value), coordinate)
 				Err(_) => Bool.False
 			}
 		}
-		valid
+		$valid
 	}
 }
 
@@ -198,40 +198,40 @@ month_length = |year, month| {
 
 ## R05: enumerate a complete Gregorian cycle independently of year-counting.
 expect {
-	var valid = Bool.True
-	var number = -719528.I64
-	var year = 0.I64
-	while year < 400 {
-		var month = 1.U8
+	var $valid = Bool.True
+	var $number = -719528.I64
+	var $year = 0.I64
+	while $year < 400 {
+		var $month = 1.U8
 		for common_length in [31.U8, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] {
-			leap = I64.rem_by(year, 4) == 0 and (I64.rem_by(year, 100) != 0 or I64.rem_by(year, 400) == 0)
-			length = if month == 2 and leap {
+			leap = I64.rem_by($year, 4) == 0 and (I64.rem_by($year, 100) != 0 or I64.rem_by($year, 400) == 0)
+			length = if $month == 2 and leap {
 				29.U8
 			} else {
 				common_length
 			}
-			var day = 1.U8
-			while day <= length {
+			var $day = 1.U8
+			while $day <= length {
 				# Translate the enumerated cycle across year zero and near both
 				# provider extremes using the independently counted cycle length.
 				for offset in [-2147483600.I64, -400, 0, 2147483200] {
-					fields = { year: year + offset, month, day }
+					fields = { year: $year + offset, month: $month, day: $day }
 					coordinate = CivilDay.from_day_number(
-						number + I64.div_trunc_by(offset, 400) * 146097,
+						$number + I64.div_trunc_by(offset, 400) * 146097,
 					)
 					date = GregorianDate.from_fields(fields)
-					valid = valid and GregorianDate.from_civil_day(coordinate) == date
-					valid = valid and match date {
+					$valid = $valid and GregorianDate.from_civil_day(coordinate) == date
+					$valid = $valid and match date {
 						Ok(value) => CivilDay.is_eq(GregorianDate.to_civil_day(value), coordinate)
 						Err(_) => Bool.False
 					}
 				}
-				number = number + 1
-				day = day + 1
+				$number = $number + 1
+				$day = $day + 1
 			}
-			month = month + 1
+			$month = $month + 1
 		}
-		year = year + 1
+		$year = $year + 1
 	}
-	valid and number == -573431
+	$valid and $number == -573431
 }

@@ -33,15 +33,15 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 			Second => 6
 			Fraction(_) => 7
 		}
-		var seen = []
+		var $seen = []
 		for item in qualifications {
 			if scope_rank(item.scope) > supplied {
 				return Err(UnsuppliedComponent(item.scope))
 			}
-			if seen.contains(item.scope) {
+			if $seen.contains(item.scope) {
 				return Err(DuplicateScope(item.scope))
 			}
-			seen = seen.append(item.scope)
+			$seen = $seen.append(item.scope)
 		}
 		canonical = qualifications.sort_with(
 			|a, b| {
@@ -82,16 +82,16 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 	is_eq = |a, b| a.value == b.value and a.qualifications == b.qualifications
 	to_hash : QualifiedCalendarValue, Hasher -> Hasher
 	to_hash = |description, hasher| {
-		var state = description.value.to_hash(hasher)
+		var $state = description.value.to_hash(hasher)
 		for item in description.qualifications {
 			code = match item.qualifier {
 				Uncertain => 0.U8
 				Approximate => 1
 				UncertainApproximate => 2
 			}
-			state = code.to_hash(scope_rank(item.scope).to_hash(state))
+			$state = code.to_hash(scope_rank(item.scope).to_hash($state))
 		}
-		description.qualifications.len().to_hash(state)
+		description.qualifications.len().to_hash($state)
 	}
 
 	## Summary, zone requirement, optional model requirement, then scoped facts.

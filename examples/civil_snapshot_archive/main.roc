@@ -1,5 +1,6 @@
 app [main!] {
-	time: "../../package/main.roc",
+	roc: "nightly-2026-09-05-b195f5b",
+	time: "https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc1/roc-time-2T6KR7B59FhCSNghyPAgP2j61YiU1F537CkB6UFUwzfY.tar.zst",
 }
 import CivilArchive
 import time.RfcDateTime

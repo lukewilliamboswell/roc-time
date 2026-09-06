@@ -4,10 +4,21 @@ Start with [booking exchange](booking_exchange/main.roc) for text input,
 availability calculation and text output, or [archive search](archive_search/main.roc)
 for dates whose supplied precision and uncertainty must be preserved.
 
-Each application has a `main.roc` entrypoint and a pure type module. From the
-repository root, use the compiler pinned in [`.roc-version`](../.roc-version),
-then run an entrypoint, for example `roc examples/booking_exchange/main.roc`.
-The integration gate checks these applications locally and against the package bundle.
+Each application has a `main.roc` entrypoint and companion type modules. Download
+or copy the complete application folder, then run `roc main.roc` inside it.
+Alternatively, clone this repository and run `roc examples/booking_exchange/main.roc`.
+No Python runner is required.
+
+Use the compiler named by the `roc` field in that application's header. Its
+package dependencies are immutable published URLs, so these examples do not
+require building the repository's development package. During this workflow pilot,
+`nightly-2026-09-05-b195f5b` stands in for a future supported stable compiler;
+it is still a nightly. Obtain it from the [exact upstream release](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b).
+
+Development may use a newer compiler. CI validates these examples unchanged with
+their declared compiler, then tests temporary copies against development source
+and candidate bundles. Release follow-up PRs update public example URLs and pins
+without changing the development package compiler.
 
 | Application | Demonstrates |
 | --- | --- |

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Replay independently generated calendar and zone expectations through public Roc APIs."""
 from __future__ import annotations
+from roc_version import package_pin
 
 import argparse
 import sys
@@ -273,7 +274,7 @@ def replay(name: str, workers: int = 4) -> None:
     else:
         raise ValueError("Oracle command gate accepted a failing driver")
     version = command([roc, "version"], session, "version").strip()
-    if version != "Roc compiler version " + (ROOT / ".roc-version").read_text().strip():
+    if version != "Roc compiler version " + package_pin(ROOT):
         raise ValueError(f"Wrong oracle compiler: {version}")
     for source in driver.rglob("*.roc"):
         destination = session / source.relative_to(driver)
