@@ -398,6 +398,33 @@ def verify_selection_explanation(target: str) -> None:
             raise RuntimeError(f"{mode}: selection explanation negative control failed")
         print(f"PASS selection explanation {mode}: allocation negative control")
 
+def verify_recurrence_explanation(target: str) -> None:
+    """Bounded declaration facts independent of series and selector extent."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/recurrence_explanation_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"recurrence-explanation-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for count in (2, 4096):
+            for termination in ("forever", "count"):
+                for kind in ("date", "timed", "rfc"):
+                    result = subprocess.run([binary, str(count), termination, kind, "65536"], capture_output=True, timeout=5)
+                    if result.returncode or result.stdout != b"recurrence=declaration,budget=bounded\n":
+                        raise RuntimeError(f"{mode}/{count}/{termination}/{kind}: recurrence explanation failed: {result.stderr!r}")
+                    match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
+                    if match is None:
+                        raise RuntimeError("missing recurrence explanation allocation observations")
+                    counts = tuple(int(value) for value in match[1].split(b","))
+                    if len(counts) != 6 or counts[:3] != (0, 0, 0):
+                        raise RuntimeError(f"recurrence explanation unexpected allocation: {counts}")
+                    print(f"PASS recurrence explanation {mode}/{count}/{termination}/{kind}: requested bytes {counts}")
+        failed = subprocess.run([binary, "2", "forever", "date", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: recurrence explanation negative control failed")
+        print(f"PASS recurrence explanation {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -415,5 +442,6 @@ if __name__ == "__main__":
         verify_snapshot_persistence(selected_target)
         verify_civil_persistence(selected_target)
         verify_selection_explanation(selected_target)
+        verify_recurrence_explanation(selected_target)
     else:
         print(selected_target)

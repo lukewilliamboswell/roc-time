@@ -1,0 +1,16 @@
+One counted date, excluded; an additional date remains (rendering Complete)
+DateRecurrence declaration: anchor Gregorian year 2025, month 1, day 31; Monthly periods; interval 1; week starts Monday; selector entries 0, explicit inclusions 1, exclusions 1. Occurrences have not been enumerated. Invalid calendar dates are skipped; exclusions do not replenish COUNT; explicit inclusions are outside rule termination.
+Rule termination: COUNT 1 before exclusions and query restriction; not a promised output count. Explicit inclusions remain outside this limit.
+Inclusion: Gregorian year 2025, month 7, day 4; matched by source position, not resolved coverage.
+Exclusion: Gregorian year 2025, month 1, day 31; matched by source position, not resolved coverage.
+Weekly meeting with no termination; zone rules still required (rendering Complete)
+RFC timed recurrence declaration: Zoned mode; 0 explicit PERIOD entries. The application must supply rules for the property's named zone. The following native rule uses effective selectors, including clock defaults; source spelling is not reconstructed.
+Interpretation: explicit zone rules are required; repeated labels select the first occurrence; nonexistent labels use the offset before the gap. No zone interpretation has been performed.
+Default recurrence duration: 0 calendar days followed by 3600 coordinate seconds; calendar days are not converted to 86400-second quantities. Each occurrence supplies its start; explicit PERIOD entries can override this default. No occurrence end has been computed.
+TimedRecurrence declaration: anchor Gregorian year 2026, month 10, day 1, 9:00:00.000000; Weekly periods; interval 1; week starts Monday; selector entries 5, explicit inclusions 0, exclusions 0. Occurrences have not been enumerated. Invalid calendar dates are skipped; exclusions do not replenish COUNT; explicit inclusions are outside rule termination.
+Rule termination: no declared end; this does not prove infinitely many valid occurrences. Explicit inclusions remain outside this limit.
+Selector: weekday Thursday.
+Selector: effective hour 9.
+Selector: effective minute 0.
+Selector: effective second 0.
+Selector: anchored microsecond 0.

@@ -75,7 +75,8 @@ empty and disconnected coverage, both source calendars and their full rules.
 
 [Explanation](package/Explanation.roc) renders calendar descriptions, EDTF dates,
 offset timestamps, exact intervals, RFC date-time/duration/PERIOD values and
-IXDTF declarations/snapshots, coverage and resolved civil results from shared [typed facts](package/SemanticFact.roc),
+IXDTF declarations/snapshots, coverage, resolved civil results and recurrence
+declarations from shared [typed facts](package/SemanticFact.roc),
 with explicit fact and byte limits. Exact intervals retain their stored extent
 and both supplied endpoint offsets and fractional digit counts. RFC facts distinguish
 calendar days from coordinate seconds and local labels from UTC declarations.
@@ -83,8 +84,11 @@ Rendering a snapshot reads its stored result. A resolved instant can coexist
 with unsupported calendar presentation; truncated output reports `Limited`.
 Inspection uses the same summary facts. Selection evaluation status remains
 separate from rendering completeness: a complete explanation can describe an
-incomplete evaluation. Recurrence explanations and styled renderers remain
-outside this profile.
+incomplete evaluation. Recurrence facts preserve native date/timed rules and RFC
+timed modes without expansion: COUNT precedes exclusions, explicit inclusions
+remain outside rule termination, and local/POSIX UNTIL limits remain distinct.
+Clock fields describe effective selectors, including normalized defaults.
+Styled renderers and recurrence cursor explanations remain outside this profile.
 
 ## Examples
 
@@ -98,6 +102,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Explain event terms](examples/explain_event_terms/main.roc) | Review calendar-day versus clock-duration terms, local/UTC PERIOD inputs and an exact interval with different endpoint offsets |
 | [Explain annotations](examples/explain_annotations/main.roc) | Explain a declaration's context requirement and its stored interpretation with unsupported calendar presentation |
+| [Review a recurrence](examples/explain_recurrence/main.roc) | Explain COUNT and exclusions, an additional date, and an unbounded zoned meeting before choosing evaluation context |
 | [Explain a civil selection](examples/explain_selection/main.roc) | Explain a later fold appointment and a disconnected selection across bounded evaluation and resumption |
 | [Civil snapshot archive](examples/civil_snapshot_archive/main.roc) | Restore explicit fold choices and both windows of a repeated local range |
 | [Snapshot archive](examples/snapshot_persistence/main.roc) | Restore an interpretation with its original rules, then explicitly reinterpret it under changed data |

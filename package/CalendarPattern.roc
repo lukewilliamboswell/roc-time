@@ -20,6 +20,9 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 		by_day : List({ ordinal : I8, weekday : Weekday }),
 	}
 
+	## Read validated selector declarations without evaluating a period.
+	definition : CalendarPattern -> Spec
+	definition = |pattern| pattern.spec
 	defaults : Frequency -> Spec
 	defaults = |frequency| { frequency, interval: 1, week_start: Monday, by_month: [], by_month_day: [], by_year_day: [], by_week_no: [], by_day: [] }
 
@@ -108,6 +111,11 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 			validate(spec)?
 			Ok({ spec: spec })
 		}
+
+		## Shared predicate storage only: frequency/interval/week_start are
+		## placeholders, not a recurrence frequency or expansion defaults.
+		definition : Filter -> CalendarPattern.Spec
+		definition = |filter| filter.spec
 		matches : Filter, GregorianDate -> Try(Bool, [OutOfRange, ..])
 		matches = |filter, date| matches_filters(filter.spec, date)
 	}

@@ -5,6 +5,7 @@ import ClockTime
 ## This is a candidate layer, not a recurrence rule or timezone interpretation.
 ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), microsecond : U32 }.{
 	Spec : { hours : List(U8), minutes : List(U8), seconds : List(U8) }
+
 	## O(s log s) construction, with at most 4096 supplied values per field.
 	## Retains at most 144 distinct field values, shared by its iterators.
 	new : ClockTime, Spec -> Try(ClockPattern, [TooManySelectors, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, ..])
@@ -33,6 +34,11 @@ ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), micr
 		fields = ClockTime.to_fields(anchor)
 		Ok({ hours: normalize(spec.hours, fields.hour), minutes: normalize(spec.minutes, fields.minute), seconds: normalize(spec.seconds, fields.second), microsecond: fields.microsecond })
 	}
+
+	## Effective normalized fields, including inherited defaults. These are not
+	## the original selector spelling and do not materialize clock combinations.
+	definition : ClockPattern -> { hours : List(U8), minutes : List(U8), seconds : List(U8), microsecond : U32 }
+	definition = |pattern| { hours: pattern.hours, minutes: pattern.minutes, seconds: pattern.seconds, microsecond: pattern.microsecond }
 
 	## At most 86400 candidates. Only the distinct selector fields are stored.
 	count : ClockPattern -> U64

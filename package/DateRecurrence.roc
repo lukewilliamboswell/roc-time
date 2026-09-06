@@ -1,3 +1,5 @@
+import SemanticFact
+import RecurrenceFacts
 import CalendarPattern
 import CivilDay
 import GregorianDate
@@ -364,8 +366,49 @@ DateRecurrence :: {
 		to_inspect = |state| "DateRecurrence.Cursor(period=${state.period.to_str()}, counted=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
 	}
 
+	## Declaration facts only: no cursor, period scan or occurrence generation.
+	fact_count : DateRecurrence -> U64
+	fact_count = |rule| 2 + RecurrenceFacts.count(CalendarPattern.definition(rule.pattern), None, rule.positions) + rule.inclusions.len() + rule.exclusions.len()
+	fact_at : DateRecurrence, U64 -> [End, Item(SemanticFact)]
+	fact_at = |rule, index| {
+		if index >= fact_count(rule) {
+			return End
+		}
+		pattern = CalendarPattern.definition(rule.pattern)
+		selectors = RecurrenceFacts.count(pattern, None, rule.positions)
+		if index == 0 {
+			return Item(SemanticFact.new(RecurrenceDescription({ kind: DateRecurrence, anchor: Date(rule.anchor), frequency: RecurrenceFacts.frequency(pattern.frequency), interval: pattern.interval, week_start: Some(pattern.week_start), selector_count: selectors, inclusion_count: rule.inclusions.len(), exclusion_count: rule.exclusions.len() })))
+		}
+		if index == 1 {
+			termination = match rule.termination {
+				Forever => Forever
+				Count(count) => Count(count)
+				Until(date) => UntilDate(date)
+			}
+			return Item(SemanticFact.new(RecurrenceTermination(termination)))
+		}
+		remaining = index - 2
+		if remaining < selectors {
+			return RecurrenceFacts.at(pattern, None, rule.positions, remaining)
+		}
+		exception = remaining - selectors
+		if exception < rule.inclusions.len() {
+			return Item(SemanticFact.new(RecurrenceException({ kind: Inclusion, source: Date(fact_date(rule.inclusions, exception)) })))
+		}
+		Item(SemanticFact.new(RecurrenceException({ kind: Exclusion, source: Date(fact_date(rule.exclusions, exception - rule.inclusions.len())) })))
+	}
 	to_inspect : DateRecurrence -> Str
-	to_inspect = |rule| "DateRecurrence(anchor=${Str.inspect(rule.anchor)}, termination=${Str.inspect(rule.termination)})"
+	to_inspect = |rule| {
+		summary = match fact_at(rule, 0) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "Recurrence always has a summary"
+		}
+		ending = match fact_at(rule, 1) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "Recurrence always has termination"
+		}
+		"${summary} ${ending}"
+	}
 }
 
 number = |date| CivilDay.to_day_number(GregorianDate.to_civil_day(date))
@@ -789,4 +832,18 @@ expect {
 		test_daterecurrence_status(anchor, { ..test_daterecurrence_spec, termination: Until(test_daterecurrence_date(2025, 1, 19)) }) == Err(InvalidUntil) and
 			test_daterecurrence_status(anchor, { ..test_daterecurrence_spec, by_set_pos: [0] }) == Err(InvalidSelector("BYSETPOS")) and
 				test_daterecurrence_status(anchor, { ..test_daterecurrence_spec, pattern, by_set_pos: [-1] }) == Err(UnsynchronizedStart)
+}
+
+fact_date = |dates, index| match dates.get(index) {
+	Ok(date) => date
+	Err(_) => crash "Recurrence fact index validated"
+}
+
+expect {
+	anchor = GregorianDate.from_fields({ year: 2025, month: 1, day: 1 })?
+	base = { pattern: CalendarPattern.defaults(Daily), termination: Count(1), by_set_pos: [], inclusions: [], exclusions: [anchor, anchor] }
+	rule = DateRecurrence.new(anchor, base)?
+	forever = DateRecurrence.new(anchor, { ..base, termination: Forever })?
+	until = DateRecurrence.new(anchor, { ..base, termination: Until(anchor) })?
+	DateRecurrence.fact_count(rule) == 3 and DateRecurrence.fact_at(rule, 1) == Item(SemanticFact.new(RecurrenceTermination(Count(1)))) and DateRecurrence.fact_at(rule, 2) == Item(SemanticFact.new(RecurrenceException({ kind: Exclusion, source: Date(anchor) }))) and DateRecurrence.fact_at(rule, 3) == End and DateRecurrence.fact_at(rule, U64.highest) == End and DateRecurrence.fact_at(forever, 1) == Item(SemanticFact.new(RecurrenceTermination(Forever))) and DateRecurrence.fact_at(until, 1) == Item(SemanticFact.new(RecurrenceTermination(UntilDate(anchor)))) and DateRecurrence.to_inspect(forever).count_utf8_bytes() <= 256
 }

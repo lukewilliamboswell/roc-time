@@ -1,3 +1,4 @@
+import SemanticFact
 import TimedOccurrence
 import PosixSpan
 import PosixDelta
@@ -144,8 +145,60 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 		}
 		RfcPeriod.schedule(series, value.rule, window, value.duration, value.periods, context)
 	}
+
+	## The wrapper retains RFC mode and policy, while native facts expose the
+	## effective selectors after adapter defaults. No original RRULE spelling.
+	fact_count : RfcTimedRule -> U64
+	fact_count = |rule| 2 + rule.periods.len() + TimedRecurrence.fact_count(rule.rule)
+	fact_at : RfcTimedRule, U64 -> [End, Item(SemanticFact)]
+	fact_at = |rule, index| {
+		if index >= fact_count(rule) {
+			return End
+		}
+		if index == 0 {
+			return Item(SemanticFact.new(RfcTimedRuleDescription({ mode: rule.mode, period_count: rule.periods.len() })))
+		}
+		if index == 1 {
+			context = match rule.mode {
+				Utc => FixedUtc
+				Floating | Zoned => Required
+			}
+			return Item(SemanticFact.new(RecurrencePolicy({ context, occurrence: First, gap: UseOffsetBeforeGap })))
+		}
+		if index == 2 {
+			components = RfcDuration.components(rule.duration)
+			return Item(SemanticFact.new(RfcDurationDescription({ role: RecurrenceEnding, days: components.days, seconds: components.seconds })))
+		}
+		remaining = index - 3
+		if remaining < rule.periods.len() {
+			return match rule.periods.get(remaining) {
+				Ok(period) => RfcPeriod.fact_at(period, 0)
+				Err(_) => End
+			}
+		}
+		native_index = remaining - rule.periods.len()
+		# Replace native caller-supplied policy with the RFC wrapper policy.
+		TimedRecurrence.fact_at(
+			rule.rule,
+			if native_index < 2 {
+				native_index
+			} else {
+				native_index + 1
+			},
+		)
+	}
 	to_inspect : RfcTimedRule -> Str
-	to_inspect = |value| "RfcTimedRule(${Str.inspect(value.mode)}, periods=${value.periods.len().to_str()}, unresolved)"
+	to_inspect = |value| {
+		summary = match fact_at(value, 0) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "RFC rule always has a summary"
+		}
+		ending = match TimedRecurrence.fact_at(value.rule, 1) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "Native rule always has termination"
+		}
+		"${summary} ${ending}"
+	}
 }
 
 timestamp : Str, Str -> Try(RfcDateTime, RfcTimedRule.Error)
@@ -260,4 +313,11 @@ expect {
 		Err(Rule(Duplicate("COUNT"))) => Bool.True
 		_ => Bool.False
 	}
+}
+
+expect {
+	rule = RfcTimedRule.parse({ start: "20250101T090000", rule: "FREQ=DAILY;COUNT=1", duration: "P1D", inclusions: [], exclusions: ["20250101T090000"], periods: [], mode: Zoned })?
+	# Exclusion preserves the one-count declaration; no occurrence is generated
+	# merely to explain it. Wrapper mode supplies RFC gap/fold policy.
+	RfcTimedRule.fact_at(rule, 0) == Item(SemanticFact.new(RfcTimedRuleDescription({ mode: Zoned, period_count: 0 }))) and RfcTimedRule.fact_at(rule, 1) == Item(SemanticFact.new(RecurrencePolicy({ context: Required, occurrence: First, gap: UseOffsetBeforeGap }))) and RfcTimedRule.fact_at(rule, 2) == Item(SemanticFact.new(RfcDurationDescription({ role: RecurrenceEnding, days: 1, seconds: 0 }))) and RfcTimedRule.fact_at(rule, 4) == Item(SemanticFact.new(RecurrenceTermination(Count(1)))) and RfcTimedRule.fact_at(rule, RfcTimedRule.fact_count(rule)) == End and RfcTimedRule.fact_at(rule, U64.highest) == End and RfcTimedRule.to_inspect(rule).count_utf8_bytes() <= 256
 }

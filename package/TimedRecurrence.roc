@@ -1,3 +1,5 @@
+import SemanticFact
+import RecurrenceFacts
 import CalendarDate
 import CalendarPattern
 import SubdailyPattern
@@ -98,6 +100,58 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		}
 		labels = starts.map(|start| LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock))
 		Ok({ ..rule, inclusions: sorted_positions(rule.inclusions.concat(labels)) })
+	}
+
+	## Effective declaration facts, without clock products or zone evaluation.
+	## Clock selectors include normalized defaults; original spelling is absent.
+	fact_count : TimedRecurrence -> U64
+	fact_count = |rule| {
+		data = fact_pattern(rule.schedule)
+		3 + RecurrenceFacts.count(data.calendar, Some(rule.clocks), rule.positions) + rule.inclusions.len() + rule.exclusions.len()
+	}
+	fact_at : TimedRecurrence, U64 -> [End, Item(SemanticFact)]
+	fact_at = |rule, index| {
+		if index >= fact_count(rule) {
+			return End
+		}
+		data = fact_pattern(rule.schedule)
+		selectors = RecurrenceFacts.count(data.calendar, Some(rule.clocks), rule.positions)
+		if index == 0 {
+			return Item(SemanticFact.new(RecurrenceDescription({ kind: TimedRecurrence, anchor: Local(rule.anchor), frequency: data.frequency, interval: data.interval, week_start: data.week_start, selector_count: selectors, inclusion_count: rule.inclusions.len(), exclusion_count: rule.exclusions.len() })))
+		}
+		if index == 1 {
+			termination = match rule.termination {
+				Forever => Forever
+				Count(count) => Count(count)
+				Until(local) => UntilLocal(local)
+				UntilBoundary(boundary) => UntilBoundary(boundary)
+			}
+			return Item(SemanticFact.new(RecurrenceTermination(termination)))
+		}
+		if index == 2 {
+			return Item(SemanticFact.new(RecurrencePolicy({ context: Required, occurrence: CallerSupplied, gap: CallerSupplied })))
+		}
+		remaining = index - 3
+		if remaining < selectors {
+			return RecurrenceFacts.at(data.calendar, Some(rule.clocks), rule.positions, remaining)
+		}
+		exception = remaining - selectors
+		if exception < rule.inclusions.len() {
+			return Item(SemanticFact.new(RecurrenceException({ kind: Inclusion, source: Local(fact_local(rule.inclusions, exception)) })))
+		}
+		Item(SemanticFact.new(RecurrenceException({ kind: Exclusion, source: Local(fact_local(rule.exclusions, exception - rule.inclusions.len())) })))
+	}
+	to_inspect : TimedRecurrence -> Str
+	to_inspect = |rule| {
+		summary = match fact_at(rule, 0) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "Recurrence always has a summary"
+		}
+		ending = match fact_at(rule, 1) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "Recurrence always has termination"
+		}
+		"${summary} ${ending}"
 	}
 
 	Window : { start : LocalDateTime, end : LocalDateTime }
@@ -1325,4 +1379,37 @@ expect {
 		}
 	}
 	valid
+}
+
+fact_pattern = |schedule| match schedule {
+	Calendar(pattern) => {
+		data = CalendarPattern.definition(pattern)
+		{ calendar: data, frequency: RecurrenceFacts.frequency(data.frequency), interval: data.interval, week_start: Some(data.week_start) }
+	}
+	Subdaily(pattern) => {
+		data = SubdailyPattern.definition(pattern)
+		frequency : SemanticFact.RecurrenceFrequency
+		frequency = match data.frequency {
+			Hourly => Hourly
+			Minutely => Minutely
+			Secondly => Secondly
+		}
+		{ calendar: data.calendar, frequency, interval: data.interval, week_start: None }
+	}
+}
+
+fact_local = |labels, index| match labels.get(index) {
+	Ok(local) => local
+	Err(_) => crash "Recurrence fact index validated"
+}
+
+expect {
+	date = GregorianDate.from_fields({ year: 2025, month: 1, day: 1 })?
+	clock = ClockTime.from_fields({ hour: 9, minute: 30, second: 0, microsecond: 120000 })?
+	local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	base = { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Until(local), by_set_pos: [] }
+	rule = TimedRecurrence.new({ date, clock }, base)?
+	boundary = PosixBoundary.from_microseconds(I64.highest)
+	absolute = TimedRecurrence.new({ date, clock }, { ..base, termination: UntilBoundary(boundary) })?
+	TimedRecurrence.fact_count(rule) == 7 and TimedRecurrence.fact_at(rule, 1) == Item(SemanticFact.new(RecurrenceTermination(UntilLocal(local)))) and TimedRecurrence.fact_at(absolute, 1) == Item(SemanticFact.new(RecurrenceTermination(UntilBoundary(boundary)))) and TimedRecurrence.fact_at(rule, 3) == Item(SemanticFact.new(RecurrenceSelector(Hour(9)))) and TimedRecurrence.fact_at(rule, 4) == Item(SemanticFact.new(RecurrenceSelector(Minute(30)))) and TimedRecurrence.fact_at(rule, 6) == Item(SemanticFact.new(RecurrenceSelector(Microsecond(120000)))) and TimedRecurrence.fact_at(rule, 7) == End and TimedRecurrence.fact_at(rule, U64.highest) == End and TimedRecurrence.to_inspect(rule).count_utf8_bytes() <= 256 and TimedRecurrence.to_inspect(absolute).count_utf8_bytes() <= 256
 }

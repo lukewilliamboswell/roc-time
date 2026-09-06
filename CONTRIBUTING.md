@@ -407,6 +407,14 @@ clipping and failing ceiling controls in dev and speed builds. A fully rendered
 limited batch must still report incomplete evaluation. These counters measure
 allocation traffic, not retained memory.
 
+Recurrence declaration explanations use
+`tests/recurrence_explanation_resource/main.roc`. Construction and indexed reads
+are measured separately from zero/tiny/fixed-budget rendering, with large selector
+and explicit-date lists, shared input storage, and unbounded or large-count rules.
+No query window or provider is needed. Dev/speed builds include failing allocation
+controls. Generated recurrence properties compare declaration facts against
+independently modeled inputs and distinguish rule COUNT from post-exclusion output.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

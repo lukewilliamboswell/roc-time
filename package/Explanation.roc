@@ -1,3 +1,7 @@
+import GregorianDate
+import DateRecurrence
+import TimedRecurrence
+import RfcTimedRule
 import Coverage
 import ResolvedBoundary
 import ResolvedSelection
@@ -30,6 +34,10 @@ import RfcPeriod
 ## batch exposes its reported evaluation status/counts separately from rendering
 ## status. Limited batches describe the request and context without presenting
 ## partial work as complete or empty coverage.
+## Recurrence facts describe stored rules and effective selectors without
+## generating candidates. COUNT is a rule limit before exclusions, not an
+## emitted-result count. Clock selector facts include normalized defaults;
+## they do not reconstruct which fields appeared in the source text.
 ## Each embedded text field is previewed to 256 bytes before formatting, using
 ## UTF-8 boundaries and a visible ellipsis. TextLimit reports such previews.
 ##
@@ -38,13 +46,16 @@ import RfcPeriod
 ## reports ByteLimit. ByteLimit takes precedence over field-preview truncation;
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
-	Source : [Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod)]
+	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), RfcTimedRule(RfcTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod)]
 	Budget : { max_facts : U64, max_utf8_bytes : U64 }
 	Report : { text : Str, status : [Complete, Limited([FactLimit, ByteLimit, TextLimit])], visited_facts : U64, total_facts : U64 }
 	new : Source -> Explanation
 	new = |source| { source: source }
 	fact_count : Explanation -> U64
 	fact_count = |value| match value.source {
+		DateRecurrence(v) => DateRecurrence.fact_count(v)
+		TimedRecurrence(v) => TimedRecurrence.fact_count(v)
+		RfcTimedRule(v) => RfcTimedRule.fact_count(v)
 		Coverage(v) => Coverage.fact_count(v)
 		ResolvedBoundary(v) => ResolvedBoundary.fact_count(v)
 		ResolvedSelection(v) => ResolvedSelection.fact_count(v)
@@ -62,6 +73,9 @@ Explanation :: { source : Source }.{
 	}
 	fact_at : Explanation, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match value.source {
+		DateRecurrence(v) => DateRecurrence.fact_at(v, index)
+		TimedRecurrence(v) => TimedRecurrence.fact_at(v, index)
+		RfcTimedRule(v) => RfcTimedRule.fact_at(v, index)
 		Coverage(v) => Coverage.fact_at(v, index)
 		ResolvedBoundary(v) => ResolvedBoundary.fact_at(v, index)
 		ResolvedSelection(v) => ResolvedSelection.fact_at(v, index)
@@ -173,6 +187,58 @@ text_field = |text| {
 
 render : SemanticFact -> { text : Str, clipped : Bool }
 render = |fact| match SemanticFact.kind(fact) {
+	RecurrenceDescription(data) => {
+		text: "${Str.inspect(data.kind)} declaration: anchor ${recurrence_source(data.anchor)}; ${Str.inspect(data.frequency)} periods; interval ${data.interval.to_str()}${
+			match data.week_start {
+				None => ""
+				Some(day) => "; week starts ${Str.inspect(day)}"
+			}
+		}; selector entries ${data.selector_count.to_str()}, explicit inclusions ${data.inclusion_count.to_str()}, exclusions ${data.exclusion_count.to_str()}. Occurrences have not been enumerated. Invalid calendar dates are skipped; exclusions do not replenish COUNT; explicit inclusions are outside rule termination.",
+		clipped: False,
+	}
+	RecurrenceTermination(termination) => {
+		text: "Rule termination: ${
+			match termination {
+				Forever => "no declared end; this does not prove infinitely many valid occurrences"
+				Count(count) => "COUNT ${count.to_str()} before exclusions and query restriction; not a promised output count"
+				UntilDate(date) => "inclusive source date ${recurrence_source(Date(date))}"
+				UntilLocal(local) => "inclusive source label ${civil_label(local)}"
+				UntilBoundary(boundary) => "inclusive POSIX position ${PosixBoundary.to_microseconds(boundary).to_str()} microseconds since 1970-01-01, after full-period position selection"
+			}
+		}. Explicit inclusions remain outside this limit.",
+		clipped: False,
+	}
+	RecurrenceSelector(selector) => { text: "Selector: ${recurrence_selector(selector)}.", clipped: False }
+	RecurrenceException(data) => { text: "${Str.inspect(data.kind)}: ${recurrence_source(data.source)}; matched by source position, not resolved coverage.", clipped: False }
+	RecurrencePolicy(data) => {
+		text: "Interpretation: ${
+			match data.context {
+				Required => "explicit zone rules are required"
+				FixedUtc => "the adapter uses its fixed UTC context"
+			}
+		}; ${
+			match data.occurrence {
+				CallerSupplied => "the caller supplies the fold policy"
+				First => "repeated labels select the first occurrence"
+			}
+		}; ${
+			match data.gap {
+				CallerSupplied => "the caller supplies the gap policy"
+				UseOffsetBeforeGap => "nonexistent labels use the offset before the gap"
+			}
+		}. No zone interpretation has been performed.",
+		clipped: False,
+	}
+	RfcTimedRuleDescription(data) => {
+		text: "RFC timed recurrence declaration: ${Str.inspect(data.mode)} mode; ${data.period_count.to_str()} explicit PERIOD entries. ${
+			match data.mode {
+				Utc => "UTC labels use the adapter's fixed UTC context."
+				Floating => "The application must explicitly bind floating labels to rules."
+				Zoned => "The application must supply rules for the property's named zone."
+			}
+		} The following native rule uses effective selectors, including clock defaults; source spelling is not reconstructed.",
+		clipped: False,
+	}
 	CoverageDescription(data) => {
 		text: if data.member_count == 0 {
 			"POSIX coverage: complete empty coverage."
@@ -244,16 +310,16 @@ render = |fact| match SemanticFact.kind(fact) {
 	}
 	RfcDurationDescription(data) => {
 		text: "${
-			if data.role == Standalone {
-				"RFC duration"
-			} else {
-				"Period ending duration"
+			match data.role {
+				Standalone => "RFC duration"
+				PeriodEnding => "Period ending duration"
+				RecurrenceEnding => "Default recurrence duration"
 			}
 		}: ${quantity(data.days, "calendar day", "calendar days")} followed by ${quantity(data.seconds, "coordinate second", "coordinate seconds")}; calendar days are not converted to 86400-second quantities. ${
-			if data.role == Standalone {
-				"Applying it requires a start and explicit interpretation context."
-			} else {
-				"Its start is supplied by the enclosing period; no end has been computed."
+			match data.role {
+				Standalone => "Applying it requires a start and explicit interpretation context."
+				PeriodEnding => "Its start is supplied by the enclosing period; no end has been computed."
+				RecurrenceEnding => "Each occurrence supplies its start; explicit PERIOD entries can override this default. No occurrence end has been computed."
 			}
 		}",
 		clipped: False,
@@ -442,4 +508,37 @@ occurrence_policy = |policy| match policy {
 	First => "first occurrence"
 	Last => "last occurrence"
 	MatchingOffset(offset) => "match offset ${FixedOffset.to_seconds(offset).to_str()} seconds"
+}
+
+recurrence_source = |source| match source {
+	Date(date) => {
+		fields = GregorianDate.to_fields(date)
+		"Gregorian year ${fields.year.to_str()}, month ${fields.month.to_str()}, day ${fields.day.to_str()}"
+	}
+	Local(local) => civil_label(local)
+}
+
+recurrence_selector = |selector| match selector {
+	Month(value) => "month ${value.to_str()}"
+	MonthDay(value) => "month-day ${value.to_str()} (negative values count from month end)"
+	YearDay(value) => "year-day ${value.to_str()} (negative values count from year end)"
+	WeekNo(value) => "week number ${value.to_str()} in the week-numbering year (negative values count from its end)"
+	Weekday(data) => if data.ordinal == 0 {
+		"weekday ${Str.inspect(data.weekday)}"
+	} else {
+		"weekday ${Str.inspect(data.weekday)}, ordinal ${data.ordinal.to_str()} within the applicable month or year (negative ordinals count from the end)"
+	}
+	SetPosition(value) => "position ${value.to_str()} within the full candidate period (negative positions count from the end)"
+	Hour(value) => "effective hour ${value.to_str()}"
+	Minute(value) => "effective minute ${value.to_str()}"
+	Second(value) => "effective second ${value.to_str()}"
+	Microsecond(value) => "anchored microsecond ${value.to_str()}"
+}
+
+expect {
+	# The enclosing recurrence already supplies DTSTART and its interpretation
+	# mode. Its duration must not be explained as a standalone missing start.
+	rule = RfcTimedRule.parse({ start: "19700101T000000Z", rule: "FREQ=DAILY;COUNT=1", duration: "PT1H", inclusions: [], exclusions: [], periods: [], mode: Utc })?
+	report = Explanation.plain(Explanation.new(RfcTimedRule(rule)), { max_facts: 20, max_utf8_bytes: 8192 })
+	report.status == Complete and report.text.contains("Each occurrence supplies its start") and !report.text.contains("requires a start")
 }

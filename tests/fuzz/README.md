@@ -185,3 +185,14 @@ Collection budgets of zero, one and eight distinguish limited evaluation from
 complete empty coverage. Rendering completeness is checked independently of the
 typed evaluation status, with zero/tiny output budgets and out-of-range fact
 indexes. Fact access does not reinterpret the saved context.
+
+Recurrence declaration facts are checked against the same independently modeled
+monthly/date and timed inputs before querying. Expected anchors, pre-exclusion
+COUNT, normalized inclusions/exclusions and selector fields come from generated
+inputs and small explicit models, not diagnostic prose. Subdaily checks separate
+unrestricted limiting fields from effective expansion fields and preserve the
+anchor microsecond. RFC fixtures distinguish floating local UNTIL from UTC/zoned
+POSIX UNTIL using the independent 1970-01-02 epoch anchor, and preserve durations,
+PERIOD declarations and adapter policy. Zero/tiny/full rendering budgets and
+out-of-range fact indexes supplement these semantic checks without expanding
+unbounded rules.

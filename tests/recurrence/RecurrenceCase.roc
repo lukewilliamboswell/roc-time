@@ -1,4 +1,6 @@
 import fuzz.Fuzz
+import time.Explanation
+import time.SemanticFact
 import time.TimedSchedule
 import time.TimedOccurrence
 import time.CalendarDelta
@@ -74,6 +76,8 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			Ok(value) => value
 			Err(_) => crash "Valid generated recurrence rejected"
 		}
+		check_date_explanation(rule, input, anchor)
+		check_rfc_explanation(input)
 		window = { start: date(2024, input.query_month, 1), end: date(2026, 1, 1) }
 		text = "FREQ=MONTHLY;COUNT=${input.count.to_str()};INTERVAL=${input.interval.to_str()}${
 			if input.last_monday {
@@ -423,6 +427,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		Ok(value) => value
 		Err(_) => crash "timed exclusions"
 	}
+	check_timed_explanation(rule, input, excluded_label)
 	start = local(window.start, 0)
 	end = local(window.end, 0)
 	rules = fixture_rules(2000000000000000)
@@ -608,6 +613,7 @@ check_subdaily = |input| {
 		Ok(value) => value
 		Err(_) => crash "subdaily exclusions"
 	}
+	check_subdaily_explanation(rule, input, start, mode)
 	window_start = if input.exclude_anchor {
 		query
 	} else {
@@ -975,4 +981,237 @@ check_boundary_cutoff = |input| {
 cutoff_span = |lower, upper| match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
 	Ok(value) => value
 	Err(_) => crash "valid cutoff fixture span"
+}
+
+# R11/R12/R14: declaration facts are compared with the generator inputs and
+# independently known sorted exception dates, never the emitted result count.
+# The calendar-table occurrence model above separately validates COUNT before
+# exclusions. Explanation must keep that same declared COUNT even when the
+# anchor is excluded, and must never enumerate an unbounded series.
+recurrence_fact = |source, index| match Explanation.fact_at(source, index) {
+	Item(fact) => SemanticFact.kind(fact)
+	End => crash "Missing recurrence declaration fact"
+}
+
+check_recurrence_rendering = |source| {
+	full = Explanation.plain(source, { max_facts: 128, max_utf8_bytes: 32768 })
+	zero = Explanation.plain(source, { max_facts: 0, max_utf8_bytes: 32768 })
+	tiny = Explanation.plain(source, { max_facts: 128, max_utf8_bytes: 1 })
+	if full.status != Complete or full.visited_facts != Explanation.fact_count(source) or
+		zero.status != Limited(FactLimit) or zero.visited_facts != 0 or !zero.text.is_empty() or
+			tiny.status != Limited(ByteLimit) or tiny.text.count_utf8_bytes() > 1 {
+		crash "Recurrence declaration rendering ignored budgets"
+	}
+	match Explanation.fact_at(source, U64.highest) {
+		End => {}
+		_ => crash "Huge recurrence fact index fabricated a fact"
+	}
+}
+
+check_date_explanation = |rule, input, anchor| {
+	source = Explanation.new(DateRecurrence(rule))
+	selectors = if input.last_monday {
+		[Weekday({ ordinal: 0, weekday: Monday }), SetPosition(-1)]
+	} else {
+		[]
+	}
+	inclusions = [anchor, date(2024, 2, 4), date(2024, 3, 31)]
+	exclusions = if input.exclude_anchor {
+		[anchor, date(2024, 3, 31)]
+	} else {
+		[date(2024, 3, 31)]
+	}
+	if recurrence_fact(source, 0) != RecurrenceDescription({ kind: DateRecurrence, anchor: Date(anchor), frequency: Monthly, interval: input.interval.to_i64(), week_start: Some(Monday), selector_count: selectors.len(), inclusion_count: 3, exclusion_count: exclusions.len() }) or
+		recurrence_fact(source, 1) != RecurrenceTermination(Count(input.count.to_u64())) {
+		crash "Date recurrence explanation lost source semantics or pre-exclusion COUNT"
+	}
+	var index = 2.U64
+	for selector in selectors {
+		if recurrence_fact(source, index) != RecurrenceSelector(selector) {
+			crash "Date recurrence selector changed"
+		}
+		index = index + 1
+	}
+	for exception in inclusions {
+		if recurrence_fact(source, index) != RecurrenceException({ kind: Inclusion, source: Date(exception) }) {
+			crash "Normalized date inclusion changed"
+		}
+		index = index + 1
+	}
+	for exception in exclusions {
+		if recurrence_fact(source, index) != RecurrenceException({ kind: Exclusion, source: Date(exception) }) {
+			crash "Normalized date exclusion changed"
+		}
+		index = index + 1
+	}
+	if Explanation.fact_count(source) != index {
+		crash "Unexpected date recurrence facts"
+	}
+	check_recurrence_rendering(source)
+}
+
+check_timed_explanation = |rule, input, anchor| {
+	source = Explanation.new(TimedRecurrence(rule))
+	calendar_selectors = if input.last_monday {
+		[Weekday({ ordinal: 0, weekday: Monday }), SetPosition(-1)]
+	} else {
+		[]
+	}
+	selectors = calendar_selectors.concat([Hour(9), Hour(17), Minute(0), Second(0), Microsecond(0)])
+	exclusions = if input.exclude_anchor {
+		[anchor]
+	} else {
+		[]
+	}
+	if recurrence_fact(source, 0) != RecurrenceDescription({ kind: TimedRecurrence, anchor: Local(anchor), frequency: Monthly, interval: input.interval.to_i64(), week_start: Some(Monday), selector_count: selectors.len(), inclusion_count: 0, exclusion_count: exclusions.len() }) or
+		recurrence_fact(source, 1) != RecurrenceTermination(Count(input.count.to_u64())) {
+		crash "Timed recurrence explanation changed anchor or pre-exclusion COUNT"
+	}
+	if recurrence_fact(source, 2) != RecurrencePolicy({ context: Required, occurrence: CallerSupplied, gap: CallerSupplied }) {
+		crash "Native timed recurrence invented interpretation policies"
+	}
+	var index = 3.U64
+	for selector in selectors {
+		if recurrence_fact(source, index) != RecurrenceSelector(selector) {
+			crash "Effective sorted clock/calendar selector changed"
+		}
+		index = index + 1
+	}
+	for exception in exclusions {
+		if recurrence_fact(source, index) != RecurrenceException({ kind: Exclusion, source: Local(exception) }) {
+			crash "Normalized local exclusion changed"
+		}
+		index = index + 1
+	}
+	if Explanation.fact_count(source) != index {
+		crash "Unexpected timed recurrence facts"
+	}
+	check_recurrence_rendering(source)
+}
+
+# RFC 5545 extracted-property mode rules: floating UNTIL is a local label;
+# UTC/zoned UNTIL is a POSIX cutoff. 1970-01-02T00:00:00Z = 86400000000us
+# is an independent epoch anchor. No zone context is supplied for explanation.
+check_rfc_explanation = |input| {
+	for mode in [Floating, Zoned, Utc] {
+		start_text = if mode == Utc {
+			"19700101T000000Z"
+		} else {
+			"19700101T000000"
+		}
+		until_text = if mode == Floating {
+			"19700102T000000"
+		} else {
+			"19700102T000000Z"
+		}
+		rule_text = if input.exclude_anchor {
+			"FREQ=DAILY;UNTIL=${until_text}"
+		} else {
+			"FREQ=DAILY"
+		}
+		parsed = match RfcTimedRule.parse({ start: start_text, rule: rule_text, mode, duration: "P1D", inclusions: [start_text, start_text], exclusions: [start_text], periods: ["${start_text}/PT1H"] }) {
+			Ok(value) => value
+			Err(_) => crash "Valid RFC explanation fixture rejected"
+		}
+		source = Explanation.new(RfcTimedRule(parsed))
+		anchor = local(date(1970, 1, 1), 0)
+		termination = if input.exclude_anchor {
+			if mode == Floating {
+				UntilLocal(local(date(1970, 1, 2), 0))
+			} else {
+				UntilBoundary(PosixBoundary.from_microseconds(86400000000))
+			}
+		} else {
+			Forever
+		}
+		if recurrence_fact(source, 0) != RfcTimedRuleDescription({ mode, period_count: 1 }) or
+			recurrence_fact(source, 1) != RecurrencePolicy({
+				context: if mode == Utc {
+					FixedUtc
+				} else {
+					Required
+				},
+				occurrence: First,
+				gap: UseOffsetBeforeGap,
+			}) or
+				recurrence_fact(source, 2) != RfcDurationDescription({ role: RecurrenceEnding, days: 1, seconds: 0 }) or
+					recurrence_fact(source, 3) != RfcPeriodDescription({
+						form: if mode == Utc {
+							Utc
+						} else {
+							Local
+						},
+						start: anchor,
+						ending: Duration({ days: 0, seconds: 3600 }),
+					}) or
+						recurrence_fact(source, 4) != RecurrenceDescription({ kind: TimedRecurrence, anchor: Local(anchor), frequency: Daily, interval: 1, week_start: Some(Monday), selector_count: 4, inclusion_count: 1, exclusion_count: 1 }) or
+							recurrence_fact(source, 5) != RecurrenceTermination(termination) {
+			crash "RFC explanation confused declared mode, duration, period or local/POSIX termination"
+		}
+		if recurrence_fact(source, 10) != RecurrenceException({ kind: Inclusion, source: Local(anchor) }) or
+			recurrence_fact(source, 11) != RecurrenceException({ kind: Exclusion, source: Local(anchor) }) or Explanation.fact_count(source) != 12 {
+			crash "RFC explicit inclusion and exclusion declaration lost"
+		}
+		var selector_index = 6.U64
+		for selector in [Hour(0), Minute(0), Second(0), Microsecond(0)] {
+			if recurrence_fact(source, selector_index) != RecurrenceSelector(selector) {
+				crash "RFC inherited clock fields changed"
+			}
+			selector_index = selector_index + 1
+		}
+		check_recurrence_rendering(source)
+	}
+}
+
+check_subdaily_explanation = |rule, input, anchor, mode| {
+	frequency : SemanticFact.RecurrenceFrequency
+	frequency = match mode {
+		0 => Hourly
+		1 => Minutely
+		_ => Secondly
+	}
+	source = Explanation.new(TimedRecurrence(rule))
+	# Subdaily limiting hours are unrestricted when omitted; minutes expand
+	# [0,30] for hourly periods and are unrestricted for smaller periods.
+	minute_count = if mode == 0 {
+		2.U64
+	} else {
+		60.U64
+	}
+	count = 24 + minute_count + 2 + 1
+	if recurrence_fact(source, 0) != RecurrenceDescription({ kind: TimedRecurrence, anchor: Local(anchor), frequency, interval: input.interval.to_i64(), week_start: None, selector_count: count, inclusion_count: 0, exclusion_count: 1 }) or
+		recurrence_fact(source, 1) != RecurrenceTermination(Count(input.count.to_u64())) {
+		crash "Subdaily explanation changed anchored grid, microseconds or COUNT"
+	}
+	var index = 3.U64
+	var hour = 0.U8
+	while hour < 24 {
+		if recurrence_fact(source, index) != RecurrenceSelector(Hour(hour)) {
+			crash "Omitted subdaily hour must allow every hour"
+		}
+		hour = hour + 1
+		index = index + 1
+	}
+	var minute = 0.U8
+	while minute < 60 {
+		if mode != 0 or minute == 0 or minute == 30 {
+			if recurrence_fact(source, index) != RecurrenceSelector(Minute(minute)) {
+				crash "Subdaily minute limitation/expansion changed"
+			}
+			index = index + 1
+		}
+		minute = minute + 1
+	}
+	for second in [10.U8, 50] {
+		if recurrence_fact(source, index) != RecurrenceSelector(Second(second)) {
+			crash "Subdaily second selectors changed"
+		}
+		index = index + 1
+	}
+	if recurrence_fact(source, index) != RecurrenceSelector(Microsecond(input.work.to_u32())) or
+		recurrence_fact(source, index + 1) != RecurrenceException({ kind: Exclusion, source: Local(anchor) }) or
+			Explanation.fact_count(source) != index + 2 {
+		crash "Subdaily explanation lost exact anchor fraction or source exclusion"
+	}
+	check_recurrence_rendering(source)
 }

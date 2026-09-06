@@ -46,6 +46,18 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 		dates = CalendarPattern.Filter.new(spec.calendar)?
 		Ok({ anchor_second, unit, interval: spec.interval.to_i128(), clocks, dates })
 	}
+
+	## Effective declaration parameters. Construction proves interval fits I64.
+	## calendar carries filter predicates only; its period fields are placeholders.
+	definition : SubdailyPattern -> { frequency : Frequency, interval : I64, calendar : CalendarPattern.Spec }
+	definition = |pattern| {
+		frequency = match pattern.unit {
+			3600 => Hourly
+			60 => Minutely
+			_ => Secondly
+		}
+		{ frequency, interval: pattern.interval.to_i64_wrap(), calendar: CalendarPattern.Filter.definition(pattern.dates) }
+	}
 	clocks : SubdailyPattern -> ClockPattern
 	clocks = |pattern| pattern.clocks
 	matches_date : SubdailyPattern, GregorianDate -> Try(Bool, [OutOfRange, ..])
