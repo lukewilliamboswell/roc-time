@@ -171,7 +171,12 @@ def main():
             paths = list(directory.glob("*.tar.zst"))
             if len(paths) != 1:
                 raise ValueError(f"expected one newly built {role} archive")
-            rows.append({"name": role, "path": str(paths[0].relative_to(ROOT)), "test_os": ["ubuntu-latest"]})
+            # Roc's URL identity includes the filename prefix before the hash.
+            # Bare hashes under one versioned release path alias the two packages.
+            prefix = "roc-time" if role == "core" else "roc-time-tzdb"
+            named = paths[0].with_name(f"{prefix}-{paths[0].name}")
+            paths[0].rename(named)
+            rows.append({"name": role, "path": str(named.relative_to(ROOT)), "test_os": ["ubuntu-latest"]})
         write_json(args.output, rows)
     elif args.command == "previous":
         resolved = previous(args.repo, args.previous_core_url)
@@ -180,6 +185,8 @@ def main():
         emit({"previous_url": resolved}, args.github_output)
     else:
         rows = json.loads(args.manifest.read_text())
+        if isinstance(rows, dict):
+            rows = list(validate_metadata(rows).values())
         if args.command == "metadata":
             write_json(args.output, metadata(rows, args.bundle_dir))
         elif args.command == "paths":

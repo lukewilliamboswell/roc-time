@@ -28,6 +28,22 @@ def roc_command() -> str:
 
 
 ROC = roc_command()
+REHEARSAL_VERSION = "0.1.0-rc1"
+
+
+def release_asset_name(source: Path, role: str) -> str:
+    """Name raw roc bundle output while preserving supplied release filenames."""
+    if re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]+\.tar\.zst", source.name):
+        prefix = "roc-time" if role == "core" else "roc-time-tzdb"
+        return f"{prefix}-{source.name}"
+    return source.name
+
+
+def bare_asset_name(source: Path) -> str:
+    match = re.search(r"([1-9A-HJ-NP-Za-km-z]+\.tar\.zst)$", source.name)
+    if not match:
+        raise ValueError(f"Archive has no trailing content hash: {source.name}")
+    return match.group(1)
 
 
 def run(cmd: list[str], *, cwd: Path = ROOT, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -152,11 +168,12 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="roc-time-bundle-", dir=tmp_parent) as tmp:
         tmp_dir = Path(tmp)
-        bundle_dir = tmp_dir / "bundle"
+        served = tmp_dir / "served"
+        bundle_dir = served / REHEARSAL_VERSION
         examples_dir = tmp_dir / "rewritten"
         build_dir = tmp_dir / "build"
 
-        bundle_dir.mkdir()
+        bundle_dir.mkdir(parents=True)
         examples_dir.mkdir()
 
         cache_dir = tmp_dir / "cache"
@@ -182,9 +199,18 @@ def main() -> None:
             shutil.copy2(source_bundle, bundle_path)
             shutil.copy2(source_zone, zone_bundle)
 
+        for role, source in (("core", bundle_path), ("zones", zone_bundle)):
+            target = bundle_dir / release_asset_name(source, role)
+            if target != source:
+                shutil.copy2(source, target)
+            if role == "core":
+                bundle_path = target
+            else:
+                zone_bundle = target
         requests: list[str] = []
-        server, base_url = start_server(bundle_dir, requests)
+        server, base_url = start_server(served, requests)
         try:
+            base_url = f"{base_url}/{REHEARSAL_VERSION}"
             bundle_url = f"{base_url}/{bundle_path.name}"
             examples = copy_examples_with_bundle_url(examples_dir, bundle_url, f"{base_url}/{zone_bundle.name}")
 
@@ -194,7 +220,7 @@ def main() -> None:
 
             if not args.skip_build_run:
                 build_and_run_examples(examples, build_dir, env=env)
-            missing = {f"/{bundle_path.name}", f"/{zone_bundle.name}"} - set(requests)
+            missing = {f"/{REHEARSAL_VERSION}/{bundle_path.name}", f"/{REHEARSAL_VERSION}/{zone_bundle.name}"} - set(requests)
             if missing:
                 raise SystemExit(f"Roc did not acquire both exact bundles from the isolated server: {sorted(missing)}")
             print("Verified cold acquisition of both core and zone archives.")

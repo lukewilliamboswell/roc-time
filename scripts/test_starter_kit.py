@@ -14,7 +14,7 @@ import zipfile
 
 sys.dont_write_bytecode = True
 from starter_kit import build, validate_url
-from test_bundle_examples import ROOT, ROC, start_server
+from test_bundle_examples import ROOT, ROC, REHEARSAL_VERSION, bare_asset_name, release_asset_name, start_server
 
 STARTERS = ("booking_exchange", "archive_search", "staffing")
 
@@ -62,13 +62,21 @@ def main():
     with tempfile.TemporaryDirectory(prefix="starter-kit-", dir=temporary) as directory:
         work = Path(directory)
         served = work / "served"
-        served.mkdir()
-        for source in (core, zones):
-            shutil.copy2(source, served / source.name)
+        # Keep a version in the HTTP path: versionless URLs bypass package
+        # version identity solving and concealed the original two-package clash.
+        release_dir = served / REHEARSAL_VERSION
+        release_dir.mkdir(parents=True)
+        staged = []
+        for role, source in (("core", core), ("zones", zones)):
+            name = source.name if args.kit_path else release_asset_name(source, role)
+            target = release_dir / name
+            shutil.copy2(source, target)
+            staged.append(target)
+        core, zones = staged
         requests = []
         server, base = start_server(served, requests)
         try:
-            core_url, zone_url = f"{base}/{core.name}", f"{base}/{zones.name}"
+            core_url, zone_url = f"{base}/{REHEARSAL_VERSION}/{core.name}", f"{base}/{REHEARSAL_VERSION}/{zones.name}"
             archive = build(work / "starter.zip", core_url, zone_url)
             duplicate = build(work / "duplicate.zip", core_url, zone_url)
             if archive.read_bytes() != duplicate.read_bytes():
@@ -83,13 +91,13 @@ def main():
                 roles_path = work / "roles.json"
                 roles_path.write_text(json.dumps(release_metadata([
                     {"name": "core", "artifact_file": core.name},
-                    {"name": "zones", "artifact_file": zones.name}], served)))
-                repo, version = "roc-time/validation", "unreleased-validation"
-                candidate = prepare(repo, version, roles_path, served, work / "candidate.zip")
+                    {"name": "zones", "artifact_file": zones.name}], release_dir)))
+                repo, version = "roc-time/validation", REHEARSAL_VERSION
+                candidate = prepare(repo, version, roles_path, release_dir, work / "candidate.zip")
             # Validate the original artifact before extraction. Its release URLs
             # cannot be fetched before publication; rebase only the extracted
             # copy's known dependency URLs onto the local server below.
-            archive = validate(candidate, roles_path, served, repo, version)
+            archive = validate(candidate, roles_path, release_dir, repo, version)
             with zipfile.ZipFile(archive) as zipped:
                 zipped.extractall(work / "extracted")
             kit = work / "extracted/roc-time-starter"
@@ -110,7 +118,7 @@ def main():
                                         text=True, timeout=10)
                 if result.returncode or result.stdout != expected:
                     raise RuntimeError(f"Native starter mismatch: {starter}: {result.stdout}\n{result.stderr}")
-            if not {f"/{core.name}", f"/{zones.name}"} <= set(requests):
+            if not {f"/{REHEARSAL_VERSION}/{core.name}", f"/{REHEARSAL_VERSION}/{zones.name}"} <= set(requests):
                 raise RuntimeError("starter did not acquire both exact archives from its fresh cache")
             print("PASS extracted starters: exact output, cold acquisition, interpreter/native, outside working directory")
             fake = work / "wrong-roc"
@@ -125,7 +133,14 @@ def main():
                    diagnostic="BookingExchange.roc: FileNotFound")
             (served / "corrupt").mkdir()
             (served / "corrupt" / core.name).write_bytes(b"invalid archive\n")
+            collision_dir = served / "collision" / REHEARSAL_VERSION
+            collision_dir.mkdir(parents=True)
+            for source in (core, zones):
+                shutil.copy2(source, collision_dir / bare_asset_name(source))
+            collision_base = f"{base}/collision/{REHEARSAL_VERSION}"
             cases = (
+                ("identity-collision", f"{collision_base}/{bare_asset_name(core)}",
+                 f"{collision_base}/{bare_asset_name(zones)}", "same package version is being served with two different content hashes"),
                 ("missing", f"{base}/missing/{core.name}", zone_url, "package download failed"),
                 ("corrupt", f"{base}/corrupt/{core.name}", zone_url, "package download failed"),
                 ("swapped", zone_url, core_url, "package module is private"),
@@ -135,8 +150,8 @@ def main():
                 with zipfile.ZipFile(candidate) as zipped:
                     zipped.extractall(work / name)
                 invoke(work / name / "roc-time-starter", work / f"{name}-cache",
-                       "check", "booking_exchange", diagnostic=diagnostic)
-            print("PASS starter failures: wrong compiler, missing companion, missing/corrupt/swapped archives")
+                       "check", "staffing" if name == "identity-collision" else "booking_exchange", diagnostic=diagnostic)
+            print("PASS starter failures: wrong compiler, missing companion, missing/corrupt/swapped archives, same-version package identity collision")
         finally:
             server.shutdown()
             server.server_close()
