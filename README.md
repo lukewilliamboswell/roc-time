@@ -3,7 +3,7 @@
 Dates, booking availability and schedules for [Roc](https://www.roc-lang.org),
 with explicit calendar and time-zone choices.
 
-**Usable from source today; not yet a published, stable package.** You can build
+**[0.1.0-rc1 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc1).** This is a release candidate, not a stable API. You can build
 working booking and calendar applications with it now. APIs may change, and the
 compiler is pinned. Broader standards support is still being built.
 
@@ -33,28 +33,25 @@ These features work, but check that your input fits their scope.
 | EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%` | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
 | IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
 | RFC recurrence import | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed profiles | No complete ICS files, mixed UTC/local exceptions, or recurrence export/persistence yet |
-| Calendar and zone data | Gregorian and Julian; optional IANA 2025b data for 1800–2200 | Additional calendars are planned; zone data is a separate source dependency |
+| Calendar and zone data | Gregorian and Julian; optional IANA 2025b data for 1800–2200 | Additional calendars are planned; zone data is a separate package dependency |
 | Explanation and persistence | Bounded plain-text explanations; versioned storage for supported descriptions, exact values, coverage and complete interpretation snapshots | No event/cursor persistence; snapshots have explicit size limits |
 
-See [API documentation](https://lukewilliamboswell.github.io/roc-time/),
+See [API documentation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc1/),
 [text profiles](package/EdtfDate.roc), [timestamp profiles](package/OffsetTimestamp.roc),
 [recurrence profiles](package/RfcTimedRule.roc), [persistence limits](package/Persistence.roc)
 and [zone-data scope](tzdb/README.md) for exact contracts.
 
 ### Tier 3: Next, in user-impact order
 
-1. **Make adoption straightforward.** A tested first-use path, a published package
-   with clear compiler compatibility, and a clear way to add optional zone data.
-   A newcomer should reach a useful result without reading the architecture.
-2. **Fill archive input/output gaps.** Individually/group-qualified components,
+1. **Fill archive input/output gaps.** Individually/group-qualified components,
    mixed-resolution interval endpoints, unknown/open bounds, then masks and sets.
    Each supported form needs faithful serialization and useful failure messages.
-3. **Complete schedule interchange.** Recurrence export and persistence, followed
+2. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
    is not available today.
-4. **Add calendars for concrete needs.** Choose providers from sourced caller
+3. **Add calendars for concrete needs.** Choose providers from sourced caller
    scenarios, with independently verified conversions and explicit capabilities.
-5. **Extend advanced interpretation and presentation.** Broader uncertainty
+4. **Extend advanced interpretation and presentation.** Broader uncertainty
    reasoning, explanation of remaining evaluation results and styled rendering.
 
 The ordering follows blocked user workflows. Additional internal refinements
@@ -64,9 +61,12 @@ problems. The engineering tasks are in [the implementation plan](planning/implem
 
 ## Try it
 
-There is no published release yet. Start from a checkout and use
+Download the [starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc1/roc-time-starter.zip), extract it, and run `python3 run.py run booking_exchange` from its folder.
+The [release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc1) include both package URLs and a complete import example. Use
 **`nightly-2026-09-04-c125b82`**, the compiler pinned in [`.roc-version`](.roc-version).
 Download the matching archive from the [pinned compiler release](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-04-c125b82), extract it, and add its directory to PATH or use the executable’s full path. Verify the version before running an example.
+
+To explore the full example collection from source:
 
 ```sh
 git clone https://github.com/lukewilliamboswell/roc-time.git
