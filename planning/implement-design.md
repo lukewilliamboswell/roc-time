@@ -42,6 +42,19 @@ resource problem; retain the required correctness and resource gates for each sl
 
 Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracle method](../AGENTS.md#oracle-evidence) for each slice. Do not change the architecture merely to record implementation progress.
 
+## Adoption acceptance still needed
+
+- Release explicit core and zone roles. Test the exact supplied pair; do not
+  rebuild zone data from the checkout while claiming to test released artifacts.
+- Update release URL rewriting and previous-release discovery to select roles,
+  rather than assume one `.tar.zst`. The pinned publishing action accepts package
+  archives only; starter applications and compiler metadata need explicit assets.
+- Verify the booking, archive and staffing starters from an extracted kit with an
+  empty package cache and a working directory outside the checkout. Require exact
+  output fixtures for all three; staffing needs its independently expected
+  seven-hour spring-transition shift recorded. Exercise missing/corrupt bundles
+  and mistaken artifact roles so acquisition and dependency checks fail visibly.
+
 ## Zone database decisions and acceptance
 
 - Measure remaining provider construction, retained runtime data and supported Wasm costs for core-only, static one-zone, dynamic global-name and generated-subset workloads. Establish whether entirely unused URL dependencies are acquired; source and binary elimination are separate concerns.
