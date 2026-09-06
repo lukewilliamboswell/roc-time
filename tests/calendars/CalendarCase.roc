@@ -1,5 +1,6 @@
 import fuzz.Fuzz
 import time.Calendar
+import time.CalendarValue
 import time.CalendarDate
 import time.CivilDay
 import time.JulianDate
@@ -44,6 +45,7 @@ CalendarCase := { number : I64 }.{
 		if CalendarDate.from_fields(Julian, CalendarDate.to_fields(julian)) != Ok(julian) {
 			crash "R06 Julian field reconstruction"
 		}
+		check_description(julian)
 		converted = CalendarDate.in_calendar(julian, Gregorian)
 		if input.number < -784353015833 or input.number > 784351576776 {
 			if converted != Err(OutOfRange) {
@@ -54,6 +56,7 @@ CalendarCase := { number : I64 }.{
 				Ok(date) => date
 				Err(_) => crash "R06 shared coordinate rejected"
 			}
+			check_description(gregorian)
 			# Map the existing full-range input to local fractions without changing
 			# the curated decoder. Calendar conversion must preserve the label.
 			micros = I64.rem_by(input.number + 784369121962, 86400000000)
@@ -89,5 +92,54 @@ CalendarCase := { number : I64 }.{
 			crash "R06 unsupported calendar substituted"
 		}
 		Fuzz.keep
+	}
+}
+
+# R02/R14: independently count valid field dates within each month/year.
+# This model asks the calendar constructor about every possible day, rather
+# than computing the next month/year boundary like CalendarValue does.
+check_description = |date| {
+	fields = CalendarDate.to_fields(date)
+	calendar = CalendarDate.calendar(date)
+	year = match CalendarValue.year(calendar, fields.year) {
+		Ok(value) => value
+		Err(_) => crash "Valid description year"
+	}
+	month = match CalendarValue.month(calendar, fields.year, fields.month) {
+		Ok(value) => value
+		Err(_) => crash "Valid description month"
+	}
+	var total = 0.I64
+	var selected = 0.I64
+	var m = 1.U8
+	while m <= 12 {
+		var d = 1.U8
+		while d <= 31 {
+			match CalendarDate.from_fields(calendar, { year: fields.year, month: m, day: d }) {
+				Ok(_) => {
+					total = total + 1
+					if m == fields.month {
+						selected = selected + 1
+					}
+				}
+				Err(InvalidDay) => {}
+				Err(_) => crash "Calendar model outside valid year"
+			}
+			d = d + 1
+		}
+		m = m + 1
+	}
+	for query in [{ value: year, width: total, last: fields.year == 2147483647 }, { value: month, width: selected, last: fields.year == 2147483647 and fields.month == 12 }] {
+		match CalendarValue.local_bounds(query.value) {
+			Err(OutOfRange) => if !query.last {
+				crash "Description lost valid upper boundary"
+			}
+			Ok(bounds) => {
+				width = CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(bounds.end))) - CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(bounds.start)))
+				if query.last or width != query.width {
+					crash "Description differs from bounded field enumeration"
+				}
+			}
+		}
 	}
 }

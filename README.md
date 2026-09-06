@@ -47,6 +47,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Service calendar](examples/maintenance/main.roc) | Import date-only recurrence values and review rescheduled visits without restarting the original series count |
 | [Dispatch deadlines](examples/dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
 | [Equipment loans](examples/equipment_loans/main.roc) | Keep monthly loans on the 31st, clamp return dates across clock changes, and add an extra one-week booking |
+| [Archive search](examples/archive_search/main.roc) | Search recordings by a supplied minute or second, preserving the different selection widths |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:
@@ -69,6 +70,12 @@ subtracting their coverage. The recorder example uses resolved POSIX coordinates
 The invoice example uses civil dates without assuming a timezone. The service-calendar
 example imports date-only recurrence values. Named-zone applications can add the
 [optional zone database](tzdb/README.md); the core does not bundle it.
+
+[CalendarValue](package/CalendarValue.roc) preserves year, month, day, hour,
+minute, second and 1–6-digit fractional resolution for Gregorian/Julian values.
+Explicit lowering computes civil bounds and uses the shared bounded zone
+selection cursor, preserving empty gaps and disconnected folds. This native
+finite profile does not yet model component qualifications or symbolic long years.
 
 [RfcDateRule](package/RfcDateRule.roc) accepts extracted date-only recurrence
 property values under its declared profile. It does not parse complete ICS

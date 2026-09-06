@@ -1,3 +1,5 @@
+import time.CalendarValue
+import time.CalendarDate
 import time.RfcPeriod
 import time.RfcDateTime
 import time.RfcDuration
@@ -9,7 +11,7 @@ import time.PosixSpan
 import time.Coverage
 
 DispatchChecks :: [].{
-	run : {} -> Try({}, [OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed, ..])
+	run : {} -> Try({}, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed, ..])
 	run = |_| {
 		for a in [I64.lowest, -1.I64, 0, 1, I64.highest] {
 			for b in [I64.lowest, -1.I64, 0, 1, I64.highest] {
@@ -34,6 +36,14 @@ DispatchChecks :: [].{
 				return Err(Failed)
 			}
 		}
+		description_date = CalendarDate.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?
+		minute_value = CalendarValue.minute(description_date, 12, 30)?
+		second_value = CalendarValue.second(description_date, 12, 30, 0)?
+		descriptions = Dict.insert(Dict.insert(Dict.empty(), minute_value, 1.U64), second_value, 2.U64)
+		if minute_value == second_value or Dict.get(descriptions, minute_value) != Ok(1) or Dict.get(descriptions, second_value) != Ok(2) or !Str.inspect(minute_value).contains("resolution=Minute") {
+			return Err(Failed)
+		}
+
 		period = parse_period("19970101T180000Z/PT1H")?
 		same_period = parse_period("19970101t180000z/+PT60M")?
 		if period != same_period or Dict.get(Dict.insert(Dict.empty(), period, 23.U64), same_period) != Ok(23) or Str.inspect(period) != "RfcPeriod(19970101T180000Z/PT3600S)" {

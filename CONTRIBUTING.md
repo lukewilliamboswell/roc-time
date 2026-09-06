@@ -178,7 +178,7 @@ network service.
 
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
-neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern and recurrence roots
+neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in `.roc-version`:
@@ -296,6 +296,11 @@ establish a complete result. An explicit local end repeats this bounded prefix
 check against both table sizes. A resolved explicit end separately consumes zero
 zone work, including an endpoint at the greatest I64 boundary. Each has its own
 4 KiB requested-byte ceiling; short/long-table traffic must match.
+A calendar-year selection additionally measures cursor construction and first
+segment consumption against 16 and 4096 transitions. The year contains trillions
+of local microseconds; a one-segment budget must return an incomplete result.
+Each phase uses the same 4 KiB traffic ceiling, with identical short/long-table
+traffic required. Input rule storage is outside these measured phases.
 These are explicit traffic budgets, not claims of live memory or zero-cost
 iteration. Short/vast traffic must still match exactly.
 A five-second process deadline catches catastrophic hidden traversal, and a

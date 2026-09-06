@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ROOT / "tests"
 DATA = SOURCES / "fuzz"
 WORK = Path(os.environ.get("ROC_TIME_TMPDIR", ROOT / ".roc-time-tmp")).resolve() / "fuzz"
-SEMANTIC = ("precision", "spans", "coverage", "gregorian", "arithmetic", "calendars", "clock", "offsets", "zones", "events", "patterns", "recurrence")
+SEMANTIC = ("precision", "spans", "coverage", "gregorian", "arithmetic", "calendars", "clock", "offsets", "zones", "events", "patterns", "recurrence", "descriptions")
 ROC = os.environ.get("ROC", "roc")
 if "/" in ROC or "\\" in ROC:
     ROC = str(Path(ROC).resolve())

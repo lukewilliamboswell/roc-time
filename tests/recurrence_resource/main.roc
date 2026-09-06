@@ -1,5 +1,6 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
+import time.CalendarValue
 import time.CalendarPattern
 import time.TimedSchedule
 import time.TimedOccurrence
@@ -566,7 +567,58 @@ main! = |args| {
 	}
 	Host.assert!(override_first.steps <= 8 and override_first.zone_segments == 1 and override_after - override_before <= ceiling)
 
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before, override_after - override_before, explicit_after - explicit_before, resolved_after - resolved_before, cutoff_constructed - cutoff_before, cutoff_after - cutoff_constructed] }
+	# A year contains trillions of local microseconds. Constructing its selection
+	# must not enumerate them or scan the caller-owned transition table.
+	description = match CalendarValue.year(Gregorian, start_year) {
+		Ok(value) => value
+		Err(_) => crash "Description resource year"
+	}
+	description_bounds = match CalendarValue.local_bounds(description) {
+		Ok(value) => value
+		Err(_) => crash "Description resource bounds"
+	}
+	description_start = match FixedOffset.resolve(FixedOffset.from_seconds(0), description_bounds.start) {
+		Ok(value) => PosixBoundary.to_microseconds(value)
+		Err(_) => crash "Description fixture start"
+	}
+	description_end = match FixedOffset.resolve(FixedOffset.from_seconds(0), description_bounds.end) {
+		Ok(value) => PosixBoundary.to_microseconds(value)
+		Err(_) => crash "Description fixture end"
+	}
+	var description_transitions = []
+	var description_index = 1.I64
+	description_size = if year > 2001 {
+		4096.I64
+	} else {
+		16.I64
+	}
+	while description_index <= description_size {
+		description_transitions = description_transitions.append({ at: PosixBoundary.from_microseconds(description_start + description_index * 1000000), offset: FixedOffset.from_seconds(0) })
+		description_index = description_index + 1
+	}
+	description_rules = match ZoneRules.new_bounded("Synthetic/YearSelection", "v1", description_span(description_start - 86400000000, description_end + 86400000000), FixedOffset.from_seconds(0), description_transitions, { minimum: 0, maximum: 0 }) {
+		Ok(value) => value
+		Err(_) => crash "Description fixture rules"
+	}
+	description_before = Host.allocated_bytes!({})
+	description_cursor = match CalendarValue.selection_cursor(description, description_rules) {
+		Ok(value) => value
+		Err(_) => crash "Description cursor"
+	}
+	description_constructed = Host.allocated_bytes!({})
+	Host.assert!(description_constructed - description_before <= ceiling)
+	description_first = match ZoneRules.SelectionCursor.collect(description_cursor, { max_segments: 1, max_members: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "Description prefix"
+	}
+	description_after = Host.allocated_bytes!({})
+	Host.assert!(description_first.segments == 1 and description_after - description_constructed <= ceiling)
+	match description_first.status {
+		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
+		Complete(_) => Host.assert!(False)
+	}
+
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before, override_after - override_before, explicit_after - explicit_before, resolved_after - resolved_before, cutoff_constructed - cutoff_before, cutoff_after - cutoff_constructed, description_constructed - description_before, description_after - description_constructed] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {
@@ -632,4 +684,9 @@ duration_start = |rules, source| {
 		Item(item) => item.occurrence
 		_ => crash "duration fixture incomplete"
 	}
+}
+
+description_span = |start, end| match PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end)) {
+	Ok(value) => value
+	Err(_) => crash "Description validity span"
 }

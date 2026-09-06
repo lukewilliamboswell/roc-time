@@ -109,7 +109,7 @@ def verify_recurrence(target: str) -> None:
             result = subprocess.run([binary, str(year), "4096"], capture_output=True, timeout=5)
             if result.returncode or result.stdout != b"prefix=1,resume=2,limited=1,zero=1\n":
                 raise RuntimeError(f"{mode}: recurrence prefix failed: {result.stderr!r}")
-            match = re.search(rb" work=((?:\d+,){24}\d+)\n$", result.stderr)
+            match = re.search(rb" work=((?:\d+,){26}\d+)\n$", result.stderr)
             if match is None:
                 raise RuntimeError(f"{mode}: missing recurrence resource observations")
             observations.append(tuple(int(value) for value in match[1].split(b",")))

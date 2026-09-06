@@ -21,6 +21,7 @@ decoders, and the named-case replay checks validate that contract.
 | `gregorian-v1` | R05: full Gregorian provider day range with endpoint/year-zero bias; coordinate and field round trips, independent next-day field progression, malformed fields and out-of-provider coordinates. Fixed tests separately enumerate all 292,194 days in years -400 through 399 against a sequential day counter. |
 | `arithmetic-v1` | R05: full provider years with endpoint/year-zero bias; years ±2, months ±24 and days ±60 against a field-walking oracle for Reject/Clamp/Carry; I64 extreme components assert range failures. The model shares Gregorian month/leap conventions but neither production civil conversion nor month-index arithmetic. |
 | `calendars-v1` | R06: full Julian provider coordinates with endpoint/epoch bias; cross-calendar shared-day equality vs description identity, Gregorian overlap range errors, Julian four-year periodicity, unsupported-name rejection, local calendar conversion preserving clock labels and distinguishing position from description. Independent generated Julian oracle modules anchor the conversion algorithm. |
+| `descriptions-v1` | R02/R07/R13–R14: full-day decimal grids at all six fractional resolutions, hour/minute/second/day widths and midnight carries; independently constructed two-segment gap/fold preimages, zero-work stops and resumptions. |
 | `clock-v1` | R01/R07/R08: numeric positions from -1 through 86400000000; explicit range errors, field reconstruction, microsecond adjacency and ordering. An exhaustive field-counter oracle independently checks all 86,400 seconds at three fractional positions. |
 | `offsets-v1` | R01/R07/R08: full I64 POSIX coordinates with limit bias and full I32 offsets; both calendar projections, exact round trips, explicit offset sign and final range errors; immutable rule lookup against an independent step-function model, including excluded validity endpoints. RFC 3339 section 4.2 supplies a separate sign-convention fixture. |
 | `events-v1` | R10: up to twelve spans with source-order U64 identities, bounded numeric starts/widths; independent cell membership verifies contributor partitions, coverage projection and disconnected clipping, with duplicate-ID rejection and retained/shared source entries. |
@@ -37,6 +38,10 @@ structured error paths. The small-domain coverage oracle complements full-range
 boundary/span checks and deterministic extreme-width tests in `CoverageTests`.
 It is not an allocation measurement or evidence of Wasm support.
 
+The calendar interoperability target also checks year/month description bounds
+across both provider ranges, including their signed limits, against independent
+bounded enumeration of valid fields (at most 372 candidate dates per year).
+
 ## Curated inputs and replay contract
 
 Each semantic corpus includes four intentionally constructed 128-byte inputs:
@@ -44,7 +49,8 @@ Each semantic corpus includes four intentionally constructed 128-byte inputs:
 (`[0,255,1,127,128,2,254,42]` repeated sixteen times). They were curated on
 2026-09-05 to exercise complete records, list lengths, shared/sliced construction,
 signed-limit selectors, and arbitrary numeric payloads. They are starter cases,
-not discoveries of a library defect. The runner copies them into disposable
+not discoveries of a library defect. The descriptions corpus applies the same four
+byte patterns, curated on 2026-09-06 with the pinned compiler and roc-fuzz 0.3.0. The runner copies them into disposable
 campaign directories before mutation; searches never modify the curated files.
 
 Consolidation also retained 64-byte zero, one-byte-value-255, and ascending
@@ -87,7 +93,7 @@ retains UTC/local form, and numeric-offset suffixes are rejected.
 ## Verified execution
 
 Apple Silicon macOS and Linux x86-64/musl have verified execution through the
-pinned release platform. The Linux gate covers all twelve semantic targets,
+pinned release platform. The Linux gate covers all thirteen semantic targets,
 curated replay and the failure lifecycle using LLVM speed with `--fuzz`, compiler
 `nightly-2026-09-04-c125b82` and roc-fuzz 0.3.0
 (`ec137edcf0fa2530e3dbb175fec4ddff5281cc6d`). Searches use seed 1, at most

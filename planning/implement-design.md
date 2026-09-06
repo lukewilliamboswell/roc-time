@@ -6,7 +6,7 @@ Objective: satisfy [design requirements R01–R16](../design.md#acceptance-requi
 
 1. Complete remaining provider resource/portability evidence (R07–R09, R15–R16).
 2. Complete [recurrence execution](recurrence.md), a declared RFC profile, candidate/output budgets and resumptions (R11–R12). Preserve series state across windows; depend on calendar and zone interpretation rather than duplicating them.
-3. Add resolution-bearing descriptions, uncertain endpoint knowledge and component qualifications before standards adapters (R13–R14). Keep symbolic range distinct from finite materialization. Separate stable month identity and provider capabilities before extending beyond Gregorian/Julian calendar shapes.
+3. Complete [calendar descriptions and uncertainty](calendar-descriptions.md), including uncertain endpoint knowledge and component qualifications before standards adapters (R13–R14). Keep symbolic range distinct from finite materialization. Separate stable month identity and provider capabilities before extending beyond Gregorian/Julian calendar shapes.
 4. Implement shared semantic adapters and versioned persistence, including IXDTF offset assertions and presentation annotations. Declare edition/profile support separately for recognition, semantic preservation, interpretation and serialization.
 5. Implement bounded semantic explanation using shared typed facts, preserving the design's masked-year, uncertain-endpoint, fold/skip, missing-context and limited-result distinctions. Extend inspection budgets to nested descriptions and embedded text.
 6. Complete public examples and evidence across all requirements, including resource measurements and supported backend checks (R15–R16).

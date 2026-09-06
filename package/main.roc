@@ -2,6 +2,7 @@ package
 	[
 		Calendar,
 		CalendarDate,
+		CalendarValue,
 		CalendarDelta,
 		CalendarArithmetic,
 		CalendarPattern,
