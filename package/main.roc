@@ -21,6 +21,8 @@ package
 		RfcDateTime,
 		EdtfDate,
 		OffsetTimestamp,
+		ExactInterval,
+		Ixdtf,
 		RfcPeriod,
 		RfcTimedRule,
 		CivilDay,

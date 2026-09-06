@@ -42,6 +42,17 @@ are not minimized discoveries. Module unit fixtures independently transcribe
 LOC date/qualification examples and RFC 3339/9557 offset facts, and cover the
 four-digit year endpoints outside this generated domain.
 
+The same unchanged generator also drives ExactInterval and Ixdtf. Independent
+one-second spans check exact interval parsing and computed-span serialization;
+a fixed pair reverses local-label order while retaining valid resolved order.
+IXDTF cases retain ordered elective annotations and fractional width, compare
+constant-zone projection with integer offset arithmetic, require explicit
+context, and distinguish numeric assertion conflicts from unasserted UTC.
+Re-resolution changes presentation under new supplied rules while the old
+snapshot retains its result and both keep the same instant. Unsupported calendar
+presentation and critical tags fail explicitly; fixed RFC module fixtures cover
+annotation grammar, critical duplicates and alias provenance separately.
+
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
 Each traversal must preserve the same dates and respect work/output budgets.

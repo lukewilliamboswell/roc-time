@@ -26,7 +26,8 @@ unchecked items are planned.
 - [x] Finite calendar descriptions, scoped qualifications and explicit finite-alternative point reasoning.
 - [ ] Broader symbolic descriptions, uncertain endpoints and interval reasoning.
 - [x] EDTF date-only and RFC offset-timestamp parsing with canonical serialization.
-- [ ] Broader ISO 8601 / EDTF profiles and IXDTF annotations.
+- [x] Exact booking interval text and bounded IXDTF annotations with explicit zone interpretation.
+- [ ] Broader ISO 8601 / EDTF profiles and calendar presentation.
 - [ ] Semantic explanations, versioned persistence and broader calendar support.
 
 Usability, independent correctness checks and predictable resource use remain
@@ -39,8 +40,13 @@ Level 0 conformance. Qualified values require explicit evidence for reasoning.
 [OffsetTimestamp](package/OffsetTimestamp.roc) handles complete RFC timestamps
 with up to six fractional digits, retaining their supplied width and RFC 9557
 offset assertions. It also formats computed POSIX boundaries with an explicit
-offset and precision. IXDTF annotations and native persistence are not yet
-supported; module documentation states exact input limits and error profiles.
+offset and precision. [ExactInterval](package/ExactInterval.roc) composes two
+complete timestamps into an exact half-open booking window. This native text
+profile is distinct from EDTF's uncertain date endpoints.
+[Ixdtf](package/Ixdtf.roc) preserves ordered annotations and critical flags, checks
+offset assertions against explicit rules, and retains calendar preferences.
+Only Gregorian presentation is currently supported. Native persistence remains
+separate work; module documentation states exact input limits and error profiles.
 
 ## Examples
 
@@ -50,6 +56,8 @@ Examples are small applications built around realistic caller tasks. Each has a
 | Application | Demonstrates |
 | --- | --- |
 | [Room availability](examples/coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
+| [Booking exchange](examples/booking_exchange/main.roc) | Read exact booking windows with different offsets and serialize free windows in UTC |
+| [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |

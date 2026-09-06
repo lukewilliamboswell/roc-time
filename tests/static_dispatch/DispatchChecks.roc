@@ -7,6 +7,8 @@ import time.RfcPeriod
 import time.RfcDateTime
 import time.EdtfDate
 import time.OffsetTimestamp
+import time.ExactInterval
+import time.Ixdtf
 import time.RfcDuration
 import time.CivilDay
 import time.GregorianDate
@@ -18,6 +20,17 @@ import time.Coverage
 DispatchChecks :: [].{
 	run : {} -> Try({}, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed, ..])
 	run = |_| {
+		annotated = parse_ixdtf("1970-01-01T00:00:00Z[+00:00][knort=value]")?
+		same_annotated = parse_ixdtf("1970-01-01t00:00:00-00:00[-00:00][knort=value]")?
+		critical = parse_ixdtf("1970-01-01T00:00:00Z[!+00:00][knort=value]")?
+		if annotated != same_annotated or annotated == critical or Dict.get(Dict.insert(Dict.empty(), annotated, 43.U64), same_annotated) != Ok(43) or !Str.inspect(annotated).contains("tags=1") {
+			return Err(Failed)
+		}
+		exact = parse_exact("1970-01-01T00:00:00Z/1970-01-01T01:00:00Z")?
+		same_exact = parse_exact("1970-01-01t00:00:00-00:00/1970-01-01t01:00:00z")?
+		if exact != same_exact or Dict.get(Dict.insert(Dict.empty(), exact, 41.U64), same_exact) != Ok(41) or !Str.inspect(exact).contains("ExactInterval") {
+			return Err(Failed)
+		}
 		archive = parse_archive("2004-06~")?
 		same_archive = parse_archive("2004-06~")?
 		if archive != same_archive or Dict.get(Dict.insert(Dict.empty(), archive, 31.U64), same_archive) != Ok(31) or !Str.inspect(archive).contains("2004-06~") {
@@ -152,6 +165,16 @@ DispatchChecks :: [].{
 }
 
 parse_archive = |text| match EdtfDate.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+parse_exact = |text| match ExactInterval.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+parse_ixdtf = |text| match Ixdtf.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }

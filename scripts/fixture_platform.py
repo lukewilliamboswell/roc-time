@@ -162,6 +162,42 @@ def verify_intervals(target: str) -> None:
                 raise RuntimeError(f"{mode}/{ownership}: interval negative control failed")
             print(f"PASS interval {mode}/{ownership}: sizes 64/512/4096 requested bytes {observations}; negative control")
 
+
+def verify_interchange(target: str) -> None:
+    """Separate parsing/output from one resolution and repeated stored reads.
+
+    Transition storage is created before counters. Observations are allocation
+    traffic, not live memory; this is no claim of constant-time zone resolution.
+    """
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/interchange_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"interchange-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for tags in (1, 32):
+            observations = []
+            for transitions in (2, 16384):
+                result = subprocess.run([binary, str(transitions), str(tags), "4194304"],
+                                        capture_output=True, timeout=5)
+                if result.returncode or result.stdout != b"instant=1000000,presentation=1000000,exact=0..2000000\n":
+                    raise RuntimeError(f"{mode}/{tags}/{transitions}: interchange probe failed: {result.stderr!r}")
+                match = re.search(rb" work=((?:\d+,){6}\d+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError(f"{mode}: missing interchange resource observations")
+                counts = tuple(int(value) for value in match[1].split(b","))
+                if counts[3] != 0:
+                    raise RuntimeError(f"{mode}: stored snapshot reads allocated: {counts}")
+                observations.append(counts)
+            if observations[0] != observations[1]:
+                raise RuntimeError(f"{mode}: interchange traffic varies with retained rule size: {observations}")
+            print(f"PASS interchange {mode}/{tags} tags: 2/16384 transitions requested bytes {observations[0]}; 100000 stored reads")
+        failed = subprocess.run([binary, "16384", "32", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: interchange negative control failed")
+        print(f"PASS interchange {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -171,5 +207,6 @@ if __name__ == "__main__":
         verify_probe(selected_target)
         verify_recurrence(selected_target)
         verify_intervals(selected_target)
+        verify_interchange(selected_target)
     else:
         print(selected_target)

@@ -8,6 +8,10 @@ import time.LocalDateTime
 import time.ClockTime
 import time.FixedOffset
 import time.GregorianDate
+import time.PosixSpan
+import time.ZoneRules
+import time.ExactInterval
+import time.Ixdtf
 import time.PosixBoundary
 
 # R02/R13/R14: generated valid Gregorian dates in 1900..2100, supplied EDTF
@@ -204,6 +208,8 @@ check_timestamp = |input, day, date_text| {
 		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(expected), expected_offset, input.digits) != Ok(parsed) {
 		crash "Timestamp boundary differs from independent Gregorian day count"
 	}
+	check_exact_interval(input, date_text, parsed, expected, elapsed_days)
+	check_ixdtf(input, parsed, expected)
 }
 
 # Mutations remain in the property's domain: ordinary structured public failures
@@ -220,4 +226,142 @@ check_malformed = |input, date_text| {
 				OffsetTimestamp.parse("${date_text}T23:59:60Z") != Err(UnsupportedLeapSecond) {
 		crash "Timestamp malformed fields or unsupported precision misclassified"
 	}
+}
+
+# R01/R08/R14: exact interval extent is independently calculated in integer
+# microseconds. Endpoints deliberately use different offsets; textual/local
+# ordering must never replace ordering of resolved boundaries.
+check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
+	# A whole second preserves every generated decimal precision exactly.
+	end = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(expected + 1000000), UnassertedUtc, input.digits) {
+		Ok(value) => value
+		Err(_) => crash "In-range generated interval end rejected"
+	}
+	source = "${OffsetTimestamp.to_text(timestamp)}/${OffsetTimestamp.to_text(end)}"
+	interval = match ExactInterval.parse(source) {
+		Ok(value) => value
+		Err(_) => crash "Valid generated exact interval rejected"
+	}
+	expected_span = model_span(expected, expected + 1000000)
+	if ExactInterval.span(interval) != expected_span or ExactInterval.to_text(interval) != source or
+		ExactInterval.parse(ExactInterval.to_text(interval)) != Ok(interval) or ExactInterval.new(timestamp, end) != Ok(interval) {
+		crash "Exact interval differs from independent endpoint extent"
+	}
+	converted = match ExactInterval.from_span(expected_span, UnassertedUtc, input.digits) {
+		Ok(value) => value
+		Err(_) => crash "Aligned exact span serialization rejected"
+	}
+	reparsed = match ExactInterval.parse(ExactInterval.to_text(converted)) {
+		Ok(value) => value
+		Err(_) => crash "Formatted exact span did not reparse"
+	}
+	if ExactInterval.span(reparsed) != expected_span {
+		crash "Exact interval span round trip changed extent"
+	}
+	reverse_labels = "${date_text}T10:00:00+02:00/${date_text}T09:00:00Z"
+	small = match ExactInterval.parse(reverse_labels) {
+		Ok(value) => value
+		Err(_) => crash "Resolved interval order confused with local endpoint order"
+	}
+	midnight = elapsed_days * 86400000000
+	if ExactInterval.span(small) != model_span(midnight + 28800000000, midnight + 32400000000) {
+		crash "Different-offset interval differs from independent hour model"
+	}
+	if ExactInterval.parse("${date_text}T09:00:00Z/${date_text}T10:00:00+02:00") != Err(ReversedBounds) or
+		ExactInterval.new(timestamp, timestamp) != Err(EmptySpan) {
+		crash "Exact interval invalid endpoint order was accepted"
+	}
+}
+
+model_span = |start, end| match PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end)) {
+	Ok(value) => value
+	Err(_) => crash "Ordered independent oracle span"
+}
+
+# RFC9557 sections2,3.3–3.4,5: generated model extensions of the sourced UTC
+# versus asserted-offset examples. Immutable synthetic constant rules make the
+# expected offset and local coordinate explicit; no host zone database is used.
+check_ixdtf = |input, timestamp, expected| {
+	base = OffsetTimestamp.to_text(timestamp)
+	critical = input.precision == 0
+	marker = if critical {
+		"!"
+	} else {
+		""
+	}
+	source = "${base}[${marker}Synthetic/Interchange][u-ca=gregory][u-ca=hebrew][knort=v${input.digits.to_str()}]"
+	parsed = match Ixdtf.parse(source) {
+		Ok(value) => value
+		Err(_) => crash "Generated supported IXDTF annotations rejected"
+	}
+	if Ixdtf.to_text(parsed) != source or Ixdtf.parse(Ixdtf.to_text(parsed)) != Ok(parsed) or
+		Ixdtf.parts(parsed).timestamp != timestamp or Ixdtf.preferred_calendar(parsed) != Some("gregory") or
+			Ixdtf.new(Ixdtf.parts(parsed)) != Ok(parsed) {
+		crash "IXDTF annotation order, base resolution, or declaration changed"
+	}
+	tags = Ixdtf.parts(parsed).tags
+	if tags != [{ critical: Bool.False, key: "u-ca", value: "gregory" }, { critical: Bool.False, key: "u-ca", value: "hebrew" }, { critical: Bool.False, key: "knort", value: "v${input.digits.to_str()}" }] {
+		crash "IXDTF elective duplicate tags were not retained"
+	}
+	offset = input.offset.to_i32() * 60
+	rules = constant_rules(expected, offset, "v1")
+	snapshot = match Ixdtf.resolve(parsed, Some(rules)) {
+		Ok(value) => value
+		Err(_) => crash "Matching generated IXDTF interpretation failed"
+	}
+	if Ixdtf.Snapshot.boundary(snapshot) != PosixBoundary.from_microseconds(expected) or
+		Ixdtf.Snapshot.source(snapshot) != parsed or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) {
+		crash "IXDTF snapshot changed source position or rule offset"
+	}
+	presentation = match Ixdtf.Snapshot.presentation(snapshot) {
+		Ok(value) => value
+		Err(_) => crash "First elective Gregorian calendar did not win"
+	}
+	if FixedOffset.resolve(FixedOffset.from_seconds(0), presentation) != Ok(PosixBoundary.from_microseconds(expected + offset.to_i64() * 1000000)) {
+		crash "IXDTF presentation differs from independent constant-offset model"
+	}
+	match Ixdtf.resolve(parsed, None) {
+		Err(NeedsContext) => {}
+		_ => crash "Named zone accepted without explicit rules"
+	}
+	changed_rules = constant_rules(expected, offset + 60, "v2")
+	if input.qualifier < 2 {
+		changed = match Ixdtf.Snapshot.reresolve(snapshot, Some(changed_rules)) {
+			Ok(value) => value
+			Err(_) => crash "Unasserted UTC rejected changed local rules"
+		}
+		if Ixdtf.Snapshot.boundary(changed) != PosixBoundary.from_microseconds(expected) or
+			Ixdtf.Snapshot.offset(changed) != FixedOffset.from_seconds(offset + 60) or
+				Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) or
+					Ixdtf.Snapshot.presentation(snapshot) != Ok(presentation) {
+			crash "IXDTF changed rules mutated retained snapshot or UTC position"
+		}
+	} else {
+		match Ixdtf.Snapshot.reresolve(snapshot, Some(changed_rules)) {
+			Err(OffsetConflict) => {}
+			_ => crash "Asserted numeric offset ignored rule conflict"
+		}
+	}
+	# An elective unsupported calendar changes only presentation availability.
+	hebrew = match Ixdtf.parse("${base}[u-ca=hebrew]") {
+		Ok(value) => value
+		Err(_) => crash "Elective calendar preference rejected"
+	}
+	hebrew_snapshot = match Ixdtf.resolve(hebrew, None) {
+		Ok(value) => value
+		Err(_) => crash "Elective calendar reinterpreted Gregorian timestamp"
+	}
+	if Ixdtf.Snapshot.boundary(hebrew_snapshot) != PosixBoundary.from_microseconds(expected) or
+		Ixdtf.Snapshot.presentation(hebrew_snapshot) != Err(UnsupportedCalendar("hebrew")) {
+		crash "Calendar presentation preference changed timestamp meaning"
+	}
+	if Ixdtf.parse("${base}[!knort=v${input.digits.to_str()}]") != Err(UnknownCritical) or
+		Ixdtf.parse("${base}[!u-ca=gregory][u-ca=hebrew]") != Err(ConflictingCritical) {
+		crash "Critical annotation errors were ignored"
+	}
+}
+
+constant_rules = |boundary, offset, version| match ZoneRules.new_bounded("Synthetic/Interchange", version, model_span(boundary - 172800000000, boundary + 172800000000), FixedOffset.from_seconds(offset), [], { minimum: offset, maximum: offset }) {
+	Ok(value) => value
+	Err(_) => crash "Valid fixed synthetic interpretation context"
 }

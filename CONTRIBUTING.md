@@ -314,6 +314,15 @@ bounds for this shared-cursor workload, not exact allocation or retained-memory
 contracts. Review ceiling changes against measured operations and ownership;
 do not raise them merely to make a regression pass.
 
+Interchange resource evidence lives in `tests/interchange_resource/main.roc`.
+The normal fixture gate measures parsing, serialization, interpretation, stored
+snapshot reads and inspection separately for 1/32 annotations and 2/16,384
+retained transitions. It checks semantic output and 100,000 stored reads with
+zero allocation traffic under a five-second subprocess limit, plus dev/speed
+failing allocation controls. Rules and runtime input are built outside those
+scopes. Counts are cumulative requested bytes, not live or retained memory;
+initial interpretation remains linear in the supplied transition table.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

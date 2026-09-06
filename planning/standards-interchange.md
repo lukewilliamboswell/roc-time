@@ -8,33 +8,20 @@ reasoning model or declaring full ISO/EDTF conformance first.
 
 ## Remaining caller slices
 
-1. **Booking availability:** compose complete offset-bearing endpoints through
-   an explicitly exact-interval API, then PosixSpan/Coverage difference and UTC
-   canonical output. Opening 09–17 with bookings 10–12 and 15–16 yields 09–10,
-   12–15 and 16–17. Include operands with different explicit offsets. Date-only
-   EDTF intervals cannot enter this endpoint API. Establish the interval syntax
-   profile independently before any ISO edition-level claim.
-2. **IXDTF presentation:** extend the timestamp declaration with ordered
-   annotations and criticality. Pin supported annotation grammar, duplicates,
-   conflicts and elective-extension preservation. Unknown critical annotations
-   fail. Interpret supplied instants with explicit immutable zone rules; asserted
-   offsets must agree, while unasserted UTC can project into the named zone.
-   Preserve `u-ca` as presentation preference without reinterpreting Gregorian
-   fields. Bind results to their source declaration and actual rule provenance.
-3. **Richer archive descriptions:** support individually/group-qualified
+1. **Richer archive descriptions:** support individually/group-qualified
    components, independently resolved interval endpoints, unknown versus open
    bounds, then selected masks and finite one-of/all-of sets. Specify group
    qualification representation before promising lossless native round trips.
    Preserve metadata without needing a complete uncertainty solver. Interpretation
    uses shared native machinery or returns an explicit unsupported result.
-4. **Explain and save:** expose shared typed facts for each supported declaration
+2. **Explain and save:** expose shared typed facts for each supported declaration
    and its bound interpretation result. Bounded renderers distinguish unresolved,
    unsupported, empty and limited results without re-resolution. Deliver this
    with the first useful format slices, not after all standards support. Define
    a versioned native persistence envelope with axis/units where applicable,
    semantic payload, context/provenance policy and unknown-version rejection.
    Standards text and debug inspection are not substitutes for that envelope.
-5. **Calendar presentation:** choose the first additional provider from a sourced
+3. **Calendar presentation:** choose the first additional provider from a sourced
    Tempo scenario and independent equal-day fixtures. Hebrew presentation is a
    candidate requiring stable leap-month identity and declared capabilities.
    Retaining a calendar annotation can ship before conversion; presentation

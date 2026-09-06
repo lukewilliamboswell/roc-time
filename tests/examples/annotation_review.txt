@@ -1,0 +1,4 @@
+Review imported timestamp annotations
+2022-07-08T00:14:07Z[Europe/Paris] -> Paris clock 02:14:07
+2022-07-08T00:14:07+00:00[Europe/Paris] -> offset assertion conflicts with supplied Paris rules
+2022-07-08T00:14:07Z[Europe/Paris][u-ca=hebrew] -> calendar preference preserved; presentation unsupported

@@ -12,22 +12,20 @@ general uncertainty reasoning and provider-wide measurements do not block the
 first bounded adapters. Each slice still requires its own correctness and
 resource evidence.
 
-1. Implement exact interval booking input/output and IXDTF annotations using
-   the shared timestamp declaration (R01–R02, R07–R09, R14–R16).
-2. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
+1. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
    selected EDTF endpoint, qualification, mask and set forms (R13–R14). Preserve
    descriptions before implementing broader interpretation; never substitute
    year starts for uncertain endpoints or treat unsupported reasoning as success.
-3. Add bounded semantic explanation and versioned persistence alongside these
+2. Add bounded semantic explanation and versioned persistence alongside these
    adapters, using shared typed facts and explicit interpretation snapshots.
    Keep standards interchange separate from the native persistence format.
-4. Extend calendar presentation and conversion for a sourced caller scenario.
+3. Extend calendar presentation and conversion for a sourced caller scenario.
    Separate stable month identity and provider capabilities before calendars
    beyond the Gregorian/Julian shape; preserve unsupported presentation requests.
-5. Complete remaining [recurrence execution](recurrence.md), provider evidence
+4. Complete remaining [recurrence execution](recurrence.md), provider evidence
    and broader reasoning. Preserve series state across windows and resumptions.
    Bring a deliverable forward when a selected interchange scenario needs it.
-6. Complete public examples and evidence across all requirements, including
+5. Complete public examples and evidence across all requirements, including
    resource measurements and supported backend checks (R15–R16).
 
 Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracle method](../AGENTS.md#oracle-evidence) for each slice. Do not change the architecture merely to record implementation progress.
