@@ -17,6 +17,9 @@ import time.ZoneRules
 import time.CalendarPattern
 import time.DateRecurrence
 import time.GregorianDate
+import time.RfcTimedRule
+import time.RfcPeriod
+import time.RfcDuration
 import time.RfcDateRule
 
 # R11–R12: a finite calendar-table model, independent of CalendarPattern and
@@ -148,6 +151,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				month = month + 1
 			}
 		}
+		check_boundary_cutoff(input)
 		check_subdaily(input)
 		check_timed(input, anchor, pattern, window, expected)
 		# Direct ordered set model; deliberately not the cursor's two-stream merge.
@@ -459,7 +463,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		}
 	}
 	check_timed_batches(current, input.work.to_u64(), expected_sources, expected_boundaries)
-	check_schedule(rule, { start, end }, rules, input.work.to_u64(), expected_sources, expected_boundaries, anchor, anchor_clock, input.exclude_anchor)
+	check_schedule(rule, { start, end }, rules, input.work.to_u64(), expected_sources, expected_boundaries, anchor, anchor_clock, input.exclude_anchor, input)
 
 	var sources = []
 	var boundaries = []
@@ -483,7 +487,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 				current = progress.cursor
 			}
 			Item(item) => {
-				check_duration(item.occurrence)
+				check_duration(item.occurrence, input.work)
 				sources = sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
 				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
 				match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
@@ -669,7 +673,40 @@ check_subdaily = |input| {
 
 # In fixed UTC, one calendar day plus one coordinate hour is exactly 25
 # coordinate hours. The same source with a fixed one-hour duration stays 1h.
-check_duration = |start| {
+check_duration = |start, amount| {
+	# Generated H/M/S fields use an independent integer-second oracle. Parse,
+	# canonical reparse and shared occurrence execution all retain that width.
+	weeks = match RfcDuration.parse("P${amount.to_str()}W") {
+		Ok(value) => value
+		Err(_) => crash "valid generated weeks rejected"
+	}
+	if RfcDuration.components(weeks) != { days: amount.to_i64() * 7, seconds: 0.I64 } or RfcDuration.parse(RfcDuration.to_text(weeks)) != Ok(weeks) {
+		crash "nominal weeks differ from seven-day model"
+	}
+	text = "PT${amount.to_str()}H${amount.to_str()}M${amount.to_str()}S"
+	parsed = match RfcDuration.parse(text) {
+		Ok(value) => value
+		Err(_) => crash "valid generated duration rejected"
+	}
+	if RfcDuration.parse(RfcDuration.to_text(parsed)) != Ok(parsed) or RfcDuration.parse("${text}S") != Err(Malformed) {
+		crash "duration grammar or semantic round trip"
+	}
+	parsed_cursor = match TimedOccurrence.cursor(42.U64, start, RfcDuration.to_duration(parsed)) {
+		Ok(value) => value
+		Err(_) => crash "parsed duration construction"
+	}
+	parsed_batch = match TimedOccurrence.Cursor.collect(parsed_cursor, { max_segments: 0, max_candidates: 0 }) {
+		Ok(value) => value
+		Err(_) => crash "parsed duration execution"
+	}
+	expected_width = amount.to_i64() * 3661000000
+	match parsed_batch.status {
+		Complete(value) => if PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(expected_width)) {
+			crash "parsed duration differs from integer-second oracle"
+		}
+		Limited(_) => crash "coordinate duration used zone budget"
+	}
+
 	base = PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(start))
 	for duration in [Coordinate(PosixDelta.from_microseconds(3600000000)), Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })] {
 		cursor = match TimedOccurrence.cursor(42.U64, start, duration) {
@@ -696,7 +733,7 @@ check_duration = |start| {
 
 # Independent UTC grid: calendar day plus hour has a 25-hour coordinate width.
 # One shared zone step forces a pause between start and end interpretation.
-check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries, anchor, anchor_clock, exclude_anchor| {
+check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries, anchor, anchor_clock, exclude_anchor, input| {
 	inclusions = [{ date: date(2024, 1, 1), clock: clock(9) }, { date: date(2024, 2, 4), clock: clock(9) }, { date: anchor, clock: anchor_clock }, { date: date(2024, 2, 4), clock: clock(9) }]
 	rule = match TimedRecurrence.with_inclusions(base_rule, inclusions) {
 		Ok(value) => value
@@ -748,11 +785,64 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	short = Coordinate(PosixDelta.from_microseconds(work.to_i64_wrap() * 3600000000))
 	extra : TimedOccurrence.Duration
 	extra = Calendar({ delta: CalendarDelta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
-	overrides = [{ source: anchor_source, duration: short }, { source: extra_source, duration: extra }, { source: anchor_source, duration: short }]
-	var current = match TimedSchedule.new_with_overrides(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	anchor_boundary = match FixedOffset.resolve(FixedOffset.from_seconds(0), anchor_source) {
 		Ok(value) => value
-		Err(_) => crash "schedule construction"
+		Err(_) => crash "fixture anchor"
 	}
+	anchor_end = match PosixBoundary.shift(anchor_boundary, PosixDelta.from_microseconds(work.to_i64_wrap() * 3600000000)) {
+		Ok(value) => value
+		Err(_) => crash "fixture end"
+	}
+	# Explicit endpoint overrides retain the same independent UTC widths.
+	# Alternate duration and explicit forms; duplicates are one definition.
+	short_ending = if exclude_anchor {
+		After(short)
+	} else {
+		AtBoundary(anchor_end)
+	}
+	extra_ending = if exclude_anchor {
+		After(extra)
+	} else {
+		AtLocal({ source: local(date(2024, 2, 6), 9), occurrence: First, gap: UseOffsetBeforeGap })
+	}
+	overrides = [{ source: anchor_source, ending: short_ending }, { source: extra_source, ending: extra_ending }, { source: anchor_source, ending: short_ending }]
+	var current = if exclude_anchor {
+		match TimedSchedule.new_with_endings(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+			Ok(value) => value
+			Err(_) => crash "schedule construction"
+		}
+	} else {
+		fields = GregorianDate.to_fields(anchor)
+		hour = ClockTime.to_fields(anchor_clock).hour
+		hour_text = if hour < 10 {
+			"0${hour.to_str()}"
+		} else {
+			hour.to_str()
+		}
+		start_text = "202401${fields.day.to_str()}T${hour_text}0000"
+		anchor_text = "${start_text}/PT${work.to_str()}H"
+		anchor_period = match RfcPeriod.parse(anchor_text) {
+			Ok(value) => value
+			Err(_) => crash "generated anchor period"
+		}
+		if RfcPeriod.parse(RfcPeriod.to_text(anchor_period)) != Ok(anchor_period) {
+			crash "period semantic text round trip"
+		}
+		selectors = if input.last_monday {
+			";BYDAY=MO;BYSETPOS=-1"
+		} else {
+			""
+		}
+		parsed = match RfcTimedRule.parse({ start: start_text, rule: "FREQ=MONTHLY;INTERVAL=${input.interval.to_str()};COUNT=${input.count.to_str()};BYHOUR=9,17${selectors}", mode: Zoned, duration: "P1DT1H", inclusions: ["20240101T090000", "20240204T090000", start_text, "20240204T090000"], exclusions: [], periods: [anchor_text, "20240204T090000/20240206T090000", anchor_text] }) {
+			Ok(value) => value
+			Err(_) => crash "generated timed RFC rule rejected"
+		}
+		match RfcTimedRule.schedule(42.U64, parsed, window, Local(rules)) {
+			Ok(value) => value
+			Err(_) => crash "timed RFC schedule adaptation"
+		}
+	}
+
 	var index = 0.U64
 	var calls = 0.U64
 	while calls < 10000 {
@@ -799,4 +889,90 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		calls = calls + 1
 	}
 	crash "schedule failed to make bounded progress"
+}
+
+# Independent small source grid, with one explicitly modeled offset jump.
+# Filter by resolved boundary without assuming that source order is UTC order.
+check_boundary_cutoff = |input| {
+	d = date(1970, 1, 1)
+	cutoff = input.count.to_i64() * 1800000000
+	rule = match TimedRecurrence.new({ date: d, clock: clock(0) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2, 3, 4, 5], minutes: [0, 30], seconds: [] }, termination: UntilBoundary(PosixBoundary.from_microseconds(cutoff)), by_set_pos: [] }) {
+		Ok(value) => value
+		Err(_) => crash "cutoff grid rule"
+	}
+	validity = cutoff_span(-86400000000, 172800000000)
+	offset = if input.exclude_anchor {
+		-3600.I32
+	} else {
+		3600.I32
+	}
+	rules = match ZoneRules.new_bounded(
+		"Synthetic/Grid",
+		"v1",
+		validity,
+		FixedOffset.from_seconds(0),
+		[{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(offset) }],
+		{
+			minimum: if offset < 0 {
+				offset
+			} else {
+				0
+			},
+			maximum: if offset > 0 {
+				offset
+			} else {
+				0
+			},
+		},
+	) {
+		Ok(value) => value
+		Err(_) => crash "grid rules"
+	}
+	var expected = []
+	for half_hour in [0.I64, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] {
+		source = half_hour * 1800000000
+		boundary = if offset > 0 and source >= 10800000000 {
+			source - 3600000000
+		} else if offset < 0 and source >= 7200000000 {
+			source + 3600000000
+		} else {
+			source
+		}
+		if boundary <= cutoff {
+			expected = expected.append({ source, boundary })
+		}
+	}
+	var cursor = match TimedRecurrence.cursor(rule, { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, { rules, occurrence: First, gap: UseOffsetBeforeGap }) {
+		Ok(value) => value
+		Err(_) => crash "grid cursor"
+	}
+	var observed = []
+	var calls = 0.U64
+	while calls < 500 {
+		batch = match TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "grid cutoff execution"
+		}
+		for value in batch.occurrences {
+			observed = observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))), boundary: PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)) })
+		}
+		match batch.status {
+			Complete => {
+				if observed != expected {
+					crash "UTC cutoff differs from piecewise offset grid"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				cursor = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "cutoff grid did not terminate under finite resumption budget"
+}
+
+cutoff_span = |lower, upper| match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
+	Ok(value) => value
+	Err(_) => crash "valid cutoff fixture span"
 }

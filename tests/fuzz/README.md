@@ -25,7 +25,7 @@ decoders, and the named-case replay checks validate that contract.
 | `offsets-v1` | R01/R07/R08: full I64 POSIX coordinates with limit bias and full I32 offsets; both calendar projections, exact round trips, explicit offset sign and final range errors; immutable rule lookup against an independent step-function model, including excluded validity endpoints. RFC 3339 section 4.2 supplies a separate sign-convention fixture. |
 | `events-v1` | R10: up to twelve spans with source-order U64 identities, bounded numeric starts/widths; independent cell membership verifies contributor partitions, coverage projection and disconnected clipping, with duplicate-ID rejection and retained/shared source entries. |
 | `patterns-v1` | R11 candidate layer: full Gregorian years with limit/year-zero bias, monthly intervals 1–3 and period indices 0–6; month-field walking verifies period bounds, and an independently enumerated 400-year weekday cycle checks signed month-day/weekday-position intersections. Zero selectors and out-of-range exclusive ends must fail explicitly. Fixed/source oracle cases cover the other date-selector combinations. |
-| `recurrence-v1` | R11–R12/R14: 2024–2025 monthly schedules on day 31 or the last Monday, intervals 1–3, COUNT 1–6, duplicate inclusions, exclusions and query starts in every month. An independent month-table/weekday walk builds the finite set before query filtering. Native resumptions with 1–128 work steps and one output slot, and equivalent parsed RFC date values, must yield exactly that set. Duplicate COUNT parts must fail. Fixed tests add UNTIL, positive positions, zero/reduced buffer limits and provider endpoints. |
+| `recurrence-v1` | R11–R12/R14: 2024–2025 monthly schedules on day 31 or the last Monday, intervals 1–3, COUNT 1–6, duplicate inclusions, exclusions and query starts in every month. An independent month-table/weekday walk builds the finite set before query filtering. Native resumptions with 1–128 work steps and one output slot, and equivalent parsed RFC date values, must yield exactly that set. Duplicate COUNT parts must fail. Generated positive RFC H/M/S durations lower through TimedOccurrence and agree with an independent integer-second sum, without zone work; canonical text reparses semantically and malformed suffixes fail. The schedule model alternates native ending overrides with parsed RfcPeriod additions, preserving existing inclusions, source identities and UTC-grid widths under resumption. A separate half-hour grid with a forward or backward offset jump filters native UntilBoundary results against a piecewise arithmetic model, with one zone segment per resumption. Fixed tests add UNTIL, positive positions, zero/reduced buffer limits and provider endpoints. |
 | `zones-v1` | R07: two synthetic transitions imported through the structural database adapter, offsets -2 through 2 seconds, local labels within a complete finite rule domain and arbitrary microsecond fractions; classification, explicit occurrence policies, snapshot provenance/re-resolution and half-second selection membership compared with independent timeline-cell enumeration. Fixed fixtures add three-occurrence folds, a skipped local day and incomplete-domain errors. |
 
 The recurrence target also compares `next`, stopped/resumed scalar folds and
@@ -79,12 +79,20 @@ all bytes and replays it successfully. This verifies the failure pipeline; it
 is intentionally separate from the passing semantic targets and is not claimed
 as a roc-time bug. The lifecycle check repeats these assertions in normal CI.
 
+The offsets target also drives `RfcDateTime` with generated whole-second labels
+on the days immediately before and after the epoch. An independent integer-second
+grid checks UTC boundaries, local values must require context, canonical text
+retains UTC/local form, and numeric-offset suffixes are rejected.
+
 ## Verified execution
 
-On Apple Silicon macOS, all nine targets built from the release URL, replayed
-the curated inputs, and passed 10,000 runs each with seed 1, 5-second maximum,
-256-byte input maximum, 256 MB RSS limit, and 2-second per-input timeout.
-Coverage counters were present. Exact runnable commands live in CONTRIBUTING.md
-and `scripts/fuzz.py`. Linux x86-64/musl is configured from the upstream platform
-and must pass the CI gate, but runtime execution has not been verified locally.
+Apple Silicon macOS and Linux x86-64/musl have verified execution through the
+pinned release platform. The Linux gate covers all twelve semantic targets,
+curated replay and the failure lifecycle using LLVM speed with `--fuzz`, compiler
+`nightly-2026-09-04-c125b82` and roc-fuzz 0.3.0
+(`ec137edcf0fa2530e3dbb175fec4ddff5281cc6d`). Searches use seed 1, at most
+10,000 runs or 5 seconds, a 256-byte input maximum, 256 MB RSS limit and a
+2-second per-input timeout. A time-limited campaign may execute fewer than
+10,000 inputs; these finite searches do not establish exhaustive correctness.
+Exact runnable commands live in CONTRIBUTING.md and `scripts/fuzz.py`.
 Other host/architecture combinations explicitly report fuzz checks as unverified.

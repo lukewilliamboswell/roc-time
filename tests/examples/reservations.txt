@@ -1,0 +1,4 @@
+Equipment reservations (UTC)
+January 1: 780 POSIX minutes
+January 2: 60 POSIX minutes
+January 3: 330 POSIX minutes

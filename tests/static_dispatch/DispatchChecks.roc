@@ -1,3 +1,6 @@
+import time.RfcPeriod
+import time.RfcDateTime
+import time.RfcDuration
 import time.CivilDay
 import time.GregorianDate
 import time.PosixBoundary
@@ -30,6 +33,22 @@ DispatchChecks :: [].{
 					Dict.get(Dict.insert(Dict.empty(), PosixDelta.from_microseconds(a), 7.U64), PosixDelta.from_microseconds(a)) != Ok(7) {
 				return Err(Failed)
 			}
+		}
+		period = parse_period("19970101T180000Z/PT1H")?
+		same_period = parse_period("19970101t180000z/+PT60M")?
+		if period != same_period or Dict.get(Dict.insert(Dict.empty(), period, 23.U64), same_period) != Ok(23) or Str.inspect(period) != "RfcPeriod(19970101T180000Z/PT3600S)" {
+			return Err(Failed)
+		}
+		utc = parse_datetime("19700101T000000Z")?
+		lower = parse_datetime("19700101t000000z")?
+		local = parse_datetime("19700101T000000")?
+		if utc != lower or utc == local or Dict.get(Dict.insert(Dict.empty(), utc, 19.U64), lower) != Ok(19) or Str.inspect(local) != "RfcDateTime(19700101T000000, Local)" {
+			return Err(Failed)
+		}
+		week = parse_duration("P1W")?
+		days = parse_duration("P7D")?
+		if week != days or Dict.get(Dict.insert(Dict.empty(), week, 17.U64), days) != Ok(17) or Str.inspect(week) != "RfcDuration(P7D)" {
+			return Err(Failed)
 		}
 		first = GregorianDate.from_fields({ year: -1, month: 12, day: 31 })?
 		next = GregorianDate.from_fields({ year: 0, month: 1, day: 1 })?
@@ -85,4 +104,22 @@ DispatchChecks :: [].{
 		}
 		Ok({})
 	}
+}
+
+parse_duration : Str -> Try(RfcDuration, [Failed, ..])
+parse_duration = |text| match RfcDuration.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+parse_datetime : Str -> Try(RfcDateTime, [Failed, ..])
+parse_datetime = |text| match RfcDateTime.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+parse_period : Str -> Try(RfcPeriod, [Failed, ..])
+parse_period = |text| match RfcPeriod.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
 }

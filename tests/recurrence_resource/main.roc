@@ -316,6 +316,26 @@ main! = |args| {
 		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
+	cutoff_rule = match TimedRecurrence.new_subdaily({ date: anchor, clock: clock_anchor }, { pattern: { frequency: Secondly, interval: 1, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } }, termination: UntilBoundary(PosixBoundary.from_microseconds(I64.highest)), by_set_pos: [] }) {
+		Ok(value) => value
+		Err(_) => crash "cutoff resource rule"
+	}
+	cutoff_before = Host.allocated_bytes!({})
+	cutoff_cursor = match TimedRecurrence.cursor(cutoff_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "cutoff resource cursor"
+	}
+	cutoff_constructed = Host.allocated_bytes!({})
+	cutoff_first = match TimedRecurrence.Cursor.next(cutoff_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "cutoff resource prefix"
+	}
+	cutoff_after = Host.allocated_bytes!({})
+	Host.assert!(cutoff_constructed - cutoff_before <= ceiling and cutoff_after - cutoff_constructed <= ceiling and cutoff_first.steps <= 8 and cutoff_first.zone_segments == 1)
+	match cutoff_first.status {
+		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		_ => Host.assert!(False)
+	}
 	var exclusions = []
 	var exclusion_index = 1.I64
 	exclusion_count = if year > 2001 {
@@ -385,6 +405,39 @@ main! = |args| {
 	match duration_result.status {
 		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
 		Complete(_) => Host.assert!(False)
+	}
+	# Explicit endpoints use the same bounded classifier, with rules retained
+	# outside the measurement. The resolved form needs no classification.
+	explicit_label = classification_label(86400500000)
+	explicit_before = Host.allocated_bytes!({})
+	explicit_cursor = match TimedOccurrence.cursor_with_ending(3.U64, duration_source, AtLocal({ source: explicit_label, occurrence: First, gap: RejectGap })) {
+		Ok(value) => value
+		Err(_) => crash "explicit end cursor"
+	}
+	explicit_result = match TimedOccurrence.Cursor.collect(explicit_cursor, { max_segments: 1, max_candidates: 1 }) {
+		Ok(value) => value
+		Err(_) => crash "explicit end step"
+	}
+	explicit_after = Host.allocated_bytes!({})
+	Host.assert!(explicit_result.segments == 1 and explicit_after - explicit_before <= ceiling)
+	match explicit_result.status {
+		Limited(progress) => Host.assert!(progress.reason == WorkLimit)
+		Complete(_) => Host.assert!(False)
+	}
+	resolved_before = Host.allocated_bytes!({})
+	resolved_cursor = match TimedOccurrence.cursor_with_ending(4.U64, saved_start, AtBoundary(PosixBoundary.from_microseconds(I64.highest))) {
+		Ok(value) => value
+		Err(_) => crash "resolved end cursor"
+	}
+	resolved_result = match TimedOccurrence.Cursor.collect(resolved_cursor, { max_segments: 0, max_candidates: 0 }) {
+		Ok(value) => value
+		Err(_) => crash "resolved end step"
+	}
+	resolved_after = Host.allocated_bytes!({})
+	Host.assert!(resolved_result.segments == 0 and resolved_after - resolved_before <= ceiling)
+	match resolved_result.status {
+		Complete(value) => Host.assert!(PosixSpan.end(TimedOccurrence.span(value)) == PosixBoundary.from_microseconds(I64.highest))
+		Limited(_) => Host.assert!(False)
 	}
 	# Consume only one composed appointment from the full clock/day product.
 	# One zone segment resolves its start; a second resolves the calendar end.
@@ -513,7 +566,7 @@ main! = |args| {
 	}
 	Host.assert!(override_first.steps <= 8 and override_first.zone_segments == 1 and override_after - override_before <= ceiling)
 
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before, override_after - override_before] }
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before, override_after - override_before, explicit_after - explicit_before, resolved_after - resolved_before, cutoff_constructed - cutoff_before, cutoff_after - cutoff_constructed] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {

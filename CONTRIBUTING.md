@@ -119,7 +119,15 @@ with 17 work steps and one output slot per batch. Regenerate with
 `python3 scripts/generate_rfc_date_oracle.py /path/to/wheel-directory` using the
 same pinned dateutil/six wheels. The manifest records its semantic intersection;
 it excludes timed rules, week-number selectors and disputed omitted yearly
-fields. Fixed parser tests cover malformed inputs and profile boundaries.
+fields. Replay also lifts every case to UTC midnight through `RfcTimedRule`,
+checking the same independently generated dates and one-day occurrence widths.
+That extension tests the shared date/timed semantic intersection, not subdaily
+selectors, zone transitions or general timed conformance. Fixed parser tests
+cover malformed inputs and profile boundaries.
+
+Valid forward Gregorian cases in years 0001–9999 also exercise `RfcDateTime`
+parsing and explicit UTC midnight conversion against the same expected day.
+This covers calendar-date interpretation, not named zones or leap seconds.
 
 Gregorian expectations come from CPython 3.14.3 `datetime` for years 1–9999 and
 a 400-year table model outside that range. The model extension is not direct
@@ -178,8 +186,8 @@ each semantic target, and the deliberately failing harness lifecycle. Searches
 also bound raw inputs to 256 bytes, RSS to 256 MB, and each target call to two
 seconds. Builds, corpora, failure artifacts, and logs stay under `.roc-time-tmp/`
 by default; `ROC_TIME_TMPDIR` selects a different disposable working directory.
-Apple Silicon macOS is verified; Linux x86-64/musl is configured for CI but has
-not been executed locally. Other hosts explicitly report fuzzing as unverified.
+Apple Silicon macOS and Linux x86-64/musl have verified native fuzz execution.
+Other hosts explicitly report fuzzing as unverified.
 See [target domains and corpus provenance](tests/fuzz/README.md).
 
 For a saved failure, run these commands from a directory under `.roc-time-tmp/`
@@ -262,7 +270,9 @@ for its terminal zero-work result. These accommodate measured traffic on the
 pinned compiler. Schedule checks also pause between start and calendar-end
 interpretation, then resume with zero source work under the shared zone budget.
 A secondly recurrence over the same horizons separately verifies that seeking
-and consuming one clock period stays within the base budget. Source-exclusion
+and consuming one clock period stays within the base budget. A POSIX cutoff at
+I64.highest separately measures cursor construction (including its conservative
+local source bound) and first consumption, each under the base budget. Source-exclusion
 lookup is checked with 16 and 4096 normalized labels. Inclusion merging also
 compares 16 and 4096 explicit starts, interpreting one pre-anchor inclusion
 beside a retained rule start under the same budgets. Duration-override lookup
@@ -271,7 +281,10 @@ construction outside the measured prefix scope. Fixed-duration construction must
 segments; calendar-duration end resolution must pause after one segment in
 both short and long transition tables, with start resolution outside its scope.
 The calendar end lies in every fold segment, so one inspected segment cannot
-establish a complete result.
+establish a complete result. An explicit local end repeats this bounded prefix
+check against both table sizes. A resolved explicit end separately consumes zero
+zone work, including an endpoint at the greatest I64 boundary. Each has its own
+4 KiB requested-byte ceiling; short/long-table traffic must match.
 These are explicit traffic budgets, not claims of live memory or zero-cost
 iteration. Short/vast traffic must still match exactly.
 A five-second process deadline catches catastrophic hidden traversal, and a
@@ -280,9 +293,10 @@ bounds for this shared-cursor workload, not exact allocation or retained-memory
 contracts. Review ceiling changes against measured operations and ownership;
 do not raise them merely to make a regression pass.
 
-The host is test-only and adds no package dependency. Apple Silicon native
-execution is verified. Linux x86-64/musl is configured with pinned linker inputs;
-other targets remain unsupported by this fixture host. Provenance and licenses
+The host is test-only and adds no package dependency. Apple Silicon macOS and
+Linux x86-64/musl native execution are verified, including dev/speed resource
+assertions and failing controls. Linux uses pinned linker inputs; other targets
+remain unsupported by this fixture host. Provenance and licenses
 are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 ## Packaging

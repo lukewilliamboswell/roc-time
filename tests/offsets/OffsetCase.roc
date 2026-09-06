@@ -1,3 +1,4 @@
+import time.RfcDateTime
 import fuzz.Fuzz
 import time.FixedOffset
 import time.PosixBoundary
@@ -25,6 +26,38 @@ OffsetCase := { number : I64, seconds : I32 }.{
 
 	check : OffsetCase -> Fuzz.Outcome
 	check = |input| {
+		# R02/R14: independent epoch-day clock grid, including the preceding
+		# day. The parser receives text, never the expected coordinate.
+		seconds = I64.mod_by(input.seconds.to_i64(), 86400)
+		hour = seconds // 3600
+		minute = I64.mod_by(seconds // 60, 60)
+		second = I64.mod_by(seconds, 60)
+		date_text = if input.number < 0 {
+			"19691231"
+		} else {
+			"19700101"
+		}
+		text = "${date_text}T${two(hour)}${two(minute)}${two(second)}"
+		parsed = match RfcDateTime.parse("${text}Z") {
+			Ok(value) => value
+			Err(_) => crash "valid epoch grid text rejected"
+		}
+		parsed_local = match RfcDateTime.parse(text) {
+			Ok(value) => value
+			Err(_) => crash "valid local grid text rejected"
+		}
+		expected_micros = (
+			seconds - (
+				if input.number < 0 {
+					86400
+				} else {
+					0
+				}
+			)
+		) * 1000000
+		if RfcDateTime.utc_boundary(parsed) != Ok(PosixBoundary.from_microseconds(expected_micros)) or RfcDateTime.utc_boundary(parsed_local) != Err(NeedsContext) or parsed == parsed_local or RfcDateTime.parse(RfcDateTime.to_text(parsed)) != Ok(parsed) or RfcDateTime.parse("${text}+0000") != Err(Malformed) {
+			crash "RFC value differs from epoch grid or lost UTC/local form"
+		}
 		boundary = PosixBoundary.from_microseconds(input.number)
 		offset = FixedOffset.from_seconds(input.seconds)
 		span = rule_span(I64.lowest, I64.highest)
@@ -75,4 +108,11 @@ OffsetCase := { number : I64, seconds : I32 }.{
 rule_span = |lower, upper| match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
 	Ok(value) => value
 	Err(_) => crash "valid synthetic rule range rejected"
+}
+
+two : I64 -> Str
+two = |value| if value < 10 {
+	"0${value.to_str()}"
+} else {
+	value.to_str()
 }

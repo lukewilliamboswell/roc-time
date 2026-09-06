@@ -1,3 +1,13 @@
+import time.RfcTimedRule
+import time.RfcDateTime
+import time.TimedSchedule
+import time.TimedOccurrence
+import time.TimedRecurrence
+import time.LocalDateTime
+import time.CalendarDate
+import time.ClockTime
+import time.PosixSpan
+import time.PosixDelta
 import time.RfcDateRule
 import time.DateRecurrence
 import time.GregorianDate
@@ -60,7 +70,11 @@ observe = |input| {
 	if complete == False {
 		crash "Oracle cursor did not finish"
 	}
-	Str.join_with(result, "\t")
+	observed = Str.join_with(result, "\t")
+	if observe_timed(input) != observed {
+		crash "Timed UTC lifting differs from date oracle"
+	}
+	observed
 }
 
 values = |text| if text == "-" {
@@ -101,3 +115,63 @@ pad = |value| if value < 10 {
 
 expect DateOracle.verify([{ input: ["20240101", "FREQ=DAILY;COUNT=1", "-", "-", "20240101", "20240102"], expected: "ok\t20240101" }]) == Ok(1)
 expect DateOracle.verify([{ input: ["20240101", "FREQ=DAILY;COUNT=1", "-", "-", "20240101", "20240102"], expected: "wrong" }]) == Err(Mismatch(0))
+
+# Lift the pinned DATE corpus to UTC midnights. This semantic intersection
+# preserves dates, COUNT/UNTIL, BY positions and exclusions without zone changes.
+# Expectations still come from the checked-in dateutil corpus, never roc-time.
+observe_timed = |input| {
+	var parts = []
+	for part in at(input, 1).split_on(";") {
+		parts = parts.append(
+			if part.starts_with("UNTIL=") or part.starts_with("until=") {
+				"${part}T000000Z"
+			} else {
+				part
+			},
+		)
+	}
+	parsed = match RfcTimedRule.parse({ start: "${at(input, 0)}T000000Z", rule: Str.join_with(parts, ";"), mode: Utc, duration: "P1D", inclusions: timed_values(at(input, 2)), exclusions: timed_values(at(input, 3)), periods: [] }) {
+		Ok(value) => value
+		Err(error) => crash "Timed oracle rule rejected: ${Str.inspect(error)}"
+	}
+	window = { start: midnight_label(at(input, 4)), end: midnight_label(at(input, 5)) }
+	var cursor = match RfcTimedRule.schedule({}, parsed, window, Utc) {
+		Ok(value) => value
+		Err(_) => crash "Timed oracle window rejected"
+	}
+	var output = ["ok"]
+	var calls = 0.U64
+	while calls < 10000 {
+		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "Timed oracle execution failed"
+		}
+		for value in batch.occurrences {
+			source = TimedRecurrence.Occurrence.source(TimedOccurrence.start(value))
+			fields = CalendarDate.to_fields(LocalDateTime.date(source))
+			if ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(source)) != 0 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(86400000000)) {
+				crash "Timed midnight lifting changed clock or width"
+			}
+			output = output.append("${fields.year.to_str()}${pad(fields.month)}${pad(fields.day)}")
+		}
+		match batch.status {
+			Complete => return Str.join_with(output, "\t")
+			Limited(progress) => {
+				cursor = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	crash "Timed oracle failed to terminate"
+}
+
+timed_values = |text| if text == "-" {
+	[]
+} else {
+	text.split_on(",").map(|value| "${value}T000000Z")
+}
+
+midnight_label = |text| match RfcDateTime.parse("${text}T000000Z") {
+	Ok(value) => RfcDateTime.local_label(value)
+	Err(_) => crash "Valid oracle midnight"
+}

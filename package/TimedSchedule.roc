@@ -15,6 +15,7 @@ import ZoneRules
 ## Identified appointment spans in source-label order. The window selects
 ## starts; duration may extend beyond it. IDs preserve the series and source.
 ## Start and end interpretation share one zone-work budget per call.
+## `new_with_endings` supports source-specific duration or explicit-end overrides.
 ##
 ## Example
 ##
@@ -86,7 +87,8 @@ import ZoneRules
 ## When a batch returns `Limited`, process its partial output and resume the returned
 ## cursor with sufficient budgets. Increasing only the output cap does not fix a
 ## work or buffer limit.
-TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrides : List(Override), starts : TimedRecurrence.Cursor, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, pending : [None, Some(TimedOccurrence.Cursor({ series : id, source : LocalDateTime }))] }.{
+TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrides : List(EndOverride), starts : TimedRecurrence.Cursor, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, pending : [None, Some(TimedOccurrence.Cursor({ series : id, source : LocalDateTime }))] }.{
+	EndOverride : { source : LocalDateTime, ending : TimedOccurrence.Ending }
 	Override : { source : LocalDateTime, duration : TimedOccurrence.Duration }
 	Limits : TimedRecurrence.Limits
 	Limit : [StartWorkLimit, StartBufferLimit, StartZoneWorkLimit, StartZoneBufferLimit, EndZoneWorkLimit, EndZoneBufferLimit, OutputLimit]
@@ -110,6 +112,17 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	new_with_overrides : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(Override), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingDuration(LocalDateTime), ..])
 	new_with_overrides = |series, rule, window, duration, inputs, context| {
 		overrides = normalize_overrides(inputs)?
+		base = new(series, rule, window, duration, context)?
+		Ok({ ..base, overrides })
+	}
+
+	## Override a source with a duration or explicit end, without adding starts.
+	## The same 4096-entry limit and positional lookup apply. Equal definitions
+	## coalesce; different definitions at one position return ConflictingEnding.
+	## Endpoint order is checked after the start and end are interpreted.
+	new_with_endings : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(EndOverride), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	new_with_endings = |series, rule, window, duration, inputs, context| {
+		overrides = normalize_endings(inputs)?
 		base = new(series, rule, window, duration, context)?
 		Ok({ ..base, overrides })
 	}
@@ -149,7 +162,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 					}
 					Item(item) => {
 						identity = { series: state.series, source: TimedRecurrence.Occurrence.source(item.occurrence) }
-						pending = match TimedOccurrence.cursor(identity, item.occurrence, duration_at(state.overrides, identity.source, state.duration)) {
+						pending = match TimedOccurrence.cursor_with_ending(identity, item.occurrence, ending_at(state.overrides, identity.source, state.duration)) {
 							Ok(value) => value
 							Err(error) => return Err(error)
 						}
@@ -348,13 +361,31 @@ expect {
 	}
 }
 
-normalize_overrides : List(TimedSchedule.Override) -> Try(List(TimedSchedule.Override), [InvalidDuration, TooManyOverrides, ConflictingDuration(LocalDateTime), ..])
+normalize_overrides : List(TimedSchedule.Override) -> Try(List(TimedSchedule.EndOverride), [InvalidDuration, TooManyOverrides, ConflictingDuration(LocalDateTime), ..])
 normalize_overrides = |inputs| {
 	if inputs.len() > 4096 {
 		return Err(TooManyOverrides)
 	}
+	match normalize_endings(inputs.map(|input| { source: input.source, ending: After(input.duration) })) {
+		Ok(value) => Ok(value)
+		Err(InvalidDuration) => Err(InvalidDuration)
+		Err(TooManyOverrides) => Err(TooManyOverrides)
+		Err(ConflictingEnding(source)) => Err(ConflictingDuration(source))
+	}
+}
+
+normalize_endings : List(TimedSchedule.EndOverride) -> Try(List(TimedSchedule.EndOverride), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+normalize_endings = |inputs| {
+	if inputs.len() > 4096 {
+		return Err(TooManyOverrides)
+	}
 	for input in inputs {
-		TimedOccurrence.validate_duration(input.duration)?
+		match input.ending {
+			After(duration) => {
+				TimedOccurrence.validate_duration(duration)?
+			}
+			_ => {}
+		}
 	}
 	sorted = inputs.sort_with(
 		|a, b| match LocalDateTime.compare_position(a.source, b.source) {
@@ -369,8 +400,8 @@ normalize_overrides = |inputs| {
 		distinct = match previous {
 			None => Bool.True
 			Some(value) => if LocalDateTime.same_position(value.source, input.source) {
-				if !same_duration_definition(value.duration, input.duration) {
-					return Err(ConflictingDuration(input.source))
+				if !same_ending_definition(value.ending, input.ending) {
+					return Err(ConflictingEnding(input.source))
 				}
 				Bool.False
 			} else {
@@ -385,8 +416,8 @@ normalize_overrides = |inputs| {
 	Ok(result)
 }
 
-duration_at : List(TimedSchedule.Override), LocalDateTime, TimedOccurrence.Duration -> TimedOccurrence.Duration
-duration_at = |overrides, source, fallback| {
+ending_at : List(TimedSchedule.EndOverride), LocalDateTime, TimedOccurrence.Duration -> TimedOccurrence.Ending
+ending_at = |overrides, source, fallback| {
 	var lower = 0.U64
 	var upper = overrides.len()
 	while lower < upper {
@@ -396,7 +427,7 @@ duration_at = |overrides, source, fallback| {
 			Err(_) => crash "override binary search invariant"
 		}
 		match LocalDateTime.compare_position(entry.source, source) {
-			EQ => return entry.duration
+			EQ => return entry.ending
 			LT => {
 				lower = middle + 1
 			}
@@ -405,7 +436,15 @@ duration_at = |overrides, source, fallback| {
 			}
 		}
 	}
-	fallback
+	After(fallback)
+}
+
+same_ending_definition : TimedOccurrence.Ending, TimedOccurrence.Ending -> Bool
+same_ending_definition = |a, b| match (a, b) {
+	(After(left), After(right)) => same_duration_definition(left, right)
+	(AtBoundary(left), AtBoundary(right)) => left == right
+	(AtLocal(left), AtLocal(right)) => left.source == right.source and left.occurrence == right.occurrence and left.gap == right.gap
+	_ => Bool.False
 }
 
 # Compare input meaning, not the extent of a particular resolved occurrence.
@@ -543,4 +582,25 @@ expect {
 	first = batch.occurrences.get(0)?
 	second = batch.occurrences.get(1)?
 	batch.occurrences.len() == 2 and TimedOccurrence.id(first).source == source and TimedOccurrence.id(second).source != source and PosixSpan.start(TimedOccurrence.span(first)) == PosixBoundary.from_microseconds(9000000000) and PosixSpan.start(TimedOccurrence.span(first)) == PosixSpan.start(TimedOccurrence.span(second)) and PosixSpan.coordinate_width(TimedOccurrence.span(first)) == Ok(PosixDelta.from_microseconds(7200000000)) and PosixSpan.coordinate_width(TimedOccurrence.span(second)) == Ok(PosixDelta.from_microseconds(3600000000))
+}
+
+expect {
+	source = test_override_sources({})?.get(0)?
+	boundary = PosixBoundary.from_microseconds(86400000000)
+	# Definitions stay distinct even if a particular interpretation could
+	# give them equal extents; conflicting inputs do not silently pick one.
+	conflict = match normalize_endings([{ source, ending: AtBoundary(boundary) }, { source, ending: After(Coordinate(PosixDelta.from_microseconds(86400000000))) }]) {
+		Err(ConflictingEnding(position)) => position == source
+		_ => Bool.False
+	}
+	invalid = match normalize_endings([{ source, ending: After(Coordinate(PosixDelta.from_microseconds(0))) }]) {
+		Err(InvalidDuration) => Bool.True
+		_ => Bool.False
+	}
+	entry = { source, ending: AtBoundary(boundary) }
+	too_many = match normalize_endings(List.repeat(entry, 4097)) {
+		Err(TooManyOverrides) => Bool.True
+		_ => Bool.False
+	}
+	conflict and invalid and too_many and normalize_endings([entry, entry])?.len() == 1
 }

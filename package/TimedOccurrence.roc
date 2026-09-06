@@ -19,8 +19,16 @@ import ZoneRules
 ## Zero calendar movement retains the selected start without another lookup.
 ## A coordinate tail may extend beyond zone-data validity: it performs checked
 ## POSIX arithmetic and makes no claim about the final local clock label.
+## Explicit endings use a resolved boundary or a local label with end policies.
+## `ending` retains that intent; `duration` returns Some only for duration-based
+## appointments and None for explicit ends. InvalidDuration also identifies an
+## explicit end that resolves at or before the start.
 ## It does not construct the preimage of every civil label between endpoints.
-TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, duration : Duration, span : PosixSpan, calendar_anchor : [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] }.{
+TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : Ending, span : PosixSpan, calendar_anchor : [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] }.{
+
+	## Endpoint intent is distinct from an elapsed or calendar quantity.
+	Ending : [After(Duration), AtBoundary(PosixBoundary), AtLocal(LocalEnd)]
+	LocalEnd : { source : LocalDateTime, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Duration : [Coordinate(PosixDelta), Calendar(CalendarDuration)]
 	CalendarDuration : { delta : CalendarDelta, invalid_date : CalendarArithmetic.Policy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })] }
@@ -89,10 +97,40 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, duration :
 			Ok(Pending({ id, start, spec, end_source, pending }))
 		}
 	}
-	Cursor(id) :: [Ready(TimedOccurrence(id)), Pending({ id : id, start : TimedRecurrence.Occurrence, spec : CalendarDuration, end_source : LocalDateTime, pending : ZoneRules.ClassificationCursor })].{
+
+	## Construct an appointment with a duration or explicit end. AtLocal uses
+	## the start's immutable rules and the supplied end policies. Local label
+	## order does not establish timeline order across a fold/gap. Both explicit
+	## end forms validate the resolved span, returning InvalidDuration when its
+	## end is equal to or before the selected start. AtBoundary needs no rules.
+	cursor_with_ending : id, TimedRecurrence.Occurrence, Ending -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields), ..])
+	cursor_with_ending = |id, start, ending| match ending {
+		After(duration) => cursor(id, start, duration)
+		AtBoundary(end) => {
+			value = finish_ending(id, start, ending, end, None)?
+			Ok(Ready(value))
+		}
+		AtLocal(spec) => {
+			pending = ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start), spec.source)?
+			Ok(Explicit({ id, start, spec, pending }))
+		}
+	}
+	Cursor(id) :: [Ready(TimedOccurrence(id)), Explicit({ id : id, start : TimedRecurrence.Occurrence, spec : LocalEnd, pending : ZoneRules.ClassificationCursor }), Pending({ id : id, start : TimedRecurrence.Occurrence, spec : CalendarDuration, end_source : LocalDateTime, pending : ZoneRules.ClassificationCursor })].{
 		collect : Cursor(id), ZoneRules.ClassificationLimits -> Try(Batch(id), [InvalidDuration, OutOfRange, Gap, Ambiguous, AmbiguousGap, OffsetConflict, ..])
 		collect = |state, limits| match state {
 			Ready(value) => Ok({ segments: 0, buffered: 0, status: Complete(value) })
+			Explicit(value) => {
+				batch = ZoneRules.ClassificationCursor.collect(value.pending, limits)?
+				status = match batch.status {
+					Limited(progress) => Limited({ cursor: Explicit({ ..value, pending: progress.cursor }), reason: progress.reason })
+					Complete(classification) => {
+						choice = ZoneRules.Classification.choose(classification, { occurrence: value.spec.occurrence, gap: value.spec.gap })?
+						occurrence = finish_ending(value.id, value.start, AtLocal(value.spec), choice.boundary, Some({ source: value.spec.source, choice }))?
+						Complete(occurrence)
+					}
+				}
+				Ok({ segments: batch.segments, buffered: batch.buffered, status })
+			}
 			Pending(value) => {
 				batch = ZoneRules.ClassificationCursor.collect(value.pending, limits)?
 				status = match batch.status {
@@ -111,18 +149,28 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, duration :
 		to_inspect = |state| match state {
 			Ready(_) => "TimedOccurrence.Cursor(ready)"
 			Pending(_) => "TimedOccurrence.Cursor(calendar end pending)"
+			Explicit(_) => "TimedOccurrence.Cursor(explicit local end pending)"
 		}
 	}
 	id : TimedOccurrence(id) -> id
 	id = |value| value.id
 	start : TimedOccurrence(id) -> TimedRecurrence.Occurrence
 	start = |value| value.start
-	duration : TimedOccurrence(id) -> Duration
-	duration = |value| value.duration
+	ending : TimedOccurrence(id) -> Ending
+	ending = |value| value.ending
+
+	## Explicit endpoints do not invent a duration. Query coordinate_width on
+	## the resolved span when a checked numerical width is desired.
+	duration : TimedOccurrence(id) -> [None, Some(Duration)]
+	duration = |value| match value.ending {
+		After(duration) => Some(duration)
+		_ => None
+	}
 	span : TimedOccurrence(id) -> PosixSpan
 	span = |value| value.span
 
-	## The interpreted calendar anchor before adding the coordinate tail.
+	## The interpreted local end label, or calendar anchor before adding its tail.
+	## Explicit resolved boundaries and coordinate durations have no local anchor.
 	calendar_anchor : TimedOccurrence(id) -> [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })]
 	calendar_anchor = |value| value.calendar_anchor
 	to_inspect : TimedOccurrence(id) -> Str
@@ -130,12 +178,15 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, duration :
 }
 
 finish : id, TimedRecurrence.Occurrence, TimedOccurrence.Duration, PosixBoundary, [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] -> Try(TimedOccurrence(id), [InvalidDuration, ..])
-finish = |id, start, duration, end, calendar_anchor| {
+finish = |id, start, duration, end, calendar_anchor| finish_ending(id, start, After(duration), end, calendar_anchor)
+
+finish_ending : id, TimedRecurrence.Occurrence, TimedOccurrence.Ending, PosixBoundary, [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] -> Try(TimedOccurrence(id), [InvalidDuration, ..])
+finish_ending = |id, start, ending, end, calendar_anchor| {
 	span = match PosixSpan.new(TimedRecurrence.Occurrence.boundary(start), end) {
 		Ok(value) => value
 		Err(_) => return Err(InvalidDuration)
 	}
-	Ok({ id, start, duration, span, calendar_anchor })
+	Ok({ id, start, ending, span, calendar_anchor })
 }
 
 # Epoch midnight with a one-hour forward jump at noon: the next local midnight
@@ -317,6 +368,73 @@ expect {
 			}
 			evidence and PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(86400000000))
 		}
+		Limited(_) => Bool.False
+	}
+}
+
+# R07/R12: explicit next-midnight endpoint in a +1h transition has a 23h
+# width under the independent two-segment offset model used above.
+expect {
+	start = test_start(test_rules(3600, 43200000000)?, RequireUnique)?
+	source = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), ClockTime.from_microseconds_since_midnight(0)?)
+	ending = AtLocal({ source, occurrence: RequireUnique, gap: RejectGap })
+	cursor = TimedOccurrence.cursor_with_ending("explicit", start, ending)?
+	paused = TimedOccurrence.Cursor.collect(cursor, { max_segments: 1, max_candidates: 1 })?
+	pending = match paused.status {
+		Limited(progress) => progress.cursor
+		Complete(_) => crash "explicit end needs both segments"
+	}
+	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 1 })?
+	match resumed.status {
+		Complete(value) => {
+			anchor = match TimedOccurrence.calendar_anchor(value) {
+				Some(evidence) => evidence.source == source
+				None => Bool.False
+			}
+			anchor and TimedOccurrence.duration(value) == None and paused.segments == 1 and resumed.segments == 1 and PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(82800000000))
+		}
+		Limited(_) => Bool.False
+	}
+}
+
+expect {
+	start = test_start(test_rules(0, 43200000000)?, RequireUnique)?
+	# Both representable I64 endpoint limits remain ordinary boundaries.
+	reversed = match TimedOccurrence.cursor_with_ending({}, start, AtBoundary(PosixBoundary.from_microseconds(I64.lowest))) {
+		Err(InvalidDuration) => Bool.True
+		_ => Bool.False
+	}
+	empty = match TimedOccurrence.cursor_with_ending({}, start, AtBoundary(TimedRecurrence.Occurrence.boundary(start))) {
+		Err(InvalidDuration) => Bool.True
+		_ => Bool.False
+	}
+	cursor = TimedOccurrence.cursor_with_ending({}, start, AtBoundary(PosixBoundary.from_microseconds(I64.highest)))?
+	batch = TimedOccurrence.Cursor.collect(cursor, { max_segments: 0, max_candidates: 0 })?
+	reversed and empty and batch.segments == 0 and match batch.status {
+		Complete(value) => PosixSpan.end(TimedOccurrence.span(value)) == PosixBoundary.from_microseconds(I64.highest) and TimedOccurrence.duration(value) == None
+		Limited(_) => Bool.False
+	}
+}
+
+# The source is midnight's second occurrence (01:00Z). The later local
+# 00:30 label's first occurrence is 00:30Z, so local ordering is insufficient.
+expect {
+	start = test_start(test_rules(-3600, 3600000000)?, Last)?
+	source = LocalDateTime.new(LocalDateTime.date(TimedRecurrence.Occurrence.source(start)), ClockTime.from_microseconds_since_midnight(1800000000)?)
+	first = TimedOccurrence.cursor_with_ending({}, start, AtLocal({ source, occurrence: First, gap: RejectGap }))?
+	rejected = match TimedOccurrence.Cursor.collect(first, { max_segments: 2, max_candidates: 2 }) {
+		Err(InvalidDuration) => Bool.True
+		_ => Bool.False
+	}
+	last = TimedOccurrence.cursor_with_ending({}, start, AtLocal({ source, occurrence: Last, gap: RejectGap }))?
+	paused = TimedOccurrence.Cursor.collect(last, { max_segments: 2, max_candidates: 1 })?
+	pending = match paused.status {
+		Limited(progress) => progress.cursor
+		Complete(_) => crash "two fold candidates need capacity"
+	}
+	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
+	rejected and match resumed.status {
+		Complete(value) => PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(1800000000))
 		Limited(_) => Bool.False
 	}
 }

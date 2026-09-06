@@ -6,16 +6,11 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
-- RDATE PERIOD adaptation, including explicit start/end periods and source-position
-  duration overrides. Reuse CalendarPattern,
-  SubdailyPattern, ClockPattern, TimedOccurrence and ZoneRules. Apply the RFC
-  timed profile's before-gap offset and first-fold policies (verified erratum 4271); only invalid
-  calendar dates are discarded. BYSETPOS must see full timed candidate periods.
-- Extend RFC 5545 adaptation to timed values, omitted yearly defaults and
-  declared serialization/persistence. Keep its explicit profile and UNTIL type
-  checks; do not introduce a separate parser execution engine. Settle UTC EXDATE
-  matching against gap-adjusted sources before mapping it to native source
-  exclusions: projecting an adjusted boundary cannot recover its original label.
+- Resolve broader mixed UTC/local property support and UTC EXDATE matching
+  against gap-adjusted sources before widening the timed profile: projecting
+  an adjusted boundary cannot recover its original label.
+- Extend RFC adaptation to omitted yearly defaults and declared
+  serialization/persistence, retaining the shared native execution engine.
 - Independently generated JSONL cases, RFC examples, synthetic zone transitions,
   bounded fuzz models, invalid-input/domain checks and realistic applications.
 
@@ -38,8 +33,8 @@ New York 1997-09-02 three-hour example ends at 21:00Z, not the original
 the erroneous example's output. Settle BYSETPOS ordering and
 deduplication when different source labels map to the same boundary after gap
 adjustment; retain source identity rather than inferring it from coverage.
-Settle exception duration identity, RDATE PERIOD support and subdaily buffering
-limits before exposing those adapter operations. Unsupported scopes stay errors.
+Keep unsupported mixed-form PERIOD properties and timed exception matching
+explicit before widening the property adapter.
 Resolve omitted-field defaults before widening `rfc5545-date-values-v1`:
 RFC 5545 §3.3.10's derivation prose/table, RFC 8984 §4.3.3's explicit defaults
 and dateutil disagree for YEARLY BYMONTHDAY without BYMONTH and BYWEEKNO without

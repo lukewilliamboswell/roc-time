@@ -149,6 +149,11 @@ ZoneRules :: {
 	validity : ZoneRules -> PosixSpan
 	validity = |rules| rules.validity
 
+	## Authoritative global offset bounds supplied at construction, not merely
+	## the extrema observed inside this finite transition table.
+	offset_bounds : ZoneRules -> OffsetBounds
+	offset_bounds = |rules| rules.bounds
+
 	## A transition's new offset applies at its exact boundary.
 	offset_at : ZoneRules, PosixBoundary -> Try(FixedOffset, [OutsideValidity, ..])
 	offset_at = |rules, boundary| {

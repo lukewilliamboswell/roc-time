@@ -29,7 +29,12 @@ import ZoneRules
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
 TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime), inclusions : List(LocalDateTime) }.{
-	Termination : [Forever, Count(U64), Until(LocalDateTime)]
+
+	## Until is inclusive in source-label order. UntilBoundary is inclusive
+	## on the POSIX axis after full-period BYSETPOS selection. Explicit inclusions
+	## remain outside rule termination. A boundary before all starts yields no
+	## rule occurrences; it cannot be compared to the unresolved anchor at new.
+	Termination : [Forever, Count(U64), Until(LocalDateTime), UntilBoundary(PosixBoundary)]
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new = |start, spec| {
@@ -83,6 +88,18 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		Ok({ ..rule, inclusions: sorted_positions(labels) })
 	}
 
+	## Add explicit starts while retaining existing inclusions and exclusions.
+	## Existing normalized entries plus supplied inputs must total at most 4096
+	## before deduplication. Construction sorts the combined bounded collection.
+	add_inclusions : TimedRecurrence, List({ date : GregorianDate, clock : ClockTime }) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	add_inclusions = |rule, starts| {
+		if starts.len() > 4096 - rule.inclusions.len() {
+			return Err(TooManySelectors)
+		}
+		labels = starts.map(|start| LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock))
+		Ok({ ..rule, inclusions: sorted_positions(rule.inclusions.concat(labels)) })
+	}
+
 	Window : { start : LocalDateTime, end : LocalDateTime }
 	Context : { rules : ZoneRules, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Limits : { max_steps : U64, max_buffered : U64, max_zone_segments : U64, max_zone_candidates : U64 }
@@ -109,11 +126,24 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 			GT => return Err(ReversedWindow)
 			LT => {}
 		}
-		frame = timed_frame(rule, 0)?
-		Ok({ rule, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0, inclusion_index: 0, held: None, rule_ended: Bool.False, inclusion_pending: None })
+		# L resolves using an offset no greater than maximum. Consequently,
+		# L > cutoff + maximum cannot produce an in-limit boundary, including
+		# before-gap adjustment. Keep the cutoff for individual result filtering;
+		# the local envelope alone must not replace its meaning.
+		(effective_rule, boundary_cutoff) = match rule.termination {
+			UntilBoundary(boundary) => {
+				maximum = ZoneRules.offset_bounds(context.rules).maximum
+				last_source = FixedOffset.project(FixedOffset.from_seconds(maximum), boundary, Gregorian)?
+				({ ..rule, termination: Until(last_source) }, Some(boundary))
+			}
+			_ => (rule, None)
+		}
+		frame = timed_frame(effective_rule, 0)?
+		Ok({ rule: effective_rule, boundary_cutoff, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0, inclusion_index: 0, held: None, rule_ended: Bool.False, inclusion_pending: None })
 	}
 	Cursor :: {
 		rule : TimedRecurrence,
+		boundary_cutoff : [None, Some(PosixBoundary)],
 		window : Window,
 		context : Context,
 		period : U64,
@@ -1031,9 +1061,15 @@ next_rule = |initial, limits| {
 						if !before(occurrence.source, state.window.end) {
 							return Ok(ended(state, steps, zone_segments))
 						}
-						state = { ..state, count: state.count + 1 }
-						if !before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) {
-							return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
+						within_cutoff = match state.boundary_cutoff {
+							None => Bool.True
+							Some(boundary) => occurrence.choice.boundary <= boundary
+						}
+						if within_cutoff {
+							state = { ..state, count: state.count + 1 }
+							if !before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) {
+								return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
+							}
 						}
 					}
 				}
@@ -1203,6 +1239,89 @@ expect {
 		valid = valid and observed == [0.I64, 172800000000, 259200000000] and match completed.status {
 			Complete => Bool.True
 			_ => Bool.False
+		}
+	}
+	valid
+}
+
+# R07/R11/R12: a source after a rejected gap label can map back below UNTIL.
+# Direct two-segment model: at 02:00Z offset changes from 0 to +1h.
+# 02:30 local uses the pre-gap offset (02:30Z), but 03:00 is 02:00Z.
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_fields({ hour: 2, minute: 30, second: 0, microsecond: 0 })?
+	cutoff = PosixBoundary.from_microseconds(8100000000)
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [2, 3], minutes: [0, 30], seconds: [] }, termination: UntilBoundary(cutoff), by_set_pos: [] })?
+	four = ClockTime.from_fields({ hour: 4, minute: 0, second: 0, microsecond: 0 })?
+	with_extra = TimedRecurrence.with_inclusions(rule, [{ date, clock: four }])?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC-cutoff", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	var cursor = TimedRecurrence.cursor(with_extra, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+	var boundaries = []
+	var hours = []
+	var calls = 0.U64
+	var complete = Bool.False
+	while calls < 100 and !complete {
+		batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 })?
+		for value in batch.occurrences {
+			boundaries = boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
+			hours = hours.append(ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour)
+		}
+		match batch.status {
+			Complete => {
+				complete = Bool.True
+			}
+			Limited(progress) => {
+				cursor = progress.cursor
+			}
+		}
+		calls = calls + 1
+	}
+	complete and boundaries == [7200000000.I64, 10800000000] and hours == [3.U8, 4]
+}
+
+# BYSETPOS observes the whole day before boundary termination. Cutting the
+# second day's clock list at 01:30 would incorrectly make 01:00 its last item.
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_fields({ hour: 2, minute: 0, second: 0, microsecond: 0 })?
+	cutoff = PosixBoundary.from_microseconds(91800000000)
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: UntilBoundary(cutoff), by_set_pos: [-1] })?
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(259200000000))?
+	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
+	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+	batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 3, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 })?
+	match batch.status {
+		Complete => batch.occurrences.len() == 1 and TimedRecurrence.Occurrence.boundary(batch.occurrences.get(0)?) == PosixBoundary.from_microseconds(7200000000)
+		Limited(_) => Bool.False
+	}
+}
+
+# RFC 5545 section 3.8.5.3, corrected by verified erratum 3883 (2014-02-14).
+# https://www.rfc-editor.org/errata/eid3883
+# New York 1997-09-02 is UTC-04:00: corrected 21:00Z includes 09/12/15
+# local; original 17:00Z includes only 09/12. 19:00Z tests exact inclusion.
+expect {
+	date = GregorianDate.from_fields({ year: 1997, month: 9, day: 2 })?
+	clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond: 0 })?
+	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1997, month: 9, day: 3 })?), clock)
+	midnight_label = LocalDateTime.new(CalendarDate.from_gregorian(date), midnight({}))
+	base = PosixBoundary.to_microseconds(FixedOffset.resolve(FixedOffset.from_seconds(0), midnight_label)?)
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(base - 86400000000), PosixBoundary.from_microseconds(base + 172800000000))?
+	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
+	var valid = Bool.True
+	for case in [{ cutoff_hour: 21.I64, expected: [9.U8, 12, 15] }, { cutoff_hour: 17, expected: [9, 12] }, { cutoff_hour: 19, expected: [9, 12, 15] }] {
+		rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern: { frequency: Hourly, interval: 3, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } }, termination: UntilBoundary(PosixBoundary.from_microseconds(base + case.cutoff_hour * 3600000000)), by_set_pos: [] })?
+		cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+		batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 1 }, max_occurrences: 10 })?
+		valid = valid and batch.occurrences.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour) == case.expected and match batch.status {
+			Complete => Bool.True
+			Limited(_) => Bool.False
 		}
 	}
 	valid

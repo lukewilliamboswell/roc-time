@@ -21,8 +21,8 @@ unchecked items are planned.
 - [x] Exact microsecond boundaries, interval relations and coverage set operations.
 - [x] Gregorian/Julian dates and explicit calendar arithmetic.
 - [x] Gap/fold handling, local selections and an optional time-zone database.
-- [x] Bounded, resumable date and timed schedules, identified appointments and a date-only RFC recurrence adapter.
-- [ ] Broader RFC recurrence import, including timed rules and period-valued additions.
+- [x] Bounded, resumable date and timed schedules, identified appointments and RFC date/timed value adapters.
+- [ ] Broader RFC recurrence import and persistence.
 - [ ] Richer temporal descriptions: partial dates, uncertainty and bounded reasoning.
 - [ ] ISO 8601 / EDTF / IXDTF parsing and serialization in explicitly supported profiles.
 - [ ] Semantic explanations, versioned persistence and broader calendar support.
@@ -43,6 +43,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |
 | [Voyage briefing](examples/voyage/main.roc) | Supply a ship's clock schedule and review a rules update while retaining the saved booking |
 | [Equipment inspections](examples/inspections/main.roc) | Schedule four inspections on the last Tuesday every three months, with explicit evaluation limits |
+| [Equipment reservations](examples/reservations/main.roc) | Import a timed RRULE and PERIOD additions with explicit return times or positive durations |
 | [Service calendar](examples/maintenance/main.roc) | Import date-only recurrence values and review rescheduled visits without restarting the original series count |
 | [Dispatch deadlines](examples/dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
 | [Equipment loans](examples/equipment_loans/main.roc) | Keep monthly loans on the 31st, clamp return dates across clock changes, and add an extra one-week booking |
@@ -73,6 +74,33 @@ example imports date-only recurrence values. Named-zone applications can add the
 property values under its declared profile. It does not parse complete ICS
 documents or timed rules; affected yearly rules require explicit fields where
 omitted defaults remain unsupported.
+
+[RfcTimedRule](package/RfcTimedRule.roc) accepts extracted DTSTART, RRULE,
+RDATE, EXDATE, positive DURATION and PERIOD values. UTC, floating and zoned
+modes validate DTSTART/UNTIL forms before building native bounded schedules.
+Local modes require explicit zone rules when scheduling. Complete ICS input,
+TZID lookup and mixed UTC/local exception forms remain unsupported.
+
+[TimedRecurrence](package/TimedRecurrence.roc) supports inclusive POSIX-boundary
+cutoffs in addition to source-label UNTIL values. Cutoffs filter complete
+BYSETPOS selections and preserve explicit additions beyond the rule’s end.
+
+[TimedSchedule](package/TimedSchedule.roc) supports source-specific explicit
+endpoints as well as duration overrides. Local endpoints share the schedule’s
+zone-work budget; resolved endpoints require no further zone interpretation.
+
+[RfcPeriod](package/RfcPeriod.roc) parses individual PERIOD values and adds them
+to native schedules with explicit UTC or local context. Start/end and positive
+duration forms share the ordinary occurrence engine and work budgets.
+
+[RfcDateTime](package/RfcDateTime.roc) validates extracted local and UTC
+DATE-TIME values, retaining the UTC marker. Local values require explicit
+interpretation context; leap seconds remain unsupported on the POSIX profile.
+
+[RfcDuration](package/RfcDuration.roc) parses positive event/period duration
+values and lowers them into the shared timed appointment engine. Calendar days
+remain distinct from coordinate hours across clock changes. Negative alarm
+durations are outside this adapter’s profile; use `RfcPeriod` for PERIOD values.
 
 [AllDayOccurrence](package/AllDayOccurrence.roc) resolves an identified calendar
 date and civil-day duration against explicit zone rules, with resumable work
