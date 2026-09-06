@@ -98,7 +98,7 @@ jobs:
           docs_version: ${{ inputs.release_version }}
 
       - name: Open release follow-up PR
-        uses: roc-lang/release-package/actions/create-followup-pr@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+        uses: roc-lang/release-package/actions/create-followup-pr@f963105a8e6200565dcfc7c732ecf10ed2e0aee0
         with:
           release_version: ${{ inputs.release_version }}
           paths: |
