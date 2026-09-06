@@ -1,5 +1,6 @@
 import fuzz.Fuzz
 import time.CalendarValue
+import time.QualifiedCalendarValue
 import time.CalendarDate
 import time.FixedOffset
 import time.PosixBoundary
@@ -67,7 +68,9 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			Ok(found) => found
 			Err(_) => crash "Valid synthetic rules"
 		}
-		cursor = match CalendarValue.selection_cursor(value, rules) {
+		check_qualifications(value, minute, rules, input.number)
+		plain = qualified(value, [])
+		cursor = match QualifiedCalendarValue.selection_cursor(plain, rules) {
 			Ok(found) => found
 			Err(_) => crash "Valid description selection"
 		}
@@ -129,3 +132,67 @@ span = |start, end| match PosixSpan.new(point(start), point(end)) {
 }
 
 epoch_date = |_digits| CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })
+
+# Independent set model: qualifier order is irrelevant, but scopes and flags
+# remain distinct. Every listed fractional component exists; seconds were not
+# supplied in the minute value. No numeric tolerance follows from any flag.
+check_qualifications = |value, minute, rules, number| {
+	scopes : List(QualifiedCalendarValue.Scope)
+	scopes = [Whole, Year, Month, Day, Hour, Minute, Second, Fraction]
+	var forward = []
+	var backward = []
+	var bits = number
+	for scope in scopes {
+		flag = match bits % 3 {
+			0 => Uncertain
+			1 => Approximate
+			_ => UncertainApproximate
+		}
+		if bits % 2 == 0 {
+			item = { scope, qualifier: flag }
+			forward = forward.append(item)
+			backward = [item].concat(backward)
+		}
+		bits = bits // 2
+	}
+	a = qualified(value, forward)
+	b = qualified(value, backward)
+	# Retain both input lists and a slice while canonicalization may sort them.
+	sliced = [{ scope: Whole, qualifier: Uncertain }].concat(backward).drop_first(1)
+	c = qualified(value, sliced)
+	if a != b or a != c or QualifiedCalendarValue.qualifications(a).len() != forward.len() or QualifiedCalendarValue.described_value(a) != value {
+		crash "Qualification set changed under ordering or sharing"
+	}
+	for item in forward {
+		if !QualifiedCalendarValue.qualifications(a).contains(item) {
+			crash "Qualification fact lost"
+		}
+	}
+	if !forward.is_empty() {
+		match QualifiedCalendarValue.selection_cursor(a, rules) {
+			Err(NeedsModel) => {}
+			_ => crash "Qualifier invented a certain selection"
+		}
+	}
+	for scope in scopes {
+		result = QualifiedCalendarValue.new(minute, [{ scope, qualifier: Approximate }])
+		if scope == Second or scope == Fraction {
+			if result != Err(UnsuppliedComponent(scope)) {
+				crash "Qualifier applied to an omitted component"
+			}
+		} else {
+			match result {
+				Ok(_) => {}
+				Err(_) => crash "Supplied component rejected"
+			}
+		}
+		if QualifiedCalendarValue.new(value, [{ scope, qualifier: Approximate }, { scope, qualifier: Uncertain }]) != Err(DuplicateScope(scope)) {
+			crash "Duplicate qualification scope accepted"
+		}
+	}
+}
+
+qualified = |value, items| match QualifiedCalendarValue.new(value, items) {
+	Ok(found) => found
+	Err(_) => crash "Valid qualifications rejected"
+}

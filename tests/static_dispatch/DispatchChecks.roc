@@ -1,4 +1,5 @@
 import time.CalendarValue
+import time.QualifiedCalendarValue
 import time.CalendarDate
 import time.RfcPeriod
 import time.RfcDateTime
@@ -41,6 +42,12 @@ DispatchChecks :: [].{
 		second_value = CalendarValue.second(description_date, 12, 30, 0)?
 		descriptions = Dict.insert(Dict.insert(Dict.empty(), minute_value, 1.U64), second_value, 2.U64)
 		if minute_value == second_value or Dict.get(descriptions, minute_value) != Ok(1) or Dict.get(descriptions, second_value) != Ok(2) or !Str.inspect(minute_value).contains("resolution=Minute") {
+			return Err(Failed)
+		}
+
+		qualified_minute = qualify(minute_value, [{ scope: Minute, qualifier: Approximate }, { scope: Whole, qualifier: Uncertain }])?
+		reordered = qualify(minute_value, [{ scope: Whole, qualifier: Uncertain }, { scope: Minute, qualifier: Approximate }])?
+		if Dict.get(Dict.insert(Dict.empty(), qualified_minute, 3.U64), reordered) != Ok(3) or !Str.inspect(qualified_minute).contains("Approximate") {
 			return Err(Failed)
 		}
 
@@ -131,5 +138,10 @@ parse_datetime = |text| match RfcDateTime.parse(text) {
 parse_period : Str -> Try(RfcPeriod, [Failed, ..])
 parse_period = |text| match RfcPeriod.parse(text) {
 	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+qualify = |value, items| match QualifiedCalendarValue.new(value, items) {
+	Ok(found) => Ok(found)
 	Err(_) => Err(Failed)
 }

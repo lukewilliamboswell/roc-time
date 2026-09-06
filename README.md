@@ -75,7 +75,11 @@ example imports date-only recurrence values. Named-zone applications can add the
 minute, second and 1–6-digit fractional resolution for Gregorian/Julian values.
 Explicit lowering computes civil bounds and uses the shared bounded zone
 selection cursor, preserving empty gaps and disconnected folds. This native
-finite profile does not yet model component qualifications or symbolic long years.
+finite profile does not yet model symbolic long years.
+[QualifiedCalendarValue](package/QualifiedCalendarValue.roc) attaches whole-value
+or supplied-component uncertainty/approximation without inventing a tolerance.
+Qualified selections return `NeedsModel`; numerical admissible models and
+uncertain-endpoint reasoning remain unfinished.
 
 [RfcDateRule](package/RfcDateRule.roc) accepts extracted date-only recurrence
 property values under its declared profile. It does not parse complete ICS

@@ -5,8 +5,9 @@ EDTF/ISO adapters. Reuse validated calendars, local selections and zone cursors.
 
 ## Deliverables
 
-- Component-scoped uncertain/approximate qualifications without inferred numeric
-  tolerances. Preserve endpoint knowledge separately from open-ended bounds.
+- Supply explicit admissible models for qualified values; preserve component
+  scope without inferred numeric tolerances. Preserve endpoint knowledge
+  separately from open-ended bounds.
 - Interval descriptions with independent endpoint resolution, plus distinct
   alternatives and all-of selections. Define supported reasoning models and
   compare definite/possible/impossible results with small independent models.

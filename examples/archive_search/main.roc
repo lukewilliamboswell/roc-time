@@ -8,7 +8,10 @@ main! = |_args| {
 	matches = ArchiveSearch.find({ year: 2025, month: 6, day: 12 }, ["20250612T093000Z", "20250612T093045Z", "20250612T093100Z"])?
 	echo!("Archive search (UTC)\n")
 	for result in matches {
-		echo!("${result.label}: ${result.count.to_str()} recordings\n")
+		match result.outcome {
+			Matches(count) => echo!("${result.label}: ${count.to_str()} recordings\n")
+			NeedsModel => echo!("${result.label}: no exact count without a search range\n")
+		}
 	}
 	Ok({})
 }
