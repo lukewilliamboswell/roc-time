@@ -51,13 +51,28 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	to_civil_day : GregorianDate -> CivilDay
 	to_civil_day = |Date(date)| {
-		var before = 0.I64
-		var month = 1.U8
-		while month < date.month {
-			before = before + U8.to_i64(month_length(date.year, month))
-			month = month + 1
+		# Common-year days preceding each month. Nominal construction establishes
+		# month 1..12; only dates after February need a leap-day correction.
+		before = match date.month {
+			1 => 0.I64
+			2 => 31
+			3 => 59
+			4 => 90
+			5 => 120
+			6 => 151
+			7 => 181
+			8 => 212
+			9 => 243
+			10 => 273
+			11 => 304
+			_ => 334
 		}
-		CivilDay.from_day_number(year_start(date.year) + before + U8.to_i64(date.day) - 1)
+		leap_day = if date.month > 2 and month_length(date.year, 2) == 29 {
+			1.I64
+		} else {
+			0.I64
+		}
+		CivilDay.from_day_number(year_start(date.year) + before + leap_day + U8.to_i64(date.day) - 1)
 	}
 
 	from_civil_day : CivilDay -> Try(GregorianDate, [OutOfRange, ..])
@@ -73,27 +88,35 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		# The provider range keeps every intermediate within I64.
 		shifted = number + 719468
 		era = I64.div_floor_by(shifted, 146097)
-		era_day = shifted - era * 146097 # 0..146096, including negative eras
-		era_year = I64.div_trunc_by(era_day - I64.div_trunc_by(era_day, 1460) + I64.div_trunc_by(era_day, 36524) - I64.div_trunc_by(era_day, 146096), 365)
-		year_day = era_day - (365 * era_year + I64.div_trunc_by(era_year, 4) - I64.div_trunc_by(era_year, 100))
-		march_month = I64.div_trunc_by(5 * year_day + 2, 153)
-		month_number = march_month + if march_month < 10 {
-			3
-		} else {
-			-9
+		# Floor division leaves a nonnegative era remainder, even for negative
+		# years. Only this bounded remainder is narrowed: era/year stay I64.
+		era_day = match I64.to_u32_try(shifted - era * 146097) {
+			Ok(value) => value # 0..146096
+			Err(_) => crash "Gregorian era remainder invariant"
 		}
-		day_number = year_day - I64.div_trunc_by(153 * march_month + 2, 5) + 1
-		year = era * 400 + era_year + if month_number <= 2 {
+		# era_year is 0..399; year_day is 0..365; march_month is 0..11.
+		# All unsigned subtractions are nonnegative in this decomposition.
+		# Its largest intermediate is below 2^18, safely inside U32.
+		era_year = (era_day - era_day // 1460 + era_day // 36524 - era_day // 146096) // 365
+		year_day = era_day - (365 * era_year + era_year // 4 - era_year // 100)
+		march_month = (5 * year_day + 2) // 153
+		month_number = if march_month < 10 {
+			march_month + 3
+		} else {
+			march_month - 9
+		}
+		day_number = year_day - (153 * march_month + 2) // 5 + 1
+		year = era * 400 + era_year.to_i64() + if month_number <= 2 {
 			1
 		} else {
 			0
 		}
 		# The decomposition guarantees month 1..12 and day 1..31.
-		month = match I64.to_u8_try(month_number) {
+		month = match U32.to_u8_try(month_number) {
 			Ok(value) => value
 			Err(_) => crash "Gregorian month decomposition invariant"
 		}
-		day_of_month = match I64.to_u8_try(day_number) {
+		day_of_month = match U32.to_u8_try(day_number) {
 			Ok(value) => value
 			Err(_) => crash "Gregorian day decomposition invariant"
 		}

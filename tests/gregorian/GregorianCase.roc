@@ -34,6 +34,27 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 			crash "R05 civil coordinate round trip"
 		}
 		fields = GregorianDate.to_fields(date)
+		# Independent month walk checks every boundary at the generated full-range
+		# year. January's coordinate anchors the year; summing month lengths does
+		# not share the production prefix table or inverse decomposition.
+		january = match GregorianDate.from_fields({ year: fields.year, month: 1, day: 1 }) {
+			Ok(value) => value
+			Err(_) => crash "valid model year"
+		}
+		var expected = CivilDay.to_day_number(GregorianDate.to_civil_day(january))
+		for month in [1.U8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] {
+			length = days_in_month(fields.year, month)
+			for day in [1.U8, length] {
+				boundary = match GregorianDate.from_fields({ year: fields.year, month, day }) {
+					Ok(value) => value
+					Err(_) => crash "valid model month boundary"
+				}
+				if CivilDay.to_day_number(GregorianDate.to_civil_day(boundary)) != expected + day.to_i64() - 1 {
+					crash "R05 month prefix differs from independent month walk"
+				}
+			}
+			expected = expected + length.to_i64()
+		}
 		if GregorianDate.from_fields(fields) != Ok(date) {
 			crash "R05 validated field round trip"
 		}
