@@ -178,3 +178,10 @@ curated replay and the failure lifecycle using LLVM speed with `--fuzz`, compile
 10,000 inputs; these finite searches do not establish exhaustive correctness.
 Exact runnable commands live in CONTRIBUTING.md and `scripts/fuzz.py`.
 Other host/architecture combinations explicitly report fuzz checks as unverified.
+
+Selection explanation properties use those independent fold/gap preimages to
+check stored boundary policies, canonical members and source calendar identity.
+Collection budgets of zero, one and eight distinguish limited evaluation from
+complete empty coverage. Rendering completeness is checked independently of the
+typed evaluation status, with zero/tiny output budgets and out-of-range fact
+indexes. Fact access does not reinterpret the saved context.

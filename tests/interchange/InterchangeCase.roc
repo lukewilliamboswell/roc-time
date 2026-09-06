@@ -714,6 +714,12 @@ check_civil_snapshot_persistence = |origin| {
 					ZoneRules.definition(ResolvedBoundary.rules(replay)) != ZoneRules.definition(fold) or replay != snapshot {
 			crash "Civil boundary persistence changed independently modeled occurrence or policy"
 		}
+		source = Explanation.new(ResolvedBoundary(replay))
+		if explanation_fact(source, 0) != CivilBoundaryDescription({ source: lower, policy: choice.policy, boundary: PosixBoundary.from_microseconds(choice.position), offset: FixedOffset.from_seconds(choice.offset) }) or Explanation.fact_count(source) != 2 {
+			crash "Boundary explanation lost modeled occurrence, calendar or policy"
+		}
+		check_civil_context(source, 1, fold)
+		check_declaration_limits(source, 1)
 	}
 	match ResolvedBoundary.resolve(gap, lower, First) {
 		Err(Gap) => {}
@@ -733,6 +739,12 @@ check_civil_snapshot_persistence = |origin| {
 				ZoneRules.definition(ResolvedSelection.rules(replay)) != ZoneRules.definition(fixture.rules) or replay != snapshot {
 			crash "Civil selection persistence erased empty/disconnected coverage or endpoint calendar identity"
 		}
+		members = if fixture.extent == Coverage.empty {
+			[]
+		} else {
+			[model_span(origin - 1500000, origin - 1250000), model_span(origin + 500000, origin + 750000)]
+		}
+		check_civil_explanation(replay, lower, upper, fixture.rules, members)
 	}
 }
 
@@ -760,4 +772,79 @@ replay_snapshot_value = |value| {
 		crash "Civil snapshot persistence is not canonically stable"
 	}
 	Persistence.value(replay)
+}
+
+# R07/R09/R14: raw segment preimages above are the member oracle; rendering
+# completion is deliberately checked separately from interpretation completion.
+check_civil_explanation = |snapshot, lower, upper, rules, members| {
+	coverage_source = Explanation.new(Coverage(ResolvedSelection.coverage(snapshot)))
+	source = Explanation.new(ResolvedSelection(snapshot))
+	count = members.len()
+	if explanation_fact(coverage_source, 0) != CoverageDescription({ member_count: count }) or
+		explanation_fact(source, 0) != CivilSelectionDescription({ start: lower, end: upper, member_count: count }) or
+			Explanation.fact_count(coverage_source) != count + 1 or Explanation.fact_count(source) != count + 2 {
+		crash "Complete coverage explanation changed independent membership or endpoint identity"
+	}
+	check_civil_context(source, 1, rules)
+	var index = 0.U64
+	for span in members {
+		expected = CoverageMember({ index, span })
+		if explanation_fact(coverage_source, index + 1) != expected or explanation_fact(source, index + 2) != expected {
+			crash "Coverage explanation changed independent half-open member"
+		}
+		index = index + 1
+	}
+	check_declaration_limits(coverage_source, 1)
+	check_declaration_limits(source, 1)
+	cursor = match ZoneRules.selection_cursor(rules, lower, upper) {
+		Ok(value) => value
+		Err(_) => crash "Bounded selection cursor fixture rejected"
+	}
+	for limit in [0.U64, 1, 8] {
+		batch = match ResolvedSelection.collect(cursor, { max_segments: limit, max_members: 8 }) {
+			Ok(value) => value
+			Err(_) => crash "Bounded selection evaluation fixture rejected"
+		}
+		batch_source = Explanation.new(SelectionBatch(batch))
+		status = match batch.status {
+			Limited(progress) => {
+				if limit == 8 or progress.reason != WorkLimit or
+					explanation_fact(batch_source, 1) != LocalSelectionDescription({ start: lower, end: upper }) or
+						Explanation.fact_count(batch_source) != 3 {
+					crash "Incomplete evaluation fabricated complete coverage facts"
+				}
+				check_civil_context(batch_source, 2, rules)
+				Limited(WorkLimit)
+			}
+			Complete(done) => {
+				if limit < 2 or ResolvedSelection.coverage(done) != ResolvedSelection.coverage(snapshot) or
+					explanation_fact(batch_source, 1) != CivilSelectionDescription({ start: lower, end: upper, member_count: count }) or
+						Explanation.fact_count(batch_source) != count + 3 {
+					crash "Complete evaluation lost independently modeled empty/disconnected result"
+				}
+				check_civil_context(batch_source, 2, rules)
+				var member_index = 0.U64
+				for span in members {
+					if explanation_fact(batch_source, member_index + 3) != CoverageMember({ index: member_index, span }) {
+						crash "Complete batch explanation changed raw modeled member"
+					}
+					member_index = member_index + 1
+				}
+				Complete
+			}
+		}
+		if explanation_fact(batch_source, 0) != SelectionEvaluation({ status, segments: batch.segments, buffered: batch.buffered }) or
+			(limit == 0 and (batch.segments != 0 or batch.buffered != 0)) {
+			crash "Batch explanation changed work state"
+		}
+		# This requires Complete rendering even for Limited(WorkLimit) evaluation.
+		check_declaration_limits(batch_source, 1)
+	}
+}
+
+check_civil_context = |source, index, rules| {
+	definition = ZoneRules.definition(rules)
+	if explanation_fact(source, index) != Context({ name: definition.name, version: definition.version, validity: definition.validity, provenance: definition.provenance }) {
+		crash "Civil explanation changed retained immutable context metadata"
+	}
 }

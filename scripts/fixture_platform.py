@@ -369,6 +369,35 @@ def verify_civil_persistence(target: str) -> None:
             raise RuntimeError(f"{mode}: civil persistence negative control failed")
         print(f"PASS civil persistence {mode}: allocation negative control")
 
+def verify_selection_explanation(target: str) -> None:
+    """Fixed semantic fact budgets over retained coverage and civil providers."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/selection_explanation_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"selection-explanation-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for count in (2, 16384):
+            for text_size in (4, 524288):
+                for kind in ("coverage", "boundary", "selection", "batch"):
+                    for ownership in ("owned", "shared", "sliced"):
+                        result = subprocess.run([binary, str(count), str(text_size), kind, ownership, "65536"],
+                                                capture_output=True, timeout=5)
+                        if result.returncode or result.stdout != b"selection=facts-bounded,incompleteness-preserved\n":
+                            raise RuntimeError(f"{mode}/{count}/{text_size}/{kind}/{ownership}: explanation failed: {result.stderr!r}")
+                        match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
+                        if match is None:
+                            raise RuntimeError("missing selection explanation allocation observations")
+                        counts = tuple(int(value) for value in match[1].split(b","))
+                        if len(counts) != 6 or counts[:3] != (0, 0, 0):
+                            raise RuntimeError(f"selection explanation unexpected allocation: {counts}")
+                        print(f"PASS selection explanation {mode}/{count}/{text_size}/{kind}/{ownership}: requested bytes {counts}")
+        failed = subprocess.run([binary, "2", "4", "batch", "shared", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: selection explanation negative control failed")
+        print(f"PASS selection explanation {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -385,5 +414,6 @@ if __name__ == "__main__":
         verify_declaration_explanation(selected_target)
         verify_snapshot_persistence(selected_target)
         verify_civil_persistence(selected_target)
+        verify_selection_explanation(selected_target)
     else:
         print(selected_target)

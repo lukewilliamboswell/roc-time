@@ -1,3 +1,6 @@
+import Coverage
+import ResolvedBoundary
+import ResolvedSelection
 import CalendarValue
 import QualifiedCalendarValue
 import EdtfDate
@@ -22,6 +25,11 @@ import RfcPeriod
 ## completeness only. Caller limits bound visited facts and UTF-8 output bytes.
 ## Fact budgets count indexed fact accesses. A snapshot presentation fact may
 ## inspect at most 32 source annotations; no fact access traverses zone rules.
+## Coverage and complete selections expose cached counts and indexed members;
+## fact access never scans earlier members or computes total width. A selection
+## batch exposes its reported evaluation status/counts separately from rendering
+## status. Limited batches describe the request and context without presenting
+## partial work as complete or empty coverage.
 ## Each embedded text field is previewed to 256 bytes before formatting, using
 ## UTF-8 boundaries and a visible ellipsis. TextLimit reports such previews.
 ##
@@ -30,13 +38,17 @@ import RfcPeriod
 ## reports ByteLimit. ByteLimit takes precedence over field-preview truncation;
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
-	Source : [CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod)]
+	Source : [Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod)]
 	Budget : { max_facts : U64, max_utf8_bytes : U64 }
 	Report : { text : Str, status : [Complete, Limited([FactLimit, ByteLimit, TextLimit])], visited_facts : U64, total_facts : U64 }
 	new : Source -> Explanation
 	new = |source| { source: source }
 	fact_count : Explanation -> U64
 	fact_count = |value| match value.source {
+		Coverage(v) => Coverage.fact_count(v)
+		ResolvedBoundary(v) => ResolvedBoundary.fact_count(v)
+		ResolvedSelection(v) => ResolvedSelection.fact_count(v)
+		SelectionBatch(v) => ResolvedSelection.batch_fact_count(v)
 		CalendarValue(v) => CalendarValue.fact_count(v)
 		QualifiedCalendarValue(v) => QualifiedCalendarValue.fact_count(v)
 		EdtfDate(v) => EdtfDate.fact_count(v)
@@ -50,6 +62,10 @@ Explanation :: { source : Source }.{
 	}
 	fact_at : Explanation, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match value.source {
+		Coverage(v) => Coverage.fact_at(v, index)
+		ResolvedBoundary(v) => ResolvedBoundary.fact_at(v, index)
+		ResolvedSelection(v) => ResolvedSelection.fact_at(v, index)
+		SelectionBatch(v) => ResolvedSelection.batch_fact_at(v, index)
 		CalendarValue(v) => CalendarValue.fact_at(v, index)
 		QualifiedCalendarValue(v) => QualifiedCalendarValue.fact_at(v, index)
 		EdtfDate(v) => EdtfDate.fact_at(v, index)
@@ -157,6 +173,63 @@ text_field = |text| {
 
 render : SemanticFact -> { text : Str, clipped : Bool }
 render = |fact| match SemanticFact.kind(fact) {
+	CoverageDescription(data) => {
+		text: if data.member_count == 0 {
+			"POSIX coverage: complete empty coverage."
+		} else {
+			"POSIX coverage: ${data.member_count.to_str()} canonical half-open ${
+				if data.member_count == 1 {
+					"span"
+				} else {
+					"spans"
+				}
+			}."
+		},
+		clipped: False,
+	}
+	CoverageMember(data) => { text: "Coverage member ${data.index.to_str()}: [${PosixBoundary.to_microseconds(PosixSpan.start(data.span)).to_str()}, ${PosixBoundary.to_microseconds(PosixSpan.end(data.span)).to_str()}) POSIX microseconds since 1970-01-01; start included, end excluded.", clipped: False }
+	CivilBoundaryDescription(data) => { text: "Resolved civil boundary: ${civil_label(data.source)}; policy ${occurrence_policy(data.policy)}; stored POSIX position ${PosixBoundary.to_microseconds(data.boundary).to_str()} microseconds since 1970-01-01; local offset ${FixedOffset.to_seconds(data.offset).to_str()} seconds.", clipped: False }
+	CivilSelectionDescription(data) => {
+		text: "Complete civil selection: from ${civil_label(data.start)} to ${civil_label(data.end)} (end excluded); ${
+			if data.member_count == 0 {
+				"stored coverage is empty"
+			} else {
+				"stored coverage has ${data.member_count.to_str()} ${
+					if data.member_count == 1 {
+						"span"
+					} else {
+						"separate spans"
+					}
+				}"
+			}
+		}.",
+		clipped: False,
+	}
+	LocalSelectionDescription(data) => { text: "Local selection request: from ${civil_label(data.start)} to ${civil_label(data.end)} (end excluded).", clipped: False }
+	SelectionEvaluation(data) => {
+		text: "Selection evaluation ${
+			match data.status {
+				Complete => "complete"
+				Limited(WorkLimit) => "incomplete: work limit reached"
+				Limited(BufferLimit) => "incomplete: buffer limit reached"
+			}
+		}; visited ${data.segments.to_str()} ${
+			if data.segments == 1 {
+				"segment"
+			} else {
+				"segments"
+			}
+		}; buffered ${data.buffered.to_str()} ${
+			if data.buffered == 1 {
+				"member"
+			} else {
+				"members"
+			}
+		}.",
+		clipped: False,
+
+	}
+
 	ExactIntervalDescription(data) => { text: "Exact interval: stored half-open POSIX extent [${PosixBoundary.to_microseconds(PosixSpan.start(data.span)).to_str()}, ${PosixBoundary.to_microseconds(PosixSpan.end(data.span)).to_str()}) microseconds since 1970-01-01; start included, end excluded.", clipped: False }
 	OffsetEndpoint(data) => { text: "${Str.inspect(data.role)} endpoint: ${local_fields(data.local, data.fraction_digits)}; ${data.fraction_digits.to_str()} fractional digits; ${offset_assertion(data.offset)}.", clipped: False }
 	RfcDateTimeDescription(data) => {
@@ -354,4 +427,19 @@ expect {
 	value = RfcDuration.parse("P1DT1S")?
 	report = Explanation.plain(Explanation.new(RfcDuration(value)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.text.contains("1 calendar day followed by 1 coordinate second;")
+}
+
+civil_label = |local| {
+	calendar = match CalendarDate.calendar(LocalDateTime.date(local)) {
+		Gregorian => "Gregorian"
+		Julian => "Julian"
+	}
+	"${calendar} ${local_fields(local, 6)}"
+}
+
+occurrence_policy = |policy| match policy {
+	RequireUnique => "require a unique occurrence"
+	First => "first occurrence"
+	Last => "last occurrence"
+	MatchingOffset(offset) => "match offset ${FixedOffset.to_seconds(offset).to_str()} seconds"
 }

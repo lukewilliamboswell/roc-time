@@ -1,3 +1,4 @@
+import SemanticFact
 import CalendarDate
 import ClockTime
 import FixedOffset
@@ -65,8 +66,57 @@ ResolvedSelection :: {
 	to_hash : ResolvedSelection, Hasher -> Hasher
 	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.coverage.to_hash(value.end.to_hash(value.start.to_hash(hasher))))
 
+	## Complete snapshots expose stored canonical members without reevaluation.
+	fact_count : ResolvedSelection -> U64
+	fact_count = |snapshot| Coverage.member_count(snapshot.coverage) + 2
+	fact_at : ResolvedSelection, U64 -> [End, Item(SemanticFact)]
+	fact_at = |snapshot, index| {
+		if index == 0 {
+			return Item(SemanticFact.new(CivilSelectionDescription({ start: snapshot.start, end: snapshot.end, member_count: Coverage.member_count(snapshot.coverage) })))
+		}
+		if index == 1 {
+			return Item(context_fact(snapshot.rules))
+		}
+		# Subtract only after the fixed header cases; huge indexes safely End.
+		Coverage.fact_at(snapshot.coverage, index - 1)
+	}
+
+	## Limited batches explain inputs and work state, not partial coverage.
+	batch_fact_count : Batch -> U64
+	batch_fact_count = |batch| match batch.status {
+		Complete(snapshot) => fact_count(snapshot) + 1
+		Limited(_) => 3
+	}
+	batch_fact_at : Batch, U64 -> [End, Item(SemanticFact)]
+	batch_fact_at = |batch, index| {
+		if index == 0 {
+			status = match batch.status {
+				Complete(_) => Complete
+				Limited(progress) => Limited(progress.reason)
+			}
+			return Item(SemanticFact.new(SelectionEvaluation({ status, segments: batch.segments, buffered: batch.buffered })))
+		}
+		match batch.status {
+			Complete(snapshot) => fact_at(snapshot, index - 1)
+			Limited(progress) => {
+				if index > 2 {
+					return End
+				}
+				context = ZoneRules.SelectionCursor.context(progress.cursor)
+				if index == 1 {
+					Item(SemanticFact.new(LocalSelectionDescription({ start: context.start, end: context.end })))
+				} else {
+					Item(context_fact(context.rules))
+				}
+			}
+		}
+	}
+
 	to_inspect : ResolvedSelection -> Str
-	to_inspect = |snapshot| "ResolvedSelection(${Str.inspect(snapshot.coverage)}, start=${Str.inspect(snapshot.start)}, end=${Str.inspect(snapshot.end)})"
+	to_inspect = |snapshot| match fact_at(snapshot, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "Resolved selection always supplies its summary fact"
+	}
 }
 
 ## Independent bounded timeline enumeration for R07 classification.
@@ -335,4 +385,48 @@ test_zonerules_local_label = |number| {
 		},
 	)?
 	Ok(LocalDateTime.new(date, clock))
+}
+
+context_fact = |rules| SemanticFact.new(Context({ name: ZoneRules.name(rules), version: ZoneRules.version(rules), validity: ZoneRules.validity(rules), provenance: ZoneRules.provenance(rules) }))
+
+expect {
+	# Independent three-preimage timeline: local [2.5,2.75) appears in three
+	# distinct segments. Limited facts must never pretend to describe coverage.
+	point = PosixBoundary.from_microseconds
+	validity = PosixSpan.new(point(-10000000), point(10000000))?
+	rules = ZoneRules.new_bounded("Synthetic/SelectionFacts", "facts-v1", validity, FixedOffset.from_seconds(4), [{ at: point(0), offset: FixedOffset.from_seconds(2) }, { at: point(1000000), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 4 })?
+	start = test_zonerules_local_label(2500000)?
+	end = test_zonerules_local_label(2750000)?
+	cursor = ZoneRules.selection_cursor(rules, start, end)?
+	zero = ResolvedSelection.collect(cursor, { max_segments: 0, max_members: 1 })?
+	blocked = ResolvedSelection.collect(cursor, { max_segments: 3, max_members: 1 })?
+	complete = ResolvedSelection.collect(cursor, { max_segments: 3, max_members: 3 })?
+	context = SemanticFact.new(Context({ name: "Synthetic/SelectionFacts", version: "facts-v1", validity, provenance: Supplied }))
+	limited_valid = ResolvedSelection.batch_fact_count(zero) == 3 and ResolvedSelection.batch_fact_at(zero, 0) == Item(SemanticFact.new(SelectionEvaluation({ status: Limited(WorkLimit), segments: 0, buffered: 0 }))) and ResolvedSelection.batch_fact_at(zero, 1) == Item(SemanticFact.new(LocalSelectionDescription({ start, end }))) and ResolvedSelection.batch_fact_at(zero, 2) == Item(context) and ResolvedSelection.batch_fact_at(zero, 3) == End and ResolvedSelection.batch_fact_at(zero, U64.highest) == End and ResolvedSelection.batch_fact_at(blocked, 0) == Item(SemanticFact.new(SelectionEvaluation({ status: Limited(BufferLimit), segments: 2, buffered: 1 })))
+	complete_valid = match complete.status {
+		Limited(_) => False
+		Complete(snapshot) => {
+			middle = PosixSpan.new(point(500000), point(750000))?
+			ResolvedSelection.fact_count(snapshot) == 5 and ResolvedSelection.fact_at(snapshot, 0) == Item(SemanticFact.new(CivilSelectionDescription({ start, end, member_count: 3 }))) and ResolvedSelection.fact_at(snapshot, 1) == Item(context) and ResolvedSelection.fact_at(snapshot, 3) == Item(SemanticFact.new(CoverageMember({ index: 1, span: middle }))) and ResolvedSelection.fact_at(snapshot, 5) == End and ResolvedSelection.fact_at(snapshot, U64.highest) == End and ResolvedSelection.batch_fact_count(complete) == 6 and ResolvedSelection.batch_fact_at(complete, 0) == Item(SemanticFact.new(SelectionEvaluation({ status: Complete, segments: 3, buffered: 3 }))) and ResolvedSelection.batch_fact_at(complete, 6) == End and ResolvedSelection.batch_fact_at(complete, U64.highest) == End
+		}
+	}
+	boundary = ResolvedBoundary.resolve(rules, start, Last)?
+	boundary_valid = ResolvedBoundary.fact_count(boundary) == 2 and ResolvedBoundary.fact_at(boundary, 0) == Item(SemanticFact.new(CivilBoundaryDescription({ source: start, policy: Last, boundary: point(2500000), offset: FixedOffset.from_seconds(0) }))) and ResolvedBoundary.fact_at(boundary, 1) == Item(context) and ResolvedBoundary.fact_at(boundary, 2) == End and ResolvedBoundary.fact_at(boundary, U64.highest) == End
+	limited_valid and complete_valid and boundary_valid
+}
+
+expect {
+	# A forward gap yields complete empty coverage; its facts differ from a
+	# zero-work limited batch despite both reporting zero buffered members.
+	point = PosixBoundary.from_microseconds
+	validity = PosixSpan.new(point(-10000000), point(10000000))?
+	rules = ZoneRules.new_bounded("Synthetic/GapFacts", "facts-v1", validity, FixedOffset.from_seconds(0), [{ at: point(0), offset: FixedOffset.from_seconds(2) }], { minimum: 0, maximum: 2 })?
+	start = test_zonerules_local_label(500000)?
+	end = test_zonerules_local_label(750000)?
+	cursor = ZoneRules.selection_cursor(rules, start, end)?
+	complete = ResolvedSelection.collect(cursor, { max_segments: 2, max_members: 0 })?
+	match complete.status {
+		Limited(_) => False
+		Complete(snapshot) => ResolvedSelection.fact_count(snapshot) == 2 and ResolvedSelection.fact_at(snapshot, 0) == Item(SemanticFact.new(CivilSelectionDescription({ start, end, member_count: 0 }))) and ResolvedSelection.fact_at(snapshot, 2) == End and ResolvedSelection.batch_fact_count(complete) == 3 and ResolvedSelection.batch_fact_at(complete, 0) == Item(SemanticFact.new(SelectionEvaluation({ status: Complete, segments: 2, buffered: 0 })))
+	}
 }

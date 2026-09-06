@@ -75,14 +75,16 @@ empty and disconnected coverage, both source calendars and their full rules.
 
 [Explanation](package/Explanation.roc) renders calendar descriptions, EDTF dates,
 offset timestamps, exact intervals, RFC date-time/duration/PERIOD values and
-IXDTF declarations/snapshots from shared [typed facts](package/SemanticFact.roc),
+IXDTF declarations/snapshots, coverage and resolved civil results from shared [typed facts](package/SemanticFact.roc),
 with explicit fact and byte limits. Exact intervals retain their stored extent
 and both supplied endpoint offsets and fractional digit counts. RFC facts distinguish
 calendar days from coordinate seconds and local labels from UTC declarations.
 Rendering a snapshot reads its stored result. A resolved instant can coexist
 with unsupported calendar presentation; truncated output reports `Limited`.
-Inspection uses the same summary facts. Recurrence, coverage and bound-selection
-explanations, and styled renderers, remain outside this profile.
+Inspection uses the same summary facts. Selection evaluation status remains
+separate from rendering completeness: a complete explanation can describe an
+incomplete evaluation. Recurrence explanations and styled renderers remain
+outside this profile.
 
 ## Examples
 
@@ -96,6 +98,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Explain event terms](examples/explain_event_terms/main.roc) | Review calendar-day versus clock-duration terms, local/UTC PERIOD inputs and an exact interval with different endpoint offsets |
 | [Explain annotations](examples/explain_annotations/main.roc) | Explain a declaration's context requirement and its stored interpretation with unsupported calendar presentation |
+| [Explain a civil selection](examples/explain_selection/main.roc) | Explain a later fold appointment and a disconnected selection across bounded evaluation and resumption |
 | [Civil snapshot archive](examples/civil_snapshot_archive/main.roc) | Restore explicit fold choices and both windows of a repeated local range |
 | [Snapshot archive](examples/snapshot_persistence/main.roc) | Restore an interpretation with its original rules, then explicitly reinterpret it under changed data |
 | [Archive persistence](examples/archive_persistence/main.roc) | Save and restore an uncertain catalogue date, a recording declaration and its exact POSIX boundary |

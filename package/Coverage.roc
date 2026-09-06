@@ -1,3 +1,4 @@
+import SemanticFact
 import PosixBoundary
 import PosixDelta
 import PosixSpan
@@ -138,8 +139,29 @@ Coverage :: [Spans(List(PosixSpan))].{
 	to_hash : Coverage, Hasher -> Hasher
 	to_hash = |Spans(items), hasher| items.to_hash(hasher)
 
+	## Indexed semantic facts visit canonical spans, never their coordinates.
+	## An allocated span list uses at least 16 bytes per member, leaving room
+	## for the fixed fact headers when its length is counted in U64.
+	fact_count : Coverage -> U64
+	fact_count = |coverage| member_count(coverage) + 1
+	fact_at : Coverage, U64 -> [End, Item(SemanticFact)]
+	fact_at = |Spans(items), index| {
+		if index == 0 {
+			return Item(SemanticFact.new(CoverageDescription({ member_count: items.len() })))
+		}
+		match items.get(index - 1) {
+			Ok(span) => Item(SemanticFact.new(CoverageMember({ index: index - 1, span })))
+			Err(_) => End
+		}
+	}
+
 	to_inspect : Coverage -> Str
-	to_inspect = |Spans(items)| {
+	to_inspect = |coverage| {
+		items = to_spans(coverage)
+		summary = match fact_at(coverage, 0) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "Coverage always supplies its summary fact"
+		}
 		count = List.len(items)
 		var index = 0.U64
 		var preview = ""
@@ -150,7 +172,14 @@ Coverage :: [Spans(List(PosixSpan))].{
 			} else {
 				", "
 			}
-			preview = "${preview}${separator}${Str.inspect(at(items, index))}"
+			member = match fact_at(coverage, index + 1) {
+				Item(fact) => match SemanticFact.kind(fact) {
+					CoverageMember(data) => data.span
+					_ => crash "Coverage member index supplies a member fact"
+				}
+				End => crash "Preview index is within member count"
+			}
+			preview = "${preview}${separator}${Str.inspect(member)}"
 			index = index + 1
 		}
 		omitted = if count > index {
@@ -158,10 +187,10 @@ Coverage :: [Spans(List(PosixSpan))].{
 		} else {
 			""
 		}
-		"Coverage(members=${count.to_str()}, preview=[${preview}]${omitted})"
+		"${summary} preview=[${preview}]${omitted}"
 	}
 
-	expect Str.inspect(empty) == "Coverage(members=0, preview=[])"
+	expect Str.inspect(empty) == "Coverage(members=0) preview=[]"
 
 	is_eq : Coverage, Coverage -> Bool
 	is_eq = |Spans(a), Spans(b)| a == b
@@ -538,4 +567,11 @@ expect {
 	coverage = Coverage.from_spans([unit])
 	Coverage.contains(coverage, PosixSpan.start(unit)) and !Coverage.contains(coverage, PosixSpan.end(unit)) and
 		Coverage.complement_within(coverage, unit) == Coverage.empty
+}
+
+expect {
+	# The full coordinate range is one member even though its width overflows.
+	span = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+	coverage = Coverage.from_spans([span])
+	Coverage.fact_count(Coverage.empty) == 1 and Coverage.fact_at(Coverage.empty, 0) == Item(SemanticFact.new(CoverageDescription({ member_count: 0 }))) and Coverage.fact_at(Coverage.empty, 1) == End and Coverage.fact_count(coverage) == 2 and Coverage.fact_at(coverage, 1) == Item(SemanticFact.new(CoverageMember({ index: 0, span }))) and Coverage.fact_at(coverage, 2) == End and Coverage.fact_at(coverage, U64.highest) == End
 }

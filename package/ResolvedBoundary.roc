@@ -1,3 +1,4 @@
+import SemanticFact
 import FixedOffset
 import LocalDateTime
 import PosixBoundary
@@ -44,6 +45,19 @@ ResolvedBoundary :: {
 	to_hash : ResolvedBoundary, Hasher -> Hasher
 	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.offset.to_hash(value.boundary.to_hash(value.policy.to_hash(value.source.to_hash(hasher)))))
 
+	## Facts read only stored source, policy, result and context metadata.
+	fact_count : ResolvedBoundary -> U64
+	fact_count = |_| 2
+	fact_at : ResolvedBoundary, U64 -> [End, Item(SemanticFact)]
+	fact_at = |snapshot, index| match index {
+		0 => Item(SemanticFact.new(CivilBoundaryDescription({ source: snapshot.source, policy: snapshot.policy, boundary: snapshot.boundary, offset: snapshot.offset })))
+		1 => Item(SemanticFact.new(Context({ name: ZoneRules.name(snapshot.rules), version: ZoneRules.version(snapshot.rules), validity: ZoneRules.validity(snapshot.rules), provenance: ZoneRules.provenance(snapshot.rules) })))
+		_ => End
+	}
+
 	to_inspect : ResolvedBoundary -> Str
-	to_inspect = |snapshot| "ResolvedBoundary(${Str.inspect(snapshot.boundary)}, offset=${Str.inspect(snapshot.offset)}, source=${Str.inspect(snapshot.source)})"
+	to_inspect = |snapshot| match fact_at(snapshot, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "Resolved boundary always supplies its summary fact"
+	}
 }

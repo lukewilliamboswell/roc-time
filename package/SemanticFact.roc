@@ -35,7 +35,13 @@ SemanticFact :: { value : Kind }.{
 	RfcDateTimeData : { role : [Standalone, Start, End], local : LocalDateTime, form : [Utc, Local] }
 	RfcDurationData : { role : [Standalone, PeriodEnding], days : I64, seconds : I64 }
 	RfcPeriodData : { form : [Utc, Local], start : LocalDateTime, ending : [Endpoint(LocalDateTime), Duration({ days : I64, seconds : I64 })] }
-	Kind : [ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), RfcDateTimeDescription(RfcDateTimeData), RfcDurationDescription(RfcDurationData), RfcPeriodDescription(RfcPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
+	CoverageData : { member_count : U64 }
+	CoverageMemberData : { index : U64, span : PosixSpan }
+	CivilBoundaryData : { source : LocalDateTime, policy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)], boundary : PosixBoundary, offset : FixedOffset }
+	CivilSelectionData : { start : LocalDateTime, end : LocalDateTime, member_count : U64 }
+	LocalSelectionData : { start : LocalDateTime, end : LocalDateTime }
+	SelectionEvaluationData : { status : [Complete, Limited([WorkLimit, BufferLimit])], segments : U64, buffered : U64 }
+	Kind : [CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), RfcDateTimeDescription(RfcDateTimeData), RfcDurationDescription(RfcDurationData), RfcPeriodDescription(RfcPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
 	new : Kind -> SemanticFact
 	new = |kind| { value: kind }
 	kind : SemanticFact -> Kind
@@ -43,6 +49,12 @@ SemanticFact :: { value : Kind }.{
 
 	summary : SemanticFact -> Str
 	summary = |fact| match fact.value {
+		CoverageDescription(data) => "Coverage(members=${data.member_count.to_str()})"
+		CoverageMember(data) => "CoverageMember(index=${data.index.to_str()}, span=${Str.inspect(data.span)})"
+		CivilBoundaryDescription(data) => "ResolvedBoundary(source=${local_text(data.source, 6)}, policy=${Str.inspect(data.policy)}, boundary=${Str.inspect(data.boundary)}, offset=${FixedOffset.to_seconds(data.offset).to_str()} seconds)"
+		CivilSelectionDescription(data) => "ResolvedSelection(start=${local_text(data.start, 6)}, end=${local_text(data.end, 6)}, members=${data.member_count.to_str()})"
+		LocalSelectionDescription(data) => "LocalSelection(start=${local_text(data.start, 6)}, end=${local_text(data.end, 6)})"
+		SelectionEvaluation(data) => "SelectionEvaluation(status=${Str.inspect(data.status)}, segments=${data.segments.to_str()}, buffered=${data.buffered.to_str()})"
 		ExactIntervalDescription(data) => "ExactInterval(${Str.inspect(data.span)})"
 		OffsetEndpoint(data) => {
 			offset = match data.offset {
@@ -185,4 +197,14 @@ expect {
 	).count_utf8_bytes() <= 160 and
 		SemanticFact.summary(SemanticFact.new(RfcPeriodDescription({ form: Local, start: local, ending: Duration({ days: I64.lowest, seconds: I64.highest }) }))).count_utf8_bytes() <= 256 and
 			SemanticFact.summary(SemanticFact.new(OffsetEndpoint({ role: End, local, fraction_digits: 255, offset: Asserted(FixedOffset.from_seconds(I32.lowest)) }))).count_utf8_bytes() <= 256
+}
+
+expect {
+	date = CalendarDate.from_fields(Julian, { year: -2147483648, month: 12, day: 31 })?
+	clock = ClockTime.from_fields({ hour: 23, minute: 59, second: 59, microsecond: 999999 })?
+	local = LocalDateTime.new(date, clock)
+	boundary = SemanticFact.new(CivilBoundaryDescription({ source: local, policy: MatchingOffset(FixedOffset.from_seconds(I32.lowest)), boundary: PosixBoundary.from_microseconds(I64.lowest), offset: FixedOffset.from_seconds(I32.lowest) }))
+	selection = SemanticFact.new(CivilSelectionDescription({ start: local, end: local, member_count: U64.highest }))
+	evaluation = SemanticFact.new(SelectionEvaluation({ status: Limited(BufferLimit), segments: U64.highest, buffered: U64.highest }))
+	SemanticFact.summary(boundary).count_utf8_bytes() <= 256 and SemanticFact.summary(selection).count_utf8_bytes() <= 256 and SemanticFact.summary(evaluation).count_utf8_bytes() <= 256
 }

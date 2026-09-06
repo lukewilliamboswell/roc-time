@@ -398,6 +398,15 @@ The interchange generator independently checks fold policies and empty gap
 coverage. Neither canonical text agreement nor allocation traffic establishes
 retained memory or correctness without the corresponding semantic fixtures.
 
+Selection explanation evidence in `tests/selection_explanation_resource/main.roc`
+separates stored fact reads from bounded rendering for coverage, civil boundaries,
+complete selections and limited batches. Vary member counts, metadata lengths
+and owned/shared/sliced coverage. Zero-budget rendering and indexed fact reads
+have allocation assertions; fixed-budget rendering includes visible metadata
+clipping and failing ceiling controls in dev and speed builds. A fully rendered
+limited batch must still report incomplete evaluation. These counters measure
+allocation traffic, not retained memory.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

@@ -1,0 +1,13 @@
+Appointment: choose the later occurrence (rendering Complete)
+Resolved civil boundary: Gregorian year 1970, month 1, day 1, 0:30:00.000000; policy last occurrence; stored POSIX position 1800000000 microseconds since 1970-01-01; local offset 0 seconds.
+Context: zone "Synthetic/Fallback", version "example-v1", validity [-86400000000, 86400000000) POSIX microseconds; supplied rules.
+Selection: first evaluation step (rendering Complete)
+Selection evaluation incomplete: work limit reached; visited 1 segment; buffered 1 member.
+Local selection request: from Gregorian year 1970, month 1, day 1, 0:30:00.000000 to Gregorian year 1970, month 1, day 1, 0:45:00.000000 (end excluded).
+Context: zone "Synthetic/Fallback", version "example-v1", validity [-86400000000, 86400000000) POSIX microseconds; supplied rules.
+Selection: resumed evaluation (rendering Complete)
+Selection evaluation complete; visited 1 segment; buffered 2 members.
+Complete civil selection: from Gregorian year 1970, month 1, day 1, 0:30:00.000000 to Gregorian year 1970, month 1, day 1, 0:45:00.000000 (end excluded); stored coverage has 2 separate spans.
+Context: zone "Synthetic/Fallback", version "example-v1", validity [-86400000000, 86400000000) POSIX microseconds; supplied rules.
+Coverage member 0: [-1800000000, -900000000) POSIX microseconds since 1970-01-01; start included, end excluded.
+Coverage member 1: [1800000000, 2700000000) POSIX microseconds since 1970-01-01; start included, end excluded.
