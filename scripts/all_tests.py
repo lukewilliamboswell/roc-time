@@ -112,6 +112,8 @@ def main() -> None:
     heading("Checking scripts and examples...")
     run([sys.executable, "scripts/release_bundles.py", "self-test"])
     run([sys.executable, "scripts/release_starter.py", "self-test"])
+    run([sys.executable, "scripts/check_docs_history.py", "--self-test"])
+    run([sys.executable, "scripts/test_docs.py"])
     for example in sorted((ROOT / "examples").rglob("main.roc")):
         run([ROC, "check", str(example.relative_to(ROOT))])
 
