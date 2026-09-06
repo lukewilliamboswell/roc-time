@@ -20,6 +20,7 @@ main! = |args| {
 		"roundtrip" => sample!(data.map(|v| v.date), iterations, warmups, samples, Benchmark.roundtrip)
 		"add_days" => sample!(data.map(|v| v.date), iterations, warmups, samples, Benchmark.add_days)
 		"parse" => sample!(data.map(|v| v.text), iterations, warmups, samples, Benchmark.parse)
+		"resolve" => sample!(data.map(|v| v.timestamp), iterations, warmups, samples, Benchmark.resolve)
 		"format" => sample!(data.map(|v| v.timestamp), iterations, warmups, samples, Benchmark.format)
 		"end_to_end" => sample!(data.map(|v| v.text), iterations, warmups, samples, Benchmark.end_to_end)
 		_ => crash "unknown workload"

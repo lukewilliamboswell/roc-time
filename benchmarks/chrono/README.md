@@ -27,8 +27,11 @@ The checked-in 32-row corpus spans Gregorian 1900–2100, century/leap boundarie
 | `roundtrip` | Gregorian → civil-day → Gregorian | date → days-from-CE → date | year/month/day checksum |
 | `add_days` | civil-day coordinate +17 → Gregorian | `checked_add_days(Days::new(17))` | year/month/day checksum |
 | `parse` | `OffsetTimestamp.parse` + `boundary` | `DateTime::parse_from_rfc3339` + `timestamp_micros` | bounded microsecond checksum |
+| `resolve` | stored `OffsetTimestamp.boundary` | stored `DateTime::timestamp_micros` | bounded microsecond checksum |
 | `format` | stored `OffsetTimestamp.to_text` | stored `to_rfc3339_opts(Micros,false)` | all output bytes summed |
 | `end_to_end` | parse + canonical text | parse + canonical text | all output bytes summed |
+
+The `resolve` workload compares public representation operations on narrow arrays of stored timestamps. Chrono already stores the resolved coordinate; roc-time preserves the declared local fields and offset and computes the coordinate when requested. The checksum matches `parse`. Do not subtract `resolve` measurements from `parse` to infer parser-only latency: the representations, optimization opportunities and combined operation paths differ.
 
 The day calculation is exact calendar-day addition on date-only values. It is not duration arithmetic on a zoned timestamp. All chosen dates and their +17-day results fit both providers. The parse workload explicitly includes resolution of the supplied fixed offset to the shared POSIX microsecond coordinate; formatting starts from preconstructed values. End-to-end means the text adapter pipeline, not process startup or corpus loading.
 

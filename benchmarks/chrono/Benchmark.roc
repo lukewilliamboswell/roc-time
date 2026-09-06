@@ -73,6 +73,15 @@ Benchmark := [].{
 		I64.mod_by(PosixBoundary.to_microseconds(boundary), 1000000007).to_u64_wrap()
 	}
 
+	resolve : OffsetTimestamp -> U64
+	resolve = |value| {
+		boundary = match OffsetTimestamp.boundary(value) {
+			Ok(point) => point
+			Err(_) => crash "bounded stored timestamp"
+		}
+		I64.mod_by(PosixBoundary.to_microseconds(boundary), 1000000007).to_u64_wrap()
+	}
+
 	format : OffsetTimestamp -> U64
 	format = |v| text_sum(OffsetTimestamp.to_text(v))
 

@@ -19,7 +19,7 @@ import fixture_platform
 
 BASE = ROOT / "benchmarks/chrono"
 BUILD = ROOT / ".roc-time-tmp/chrono-benchmark"
-MODES = ("date_control", "date_to_day", "construct", "roundtrip", "add_days", "parse", "format", "end_to_end")
+MODES = ("date_control", "date_to_day", "construct", "roundtrip", "add_days", "parse", "resolve", "format", "end_to_end")
 
 
 def run(command, **kwargs):
@@ -47,7 +47,7 @@ def expected_sum(corpus, mode, iterations):
             if not 0 <= shifted_day < 2**64:
                 raise ValueError("day-coordinate checksum outside unsigned range")
             values.append(shifted_day)
-        elif mode == "parse":
+        elif mode in ("parse", "resolve"):
             values.append(case["microseconds"] % 1000000007)
         elif mode in ("format", "end_to_end"):
             values.append(sum(case["canonical"].encode("ascii")))

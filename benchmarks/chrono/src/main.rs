@@ -97,6 +97,9 @@ fn main() {
                 .timestamp_micros()
                 .rem_euclid(1_000_000_007) as u64
         }),
+        "resolve" => sample(&timestamps, iterations, warmups, samples, |v| {
+            v.timestamp_micros().rem_euclid(1_000_000_007) as u64
+        }),
         "format" => sample(&timestamps, iterations, warmups, samples, |v| {
             text_sum(&v.to_rfc3339_opts(SecondsFormat::Micros, false))
         }),
