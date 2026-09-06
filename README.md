@@ -23,7 +23,8 @@ unchecked items are planned.
 - [x] Gap/fold handling, local selections and an optional time-zone database.
 - [x] Bounded, resumable date and timed schedules, identified appointments and RFC date/timed value adapters.
 - [ ] Broader RFC recurrence import and persistence.
-- [ ] Richer temporal descriptions: partial dates, uncertainty and bounded reasoning.
+- [x] Finite calendar descriptions, scoped qualifications and explicit finite-alternative point reasoning.
+- [ ] Broader symbolic descriptions, uncertain endpoints and interval reasoning.
 - [ ] ISO 8601 / EDTF / IXDTF parsing and serialization in explicitly supported profiles.
 - [ ] Semantic explanations, versioned persistence and broader calendar support.
 
@@ -47,6 +48,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Service calendar](examples/maintenance/main.roc) | Import date-only recurrence values and review rescheduled visits without restarting the original series count |
 | [Dispatch deadlines](examples/dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
 | [Equipment loans](examples/equipment_loans/main.roc) | Keep monthly loans on the 31st, clamp return dates across clock changes, and add an extra one-week booking |
+| [Outage evidence](examples/outage_evidence/main.roc) | Compare paired outage reports with independent endpoint notes without inventing correlations |
 | [Archive search](examples/archive_search/main.roc) | Search recordings by a supplied minute or second, preserving the different selection widths |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
@@ -82,8 +84,12 @@ Qualified selections return `NeedsModel` until the caller supplies a model.
 [CalendarEvidence](package/CalendarEvidence.roc) validates explicit finite
 alternatives and answers bounded POSIX point-membership queries as definite,
 possible or impossible. It preserves unqualified fields and does not merge
-alternatives into certain coverage. Uncertain-endpoint and general interval
-reasoning remain unfinished.
+alternatives into certain coverage.
+[IntervalEvidence](package/IntervalEvidence.roc) distinguishes paired resolved
+interval choices from independent finite endpoint sets. Its point queries and
+explicit possible/definite coverage projections avoid Cartesian-product storage.
+Civil endpoint knowledge, unbounded models and general interval reasoning
+remain unfinished.
 
 [RfcDateRule](package/RfcDateRule.roc) accepts extracted date-only recurrence
 property values under its declared profile. It does not parse complete ICS

@@ -314,6 +314,18 @@ bounds for this shared-cursor workload, not exact allocation or retained-memory
 contracts. Review ceiling changes against measured operations and ownership;
 do not raise them merely to make a regression pass.
 
+Finite resolved-interval evidence has a separate resource fixture at
+`tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
+intervals and independent endpoints, with owned, shared and retained sliced
+inputs. Independent 4096-by-4096 endpoints admit 16,777,216 valid pairs; the
+constructor must stay within `1024 * n + 8192` requested bytes and a five-second
+process bound, without pair materialization. A 64-fold input increase may grow
+construction traffic by at most 128-fold. Input generation is outside those
+scopes. Point-query scopes must request zero bytes and preserve gap, definite,
+possible and impossible observations. Always-active zero-ceiling controls must
+fail in both dev and speed builds. These are allocation-traffic and execution
+bounds, not live/retained-memory or exact-layout claims.
+
 The host is test-only and adds no package dependency. Apple Silicon macOS and
 Linux x86-64/musl native execution are verified, including dev/speed resource
 assertions and failing controls. Linux uses pinned linker inputs; other targets

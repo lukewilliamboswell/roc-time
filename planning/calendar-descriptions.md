@@ -33,7 +33,7 @@ or infer correlations between independently supplied endpoint alternatives.
 Do not use a parser-specific evaluation engine or claim EDTF/ISO conformance from
 native construction. Delete completed deliverables as acceptance is established.
 
-## Next interval slice
+## Civil endpoint integration
 
 Introduce endpoint knowledge separately from interval materialization. Each side
 must retain a known resolution-bearing description, an unknown endpoint, or an
@@ -41,27 +41,23 @@ explicit unbounded endpoint. Exact resolved endpoints are a different case from
 an endpoint lying somewhere within a calendar selection. CalendarValue's lower
 boundary is not an inferred actual endpoint.
 
-Resolve the initial finite reasoning model before exposing interval queries:
-
-- Independent endpoint domains admit start/end combinations constrained by
-  start < end. A correlated model must instead retain explicitly paired choices;
-  taking their Cartesian product introduces interpretations the caller excluded.
-- Empty admissible sets are inconsistent evidence. Invalid start/end pairs must
-  not silently turn the entire model into an empty success, nor be counted as
-  evidence against a query. Decide where satisfiability is established and bound
-  its work separately from membership evaluation.
 - Preserve each endpoint's original resolution and qualifiers through explicit
   calendar/zone interpretation. A year start and a month end are independent
   domains, potentially with disconnected fold preimages. Unknown endpoints need
   supplied evidence; unbounded endpoints need operations that explicitly support
   them or explicit finite bounds.
-- Include a small correlation counterexample: paired intervals [0,1) and [2,3)
-  make point 1 impossible. Recombining starts {0,2} with ends {1,3} adds [0,3),
-  making it possible, and an invalid reversed pair. Verify both model definitions
-  independently rather than assuming they are interchangeable.
-- Include overlapping endpoint domains, mixed year/month resolution, empty and
-  reversed bounds, signed I64 limits, gaps/folds, budget exhaustion and retained
-  resumptions. Compare reasoning against exhaustive small admissible models.
+- Bridge to interval reasoning without enumerating every microsecond in a civil
+  endpoint domain. IntervalEvidence's finite boundary-list inputs do not by
+  themselves represent all possible endpoints within a year or month. Extend the
+  domain representation and prove its quantified semantics before that lowering.
+- Keep paired and independent intent explicit during interpretation. Do not
+  introduce cross-pair combinations or lose correlations retained by the native
+  resolved model. Establish satisfiability under explicit work limits before
+  returning complete reasoning outcomes.
+- Include mixed year/month resolution, signed I64 limits, gaps/folds, budget
+  exhaustion and retained resumptions, comparing with exhaustive small models.
+  General interval relationships need their own supported profile and oracle;
+  point-membership evidence does not establish Allen reasoning over uncertainty.
 
-The next vertical slice should carry one of these declared models through real
-public construction and a bounded query before adding interval interchange.
+The next vertical slice should carry endpoint knowledge through real public
+construction and a bounded interpretation/query before interval interchange.

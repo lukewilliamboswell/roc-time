@@ -1,5 +1,6 @@
 import fuzz.Fuzz
 import time.CalendarValue
+import time.IntervalEvidence
 import time.CalendarEvidence
 import time.QualifiedCalendarValue
 import time.CalendarDate
@@ -71,6 +72,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 		}
 		check_qualifications(value, minute, rules, input.number)
 		check_evidence(date, value, rules, input, start, width, after)
+		check_intervals(input)
 		plain = qualified(value, [])
 		cursor = match QualifiedCalendarValue.selection_cursor(plain, rules) {
 			Ok(found) => found
@@ -284,6 +286,114 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 				crash "Evidence resumption changed truth"
 			}
 			Limited(_) => crash "Sufficient model work incomplete"
+		}
+	}
+}
+
+# R01/R13: finite endpoint evidence; no zone interpretation is involved. Enumerate
+# every valid start/end pair in a six-point model, rather than using extrema or
+# coverage algebra as the oracle. Bits select arbitrary subsets (including empty
+# ones); signed extremes and adjacent central endpoints are always in the pool.
+# The retained lists and padded slices exercise normalization with shared storage.
+check_intervals = |input| {
+	center = if input.gap {
+		input.number.to_i64_wrap()
+	} else {
+		-input.number.to_i64_wrap()
+	}
+	points = [I64.lowest, center - 1, center, center + 1, center + 2, I64.highest]
+	var starts = []
+	var ends = []
+	var pairs = []
+	var paired_spans = []
+	var bits = input.number
+	for coordinate in points {
+		if bits % 2 == 1 {
+			starts = starts.append(coordinate)
+		}
+		if (bits // 2) % 2 == 1 {
+			ends = ends.append(coordinate)
+		}
+		bits = bits // 4
+	}
+	bits = input.number
+	for start in points {
+		for end in points {
+			if start < end {
+				if bits % 2 == 1 {
+					pairs = pairs.append({ start, end })
+					paired_spans = paired_spans.append(span(start, end))
+				}
+				bits = bits // 2
+			}
+		}
+	}
+	paired = IntervalEvidence.paired(paired_spans)
+	if pairs.is_empty() {
+		if paired != Err(InconsistentEvidence) {
+			crash "Empty paired evidence succeeded"
+		}
+	} else {
+		evidence = match paired {
+			Ok(found) => found
+			Err(_) => crash "Valid paired evidence rejected"
+		}
+		sliced = [span(center - 1, center)].concat(paired_spans.concat(paired_spans)).drop_first(1)
+		if IntervalEvidence.paired(sliced) != Ok(evidence) {
+			crash "Shared paired normalization changed declaration"
+		}
+		check_interval_truth(evidence, pairs, points)
+	}
+	var admissible = []
+	for start in starts {
+		for end in ends {
+			if start < end {
+				admissible = admissible.append({ start, end })
+			}
+		}
+	}
+	start_points = starts.map(point)
+	end_points = ends.map(point)
+	independent = IntervalEvidence.independent({ starts: start_points, ends: end_points })
+	if admissible.is_empty() {
+		if independent != Err(InconsistentEvidence) {
+			crash "Inconsistent endpoint evidence succeeded"
+		}
+	} else {
+		evidence = match independent {
+			Ok(found) => found
+			Err(_) => crash "Admissible endpoint evidence rejected"
+		}
+		sliced_starts = [point(center)].concat(start_points.concat(start_points)).drop_first(1)
+		sliced_ends = [point(center)].concat(end_points.concat(end_points)).drop_first(1)
+		if IntervalEvidence.independent({ starts: sliced_starts, ends: sliced_ends }) != Ok(evidence) {
+			crash "Shared endpoint normalization changed declaration"
+		}
+		check_interval_truth(evidence, admissible, points)
+	}
+}
+
+check_interval_truth = |evidence, intervals, points| {
+	for coordinate in points {
+		var yes = 0.U64
+		for interval in intervals {
+			if interval.start <= coordinate and coordinate < interval.end {
+				yes = yes + 1
+			}
+		}
+		expected = if yes == 0 {
+			Impossible
+		} else if yes == intervals.len() {
+			Definite
+		} else {
+			Possible
+		}
+		if IntervalEvidence.contains(evidence, point(coordinate)) != expected {
+			crash "Interval truth differs from exhaustive admissible model"
+		}
+		if Coverage.contains(IntervalEvidence.possible_coverage(evidence), point(coordinate)) != (yes > 0) or
+			Coverage.contains(IntervalEvidence.definite_coverage(evidence), point(coordinate)) != (yes == intervals.len()) {
+			crash "Interval coverage projections differ from quantified membership"
 		}
 	}
 }

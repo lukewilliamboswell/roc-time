@@ -1,5 +1,6 @@
 import time.CalendarValue
 import time.CalendarEvidence
+import time.IntervalEvidence
 import time.QualifiedCalendarValue
 import time.CalendarDate
 import time.RfcPeriod
@@ -55,6 +56,12 @@ DispatchChecks :: [].{
 		evidence = evidence_for(qualified_minute, [minute_value, minute_value])?
 		singleton = evidence_for(reordered, [minute_value])?
 		if evidence != singleton or Dict.get(Dict.insert(Dict.empty(), evidence, 4.U64), singleton) != Ok(4) or !Str.inspect(evidence).contains("alternatives=1") {
+			return Err(Failed)
+		}
+
+		interval = interval_model([PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(2), PosixBoundary.from_microseconds(0)], [PosixBoundary.from_microseconds(3)])?
+		reordered_interval = interval_model([PosixBoundary.from_microseconds(2), PosixBoundary.from_microseconds(0)], [PosixBoundary.from_microseconds(3)])?
+		if interval != reordered_interval or Dict.get(Dict.insert(Dict.empty(), interval, 5.U64), reordered_interval) != Ok(5) or Str.inspect(interval) != "IntervalEvidence(Independent, starts=2, ends=1)" {
 			return Err(Failed)
 		}
 
@@ -154,6 +161,11 @@ qualify = |value, items| match QualifiedCalendarValue.new(value, items) {
 }
 
 evidence_for = |description, values| match CalendarEvidence.new(description, values) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+interval_model = |starts, ends| match IntervalEvidence.independent({ starts, ends }) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }

@@ -122,6 +122,46 @@ def verify_recurrence(target: str) -> None:
             raise RuntimeError(f"{mode}: recurrence allocation negative control failed")
         print(f"PASS recurrence {mode}: short/vast horizon requested bytes {observations[0]}; negative control")
 
+
+def verify_intervals(target: str) -> None:
+    """Finite endpoint products stay implicit; query allocations are separate.
+
+    Requested bytes cover normalization and cached projections, not live bytes.
+    Inputs are generated before each measured scope; shared/sliced originals
+    remain observable after consumption. A deadline also bounds hidden scans.
+    """
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/interval_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"interval-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for ownership in ("owned", "shared", "sliced"):
+            observations = []
+            for size in (64, 512, 4096):
+                ceiling = 1024 * size + 8192
+                result = subprocess.run([binary, str(size), str(ceiling), ownership],
+                                        capture_output=True, timeout=5)
+                expected = b"independent=definite,edge=possible,outside=impossible,paired-gap=impossible\n"
+                if result.returncode or result.stdout != expected:
+                    raise RuntimeError(f"{mode}/{ownership}/{size}: interval resource probe failed: {result.stderr!r}")
+                match = re.search(rb" work=((?:\d+,){3}\d+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError(f"{mode}/{ownership}: missing interval observations")
+                counts = tuple(int(value) for value in match[1].split(b","))
+                if counts[1] != 0 or counts[3] != 0:
+                    raise RuntimeError(f"{mode}/{ownership}: interval queries allocated: {counts}")
+                observations.append(counts)
+            # A 64x input increase must not approach 4096x product storage.
+            for index in (0, 2):
+                if observations[-1][index] > 128 * max(1, observations[0][index]):
+                    raise RuntimeError(f"{mode}/{ownership}: nonlinear interval traffic: {observations}")
+            failed = subprocess.run([binary, "4096", "0", ownership], capture_output=True, timeout=5)
+            if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+                raise RuntimeError(f"{mode}/{ownership}: interval negative control failed")
+            print(f"PASS interval {mode}/{ownership}: sizes 64/512/4096 requested bytes {observations}; negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -130,5 +170,6 @@ if __name__ == "__main__":
     if options.verify:
         verify_probe(selected_target)
         verify_recurrence(selected_target)
+        verify_intervals(selected_target)
     else:
         print(selected_target)

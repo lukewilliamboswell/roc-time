@@ -1,0 +1,4 @@
+Possible outage intervals
+12:02 UTC: paired possible, independent possible
+12:07 UTC: paired impossible, independent possible
+12:15 UTC: paired impossible, independent impossible
