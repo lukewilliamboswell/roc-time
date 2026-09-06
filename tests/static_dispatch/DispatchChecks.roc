@@ -5,6 +5,8 @@ import time.QualifiedCalendarValue
 import time.CalendarDate
 import time.RfcPeriod
 import time.RfcDateTime
+import time.EdtfDate
+import time.OffsetTimestamp
 import time.RfcDuration
 import time.CivilDay
 import time.GregorianDate
@@ -16,6 +18,18 @@ import time.Coverage
 DispatchChecks :: [].{
 	run : {} -> Try({}, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed, ..])
 	run = |_| {
+		archive = parse_archive("2004-06~")?
+		same_archive = parse_archive("2004-06~")?
+		if archive != same_archive or Dict.get(Dict.insert(Dict.empty(), archive, 31.U64), same_archive) != Ok(31) or !Str.inspect(archive).contains("2004-06~") {
+			return Err(Failed)
+		}
+		stamp = parse_offset("1970-01-01T00:00:00.120Z")?
+		same_stamp = parse_offset("1970-01-01t00:00:00.120-00:00")?
+		asserted = parse_offset("1970-01-01T00:00:00.120+00:00")?
+		coarser = parse_offset("1970-01-01T00:00:00.12Z")?
+		if stamp != same_stamp or stamp == asserted or stamp == coarser or Dict.get(Dict.insert(Dict.empty(), stamp, 37.U64), same_stamp) != Ok(37) or !Str.inspect(stamp).contains(".120Z") {
+			return Err(Failed)
+		}
 		for a in [I64.lowest, -1.I64, 0, 1, I64.highest] {
 			for b in [I64.lowest, -1.I64, 0, 1, I64.highest] {
 				left = CivilDay.from_day_number(a)
@@ -135,6 +149,16 @@ DispatchChecks :: [].{
 		}
 		Ok({})
 	}
+}
+
+parse_archive = |text| match EdtfDate.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
+}
+
+parse_offset = |text| match OffsetTimestamp.parse(text) {
+	Ok(value) => Ok(value)
+	Err(_) => Err(Failed)
 }
 
 parse_duration : Str -> Try(RfcDuration, [Failed, ..])

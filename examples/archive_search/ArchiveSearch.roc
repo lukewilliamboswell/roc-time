@@ -2,7 +2,8 @@ import time.CalendarDate
 import time.CalendarValue
 import time.CalendarEvidence
 import time.QualifiedCalendarValue
-import time.RfcDateTime
+import time.OffsetTimestamp
+import time.EdtfDate
 import time.FixedOffset
 import time.PosixSpan
 import time.PosixBoundary
@@ -11,6 +12,31 @@ import time.Coverage
 
 ## Search by supplied calendar precision while retaining exact recording times.
 ArchiveSearch :: [].{
+
+	## Preserve imported archive dates before asking for an exact selection.
+	import_dates = |texts, recording_times| {
+		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+		var recordings = []
+		for text in recording_times {
+			timestamp = match OffsetTimestamp.parse(text) {
+				Ok(value) => value
+				Err(error) => return Err(Timestamp(error))
+			}
+			recordings = recordings.append(OffsetTimestamp.boundary(timestamp)?)
+		}
+		var results = []
+		for text in texts {
+			date = match EdtfDate.parse(text) {
+				Ok(value) => value
+				Err(error) => return Err(ArchiveDate(error))
+			}
+			outcome = count_matches(EdtfDate.description(date), rules, recordings)?
+			results = results.append({ label: EdtfDate.to_text(date), outcome })
+		}
+		Ok(results)
+	}
+
 	find = |date_fields, recording_times, admissible_minutes| {
 		date = CalendarDate.from_fields(Gregorian, date_fields)?
 		minute = CalendarValue.minute(date, 9, 30)?
@@ -19,11 +45,11 @@ ArchiveSearch :: [].{
 		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 		var recordings = []
 		for text in recording_times {
-			timestamp = match RfcDateTime.parse(text) {
+			timestamp = match OffsetTimestamp.parse(text) {
 				Ok(value) => value
 				Err(error) => return Err(Timestamp(error))
 			}
-			recordings = recordings.append(RfcDateTime.utc_boundary(timestamp)?)
+			recordings = recordings.append(OffsetTimestamp.boundary(timestamp)?)
 		}
 		exact_minute = QualifiedCalendarValue.new(minute, [])?
 		exact_second = QualifiedCalendarValue.new(second, [])?

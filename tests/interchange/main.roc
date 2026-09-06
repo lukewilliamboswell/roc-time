@@ -1,0 +1,9 @@
+app [target] {
+	fuzz: platform "https://github.com/lukewilliamboswell/roc-fuzz/releases/download/0.3.0/FTcKnkDxL1ZXfKsxeLmNKZ6XKnuKDd47Gv79ThxLYSfw.tar.zst",
+	time: "../../package/main.roc",
+}
+
+import fuzz.Fuzz
+import InterchangeCase
+
+target = Fuzz.target({ name: "interchange-v1", test: InterchangeCase.check, show: |input| Str.inspect(input) })

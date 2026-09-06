@@ -19,6 +19,8 @@ package
 		RfcDateRule,
 		RfcDuration,
 		RfcDateTime,
+		EdtfDate,
+		OffsetTimestamp,
 		RfcPeriod,
 		RfcTimedRule,
 		CivilDay,

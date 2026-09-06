@@ -29,6 +29,19 @@ decoders, and the named-case replay checks validate that contract.
 | `recurrence-v1` | R11–R12/R14: 2024–2025 monthly schedules on day 31 or the last Monday, intervals 1–3, COUNT 1–6, duplicate inclusions, exclusions and query starts in every month. An independent month-table/weekday walk builds the finite set before query filtering. Native resumptions with 1–128 work steps and one output slot, and equivalent parsed RFC date values, must yield exactly that set. Duplicate COUNT parts must fail. Generated positive RFC H/M/S durations lower through TimedOccurrence and agree with an independent integer-second sum, without zone work; canonical text reparses semantically and malformed suffixes fail. The schedule model alternates native ending overrides with parsed RfcPeriod additions, preserving existing inclusions, source identities and UTC-grid widths under resumption. A separate half-hour grid with a forward or backward offset jump filters native UntilBoundary results against a piecewise arithmetic model, with one zone segment per resumption. Fixed tests add UNTIL, positive positions, zero/reduced buffer limits and provider endpoints. |
 | `zones-v1` | R07: two synthetic transitions imported through the structural database adapter, offsets -2 through 2 seconds, local labels within a complete finite rule domain and arbitrary microsecond fractions; classification, explicit occurrence policies, snapshot provenance/re-resolution and half-second selection membership compared with independent timeline-cell enumeration. Fixed fixtures add three-occurrence folds, a skipped local day and incomplete-domain errors. |
 
+The `interchange-v1` target covers R01–R02/R13–R14 through EdtfDate and
+OffsetTimestamp. It generates Gregorian years 1900–2100, valid dates, three
+date resolutions, four qualification choices, offsets from -23:59 to +23:59
+and zero through six fractional digits. An independent year/month counter from
+1900 predicts POSIX boundaries, sharing Gregorian leap rules but no production
+date-conversion algorithm. Native fields and source resolution are checked
+separately from canonical round trips. Invalid dates, incomplete prefixes,
+out-of-profile offsets, leap seconds and seventh fractional digits require
+specific errors. Four synthetic corpus patterns exercise this generator; they
+are not minimized discoveries. Module unit fixtures independently transcribe
+LOC date/qualification examples and RFC 3339/9557 offset facts, and cover the
+four-digit year endpoints outside this generated domain.
+
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
 Each traversal must preserve the same dates and respect work/output budgets.
@@ -93,7 +106,7 @@ retains UTC/local form, and numeric-offset suffixes are rejected.
 ## Verified execution
 
 Apple Silicon macOS and Linux x86-64/musl have verified execution through the
-pinned release platform. The Linux gate covers all thirteen semantic targets,
+pinned release platform. The Linux gate covers all fourteen semantic targets,
 curated replay and the failure lifecycle using LLVM speed with `--fuzz`, compiler
 `nightly-2026-09-04-c125b82` and roc-fuzz 0.3.0
 (`ec137edcf0fa2530e3dbb175fec4ddff5281cc6d`). Searches use seed 1, at most

@@ -25,11 +25,22 @@ unchecked items are planned.
 - [ ] Broader RFC recurrence import and persistence.
 - [x] Finite calendar descriptions, scoped qualifications and explicit finite-alternative point reasoning.
 - [ ] Broader symbolic descriptions, uncertain endpoints and interval reasoning.
-- [ ] ISO 8601 / EDTF / IXDTF parsing and serialization in explicitly supported profiles.
+- [x] EDTF date-only and RFC offset-timestamp parsing with canonical serialization.
+- [ ] Broader ISO 8601 / EDTF profiles and IXDTF annotations.
 - [ ] Semantic explanations, versioned persistence and broader calendar support.
 
 Usability, independent correctness checks and predictable resource use remain
 part of every stage. See the [design](design.md) for the enduring contracts.
+
+[EdtfDate](package/EdtfDate.roc) parses and canonically serializes Gregorian
+year/month/day descriptions with whole-value `?`, `~` and `%` qualifications.
+This date-only profile preserves supplied resolution and does not claim EDTF
+Level 0 conformance. Qualified values require explicit evidence for reasoning.
+[OffsetTimestamp](package/OffsetTimestamp.roc) handles complete RFC timestamps
+with up to six fractional digits, retaining their supplied width and RFC 9557
+offset assertions. It also formats computed POSIX boundaries with an explicit
+offset and precision. IXDTF annotations and native persistence are not yet
+supported; module documentation states exact input limits and error profiles.
 
 ## Examples
 
@@ -49,7 +60,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Dispatch deadlines](examples/dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
 | [Equipment loans](examples/equipment_loans/main.roc) | Keep monthly loans on the 31st, clamp return dates across clock changes, and add an extra one-week booking |
 | [Outage evidence](examples/outage_evidence/main.roc) | Compare paired outage reports with independent endpoint notes without inventing correlations |
-| [Archive search](examples/archive_search/main.roc) | Search recordings by a supplied minute or second, preserving the different selection widths |
+| [Archive search](examples/archive_search/main.roc) | Import EDTF dates and offset timestamps; preserve search precision and unresolved qualifications |
 | [Recorder handoff](examples/sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
 
 Run them with the pinned compiler:

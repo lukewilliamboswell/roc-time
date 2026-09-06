@@ -24,6 +24,7 @@ def main() -> None:
     if control.returncode != 0:
         raise SystemExit(f"Positive control failed:\n{control.stdout}")
     cases = {
+        "timestamp_as_selection": ["first argument", "OffsetTimestamp", "CalendarValue"],
         "interval_evidence_as_coverage": ["first argument", "IntervalEvidence", "Coverage"],
         "alternatives_as_coverage": ["first argument", "CalendarEvidence", "Coverage"],
         "local_as_posix": ["first argument", "LocalDateTime", "PosixBoundary"],

@@ -12,8 +12,8 @@ general uncertainty reasoning and provider-wide measurements do not block the
 first bounded adapters. Each slice still requires its own correctness and
 resource evidence.
 
-1. Implement bounded date-description and offset-timestamp profiles, then exact
-   interval booking input/output and IXDTF annotations (R01–R02, R07–R09, R14–R16).
+1. Implement exact interval booking input/output and IXDTF annotations using
+   the shared timestamp declaration (R01–R02, R07–R09, R14–R16).
 2. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
    selected EDTF endpoint, qualification, mask and set forms (R13–R14). Preserve
    descriptions before implementing broader interpretation; never substitute

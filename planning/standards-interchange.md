@@ -6,31 +6,7 @@ Then explain and persist those same values. Follow R01–R02, R06–R09 and R12�
 in [the design](../design.md); this project does not require completing every
 reasoning model or declaring full ISO/EDTF conformance first.
 
-## First parallel slices
-
-- **Archive dates:** parse and serialize four-digit Gregorian year, year-month
-  and date descriptions with an optional terminal `?`, `~` or `%`. Preserve
-  resolution through CalendarValue and whole-value qualification through
-  QualifiedCalendarValue. Declare the year domain and a fixed input-byte bound;
-  reject unsupported forms explicitly. Extend `archive_search` to accept text
-  and emit canonical descriptions; qualified selection still requires a model.
-  This is an EDTF date-only feature profile, not Level 0 conformance.
-- **Offset timestamps:** introduce a declaration retaining Gregorian fields,
-  supplied fractional resolution and offset assertion, with RFC 3339/RFC 9557
-  parsing and canonical serialization. Initially require complete dates and
-  seconds, four-digit years and at most six fractional digits. Preserve the
-  distinction between unasserted UTC (`Z`/`-00:00`) and asserted numeric offsets
-  including `+00:00`. Reuse FixedOffset and the validated calendar/clock APIs;
-  do not overload RFC 5545's basic-format RfcDateTime.
-
-Resolve exact public names, error variants, prefix diagnostics and input limits
-before each implementation. Errors distinguish malformed/incomplete input,
-recognized unsupported forms and range failures. Never silently truncate
-fractions or treat an instant timestamp as a precision-width calendar selection.
-Parsing and serialization must have work bounded by the declared input/output
-limits, with no provider lookup or temporal enumeration.
-
-## Dependent caller slices
+## Remaining caller slices
 
 1. **Booking availability:** compose complete offset-bearing endpoints through
    an explicitly exact-interval API, then PosixSpan/Coverage difference and UTC
