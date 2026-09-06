@@ -378,6 +378,15 @@ speed builds, including maximum-I64 calendar-day declarations and allocation
 ceiling negative controls. Its counters measure requested allocation bytes,
 not retained memory.
 
+Snapshot persistence has a separate fixture at
+`tests/snapshot_persistence_resource/main.roc`. It measures checked construction,
+encoding, load validation and repeated stored reads separately, with 0, 2 and
+1024 transitions across full-I64 validity. Larger tables and oversized metadata must fail before encoding;
+allocation ceiling controls run in dev and speed builds. Functional interchange
+properties distinguish contexts with identical labels and current results but
+different microsecond transitions. These are requested-allocation observations,
+not retained-memory measurements or authenticated database provenance.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

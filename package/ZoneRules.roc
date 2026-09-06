@@ -74,6 +74,11 @@ ZoneRules :: {
 	Provenance : [Supplied, DatabaseSource({ requested_name : Str, canonical_name : Str, source_digest : Str, profile : Str })]
 	Transition : { at : PosixBoundary, offset : FixedOffset }
 	OffsetBounds : { minimum : I32, maximum : I32 }
+
+	## Semantic transport, not the opaque record representation or a codec.
+	## Boundaries and transition positions retain exact POSIX microseconds;
+	## offsets/bounds retain whole seconds. Provenance is preserved in full.
+	Definition : { name : Str, version : Str, validity : PosixSpan, initial : FixedOffset, bounds : OffsetBounds, provenance : Provenance, transitions : List(Transition) }
 	Resolution : [Gap, Unique(PosixBoundary), Fold(List(PosixBoundary))]
 	OccurrencePolicy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)]
 
@@ -110,6 +115,50 @@ ZoneRules :: {
 			previous = transition.at
 		}
 		Ok({ name, version, validity, initial, transitions, bounds, provenance: Supplied })
+	}
+
+	## Constant-time projection. Transition/string storage may remain shared;
+	## names and version labels are not substitutes for the returned actual data.
+	definition : ZoneRules -> Definition
+	definition = |rules| {
+		name: rules.name,
+		version: rules.version,
+		validity: rules.validity,
+		initial: rules.initial,
+		bounds: rules.bounds,
+		provenance: rules.provenance,
+		transitions: rules.transitions,
+	}
+
+	## Revalidate transported semantics using the same constructor invariants.
+	## O(n) transition work without copying the table. No provider lookup occurs.
+	## DatabaseSource retains the second-alignment invariant of from_database;
+	## Supplied rules retain the full microsecond domain. Provenance is asserted
+	## transport metadata, not authentication of an external database or digest.
+	from_definition : Definition -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment, ..])
+	from_definition = |data| {
+		rules = new_bounded(data.name, data.version, data.validity, data.initial, data.transitions, data.bounds)?
+		match data.provenance {
+			Supplied => {}
+			DatabaseSource(source) => {
+				if source.requested_name.is_empty() or source.canonical_name.is_empty() or source.source_digest.is_empty() or source.profile.is_empty() {
+					return Err(MissingProvenance)
+				}
+				if source.canonical_name != data.name {
+					return Err(ProvenanceNameMismatch)
+				}
+				if I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.start(data.validity)), 1000000) != 0 or
+					I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.end(data.validity)), 1000000) != 0 {
+					return Err(InvalidDatabaseAlignment)
+				}
+				for transition in data.transitions {
+					if I64.rem_by(PosixBoundary.to_microseconds(transition.at), 1000000) != 0 {
+						return Err(InvalidDatabaseAlignment)
+					}
+				}
+			}
+		}
+		Ok({ ..rules, provenance: data.provenance })
 	}
 
 	## Versioned structural data: no nominal dependency on the supplying package.
@@ -675,4 +724,61 @@ expect {
 		}
 	}
 	valid
+}
+
+expect {
+	# The transport must not round a synthetic subsecond transition or infer
+	# authoritative bounds merely from the offsets present in this table.
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(2))?
+	original = ZoneRules.new_bounded("Synthetic/Microseconds", "reused-v1", validity, FixedOffset.from_seconds(-1), [{ at: PosixBoundary.from_microseconds(1), offset: FixedOffset.from_seconds(1) }], { minimum: -10, maximum: 10 })?
+	transport = ZoneRules.definition(original)
+	restored = ZoneRules.from_definition(transport)?
+	ZoneRules.definition(restored) == transport and
+		ZoneRules.offset_at(restored, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(-1)) and
+			ZoneRules.offset_at(restored, PosixBoundary.from_microseconds(1)) == Ok(FixedOffset.from_seconds(1))
+}
+expect {
+	# Reused labels do not identify actual data. Both immutable tables survive.
+	validity = PosixSpan.new(PosixBoundary.from_microseconds(-10), PosixBoundary.from_microseconds(10))?
+	first = ZoneRules.new_bounded("Synthetic/Reused", "same-v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 3600 })?
+	first_data = ZoneRules.definition(first)
+	second = ZoneRules.from_definition({ ..first_data, transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(3600) }] })?
+	ZoneRules.name(first) == ZoneRules.name(second) and ZoneRules.version(first) == ZoneRules.version(second) and
+		ZoneRules.definition(first) != ZoneRules.definition(second) and
+			ZoneRules.offset_at(first, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(0)) and
+				ZoneRules.offset_at(second, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(3600))
+}
+expect {
+	original = ZoneRules.from_database(test_zonedatabase_fixture({}))?
+	definition = ZoneRules.definition(original)
+	restored = ZoneRules.from_definition(definition)?
+	ZoneRules.definition(restored) == definition and ZoneRules.provenance(restored) == ZoneRules.provenance(original)
+}
+expect {
+	rules = ZoneRules.from_database(test_zonedatabase_fixture({}))?
+	data = ZoneRules.definition(rules)
+	provenance = { requested_name: "Synthetic/Alias", canonical_name: "Synthetic/Canonical", source_digest: "fixture-digest", profile: "fixture-profile" }
+	definition_status({ ..data, provenance: DatabaseSource({ ..provenance, requested_name: "" }) }) == Err(MissingProvenance) and
+		definition_status({ ..data, provenance: DatabaseSource({ ..provenance, canonical_name: "" }) }) == Err(MissingProvenance) and
+			definition_status({ ..data, provenance: DatabaseSource({ ..provenance, source_digest: "" }) }) == Err(MissingProvenance) and
+				definition_status({ ..data, provenance: DatabaseSource({ ..provenance, profile: "" }) }) == Err(MissingProvenance) and
+					definition_status({ ..data, provenance: DatabaseSource({ ..provenance, canonical_name: "Unrelated/Name" }) }) == Err(ProvenanceNameMismatch) and
+						definition_status({ ..data, transitions: [{ at: PosixBoundary.from_microseconds(1), offset: FixedOffset.from_seconds(0) }] }) == Err(InvalidDatabaseAlignment) and
+							definition_status({ ..data, validity: PosixSpan.new(PosixBoundary.from_microseconds(-9999999), PosixBoundary.from_microseconds(10000000))? }) == Err(InvalidDatabaseAlignment)
+}
+expect {
+	rules = ZoneRules.from_database(test_zonedatabase_fixture({}))?
+	data = ZoneRules.definition(rules)
+	transition = { at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }
+	definition_status({ ..data, name: "" }) == Err(EmptyName) and
+		definition_status({ ..data, version: "" }) == Err(EmptyVersion) and
+			definition_status({ ..data, bounds: { minimum: 1, maximum: 0 } }) == Err(InvalidOffsetBounds) and
+				definition_status({ ..data, initial: FixedOffset.from_seconds(1801) }) == Err(OffsetOutsideBounds) and
+					definition_status({ ..data, transitions: [transition, transition] }) == Err(UnorderedTransitions) and
+						definition_status({ ..data, transitions: [{ ..transition, at: PosixSpan.start(data.validity) }] }) == Err(TransitionOutsideValidity)
+}
+
+definition_status = |data| match ZoneRules.from_definition(data) {
+	Ok(_) => Ok({})
+	Err(error) => Err(error)
 }

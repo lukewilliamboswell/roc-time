@@ -327,6 +327,8 @@ check_ixdtf = |input, timestamp, expected| {
 		Ixdtf.Snapshot.source(snapshot) != parsed or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) {
 		crash "IXDTF snapshot changed source position or rule offset"
 	}
+	_ = check_snapshot_persistence(snapshot, expected, offset)
+	check_transition_snapshot_persistence(expected)
 	check_snapshot_explanation(snapshot, expected, Gregorian, input.precision.to_u64())
 	presentation = match Ixdtf.Snapshot.presentation(snapshot) {
 		Ok(value) => value
@@ -370,6 +372,15 @@ check_ixdtf = |input, timestamp, expected| {
 		Ixdtf.Snapshot.presentation(hebrew_snapshot) != Err(UnsupportedCalendar("hebrew")) {
 		crash "Calendar presentation preference changed timestamp meaning"
 	}
+	_ = check_snapshot_persistence(
+		hebrew_snapshot,
+		expected,
+		if input.qualifier < 2 {
+			0
+		} else {
+			offset
+		},
+	)
 	check_snapshot_explanation(hebrew_snapshot, expected, UnsupportedCalendar("hebrew"), input.precision.to_u64())
 	if Ixdtf.parse("${base}[!knort=v${input.digits.to_str()}]") != Err(UnknownCritical) or
 		Ixdtf.parse("${base}[!u-ca=gregory][u-ca=hebrew]") != Err(ConflictingCritical) {
@@ -587,5 +598,89 @@ check_declaration_limits = |source, bytes| {
 	match Explanation.fact_at(source, U64.highest) {
 		End => {}
 		_ => crash "Large fact index overflowed or fabricated a declaration fact"
+	}
+}
+
+# R09/R14: persistence restores an actual immutable interpretation, not just
+# name/version labels or its current point result. Expected positions and
+# offsets are supplied by the independent models above and below.
+check_snapshot_persistence = |snapshot, expected, expected_offset| {
+	wrapped = match Persistence.new(IxdtfSnapshot(snapshot)) {
+		Ok(value) => value
+		Err(_) => crash "Bounded snapshot persistence rejected"
+	}
+	text = Persistence.to_text(wrapped)
+	restored_envelope = match Persistence.parse(text) {
+		Ok(value) => value
+		Err(_) => crash "Snapshot canonical persistence failed to restore"
+	}
+	restored = match Persistence.value(restored_envelope) {
+		IxdtfSnapshot(value) => value
+		_ => crash "Persistence changed snapshot kind"
+	}
+	if Ixdtf.Snapshot.boundary(restored) != PosixBoundary.from_microseconds(expected) or
+		Ixdtf.Snapshot.offset(restored) != FixedOffset.from_seconds(expected_offset) or
+			Ixdtf.Snapshot.source(restored) != Ixdtf.Snapshot.source(snapshot) or
+				Ixdtf.Snapshot.presentation(restored) != Ixdtf.Snapshot.presentation(snapshot) or
+					restored != snapshot or Persistence.to_text(restored_envelope) != text {
+		crash "Persisted snapshot lost source, modeled result or semantic identity"
+	}
+	match (Ixdtf.Snapshot.context(snapshot), Ixdtf.Snapshot.context(restored)) {
+		(None, None) => {}
+		(Some(original), Some(replay)) => if ZoneRules.definition(original) != ZoneRules.definition(replay) {
+			crash "Snapshot persistence changed full immutable interpretation data"
+		}
+		_ => crash "Snapshot context presence changed"
+	}
+	restored
+}
+
+check_transition_snapshot_persistence = |coordinate| {
+	timestamp = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(coordinate), UnassertedUtc, 6) {
+		Ok(value) => value
+		Err(_) => crash "Bounded model UTC timestamp rejected"
+	}
+	source = match Ixdtf.new({ timestamp, zone: Some({ critical: Bool.True, identifier: Named("Synthetic/Archive") }), tags: [] }) {
+		Ok(value) => value
+		Err(_) => crash "Valid synthetic snapshot declaration rejected"
+	}
+	# Both tables resolve the queried point identically. Reusing the same name,
+	# version and bounds must not erase their differing future microsecond data.
+	validity = model_span(coordinate - 1, coordinate + 4)
+	var snapshots = []
+	for later_offset in [1.I32, 2] {
+		rules = match ZoneRules.new_bounded("Synthetic/Archive", "same-version", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], { minimum: 0, maximum: 2 }) {
+			Ok(value) => value
+			Err(_) => crash "Microsecond synthetic transition fixture rejected"
+		}
+		snapshot = match Ixdtf.resolve(source, Some(rules)) {
+			Ok(value) => value
+			Err(_) => crash "Synthetic point before transition failed"
+		}
+		restored = check_snapshot_persistence(snapshot, coordinate, 0)
+		retained = match Ixdtf.Snapshot.context(restored) {
+			Some(value) => value
+			None => crash "Restored named snapshot lost its rules"
+		}
+		if ZoneRules.offset_at(retained, PosixBoundary.from_microseconds(coordinate + 1)) != Ok(FixedOffset.from_seconds(later_offset)) or
+			ZoneRules.validity(retained) != validity {
+			crash "Snapshot persistence preserved only the queried point, not transition/validity evidence"
+		}
+		snapshots = snapshots.append(restored)
+	}
+	first = match snapshots.get(0) {
+		Ok(value) => value
+		Err(_) => crash "Two-table model invariant"
+	}
+	second = match snapshots.get(1) {
+		Ok(value) => value
+		Err(_) => crash "Two-table model invariant"
+	}
+	if first == second or !Ixdtf.Snapshot.same_position(first, second) {
+		crash "Snapshot evidence equality confused with compatible-axis position"
+	}
+	keyed = Dict.insert(Dict.insert(Dict.empty(), first, 1.U8), second, 2.U8)
+	if Dict.get(keyed, first) != Ok(1) or Dict.get(keyed, second) != Ok(2) {
+		crash "Snapshot equality/hash erased distinct immutable rule tables"
 	}
 }

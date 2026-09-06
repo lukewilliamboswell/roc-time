@@ -32,7 +32,8 @@ import ClockTime
 ## actual rules. No lazy/budgeted interpretation claim is made. Snapshots expose
 ## stored results without resolving again. Non-Gregorian presentation errors.
 ## Numeric zone -00:00 denotes a fixed zero offset, serialized as +00:00.
-## No complete ISO, broader-calendar or native persistence claim.
+## Persistence supports this strict snapshot through an explicit versioned
+## profile with its complete immutable context. No complete ISO or broader-calendar claim.
 Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }.{
 	ZoneId : [Named(Str), Numeric(FixedOffset)]
 	Zone : { critical : Bool, identifier : ZoneId }
@@ -368,6 +369,24 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		same_position : Snapshot, Snapshot -> Bool
 		same_position = |a, b| a.boundary == b.boundary
 
+		## Snapshot equality includes the source and complete immutable context,
+		## even when provider labels are reused. Use same_position for axis equality.
+		## Equality/hashing visit the retained definition; getters do not.
+		is_eq : Snapshot, Snapshot -> Bool
+		is_eq = |a, b| a.source == b.source and a.boundary == b.boundary and a.offset == b.offset and a.local == b.local and match (a.context, b.context) {
+			(None, None) => True
+			(Some(left), Some(right)) => ZoneRules.definition(left) == ZoneRules.definition(right)
+			_ => False
+		}
+		to_hash : Snapshot, Hasher -> Hasher
+		to_hash = |value, hasher| {
+			base = value.local.to_hash(value.offset.to_hash(value.boundary.to_hash(value.source.to_hash(hasher))))
+			match value.context {
+				None => (0.U8).to_hash(base)
+				Some(rules) => ZoneRules.definition(rules).to_hash((1.U8).to_hash(base))
+			}
+		}
+
 		## Stored interpretation evidence only: no offset lookup, resolution or
 		## presentation conversion happens while reading these facts. The local
 		## position is the stored Gregorian projection even if a different
@@ -596,7 +615,7 @@ expect {
 	second_rules = test_rules("Synthetic/Rule", point, 3600)?
 	first = Ixdtf.resolve(source, Some(first_rules))?
 	second = Ixdtf.Snapshot.reresolve(first, Some(second_rules))?
-	Ixdtf.Snapshot.same_position(first, second) and
+	Ixdtf.Snapshot.same_position(first, second) and first != second and first == Ixdtf.resolve(source, Some(first_rules))? and
 		Ixdtf.Snapshot.offset(first) == FixedOffset.from_seconds(0) and
 			Ixdtf.Snapshot.offset(second) == FixedOffset.from_seconds(3600) and
 				Ixdtf.Snapshot.source(first) == source and Ixdtf.Snapshot.source(second) == source

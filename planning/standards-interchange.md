@@ -18,7 +18,8 @@ reasoning model or declaring full ISO/EDTF conformance first.
    value kinds, especially recurrence declarations, coverage and bound selection
    results. Preserve distinct unresolved, unsupported, empty and limited outcomes
    without re-resolution. Add explicit styled rendering over the same facts.
-   Extend native persistence to interpretation snapshots.
+   Extend native persistence to resolved civil boundaries and complete bound
+   selections, preserving their occurrence policies and disconnected coverage.
    Snapshot persistence must bind actual immutable interpretation data and
    policies, not only provider names/version labels. Preserve qualifiers and
    native calendar/resolution distinctions outside the text adapter profiles.

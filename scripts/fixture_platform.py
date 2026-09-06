@@ -314,6 +314,33 @@ def verify_declaration_explanation(target: str) -> None:
             raise RuntimeError(f"{mode}: declaration explanation negative control failed")
         print(f"PASS declaration explanation {mode}: allocation negative control")
 
+def verify_snapshot_persistence(target: str) -> None:
+    """Persist full finite rule evidence and reject oversize input before encoding."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/snapshot_persistence_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"snapshot-persistence-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for count, metadata in ((0, 16), (2, 16), (1024, 16), (1025, 16), (16384, 16), (2, 4097)):
+            rejected = count > 1024 or metadata > 4096
+            result = subprocess.run([binary, str(count), str(metadata), "8388608"], capture_output=True, timeout=5)
+            expected = b"rejected-before-encoding\n" if rejected else b"snapshot=restored,reads=stored\n"
+            if result.returncode or result.stdout != expected:
+                raise RuntimeError(f"{mode}/{count}/{metadata}: snapshot persistence failed: {result.stderr!r}")
+            match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
+            if match is None:
+                raise RuntimeError(f"{mode}: missing snapshot persistence observations")
+            counts = tuple(int(value) for value in match[1].split(b","))
+            if (rejected and counts != (0,)) or (not rejected and (len(counts) != 4 or counts[-1] != 0)):
+                raise RuntimeError(f"{mode}: snapshot persistence resource assertions failed: {counts}")
+            print(f"PASS snapshot persistence {mode}/{count} transitions/{metadata} metadata bytes: requested bytes {counts}")
+        failed = subprocess.run([binary, "2", "16", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: snapshot persistence negative control failed")
+        print(f"PASS snapshot persistence {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -328,5 +355,6 @@ if __name__ == "__main__":
         verify_calendar_persistence(selected_target)
         verify_explanation(selected_target)
         verify_declaration_explanation(selected_target)
+        verify_snapshot_persistence(selected_target)
     else:
         print(selected_target)

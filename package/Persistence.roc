@@ -1,3 +1,4 @@
+import PersistenceSnapshot
 import PersistenceCalendar
 import CalendarValue
 import QualifiedCalendarValue
@@ -15,7 +16,8 @@ import PosixSpan
 import Coverage
 
 ## Version 1 native persistence for text and native calendar descriptions, plus
-## POSIX boundary/displacement/span/coverage values. The JSON envelope has seven required
+## POSIX boundary/displacement/span/coverage values and IXDTF interpretation
+## snapshots. The JSON envelope has seven required
 ## string fields: format, version, kind, profile, axis, unit and payload.
 ## Format is roc-time; version is 1. Unknown metadata errors before temporal
 ## payload interpretation. No private records or compiler union encoding leak.
@@ -23,9 +25,30 @@ import Coverage
 ## Text declarations use their declared canonical semantic text/profile and
 ## axis/unit none: they are source declarations, not resolved snapshots. This
 ## preserves resolution, qualifiers, UTC/local forms and ordered annotations;
-## original spelling is not preserved. Decode never fetches context or resolves
-## zones. Snapshot/rule/event persistence is outside
-## this initial profile and unsupported kinds fail explicitly.
+## original spelling is not preserved. Declaration decoding never resolves zones.
+## Rule/event and other snapshot kinds remain unsupported.
+##
+## IxdtfSnapshot uses ixdtf-strict-snapshot-v1, axis posix-1970, unit microsecond.
+## It stores the canonical IXDTF source, strict-v1 interpretation policy, saved
+## boundary/offset and complete optional ZoneRules definition, including actual
+## transitions, global offset bounds and provenance. Provider labels are not
+## substitutes for the table; provenance is retained, not authenticated.
+## Load validates the definition through its native constructor, resolves once
+## using only that saved context and checks the saved boundary/offset. Subsequent
+## getters read the restored result; unsupported calendar presentation remains
+## unsupported. No host database, registry or network is consulted.
+##
+## Snapshot payloads are flat JSON arrays of strings; the exact field order is
+## documented in PersistenceSnapshot. Limits are 1024 transitions, 4096 combined
+## rule metadata bytes, 49152 payload bytes and 65536 complete envelope bytes.
+## Construction limit failures return InvalidSnapshot(TooLarge). Decode also
+## distinguishes TooManyTransitions from byte limits; nothing is truncated.
+## Construction checks transition/metadata limits before encoding, then caches
+## canonical payload text after the escaped envelope size check. Serialization
+## and load validation are linear in bounded stored bytes and transitions, not
+## denoted time. Equality/hashing include source and complete context; use the
+## snapshot's same_position method for position comparison. Input/output and the
+## restored table are materialized; allocation traffic is not retained memory.
 ##
 ## Native CalendarValue/QualifiedCalendarValue profiles retain Gregorian/Julian
 ## provider range and every supplied resolution without resolving upper bounds.
@@ -77,18 +100,26 @@ import Coverage
 ##     }
 ## }
 ## ```
-Persistence :: { stored : Value }.{
-	Value : [EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
-	Error : [InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
-	new : Value -> Try(Persistence, [TooManyMembers, ..])
+Persistence :: { stored : Value, snapshot_payload : Str }.{
+	Value : [IxdtfSnapshot(Ixdtf.Snapshot), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
+	Error : [InvalidSnapshot(PersistenceSnapshot.Error), InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
+	new : Value -> Try(Persistence, [InvalidSnapshot(PersistenceSnapshot.Error), TooManyMembers, ..])
 	new = |stored| {
+		var snapshot_payload = ""
 		match stored {
+			IxdtfSnapshot(snapshot) => {
+				encoded = match PersistenceSnapshot.from_snapshot(snapshot) {
+					Ok(inner) => inner
+					Err(error) => return Err(InvalidSnapshot(error))
+				}
+				snapshot_payload = PersistenceSnapshot.to_text(encoded)
+			}
 			Coverage(coverage) => if Coverage.member_count(coverage) > 1024 {
 				return Err(TooManyMembers)
 			}
 			_ => {}
 		}
-		Ok({ stored: stored })
+		Ok({ stored, snapshot_payload })
 	}
 	value : Persistence -> Value
 	value = |wrapped| wrapped.stored
@@ -118,6 +149,13 @@ Persistence :: { stored : Value }.{
 		}
 		if fields.unit != expected.unit {
 			return Err(UnsupportedUnit(fields.unit))
+		}
+		if fields.kind == "ixdtf-snapshot" {
+			decoded = match PersistenceSnapshot.parse(fields.payload) {
+				Ok(inner) => inner
+				Err(error) => return Err(InvalidSnapshot(error))
+			}
+			return Ok({ stored: IxdtfSnapshot(PersistenceSnapshot.snapshot(decoded)), snapshot_payload: PersistenceSnapshot.to_text(decoded) })
 		}
 		stored = match fields.kind {
 			"edtf-date" => match EdtfDate.parse(fields.payload) {
@@ -168,6 +206,7 @@ Persistence :: { stored : Value }.{
 	to_text : Persistence -> Str
 	to_text = |wrapped| {
 		{ kind, payload } = match wrapped.stored {
+			IxdtfSnapshot(_) => { kind: "ixdtf-snapshot", payload: wrapped.snapshot_payload }
 			EdtfDate(inner) => { kind: "edtf-date", payload: EdtfDate.to_text(inner) }
 			OffsetTimestamp(inner) => { kind: "offset-timestamp", payload: OffsetTimestamp.to_text(inner) }
 			ExactInterval(inner) => { kind: "exact-interval", payload: ExactInterval.to_text(inner) }
@@ -195,6 +234,7 @@ Persistence :: { stored : Value }.{
 		# Coverage needs at most 43007 ASCII bytes without JSON escaping.
 		# Text declarations need at most 4096 bytes; even six-byte escaping
 		# plus fixed metadata fits inside the envelope's 64KiB cap.
+		# Snapshot payloads passed the exact escaped-envelope check at construction.
 		Json.to_str({ format: "roc-time", version: "1", kind, profile: description.profile, axis: description.axis, unit: description.unit, payload })
 	}
 
@@ -202,6 +242,7 @@ Persistence :: { stored : Value }.{
 	is_eq = |a, b| a.stored == b.stored
 	to_hash : Persistence, Hasher -> Hasher
 	to_hash = |wrapped, hasher| match wrapped.stored {
+		IxdtfSnapshot(inner) => inner.to_hash((13.U8).to_hash(hasher))
 		EdtfDate(inner) => inner.to_hash((0.U8).to_hash(hasher))
 		OffsetTimestamp(inner) => inner.to_hash((1.U8).to_hash(hasher))
 		ExactInterval(inner) => inner.to_hash((2.U8).to_hash(hasher))
@@ -219,6 +260,7 @@ Persistence :: { stored : Value }.{
 	to_inspect : Persistence -> Str
 	to_inspect = |wrapped| {
 		kind = match wrapped.stored {
+			IxdtfSnapshot(_) => "ixdtf-snapshot"
 			EdtfDate(_) => "edtf-date"
 			OffsetTimestamp(_) => "offset-timestamp"
 			ExactInterval(_) => "exact-interval"
@@ -239,6 +281,7 @@ Persistence :: { stored : Value }.{
 
 metadata = |kind| {
 	profile = match kind {
+		"ixdtf-snapshot" => "ixdtf-strict-snapshot-v1"
 		"edtf-date" => EdtfDate.profile
 		"offset-timestamp" => OffsetTimestamp.profile
 		"exact-interval" => ExactInterval.profile
@@ -254,7 +297,7 @@ metadata = |kind| {
 		"qualified-calendar-value" => "native-qualified-calendar-value-v1"
 		_ => return None
 	}
-	core = kind == "posix-boundary" or kind == "posix-delta" or kind == "posix-span" or kind == "coverage"
+	core = kind == "posix-boundary" or kind == "posix-delta" or kind == "posix-span" or kind == "coverage" or kind == "ixdtf-snapshot"
 	Some({
 		profile,
 		axis: if core {
@@ -288,7 +331,7 @@ integer = |text| {
 		return Err(InvalidInteger)
 	}
 	first = match bytes.get(start) {
-		Ok(value) => value
+		Ok(inner) => inner
 		Err(_) => crash "Nonempty decimal magnitude validated"
 	}
 	if first == 48 and (negative or bytes.len() > start + 1) {
@@ -421,7 +464,7 @@ expect {
 	base = { format: "roc-time", version: "1", kind: "edtf-date", profile: EdtfDate.profile, axis: "none", unit: "none", payload: "not a date" }
 	test_parse({ ..base, format: "other" }) == Err(UnknownFormat("other")) and
 		test_parse({ ..base, version: "2" }) == Err(UnknownVersion("2")) and
-			test_parse({ ..base, kind: "ixdtf-snapshot" }) == Err(UnknownKind("ixdtf-snapshot")) and
+			test_parse({ ..base, kind: "event-snapshot" }) == Err(UnknownKind("event-snapshot")) and
 				test_parse({ ..base, profile: "other" }) == Err(UnsupportedProfile("other")) and
 					test_parse({ ..base, axis: "posix-1970" }) == Err(UnsupportedAxis("posix-1970")) and
 						test_parse({ ..base, unit: "microsecond" }) == Err(UnsupportedUnit("microsecond")) and
@@ -430,7 +473,7 @@ expect {
 
 test_parse = |fields| {
 	envelope = match PersistenceEnvelope.new(fields) {
-		Ok(value) => value
+		Ok(inner) => inner
 		Err(_) => crash "Small metadata fixture fits envelope"
 	}
 	Persistence.parse(PersistenceEnvelope.to_text(envelope))
@@ -492,4 +535,19 @@ expect {
 	qualified = test_parse({ ..base, kind: "qualified-calendar-value", profile: "native-qualified-calendar-value-v1", payload: "julian;day;1900;2;29|day=uncertain" })?
 	Persistence.parse(Persistence.to_text(parsed)) == Ok(parsed) and Persistence.parse(Persistence.to_text(qualified)) == Ok(qualified) and
 		(parsed != qualified) and test_parse({ ..base, payload: "gregorian;day;1900;2;29" }) == Err(InvalidCalendarValue(InvalidDay))
+}
+
+expect {
+	# Native snapshot framing is distinct from an unresolved IXDTF declaration.
+	source : Ixdtf
+	source = "1970-01-01T00:00:00Z[u-ca=hebrew]"
+	snapshot = Ixdtf.resolve(source, None)?
+	saved = Persistence.new(IxdtfSnapshot(snapshot))?
+	restored = Persistence.parse(Persistence.to_text(saved))?
+	expected = { format: "roc-time", version: "1", kind: "ixdtf-snapshot", profile: "ixdtf-strict-snapshot-v1", axis: "posix-1970", unit: "microsecond", payload: Json.to_str(["strict-v1", "1970-01-01T00:00:00Z[u-ca=hebrew]", "0", "0", "none"]) }
+	Persistence.to_text(saved) == Json.to_str(expected) and restored == saved and
+		Dict.get(Dict.insert(Dict.empty(), saved, 1.U64), restored) == Ok(1) and
+			test_parse({ ..expected, axis: "none" }) == Err(UnsupportedAxis("none")) and
+				test_parse({ ..expected, profile: "future-v2" }) == Err(UnsupportedProfile("future-v2")) and
+					test_parse({ ..expected, payload: Json.to_str(["strict-v1", "1970-01-01T00:00:00Z[u-ca=hebrew]", "1", "0", "none"]) }) == Err(InvalidSnapshot(StoredMismatch))
 }

@@ -90,6 +90,15 @@ days and coordinate seconds; PERIOD facts do not infer a zone or expand a
 recurrence. These checks do not parse diagnostic prose to establish temporal
 meaning or establish allocation bounds.
 
+Snapshot persistence properties compare restored positions and offsets with
+the existing independent integer model and preserve source/presentation facts.
+A separate five-microsecond synthetic rule table changes its offset one
+microsecond after the saved point. Another table reuses the same name, version
+and current result but has a different later offset; persistence must retain
+both tables distinctly and answer the later query with its declared offset.
+These generated fixtures use supplied provenance; database provenance and
+malformed payloads have deterministic native fixtures.
+
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
 Each traversal must preserve the same dates and respect work/output budgets.
