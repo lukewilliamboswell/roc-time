@@ -6,6 +6,11 @@ Then explain and persist those same values. Follow R01–R02, R06–R09 and R12�
 in [the design](../design.md); this project does not require completing every
 reasoning model or declaring full ISO/EDTF conformance first.
 
+Prioritize gaps that block booking/availability and archive/date import. Deliver
+complete input/output paths before extending explanation styling or adding detail
+to already usable diagnostic APIs. Recurrence export/persistence is tracked in
+[recurrence execution](recurrence.md); it precedes presentation enhancements.
+
 ## Remaining caller slices
 
 1. **Richer archive descriptions:** support individually/group-qualified

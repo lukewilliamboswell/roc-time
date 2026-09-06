@@ -4,29 +4,41 @@ Objective: satisfy [design requirements R01–R16](../design.md#acceptance-requi
 
 ## Remaining deliverables and dependencies
 
-The immediate critical path is [standards interchange](standards-interchange.md):
-usable text input, shared native operations, canonical text output, explanation
-and persistence for the same caller scenarios. Deliver parsing and serialization
-together. Extend native foundations only when a selected scenario needs them;
-general uncertainty reasoning and provider-wide measurements do not block the
-first bounded adapters. Each slice still requires its own correctness and
-resource evidence.
+Prioritize complete caller workflows by user impact: booking/availability and
+archive/date import are the first adoption paths. The next adoption work is a
+verified first-use path, versioned package distribution with compiler compatibility,
+and usable optional zone-data distribution. Prepare and verify release artifacts
+before publication; source-only examples do not establish easy package adoption.
 
-1. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
-   selected EDTF endpoint, qualification, mask and set forms (R13–R14). Preserve
-   descriptions before implementing broader interpretation; never substitute
-   year starts for uncertain endpoints or treat unsupported reasoning as success.
-2. Add bounded semantic explanation and versioned persistence alongside these
-   adapters, using shared typed facts and explicit interpretation snapshots.
-   Keep standards interchange separate from the native persistence format.
-3. Extend calendar presentation and conversion for a sourced caller scenario.
+Then follow [standards interchange](standards-interchange.md): usable text input,
+shared native operations and canonical text output for those callers. Parsing
+and serialization land together. Richer archive forms and recurrence export take
+priority over styled explanations or additional diagnostic detail. Extend native
+foundations when a caller needs them or evidence demonstrates a correctness or
+resource problem; retain the required correctness and resource gates for each slice.
+
+1. Prepare usable package adoption: verified versioned core/optional-zone bundles,
+   a compatible compiler pin, and first-use examples that work outside this
+   checkout. Settle release version and distribution before claiming a released
+   package; publication remains a separate external action.
+2. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
+   selected EDTF endpoint, qualification, mask and set forms (R13–R14). Deliver
+   parsing, canonical serialization, explanation and persistence for each form.
+   Never substitute year starts for uncertain endpoints or treat unsupported
+   reasoning as success.
+3. Complete schedule interchange and remaining [recurrence execution](recurrence.md).
+   Prioritize recurrence export/persistence and imported-calendar caller needs;
+   preserve series state across windows and resumptions.
+4. Extend calendar presentation and conversion for a sourced caller scenario.
    Separate stable month identity and provider capabilities before calendars
    beyond the Gregorian/Julian shape; preserve unsupported presentation requests.
-4. Complete remaining [recurrence execution](recurrence.md), provider evidence
-   and broader reasoning. Preserve series state across windows and resumptions.
-   Bring a deliverable forward when a selected interchange scenario needs it.
-5. Complete public examples and evidence across all requirements, including
-   resource measurements and supported backend checks (R15–R16).
+5. Extend remaining bounded explanations, styled rendering and broader reasoning
+   when the preceding caller paths are usable. Use shared typed facts and explicit
+   interpretation snapshots; keep native persistence separate from interchange.
+6. Complete public examples and evidence across all requirements, including
+   provider/resource measurements and supported backend checks (R15–R16).
+   Evidence required for a changed feature is part of that feature's acceptance,
+   not deferred until this final item.
 
 Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracle method](../AGENTS.md#oracle-evidence) for each slice. Do not change the architecture merely to record implementation progress.
 
