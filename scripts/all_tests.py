@@ -85,6 +85,15 @@ def main() -> None:
     run([ROC, "build", dispatch, f"--output={dispatch_binary}"])
     run([str(dispatch_binary)])
 
+    heading("Checking generic codecs and typed literals...")
+    codecs = "tests/codecs/main.roc"
+    run([ROC, "check", codecs])
+    run([ROC, codecs])
+    for mode in ("dev", "speed"):
+        codec_binary = (tmp_dir / f"codecs-{mode}").resolve()
+        run([ROC, "build", codecs, f"--opt={mode}", f"--output={codec_binary}"])
+        run([str(codec_binary)])
+
     heading("Running bounded semantic fuzz checks and regression replay...")
     run([sys.executable, "scripts/fuzz.py", "--operation", "all"])
 

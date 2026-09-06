@@ -48,6 +48,14 @@ offset assertions against explicit rules, and retains calendar preferences.
 Only Gregorian presentation is currently supported. Native persistence remains
 separate work; module documentation states exact input limits and error profiles.
 
+The text-format types provide custom `parser_for` / `encoder_for` methods, so
+generic encodings such as JSON store canonical strings and use the same checked
+parsers. `from_quote` supports validated typed literals, for example an
+`EdtfDate` assigned `"1984?"`. Temporal validation errors remain structured and
+distinct from encoding errors. For runtime interpolated text, call `parse`
+explicitly so invalid input can return an error. These codecs do not define the
+versioned native persistence format.
+
 ## Examples
 
 Examples are small applications built around realistic caller tasks. Each has a

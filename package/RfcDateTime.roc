@@ -33,6 +33,45 @@ import PosixBoundary
 RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 	Form : [Local, Utc]
 	Error : [Malformed, Incomplete, OutOfRange, InvalidDate, InvalidTime, UnsupportedLeapSecond]
+
+	## Generic encodings carry canonical text, never the opaque backing record.
+	## Encoding failures remain distinct from this profile's validation errors.
+	## The encoding owns framing and its work limits; parse bounds the decoded text.
+	parser_for : encoding -> (state -> Try({ value : RfcDateTime, rest : state }, [InvalidRfcDateTime(Error), Encoding(err), ..]))
+		where [
+			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+		]
+	parser_for = |encoding| {
+		Encoding : encoding
+		|state| {
+			parsed = match Encoding.parse_str(encoding, state) {
+				Ok(value) => value
+				Err(error) => return Err(Encoding(error))
+			}
+			match parse(parsed.value) {
+				Ok(value) => Ok({ value, rest: parsed.rest })
+				Err(error) => Err(InvalidRfcDateTime(error))
+			}
+		}
+	}
+
+	encoder_for : encoding -> (RfcDateTime, state -> Try(state, err))
+		where [
+			encoding.encode_str : Str, state -> Try(state, err),
+		]
+	encoder_for = |_encoding| {
+		Encoding : encoding
+		|value, state| Encoding.encode_str(to_text(value), state)
+	}
+
+	## Typed quoted literals use the same checked profile at compile time.
+	## Runtime interpolation remains Str followed by an explicit parse call.
+	from_quote : Str -> Try(RfcDateTime, [BadQuotedBytes(Str)])
+	from_quote = |text| match parse(text) {
+		Ok(value) => Ok(value)
+		Err(error) => Err(BadQuotedBytes("Invalid RfcDateTime literal: ${Str.inspect(error)}"))
+	}
+
 	profile : Str
 	profile = "rfc5545-datetime-values-v1"
 

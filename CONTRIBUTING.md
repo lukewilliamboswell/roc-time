@@ -217,6 +217,24 @@ TARGET replay minimized
 exit status and artifact creation, minimizes to one byte, then verifies the
 fixed harness against the saved regression.
 
+## Generic codecs and literals
+
+Generic text codecs and quoted literals are checked by
+`tests/codecs/main.roc`, through the built-in JSON codec and a small independent
+encoding that verifies unconsumed input and format failures. The full gate runs
+this application with the interpreter and dev/speed builds. Text-format types
+delegate custom `parser_for`, `encoder_for` and `from_quote` methods to validated
+parsing and canonical serialization; deriving these methods from opaque backing
+records would bypass the semantic representation. Runtime interpolations use
+an explicit fallible `parse` call. Invalid typed literals belong in the normal
+compile-failure gate and must fail for the intended validation diagnostic.
+
+The pinned compiler's encoding hook uses `encoding.parse_str(encoding, state)`
+and `encoding.encode_str(text, state)`. Keep the executable codec checks when
+upgrading the compiler: documentation on the compiler's moving main branch may
+describe a different hook signature. Codec tests establish interchange strings,
+not a versioned native persistence format.
+
 ## Instrumented fixture platform
 
 Install Zig 0.16.0 (`ZIG` can select its executable) alongside the pinned Roc

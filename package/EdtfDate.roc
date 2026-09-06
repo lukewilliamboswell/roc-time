@@ -20,8 +20,59 @@ import LocalDateTime
 ## excluded forms (negative year, long year, year-only mask) return UnsupportedForm;
 ## recognition does not validate every excluded EDTF feature. Native conversion
 ## checks calendar, resolution, year range and qualifier scope explicitly.
+##
+## Generic codecs use canonical strings and typed literals validate at compile time:
+## ```roc
+## import time.EdtfDate
+## expect {
+##     date : EdtfDate
+##     date = "1984?"
+##     parsed : Try({ date : EdtfDate }, [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfDate(EdtfDate.Error)])
+##     parsed = Json.parse(Json.to_str({ date: date }))
+##     parsed == Ok({ date: date })
+## }
+## ```
 EdtfDate :: { raw : QualifiedCalendarValue }.{
 	Error : [Malformed, Incomplete, TooLarge, OutOfRange, UnsupportedForm, UnsupportedCalendar, UnsupportedResolution, UnsupportedQualification]
+
+	## Generic encodings carry canonical text, never the opaque backing record.
+	## Encoding failures remain distinct from this profile's validation errors.
+	## The encoding owns framing and its work limits; parse bounds the decoded text.
+	parser_for : encoding -> (state -> Try({ value : EdtfDate, rest : state }, [InvalidEdtfDate(Error), Encoding(err), ..]))
+		where [
+			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+		]
+	parser_for = |encoding| {
+		Encoding : encoding
+		|state| {
+			parsed = match Encoding.parse_str(encoding, state) {
+				Ok(value) => value
+				Err(error) => return Err(Encoding(error))
+			}
+			match parse(parsed.value) {
+				Ok(value) => Ok({ value, rest: parsed.rest })
+				Err(error) => Err(InvalidEdtfDate(error))
+			}
+		}
+	}
+
+	encoder_for : encoding -> (EdtfDate, state -> Try(state, err))
+		where [
+			encoding.encode_str : Str, state -> Try(state, err),
+		]
+	encoder_for = |_encoding| {
+		Encoding : encoding
+		|value, state| Encoding.encode_str(to_text(value), state)
+	}
+
+	## Typed quoted literals use the same checked profile at compile time.
+	## Runtime interpolation remains Str followed by an explicit parse call.
+	from_quote : Str -> Try(EdtfDate, [BadQuotedBytes(Str)])
+	from_quote = |text| match parse(text) {
+		Ok(value) => Ok(value)
+		Err(error) => Err(BadQuotedBytes("Invalid EdtfDate literal: ${Str.inspect(error)}"))
+	}
+
 	profile : Str
 	profile = "edtf-gregorian-date-v1"
 	parse : Str -> Try(EdtfDate, Error)

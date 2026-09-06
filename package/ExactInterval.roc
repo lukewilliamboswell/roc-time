@@ -20,6 +20,45 @@ import PosixBoundary
 ## persistence claim is made. See OffsetTimestamp for its RFC source contracts.
 ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : PosixSpan }.{
 	Error : [Malformed, Incomplete, TooLarge, Start(OffsetTimestamp.Error), End(OffsetTimestamp.Error), EmptySpan, ReversedBounds]
+
+	## Generic encodings carry canonical text, never the opaque backing record.
+	## Encoding failures remain distinct from this profile's validation errors.
+	## The encoding owns framing and its work limits; parse bounds the decoded text.
+	parser_for : encoding -> (state -> Try({ value : ExactInterval, rest : state }, [InvalidExactInterval(Error), Encoding(err), ..]))
+		where [
+			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+		]
+	parser_for = |encoding| {
+		Encoding : encoding
+		|state| {
+			parsed = match Encoding.parse_str(encoding, state) {
+				Ok(value) => value
+				Err(error) => return Err(Encoding(error))
+			}
+			match parse(parsed.value) {
+				Ok(value) => Ok({ value, rest: parsed.rest })
+				Err(error) => Err(InvalidExactInterval(error))
+			}
+		}
+	}
+
+	encoder_for : encoding -> (ExactInterval, state -> Try(state, err))
+		where [
+			encoding.encode_str : Str, state -> Try(state, err),
+		]
+	encoder_for = |_encoding| {
+		Encoding : encoding
+		|value, state| Encoding.encode_str(to_text(value), state)
+	}
+
+	## Typed quoted literals use the same checked profile at compile time.
+	## Runtime interpolation remains Str followed by an explicit parse call.
+	from_quote : Str -> Try(ExactInterval, [BadQuotedBytes(Str)])
+	from_quote = |text| match parse(text) {
+		Ok(value) => Ok(value)
+		Err(error) => Err(BadQuotedBytes("Invalid ExactInterval literal: ${Str.inspect(error)}"))
+	}
+
 	profile : Str
 	profile = "exact-offset-interval-v1"
 	new : OffsetTimestamp, OffsetTimestamp -> Try(ExactInterval, Error)
