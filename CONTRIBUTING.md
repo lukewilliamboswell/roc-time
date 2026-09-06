@@ -34,6 +34,7 @@ third-party Python dependencies.
 | `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `measure_zone_package.py` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
 | `fixture_platform.py` | Build the instrumented test host and verify resource assertions/trace effects |
+| `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
@@ -432,6 +433,14 @@ Linux x86-64/musl native execution are verified, including dev/speed resource
 assertions and failing controls. Linux uses pinned linker inputs; other targets
 remain unsupported by this fixture host. Provenance and licenses
 are in [tests/platform/NOTICE](tests/platform/NOTICE).
+
+## Comparative benchmarks
+
+The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
+profile, independent output checks, compiler/allocator choices and sampling method.
+Run these opt-in benchmarks without concurrent builds or tests. They compare
+selected date and timestamp operations, not overall library capability; their
+in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
 ## Packaging
 

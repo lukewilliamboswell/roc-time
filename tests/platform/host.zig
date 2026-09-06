@@ -2,6 +2,7 @@
 //! Requested bytes are cumulative traffic, not live bytes or retained memory.
 const std = @import("std");
 const builtin = @import("builtin");
+const options = @import("fixture_options");
 const abi = @import("roc_platform_abi.zig");
 
 pub const std_options: std.Options = .{
@@ -32,6 +33,8 @@ comptime {
         @export(&allocatedBytes, .{ .name = "fixture_allocated_bytes" });
         @export(&deallocationCount, .{ .name = "fixture_deallocation_count" });
         @export(&assertion, .{ .name = "fixture_assert" });
+        @export(&opaqueU64, .{ .name = "fixture_opaque_u64" });
+        @export(&monotonicNs, .{ .name = "fixture_monotonic_ns" });
         @export(&mark, .{ .name = "fixture_mark" });
         @export(&main, .{ .name = "main" });
         @export(&hostAlloc, .{ .name = "roc_alloc", .visibility = .hidden });
@@ -84,7 +87,7 @@ fn platformMain(argc: usize, argv: [*][*:0]u8) c_int {
         .roc_env = undefined,
     };
     host_env.roc_env = .{
-        .allocator = host_env.gpa.allocator(),
+        .allocator = if (options.benchmark_allocator) std.heap.c_allocator else host_env.gpa.allocator(),
         .roc_io = abi.RocIo.default(),
     };
 
@@ -102,7 +105,7 @@ fn platformMain(argc: usize, argv: [*][*:0]u8) c_int {
     result.bytes.decref(&host);
     result.work.decref(&host);
 
-    if (host_env.gpa.deinit() == .leak) {
+    if (!options.benchmark_allocator and host_env.gpa.deinit() == .leak) {
         std.Io.File.stderr().writeStreamingAll(io, "ROC_HOST_LEAK\n") catch {};
         return 1;
     }
@@ -168,4 +171,16 @@ fn assertion(passed: bool) callconv(.c) void {
         failed_expectations = true;
         std.Io.File.stderr().writeStreamingAll(std.Io.Threaded.global_single_threaded.io(), "ROC_ASSERT_FAILED\n") catch std.process.exit(1);
     }
+}
+
+// Test-only monotonic timing; never available from the temporal package.
+fn monotonicNs() callconv(.c) u64 {
+    const stamp = std.Io.Clock.awake.now(std.Io.Threaded.global_single_threaded.io());
+    return std.math.cast(u64, stamp.nanoseconds) orelse std.process.exit(1);
+}
+
+// External call keeps benchmark kernel inputs opaque to the Roc optimizer.
+fn opaqueU64(value: u64) callconv(.c) u64 {
+    std.mem.doNotOptimizeAway(value);
+    return value;
 }

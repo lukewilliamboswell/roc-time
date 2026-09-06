@@ -9,12 +9,13 @@ platform ""
 		"fixture_allocation_count": Host.allocation_count!,
 		"fixture_allocated_bytes": Host.allocated_bytes!,
 		"fixture_deallocation_count": Host.deallocation_count!,
+		"fixture_opaque_u64": Host.opaque_u64!,
 		"fixture_monotonic_ns": Host.monotonic_ns!,
 		"fixture_mark": Host.mark!,
 		"fixture_assert": Host.assert!,
 	}
 	targets: {
-		inputs_dir: "../../.roc-time-tmp/fixture-platform/targets/",
+		inputs_dir: "../../../.roc-time-tmp/chrono-benchmark/targets/",
 		arm64mac: { inputs: ["libhost.a", app] },
 		x64musl: { inputs: ["crt1.o", "libhost.a", app, "libc.a"] },
 	}

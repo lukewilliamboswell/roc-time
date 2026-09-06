@@ -1,0 +1,2 @@
+[build]
+target-dir = "../../.roc-time-tmp/chrono-benchmark/editor-target"
