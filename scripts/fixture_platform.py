@@ -425,6 +425,33 @@ def verify_recurrence_explanation(target: str) -> None:
             raise RuntimeError(f"{mode}: recurrence explanation negative control failed")
         print(f"PASS recurrence explanation {mode}: allocation negative control")
 
+def verify_timestamp_format(target: str) -> None:
+    """One bounded output allocation, preserving canonical widths/assertions."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/timestamp_format_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"timestamp-format-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for count in (1, 32, 32000):
+            for year in ("0000", "9999"):
+                for ownership in ("owned", "shared"):
+                    result = subprocess.run([binary, str(count), year, ownership, "1"], capture_output=True, timeout=5)
+                    if result.returncode or result.stdout != b"format=canonical,width=preserved,assertion=preserved\n":
+                        raise RuntimeError(f"{mode}/{count}/{year}/{ownership}: formatter failed: {result.stderr!r}")
+                    match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
+                    if match is None:
+                        raise RuntimeError("missing formatter allocation observations")
+                    counts = tuple(int(value) for value in match[1].split(b","))
+                    if len(counts) != 3 or counts[0] > count or counts[1] > count * 128:
+                        raise RuntimeError(f"formatter allocation bounds: {counts}")
+                    print(f"PASS formatter {mode}/{count}/{year}/{ownership}: requested calls/bytes/UTF8 length {counts}")
+        failed = subprocess.run([binary, "32", "0000", "shared", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: formatter allocation negative control failed")
+        print(f"PASS formatter {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -443,5 +470,6 @@ if __name__ == "__main__":
         verify_civil_persistence(selected_target)
         verify_selection_explanation(selected_target)
         verify_recurrence_explanation(selected_target)
+        verify_timestamp_format(selected_target)
     else:
         print(selected_target)

@@ -279,34 +279,49 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		new({ date, clock, fraction_digits: count, offset })
 	}
 
+	## Validated fields need at most 32 ASCII bytes: 19 fixed, 7 fractional,
+	## and 6 for an asserted offset. Build one owned buffer rather than padded
+	## temporary strings. Formatting preserves supplied width and offset intent.
 	to_text : OffsetTimestamp -> Str
 	to_text = |value| {
 		date = GregorianDate.to_fields(value.date)
 		clock = ClockTime.to_fields(value.clock)
-		fraction = if value.fraction_digits == 0 {
-			""
-		} else {
-			".${pad(U32.div_trunc_by(clock.microsecond, fraction_unit(value.fraction_digits)).to_str(), value.fraction_digits.to_u64())}"
+		var bytes = List.with_capacity(32)
+		# new/parse prove the year is 0..9999; all other fields are validated
+		# by their nominal constructors. These narrowings cannot lose precision.
+		bytes = append_decimal(bytes, date.year.to_u32_wrap(), 1000, 4)
+		bytes = append_decimal(bytes.append(45), date.month.to_u32(), 10, 2)
+		bytes = append_decimal(bytes.append(45), date.day.to_u32(), 10, 2)
+		bytes = append_decimal(bytes.append(84), clock.hour.to_u32(), 10, 2)
+		bytes = append_decimal(bytes.append(58), clock.minute.to_u32(), 10, 2)
+		bytes = append_decimal(bytes.append(58), clock.second.to_u32(), 10, 2)
+		if value.fraction_digits > 0 {
+			bytes = append_decimal(bytes.append(46), clock.microsecond, 100000, value.fraction_digits)
 		}
-		offset = match value.offset {
-			UnassertedUtc => "Z"
+		match value.offset {
+			UnassertedUtc => {
+				bytes = bytes.append(90)
+			}
 			Asserted(fixed) => {
 				seconds = FixedOffset.to_seconds(fixed)
-				sign = if seconds < 0 {
-					"-"
-				} else {
-					"+"
-				}
+				# The profile restricts offsets to +/-86340 whole seconds.
 				absolute = if seconds < 0 {
-					-seconds
+					bytes = bytes.append(45)
+					(-seconds).to_u32_wrap()
 				} else {
-					seconds
+					bytes = bytes.append(43)
+					seconds.to_u32_wrap()
 				}
-				"${sign}${pad(I32.div_trunc_by(absolute, 3600).to_str(), 2)}:${pad(I32.rem_by(I32.div_trunc_by(absolute, 60), 60).to_str(), 2)}"
+				bytes = append_decimal(bytes, U32.div_trunc_by(absolute, 3600), 10, 2)
+				bytes = append_decimal(bytes.append(58), U32.rem_by(U32.div_trunc_by(absolute, 60), 60), 10, 2)
 			}
 		}
-		"${pad(date.year.to_str(), 4)}-${pad(date.month.to_str(), 2)}-${pad(date.day.to_str(), 2)}T${pad(clock.hour.to_str(), 2)}:${pad(clock.minute.to_str(), 2)}:${pad(clock.second.to_str(), 2)}${fraction}${offset}"
+		match Str.from_utf8(bytes) {
+			Ok(text) => text
+			Err(_) => crash "Timestamp formatter emits only ASCII digits and punctuation"
+		}
 	}
+
 	is_eq : OffsetTimestamp, OffsetTimestamp -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock and a.fraction_digits == b.fraction_digits and a.offset == b.offset
 	to_hash : OffsetTimestamp, Hasher -> Hasher
@@ -367,12 +382,21 @@ digits = |bytes, start, count| {
 	value
 }
 
-pad = |text, width| {
-	var result = text
-	while result.count_utf8_bytes() < width {
-		result = "0${result}"
+# All calls use a positive power-of-ten divisor and at most its decimal width.
+# The last division may yield zero only after emitting the final digit. Every
+# emitted digit is in 0..9; the buffer is consumed without retaining an alias.
+append_decimal : List(U8), U32, U32, U8 -> List(U8)
+append_decimal = |initial, number, first_divisor, count| {
+	var bytes = initial
+	var divisor = first_divisor
+	var remaining = count
+	while remaining > 0 {
+		digit_value = U32.rem_by(U32.div_trunc_by(number, divisor), 10)
+		bytes = bytes.append(digit_value.to_u8_wrap() + 48)
+		divisor = U32.div_trunc_by(divisor, 10)
+		remaining = remaining - 1
 	}
-	result
+	bytes
 }
 
 # RFC 3339 §5.8's independently stated equal-instant example.

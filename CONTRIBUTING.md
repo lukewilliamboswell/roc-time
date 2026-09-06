@@ -333,6 +333,14 @@ bounds for this shared-cursor workload, not exact allocation or retained-memory
 contracts. Review ceiling changes against measured operations and ownership;
 do not raise them merely to make a regression pass.
 
+Timestamp formatting has a separate fixture at
+`tests/timestamp_format_resource/main.roc`. It checks every fractional width,
+UTC assertion distinctions and four-digit year endpoints against independent
+canonical spellings. Parsing and input storage precede the measured scope;
+formatting allows one allocation/reallocation call and 128 requested bytes per
+output, with dev/speed failing controls. Retained inputs are observed afterward.
+These counters measure allocation traffic, not live or retained memory.
+
 Interchange resource evidence lives in `tests/interchange_resource/main.roc`.
 The normal fixture gate measures parsing, serialization, interpretation, stored
 snapshot reads and inspection separately for 1/32 annotations and 2/16,384

@@ -40,7 +40,12 @@ out-of-profile offsets, leap seconds and seventh fractional digits require
 specific errors. Four synthetic corpus patterns exercise this generator; they
 are not minimized discoveries. Module unit fixtures independently transcribe
 LOC date/qualification examples and RFC 3339/9557 offset facts, and cover the
-four-digit year endpoints outside this generated domain.
+four-digit year endpoints outside this generated domain. Each generated input
+also drives a bounded direct-construction formatter grid at years 0000 and 9999,
+all seven fractional widths and unasserted UTC, asserted UTC and extreme offsets.
+Expected text uses decimal conversion and zero padding independently of the
+formatter's ASCII buffer algorithm, including retained values and fractions
+with leading and trailing zeroes.
 
 The same unchanged generator also drives ExactInterval and Ixdtf. Independent
 one-second spans check exact interval parsing and computed-span serialization;

@@ -37,6 +37,7 @@ InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier
 		date_text = "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}-${pad(day.to_u64(), 2)}"
 		check_edtf(input, day, date_text)
 		check_timestamp(input, day, date_text)
+		check_timestamp_format_limits(input)
 		check_malformed(input, date_text)
 		Fuzz.Outcome.Keep
 	}
@@ -846,5 +847,80 @@ check_civil_context = |source, index, rules| {
 	definition = ZoneRules.definition(rules)
 	if explanation_fact(source, index) != Context({ name: definition.name, version: definition.version, validity: definition.validity, provenance: definition.provenance }) {
 		crash "Civil explanation changed retained immutable context metadata"
+	}
+}
+
+# R01/R02/R14: direct constructor inputs complement the generated parser path.
+# Decimal strings padded by prepending zeros are independent of the formatter's
+# digit-writing buffer. Every case covers all widths and offset assertions;
+# generated clock fields ensure runtime values and both extreme years recur.
+check_timestamp_format_limits = |input| {
+	hour = input.seconds // 3600
+	minute = (input.seconds // 60) % 60
+	second = input.seconds % 60
+	var scale = 1.U32
+	for digits in [0.U8, 1, 2, 3, 4, 5, 6] {
+		for variant in [0.U8, 1, 2, 3] {
+			year = if (variant + input.qualifier) % 2 == 0 {
+				0.I64
+			} else {
+				9999.I64
+			}
+			fraction = if digits == 0 {
+				0.U32
+			} else {
+				match variant {
+					0 => 0
+					1 => 1
+					2 => if digits < 2 {
+						0
+					} else {
+						10
+					}
+					_ => scale - 1
+				}
+			}
+			offset = match variant {
+				0 => UnassertedUtc
+				1 => Asserted(FixedOffset.from_seconds(0))
+				2 => Asserted(FixedOffset.from_seconds(86340))
+				_ => Asserted(FixedOffset.from_seconds(-86340))
+			}
+			suffix = match variant {
+				0 => "Z"
+				1 => "+00:00"
+				2 => "+23:59"
+				_ => "-23:59"
+			}
+			date = match GregorianDate.from_fields({ year, month: 1, day: 1 }) {
+				Ok(value) => value
+				Err(_) => crash "Formatter boundary year fixture rejected"
+			}
+			clock = match ClockTime.from_fields({ hour: hour.to_u8_wrap(), minute: minute.to_u8_wrap(), second: second.to_u8_wrap(), microsecond: fraction * (1000000 // scale) }) {
+				Ok(value) => value
+				Err(_) => crash "Formatter exact-width clock fixture rejected"
+			}
+			parts = { date, clock, fraction_digits: digits, offset }
+			value = match OffsetTimestamp.new(parts) {
+				Ok(found) => found
+				Err(_) => crash "Valid direct formatter input rejected"
+			}
+			fraction_text = if digits == 0 {
+				""
+			} else {
+				".${pad(fraction.to_u64(), digits.to_u64())}"
+			}
+			expected = "${pad(year.to_u64_wrap(), 4)}-01-01T${pad(hour.to_u64(), 2)}:${pad(minute.to_u64(), 2)}:${pad(second.to_u64(), 2)}${fraction_text}${suffix}"
+			retained = [value, value]
+			for shared in retained {
+				if OffsetTimestamp.to_text(shared) != expected or OffsetTimestamp.parts(shared) != parts {
+					crash "Timestamp formatter changed exact boundary-year fields, precision or offset assertion"
+				}
+			}
+			if OffsetTimestamp.parse(expected) != Ok(value) or OffsetTimestamp.to_text(value) != expected {
+				crash "Formatting retained value changed its independent canonical text"
+			}
+		}
+		scale = scale * 10
 	}
 }
