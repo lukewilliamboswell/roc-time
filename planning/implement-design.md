@@ -44,12 +44,10 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 
 ## Adoption acceptance still needed
 
-- Prepare starter applications and compiler compatibility metadata as explicit
-  release assets; the pinned publishing action accepts package archives only.
-- Verify the booking, archive and staffing starters from an extracted kit with an
-  empty package cache and a working directory outside the checkout. Require exact
-  output fixtures for all three. Extend acquisition/role rejection checks to the
-  extracted kit, missing companion modules and incompatible compiler selection.
+- Wire the starter ZIP and compiler compatibility metadata into versioned release
+  asset preparation and publication; the pinned publishing action accepts package
+  archives only. Validate the prepared kit's final role URLs against release
+  metadata before publication.
 - Exercise the prepared release workflow in CI before claiming release readiness;
   settle the initial release version and publish only with authorization.
 

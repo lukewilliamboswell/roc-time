@@ -43,6 +43,8 @@ third-party Python dependencies.
 | `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
 | `test_bundle_examples.py` | Verify examples against exact core/zone archives with fresh HTTP acquisition |
 | `test_bundle_failures.py` | Reject missing, swapped and malformed candidate bundles |
+| `starter_kit.py` | Create a ZIP with complete starter apps, package URLs and the compiler pin |
+| `test_starter_kit.py` | Verify extracted starters from an outside working directory and reject broken inputs |
 | `update_example_urls.py` | Point the examples at a released bundle URL |
 
 Python tooling orchestrates compiler subprocesses and localhost serving for
@@ -463,6 +465,22 @@ digests for later core-version comparisons. A legacy release without this
 metadata requires the explicit `previous_core_url` workflow input; archive count
 does not identify a package role. `scripts/release_bundles.py self-test` verifies
 role selection and rejection paths without publishing or contacting GitHub.
+
+Prepare a starter ZIP for explicit core and zone URLs with:
+
+```sh
+python3 scripts/starter_kit.py --output .roc-time-tmp/roc-time-starter.zip \
+  --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
+```
+
+The ZIP contains booking, archive-search and staffing applications, their
+companion modules, a license, the compiler pin and a runner that rejects an
+incompatible compiler. The full gate generates and extracts a kit against the
+candidate archives, acquires them through a fresh cache, and checks interpreter
+and native outputs while invoking from outside the checkout's working directory.
+Generated artifacts stay under `.roc-time-tmp/`. Failure controls cover missing
+companion modules, compiler mismatch and missing, corrupt or swapped archives.
+Publishing the starter ZIP remains a release-workflow deliverable.
 
 ## Zone-data representation measurements
 

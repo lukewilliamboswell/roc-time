@@ -151,6 +151,8 @@ def main() -> None:
          "--zone-bundle-path", zone_match.group(1)])
     run([sys.executable, "scripts/test_bundle_failures.py", "--bundle-path", core_bundle,
          "--zone-bundle-path", zone_match.group(1)])
+    run([sys.executable, "scripts/test_starter_kit.py", "--bundle-path", core_bundle,
+         "--zone-bundle-path", zone_match.group(1)])
 
 
 if __name__ == "__main__":
