@@ -1,5 +1,6 @@
 import time.ExactInterval
 import time.Coverage
+import time.Persistence
 
 ## Exchange exact booking windows as text, computing availability on coverage.
 BookingExchange :: [].{
@@ -9,7 +10,18 @@ BookingExchange :: [].{
 		for text in booking_texts {
 			bookings = bookings.append(ExactInterval.span(parse(text)?))
 		}
-		free = Coverage.complement_within(Coverage.from_spans(bookings), ExactInterval.span(opening))
+		computed = Coverage.complement_within(Coverage.from_spans(bookings), ExactInterval.span(opening))
+		# Save computed availability independently of the imported booking text.
+		# Restoring canonical coverage preserves every gap between free windows.
+		document = Persistence.to_text(Persistence.new(Coverage(computed))?)
+		restored = match Persistence.parse(document) {
+			Ok(value) => Persistence.value(value)
+			Err(error) => return Err(StoredAvailability(error))
+		}
+		free = match restored {
+			Coverage(value) => value
+			_ => return Err(UnexpectedDocumentKind)
+		}
 		var output = []
 		for span in free {
 			# The application requests exact microsecond output in UTC. This

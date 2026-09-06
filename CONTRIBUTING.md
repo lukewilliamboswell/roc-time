@@ -341,6 +341,15 @@ failing allocation controls. Rules and runtime input are built outside those
 scopes. Counts are cumulative requested bytes, not live or retained memory;
 initial interpretation remains linear in the supplied transition table.
 
+Native persistence resource checks in `tests/persistence_resource/main.roc`
+separate checked construction, encoding and decoding for 1/32/1,024 canonical
+coverage members. Small and full-range signed coordinates distinguish member
+work from coordinate distance. A 1,025-member value must fail construction before
+allocation; rejecting its JSON still includes envelope decoding costs. The gate
+runs dev/speed builds with finite subprocess limits and a dedicated failing
+allocation ceiling. These counters measure requested allocation traffic, not
+live or retained bytes.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

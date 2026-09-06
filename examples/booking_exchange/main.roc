@@ -11,7 +11,7 @@ main! = |_args| {
 			"2026-06-15T15:00:00Z/2026-06-15T16:00:00Z",
 		],
 	)?
-	echo!("Available booking windows (UTC)\n")
+	echo!("Restored available booking windows (UTC)\n")
 	for text in free {
 		echo!("${text}\n")
 	}

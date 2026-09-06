@@ -198,6 +198,35 @@ def verify_interchange(target: str) -> None:
             raise RuntimeError(f"{mode}: interchange negative control failed")
         print(f"PASS interchange {mode}: allocation negative control")
 
+
+def verify_persistence(target: str) -> None:
+    """Canonical member counts bound persistence, not coordinate distances."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/persistence_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"persistence-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for coordinates in ("small", "wide"):
+            observations = []
+            for count in (1, 32, 1024):
+                result = subprocess.run([binary, str(count), "1048576", coordinates], capture_output=True, timeout=5)
+                if result.returncode or result.stdout != b"coverage=preserved,span=preserved,1025=rejected\n":
+                    raise RuntimeError(f"{mode}/{coordinates}/{count}: persistence resources failed: {result.stderr!r}")
+                match = re.search(rb" work=((?:\d+,){6}\d+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError(f"{mode}: missing persistence observations")
+                counts = tuple(int(value) for value in match[1].split(b","))
+                if counts[0] != 0 or counts[5] != 0:
+                    raise RuntimeError(f"{mode}: persistence construction/member-limit rejection allocated: {counts}")
+                observations.append(counts)
+            print(f"PASS persistence {mode}/{coordinates}: members 1/32/1024 requested bytes {observations}")
+        failed = subprocess.run([binary, "1024", "0", "wide"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: persistence ceiling negative control failed")
+        print(f"PASS persistence {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -208,5 +237,6 @@ if __name__ == "__main__":
         verify_recurrence(selected_target)
         verify_intervals(selected_target)
         verify_interchange(selected_target)
+        verify_persistence(selected_target)
     else:
         print(selected_target)

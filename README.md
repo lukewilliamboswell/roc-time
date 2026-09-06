@@ -57,11 +57,13 @@ explicitly so invalid input can return an error. These codecs do not define the
 versioned native persistence format.
 
 [Persistence](package/Persistence.roc) stores these seven declaration types and
-POSIX boundaries/deltas in a versioned JSON envelope with explicit semantic
-profiles, axis and units. Decimal strings preserve full-range signed microseconds.
+POSIX boundaries/deltas, spans and coverage in a versioned JSON envelope with
+explicit semantic profiles, axis and units. Decimal strings preserve full-range
+signed microseconds.
 Unknown versions, incompatible metadata and duplicate fields return errors.
-This profile preserves declarations and scalar values; calendar values, coverage
-and interpretation snapshots require future persistence profiles.
+Checked construction accepts up to 1,024 canonical coverage members and preserves
+disconnected windows. Calendar values and interpretation snapshots require future
+persistence profiles.
 
 ## Examples
 
@@ -71,7 +73,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | Application | Demonstrates |
 | --- | --- |
 | [Room availability](examples/coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
-| [Booking exchange](examples/booking_exchange/main.roc) | Read exact booking windows with different offsets and serialize free windows in UTC |
+| [Booking exchange](examples/booking_exchange/main.roc) | Read bookings with different offsets, persist computed availability and serialize restored free windows in UTC |
 | [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Archive persistence](examples/archive_persistence/main.roc) | Save and restore an uncertain catalogue date, a recording declaration and its exact POSIX boundary |
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |

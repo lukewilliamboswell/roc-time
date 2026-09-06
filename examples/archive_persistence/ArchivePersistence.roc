@@ -17,9 +17,9 @@ ArchivePersistence :: [].{
 		boundary = OffsetTimestamp.boundary(timestamp)?
 		# These documents can be saved by the application. Each carries its own
 		# version and semantic profile; no zone lookup is needed to restore it.
-		date_document = Persistence.to_text(Persistence.new(EdtfDate(date)))
-		timestamp_document = Persistence.to_text(Persistence.new(OffsetTimestamp(timestamp)))
-		boundary_document = Persistence.to_text(Persistence.new(PosixBoundary(boundary)))
+		date_document = Persistence.to_text(Persistence.new(EdtfDate(date))?)
+		timestamp_document = Persistence.to_text(Persistence.new(OffsetTimestamp(timestamp))?)
+		boundary_document = Persistence.to_text(Persistence.new(PosixBoundary(boundary))?)
 		restored_date = restore(date_document)?
 		restored_timestamp = restore(timestamp_document)?
 		restored_boundary = restore(boundary_document)?

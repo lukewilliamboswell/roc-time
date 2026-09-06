@@ -73,7 +73,10 @@ main! = |args| {
 	exact_serialized = Host.allocated_bytes!({})
 	Host.assert!(exact_output == exact_text and exact_serialized - exact_parsed <= ceiling)
 	# Persist the declaration; the rule snapshot must be rebound explicitly.
-	saved = Persistence.new(Ixdtf(declaration))
+	saved = match Persistence.new(Ixdtf(declaration)) {
+		Ok(value) => value
+		Err(_) => crash "bounded declaration persistence"
+	}
 	persistence_before = Host.allocated_bytes!({})
 	encoded = Persistence.to_text(saved)
 	persistence_encoded = Host.allocated_bytes!({})

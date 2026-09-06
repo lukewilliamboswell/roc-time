@@ -8,9 +8,11 @@ import RfcDuration
 import RfcPeriod
 import PosixBoundary
 import PosixDelta
+import PosixSpan
+import Coverage
 
 ## Version 1 native persistence for seven supported text declarations and exact
-## POSIX boundary/displacement values. The JSON envelope has seven required
+## POSIX boundary/displacement/span/coverage values. The JSON envelope has seven required
 ## string fields: format, version, kind, profile, axis, unit and payload.
 ## Format is roc-time; version is 1. Unknown metadata errors before temporal
 ## payload interpretation. No private records or compiler union encoding leak.
@@ -19,7 +21,7 @@ import PosixDelta
 ## axis/unit none: they are source declarations, not resolved snapshots. This
 ## preserves resolution, qualifiers, UTC/local forms and ordered annotations;
 ## original spelling is not preserved. Decode never fetches context or resolves
-## zones. Snapshot/rule/event/coverage/calendar-native persistence is outside
+## zones. Snapshot/rule/event/calendar-native persistence is outside
 ## this initial profile and unsupported kinds fail explicitly.
 ##
 ## Core kinds posix-boundary and posix-delta use profile posix-microseconds-v1,
@@ -28,17 +30,52 @@ import PosixDelta
 ## A delta is coordinate displacement, not physical elapsed SI time.
 ##
 ## Envelope decoding is bounded to 65536 encoded bytes and seven string fields.
-## This type's canonical outputs fit below 8192 bytes: the largest payload is
-## Ixdtf's bounded 4096-byte ASCII declaration; metadata is fixed and small.
+## Span payloads use start/end signed decimals (posix-half-open-span-v1).
+## Coverage payloads join canonical spans with semicolons (posix-canonical-coverage-v1);
+## empty text means empty coverage. Input must be strictly ordered, disjoint and
+## non-touching. This native payload grammar is not ISO interval syntax.
+## These profiles use axis posix-1970 and unit microsecond. Missing endpoints
+## return IncompleteSpan; malformed separators or integers remain distinct.
+## Construction accepts at most 1024 coverage members, preserving all or failing.
+## Decode counts members before allocating/parsing their spans, so an input
+## above 1024 members errors before content/canonical-order validation. Canonical output
+## fits below 44000 bytes: each pair needs at most 41 bytes plus one separator.
+## Coverage encoding/decoding is linear in members plus text bytes; joins avoid
+## repeated growing string appends. Input storage and output are materialized.
 ## Encoding does not interpret descriptions or enumerate temporal domains.
 ## Generic parser_for/encoder_for hooks are intentionally unsupported: use
 ## parse/to_text for the versioned envelope. Generic JSON must not derive the
 ## private Value representation or mistake it for this persistence contract.
+##
+## ```roc
+## import time.Persistence
+## import time.Coverage
+## import time.PosixSpan
+## import time.PosixBoundary
+## expect {
+##     first = PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(1))?
+##     second = PosixSpan.new(PosixBoundary.from_microseconds(2), PosixBoundary.from_microseconds(3))?
+##     stored = Persistence.new(Coverage(Coverage.from_spans([first, second])))?
+##     restored = Persistence.parse(Persistence.to_text(stored))?
+##     match Persistence.value(restored) {
+##         Coverage(coverage) => !Coverage.contains(coverage, PosixBoundary.from_microseconds(1))
+##         _ => False
+##     }
+## }
+## ```
 Persistence :: { stored : Value }.{
-	Value : [EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta)]
-	Error : [Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange]
-	new : Value -> Persistence
-	new = |stored| { stored: stored }
+	Value : [EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage)]
+	Error : [Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
+	new : Value -> Try(Persistence, [TooManyMembers, ..])
+	new = |stored| {
+		match stored {
+			Coverage(coverage) => if Coverage.member_count(coverage) > 1024 {
+				return Err(TooManyMembers)
+			}
+			_ => {}
+		}
+		Ok({ stored: stored })
+	}
 	value : Persistence -> Value
 	value = |wrapped| wrapped.stored
 
@@ -99,9 +136,11 @@ Persistence :: { stored : Value }.{
 			}
 			"posix-boundary" => PosixBoundary(PosixBoundary.from_microseconds(integer(fields.payload)?))
 			"posix-delta" => PosixDelta(PosixDelta.from_microseconds(integer(fields.payload)?))
+			"posix-span" => PosixSpan(parse_span(fields.payload)?)
+			"coverage" => Coverage(parse_coverage(fields.payload)?)
 			_ => return Err(UnknownKind(fields.kind))
 		}
-		Ok(new(stored))
+		new(stored)
 	}
 
 	to_text : Persistence -> Str
@@ -116,13 +155,22 @@ Persistence :: { stored : Value }.{
 			RfcPeriod(inner) => { kind: "rfc-period", payload: RfcPeriod.to_text(inner) }
 			PosixBoundary(inner) => { kind: "posix-boundary", payload: PosixBoundary.to_microseconds(inner).to_str() }
 			PosixDelta(inner) => { kind: "posix-delta", payload: PosixDelta.to_microseconds(inner).to_str() }
+			PosixSpan(inner) => { kind: "posix-span", payload: span_text(inner) }
+			Coverage(inner) => {
+				var pieces = []
+				for span in Coverage.to_spans(inner) {
+					pieces = pieces.append(span_text(span))
+				}
+				{ kind: "coverage", payload: Str.join_with(pieces, ";") }
+			}
 		}
 		description = match metadata(kind) {
 			Some(inner) => inner
 			None => crash "Every persistent Value has declared metadata"
 		}
-		# The largest payload is 4096 bytes. Even maximal six-byte JSON
-		# escaping plus fixed metadata fits well inside the envelope's 64KiB cap.
+		# Coverage needs at most 43007 ASCII bytes without JSON escaping.
+		# Text declarations need at most 4096 bytes; even six-byte escaping
+		# plus fixed metadata fits inside the envelope's 64KiB cap.
 		Json.to_str({ format: "roc-time", version: "1", kind, profile: description.profile, axis: description.axis, unit: description.unit, payload })
 	}
 
@@ -139,6 +187,8 @@ Persistence :: { stored : Value }.{
 		RfcPeriod(inner) => inner.to_hash((6.U8).to_hash(hasher))
 		PosixBoundary(inner) => inner.to_hash((7.U8).to_hash(hasher))
 		PosixDelta(inner) => inner.to_hash((8.U8).to_hash(hasher))
+		PosixSpan(inner) => inner.to_hash((9.U8).to_hash(hasher))
+		Coverage(inner) => inner.to_hash((10.U8).to_hash(hasher))
 	}
 	to_inspect : Persistence -> Str
 	to_inspect = |wrapped| {
@@ -152,6 +202,8 @@ Persistence :: { stored : Value }.{
 			RfcPeriod(_) => "rfc-period"
 			PosixBoundary(_) => "posix-boundary"
 			PosixDelta(_) => "posix-delta"
+			PosixSpan(_) => "posix-span"
+			Coverage(_) => "coverage"
 		}
 		"Persistence(version=1, kind=${kind})"
 	}
@@ -168,9 +220,11 @@ metadata = |kind| {
 		"rfc-period" => RfcPeriod.profile
 		"posix-boundary" => "posix-microseconds-v1"
 		"posix-delta" => "posix-microseconds-v1"
+		"posix-span" => "posix-half-open-span-v1"
+		"coverage" => "posix-canonical-coverage-v1"
 		_ => return None
 	}
-	core = kind == "posix-boundary" or kind == "posix-delta"
+	core = kind == "posix-boundary" or kind == "posix-delta" or kind == "posix-span" or kind == "coverage"
 	Some({
 		profile,
 		axis: if core {
@@ -221,6 +275,80 @@ integer = |text| {
 	}
 }
 
+span_text = |span| "${PosixBoundary.to_microseconds(PosixSpan.start(span)).to_str()}/${PosixBoundary.to_microseconds(PosixSpan.end(span)).to_str()}"
+
+parse_span : Str -> Try(PosixSpan, [MalformedSpan, IncompleteSpan, InvalidInteger, OutOfRange, InvalidSpan([EmptySpan, ReversedBounds]), ..])
+parse_span = |text| {
+	var separators = 0.U8
+	for byte in text.to_utf8() {
+		if byte == 47 {
+			separators = separators + 1
+			if separators > 1 {
+				return Err(MalformedSpan)
+			}
+		}
+	}
+	if separators == 0 {
+		if !text.is_empty() and text != "-" {
+			_ = integer(text)?
+		}
+		return Err(IncompleteSpan)
+	}
+	(start_text, end_text) = match text.split_on("/") {
+		[start, end] => (start, end)
+		_ => return Err(MalformedSpan)
+	}
+	if start_text.is_empty() {
+		if !end_text.is_empty() {
+			_ = integer(end_text)?
+		}
+		return Err(IncompleteSpan)
+	}
+	start = integer(start_text)?
+	if end_text.is_empty() {
+		return Err(IncompleteSpan)
+	}
+	end = integer(end_text)?
+	match PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end)) {
+		Ok(span) => Ok(span)
+		Err(error) => Err(InvalidSpan(error))
+	}
+}
+
+parse_coverage : Str -> Try(Coverage, [TooManyMembers, MalformedSpan, IncompleteSpan, InvalidInteger, OutOfRange, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, ..])
+parse_coverage = |text| {
+	if text.is_empty() {
+		return Ok(Coverage.empty)
+	}
+	var count = 1.U64
+	# Count separators before allocating a member list or parsing any member.
+	for byte in text.to_utf8() {
+		if byte == 59 {
+			count = count + 1
+			if count > 1024 {
+				return Err(TooManyMembers)
+			}
+		}
+	}
+	var members = []
+	var previous_end = None
+	for member_text in text.split_on(";") {
+		span = parse_span(member_text)?
+		match previous_end {
+			None => {}
+			Some(end) => if PosixSpan.start(span) <= end {
+				return Err(NonCanonicalCoverage)
+			}
+		}
+		previous_end = Some(PosixSpan.end(span))
+		members = members.append(span)
+	}
+	match Coverage.from_sorted_spans(members) {
+		Ok(coverage) => Ok(coverage)
+		Err(_) => Err(NonCanonicalCoverage)
+	}
+}
+
 expect {
 	# Independent exact JSON fixture: these digits exceed IEEE754's exact
 	# integer range and must remain quoted rather than pass through a float.
@@ -232,8 +360,8 @@ expect {
 expect {
 	var valid = Bool.True
 	for number in [I64.lowest, -1, 0, 9007199254740993, I64.highest] {
-		boundary = Persistence.new(PosixBoundary(PosixBoundary.from_microseconds(number)))
-		delta = Persistence.new(PosixDelta(PosixDelta.from_microseconds(number)))
+		boundary = Persistence.new(PosixBoundary(PosixBoundary.from_microseconds(number)))?
+		delta = Persistence.new(PosixDelta(PosixDelta.from_microseconds(number)))?
 		valid = valid and boundary != delta and Persistence.parse(Persistence.to_text(boundary)) == Ok(boundary) and Persistence.parse(Persistence.to_text(delta)) == Ok(delta)
 	}
 	valid
@@ -254,7 +382,7 @@ expect {
 		RfcDuration(RfcDuration.parse("P1DT1H")?),
 		RfcPeriod(RfcPeriod.parse("20000101T000000/P1D")?),
 	] {
-		value = Persistence.new(stored)
+		value = Persistence.new(stored)?
 		valid = valid and Persistence.parse(Persistence.to_text(value)) == Ok(value)
 	}
 	valid
@@ -279,10 +407,51 @@ test_parse = |fields| {
 }
 
 expect {
-	boundary = Persistence.new(PosixBoundary(PosixBoundary.from_microseconds(1)))
+	boundary = Persistence.new(PosixBoundary(PosixBoundary.from_microseconds(1)))?
 	replay = Persistence.parse(Persistence.to_text(boundary))?
-	delta = Persistence.new(PosixDelta(PosixDelta.from_microseconds(1)))
+	delta = Persistence.new(PosixDelta(PosixDelta.from_microseconds(1)))?
 	dictionary = Dict.insert(Dict.insert(Dict.empty(), boundary, "position"), delta, "displacement")
 	Dict.get(dictionary, replay) == Ok("position") and Dict.get(dictionary, delta) == Ok("displacement") and
 		Str.inspect(boundary) == "Persistence(version=1, kind=posix-boundary)"
+}
+
+expect {
+	# Extent exists even when its signed I64 coordinate width cannot fit.
+	wide = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+	stored = Persistence.new(PosixSpan(wide))?
+	base = { format: "roc-time", version: "1", kind: "posix-span", profile: "posix-half-open-span-v1", axis: "posix-1970", unit: "microsecond", payload: "-9223372036854775808/9223372036854775807" }
+	PosixSpan.coordinate_width(wide) == Err(OutOfRange) and test_parse(base) == Ok(stored) and Persistence.parse(Persistence.to_text(stored)) == Ok(stored)
+}
+expect {
+	first = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(0))?
+	second = PosixSpan.new(PosixBoundary.from_microseconds(1), PosixBoundary.from_microseconds(3))?
+	coverage = Coverage.from_spans([second, first])
+	stored = Persistence.new(Coverage(coverage))?
+	empty = Persistence.new(Coverage(Coverage.empty))?
+	base = { format: "roc-time", version: "1", kind: "coverage", profile: "posix-canonical-coverage-v1", axis: "posix-1970", unit: "microsecond", payload: "-2/0;1/3" }
+	test_parse(base) == Ok(stored) and test_parse({ ..base, payload: "" }) == Ok(empty) and
+		Persistence.parse(Persistence.to_text(stored)) == Ok(stored) and Persistence.parse(Persistence.to_text(empty)) == Ok(empty)
+}
+expect {
+	parse_span("0/0") == Err(InvalidSpan(EmptySpan)) and parse_span("1/0") == Err(InvalidSpan(ReversedBounds)) and
+		parse_span("0") == Err(IncompleteSpan) and parse_span("0/") == Err(IncompleteSpan) and parse_span("/1") == Err(IncompleteSpan) and
+			parse_span("0/1/2") == Err(MalformedSpan) and parse_span("00/1") == Err(InvalidInteger) and
+				parse_span("0/9223372036854775808") == Err(OutOfRange) and
+					parse_coverage("0/1;") == Err(IncompleteSpan) and
+						parse_coverage("1/2;0/1") == Err(NonCanonicalCoverage) and parse_coverage("0/2;1/3") == Err(NonCanonicalCoverage) and
+							parse_coverage("0/1;1/2") == Err(NonCanonicalCoverage) and parse_coverage("0/1;0/1") == Err(NonCanonicalCoverage)
+}
+expect {
+	var spans = []
+	var index = 0.I64
+	while index < 1025 {
+		span = PosixSpan.new(PosixBoundary.from_microseconds(index * 2), PosixBoundary.from_microseconds(index * 2 + 1))?
+		spans = spans.append(span)
+		index = index + 1
+	}
+	large = Coverage.from_spans(spans)
+	limit = Coverage.from_spans(spans.drop_last(1))
+	accepted = Persistence.new(Coverage(limit))?
+	Persistence.new(Coverage(large)) == Err(TooManyMembers) and Persistence.parse(Persistence.to_text(accepted)) == Ok(accepted) and
+		parse_coverage(Str.join_with(List.repeat("0/1", 1025), ";")) == Err(TooManyMembers)
 }

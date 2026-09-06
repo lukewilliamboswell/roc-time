@@ -382,7 +382,10 @@ constant_rules = |boundary, offset, version| match ZoneRules.new_bounded("Synthe
 # underlying temporal fields/boundaries are checked against the models above;
 # this law adds persistence without using a round trip as the semantic oracle.
 check_persistence = |value, expected| {
-	envelope = Persistence.new(value)
+	envelope = match Persistence.new(value) {
+		Ok(found) => found
+		Err(_) => crash "Bounded persistence declaration rejected"
+	}
 	text = Persistence.to_text(envelope)
 	fields : Try({ format : Str, version : Str, kind : Str, profile : Str, axis : Str, unit : Str, payload : Str }, [InvalidJson(Str), MissingRequiredField(Str)])
 	fields = Json.parse(text)
@@ -402,6 +405,7 @@ check_persistence = |value, expected| {
 }
 
 check_core_persistence = |generated| {
+	check_persistence(PosixSpan(model_span(I64.lowest, I64.highest)), { kind: "posix-span", profile: "posix-half-open-span-v1", axis: "posix-1970", unit: "microsecond", payload: "-9223372036854775808/9223372036854775807" })
 	# These values cannot all be represented exactly by a JSON/F64 number.
 	# Keep them as decimal strings and verify both coordinate domain tags.
 	for coordinate in [I64.lowest, -9007199254740993, 0, 9007199254740993, I64.highest, generated] {
