@@ -227,6 +227,32 @@ def verify_persistence(target: str) -> None:
             raise RuntimeError(f"{mode}: persistence ceiling negative control failed")
         print(f"PASS persistence {mode}: allocation negative control")
 
+
+def verify_calendar_persistence(target: str) -> None:
+    """Native calendar persistence preserves resolution without lowering."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/calendar_persistence_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"calendar-persistence-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for qualifications in (0, 8):
+            observations = []
+            for digits in range(1, 7):
+                result = subprocess.run([binary, str(digits), str(qualifications), "65536", "2147483647"], capture_output=True, timeout=5)
+                if result.returncode or result.stdout != b"calendar=preserved,qualifications=preserved,limits=rejected\n":
+                    raise RuntimeError(f"{mode}/{qualifications}/{digits}: native calendar resources failed: {result.stderr!r}")
+                match = re.search(rb" work=((?:\d+,){5}\d+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError(f"{mode}: missing native calendar observations")
+                observations.append(tuple(int(value) for value in match[1].split(b",")))
+            print(f"PASS calendar persistence {mode}/{qualifications} qualifications: fraction widths1..6 requested bytes {observations}")
+        failed = subprocess.run([binary, "6", "8", "0", "2147483647"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: native calendar ceiling negative control failed")
+        print(f"PASS calendar persistence {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -238,5 +264,6 @@ if __name__ == "__main__":
         verify_intervals(selected_target)
         verify_interchange(selected_target)
         verify_persistence(selected_target)
+        verify_calendar_persistence(selected_target)
     else:
         print(selected_target)

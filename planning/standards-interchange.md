@@ -18,7 +18,7 @@ reasoning model or declaring full ISO/EDTF conformance first.
    and its bound interpretation result. Bounded renderers distinguish unresolved,
    unsupported, empty and limited results without re-resolution. Deliver this
    with the first useful format slices, not after all standards support. Extend
-   native persistence to calendar descriptions and snapshots.
+   native persistence to interpretation snapshots.
    Snapshot persistence must bind actual immutable interpretation data and
    policies, not only provider names/version labels. Preserve qualifiers and
    native calendar/resolution distinctions outside the text adapter profiles.

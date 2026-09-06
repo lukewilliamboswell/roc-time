@@ -1,3 +1,6 @@
+import PersistenceCalendar
+import CalendarValue
+import QualifiedCalendarValue
 import PersistenceEnvelope
 import EdtfDate
 import OffsetTimestamp
@@ -11,7 +14,7 @@ import PosixDelta
 import PosixSpan
 import Coverage
 
-## Version 1 native persistence for seven supported text declarations and exact
+## Version 1 native persistence for text and native calendar descriptions, plus
 ## POSIX boundary/displacement/span/coverage values. The JSON envelope has seven required
 ## string fields: format, version, kind, profile, axis, unit and payload.
 ## Format is roc-time; version is 1. Unknown metadata errors before temporal
@@ -21,8 +24,19 @@ import Coverage
 ## axis/unit none: they are source declarations, not resolved snapshots. This
 ## preserves resolution, qualifiers, UTC/local forms and ordered annotations;
 ## original spelling is not preserved. Decode never fetches context or resolves
-## zones. Snapshot/rule/event/calendar-native persistence is outside
+## zones. Snapshot/rule/event persistence is outside
 ## this initial profile and unsupported kinds fail explicitly.
+##
+## Native CalendarValue/QualifiedCalendarValue profiles retain Gregorian/Julian
+## provider range and every supplied resolution without resolving upper bounds.
+## Their axis/unit are none. Payloads use calendar;resolution;year followed by
+## only supplied month/day/hour/minute/second fields. Fraction resolution adds
+## digits;value after seconds (integer 120 with digits 3 means .120). Qualified
+## payloads append | and semicolon-joined scope=qualifier entries; even an empty
+## qualifier list retains |. Qualification order canonicalizes via the native
+## constructor. Names are lowercase; integers have no leading zeros or + sign.
+## These native grammars are not ISO/EDTF. Payload decoding is capped at 1024
+## bytes and eight qualifiers; native canonical outputs need less than 512 bytes.
 ##
 ## Core kinds posix-boundary and posix-delta use profile posix-microseconds-v1,
 ## axis posix-1970, unit microsecond. Their payload is a canonical signed decimal
@@ -64,8 +78,8 @@ import Coverage
 ## }
 ## ```
 Persistence :: { stored : Value }.{
-	Value : [EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage)]
-	Error : [Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
+	Value : [EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
+	Error : [InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
 	new : Value -> Try(Persistence, [TooManyMembers, ..])
 	new = |stored| {
 		match stored {
@@ -138,6 +152,14 @@ Persistence :: { stored : Value }.{
 			"posix-delta" => PosixDelta(PosixDelta.from_microseconds(integer(fields.payload)?))
 			"posix-span" => PosixSpan(parse_span(fields.payload)?)
 			"coverage" => Coverage(parse_coverage(fields.payload)?)
+			"calendar-value" => match PersistenceCalendar.parse_value(fields.payload) {
+				Ok(inner) => CalendarValue(inner)
+				Err(error) => return Err(InvalidCalendarValue(error))
+			}
+			"qualified-calendar-value" => match PersistenceCalendar.parse_qualified(fields.payload) {
+				Ok(inner) => QualifiedCalendarValue(inner)
+				Err(error) => return Err(InvalidQualifiedCalendarValue(error))
+			}
 			_ => return Err(UnknownKind(fields.kind))
 		}
 		new(stored)
@@ -156,6 +178,8 @@ Persistence :: { stored : Value }.{
 			PosixBoundary(inner) => { kind: "posix-boundary", payload: PosixBoundary.to_microseconds(inner).to_str() }
 			PosixDelta(inner) => { kind: "posix-delta", payload: PosixDelta.to_microseconds(inner).to_str() }
 			PosixSpan(inner) => { kind: "posix-span", payload: span_text(inner) }
+			CalendarValue(inner) => { kind: "calendar-value", payload: PersistenceCalendar.to_value_text(inner) }
+			QualifiedCalendarValue(inner) => { kind: "qualified-calendar-value", payload: PersistenceCalendar.to_qualified_text(inner) }
 			Coverage(inner) => {
 				var pieces = []
 				for span in Coverage.to_spans(inner) {
@@ -189,6 +213,8 @@ Persistence :: { stored : Value }.{
 		PosixDelta(inner) => inner.to_hash((8.U8).to_hash(hasher))
 		PosixSpan(inner) => inner.to_hash((9.U8).to_hash(hasher))
 		Coverage(inner) => inner.to_hash((10.U8).to_hash(hasher))
+		CalendarValue(inner) => inner.to_hash((11.U8).to_hash(hasher))
+		QualifiedCalendarValue(inner) => inner.to_hash((12.U8).to_hash(hasher))
 	}
 	to_inspect : Persistence -> Str
 	to_inspect = |wrapped| {
@@ -204,6 +230,8 @@ Persistence :: { stored : Value }.{
 			PosixDelta(_) => "posix-delta"
 			PosixSpan(_) => "posix-span"
 			Coverage(_) => "coverage"
+			CalendarValue(_) => "calendar-value"
+			QualifiedCalendarValue(_) => "qualified-calendar-value"
 		}
 		"Persistence(version=1, kind=${kind})"
 	}
@@ -222,6 +250,8 @@ metadata = |kind| {
 		"posix-delta" => "posix-microseconds-v1"
 		"posix-span" => "posix-half-open-span-v1"
 		"coverage" => "posix-canonical-coverage-v1"
+		"calendar-value" => "native-calendar-value-v1"
+		"qualified-calendar-value" => "native-qualified-calendar-value-v1"
 		_ => return None
 	}
 	core = kind == "posix-boundary" or kind == "posix-delta" or kind == "posix-span" or kind == "coverage"
@@ -454,4 +484,12 @@ expect {
 	accepted = Persistence.new(Coverage(limit))?
 	Persistence.new(Coverage(large)) == Err(TooManyMembers) and Persistence.parse(Persistence.to_text(accepted)) == Ok(accepted) and
 		parse_coverage(Str.join_with(List.repeat("0/1", 1025), ";")) == Err(TooManyMembers)
+}
+
+expect {
+	base = { format: "roc-time", version: "1", kind: "calendar-value", profile: "native-calendar-value-v1", axis: "none", unit: "none", payload: "julian;day;1900;2;29" }
+	parsed = test_parse(base)?
+	qualified = test_parse({ ..base, kind: "qualified-calendar-value", profile: "native-qualified-calendar-value-v1", payload: "julian;day;1900;2;29|day=uncertain" })?
+	Persistence.parse(Persistence.to_text(parsed)) == Ok(parsed) and Persistence.parse(Persistence.to_text(qualified)) == Ok(qualified) and
+		(parsed != qualified) and test_parse({ ..base, payload: "gregorian;day;1900;2;29" }) == Err(InvalidCalendarValue(InvalidDay))
 }

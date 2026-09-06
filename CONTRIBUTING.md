@@ -350,6 +350,14 @@ runs dev/speed builds with finite subprocess limits and a dedicated failing
 allocation ceiling. These counters measure requested allocation traffic, not
 live or retained bytes.
 
+`tests/calendar_persistence_resource/main.roc` separates native calendar and
+qualified-description encoding/decoding for zero/eight qualifiers and all six
+fractional resolutions. The final unit of the last supported Julian day must
+remain persistable although its exclusive upper boundary is out of range.
+Input-byte and qualifier-count limits are checked with structured errors. The
+normal fixture gate runs dev/speed builds and a dedicated failing allocation
+ceiling; decoding error costs include the outer JSON envelope.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

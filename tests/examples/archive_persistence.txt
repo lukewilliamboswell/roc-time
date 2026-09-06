@@ -1,3 +1,6 @@
 Restored archive description: 1984?
 Restored recording declaration: 2026-06-15T10:30:00.120+00:00
 Stored boundary microseconds: 1781519400120000
+Restored diary date: julian 1900-2-29
+Restored diary resolution: Minute
+Restored diary qualifiers: [{ qualifier: Uncertain, scope: Day }]

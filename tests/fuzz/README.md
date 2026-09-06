@@ -69,6 +69,14 @@ It checks that gaps survive restoration and that touching, overlapping, duplicat
 and out-of-order persisted members return `NonCanonicalCoverage`. Separate fixed
 fixtures cover empty coverage, signed endpoint limits and the 1,024-member cap.
 
+The descriptions target persists Gregorian and Julian values at every native
+resolution. Expected payload fields come from generated input fields, including
+the unscaled fractional integer and its supplied digit count. Checks preserve
+calendar identity and both provider year limits, retain each qualifier's scope
+and flags, canonicalize reordered qualifications, and reject duplicates or
+qualifiers on omitted components. This tests native persistence, not additional
+EDTF grammar or uncertainty interpretation.
+
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
 Each traversal must preserve the same dates and respect work/output budgets.

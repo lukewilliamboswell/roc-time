@@ -62,8 +62,9 @@ explicit semantic profiles, axis and units. Decimal strings preserve full-range
 signed microseconds.
 Unknown versions, incompatible metadata and duplicate fields return errors.
 Checked construction accepts up to 1,024 canonical coverage members and preserves
-disconnected windows. Calendar values and interpretation snapshots require future
-persistence profiles.
+disconnected windows. Native Gregorian/Julian calendar descriptions retain their
+supplied resolution and scoped qualifiers, including forms outside the text
+adapters. Interpretation snapshots require a future persistence profile.
 
 ## Examples
 

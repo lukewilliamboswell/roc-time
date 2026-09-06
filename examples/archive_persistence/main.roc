@@ -8,5 +8,9 @@ main! = |_| {
 	echo!("Restored archive description: ${restored.date}\n")
 	echo!("Restored recording declaration: ${restored.timestamp}\n")
 	echo!("Stored boundary microseconds: ${restored.coordinate}\n")
+	diary = ArchivePersistence.historical(Julian, { year: 1900, month: 2, day: 29 }, 12, 30, [{ scope: Day, qualifier: Uncertain }])?
+	echo!("Restored diary date: ${diary.date}\n")
+	echo!("Restored diary resolution: ${diary.resolution}\n")
+	echo!("Restored diary qualifiers: ${diary.qualifications}\n")
 	Ok({})
 }

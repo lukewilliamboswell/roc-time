@@ -2,9 +2,38 @@ import time.EdtfDate
 import time.OffsetTimestamp
 import time.PosixBoundary
 import time.Persistence
+import time.Calendar
+import time.CalendarDate
+import time.CalendarValue
+import time.QualifiedCalendarValue
+import time.LocalDateTime
 
 ## Preserve an uncertain catalogue date independently of its recording instant.
 ArchivePersistence :: [].{
+
+	## A diary's Julian calendar and supplied minute precision are part of its
+	## description. Saving it must not invent a zone or interpret its uncertainty.
+	historical = |calendar, fields, hour, minute, qualifications| {
+		date = CalendarDate.from_fields(calendar, fields)?
+		minute_value = CalendarValue.minute(date, hour, minute)?
+		description = QualifiedCalendarValue.new(minute_value, qualifications)?
+		document = Persistence.to_text(Persistence.new(QualifiedCalendarValue(description))?)
+		restored = restore(document)?
+		match restored {
+			QualifiedCalendarValue(value) => {
+				supplied = QualifiedCalendarValue.described_value(value)
+				restored_date = LocalDateTime.date(CalendarValue.start_label(supplied))
+				parts = CalendarDate.to_fields(restored_date)
+				Ok({
+					date: "${Calendar.to_name(CalendarDate.calendar(restored_date))} ${parts.year.to_str()}-${parts.month.to_str()}-${parts.day.to_str()}",
+					resolution: Str.inspect(CalendarValue.resolution(supplied)),
+					qualifications: Str.inspect(QualifiedCalendarValue.qualifications(value)),
+				})
+			}
+			_ => Err(UnexpectedDocumentKind)
+		}
+	}
+
 	save_and_restore = |date_text, timestamp_text| {
 		date = match EdtfDate.parse(date_text) {
 			Ok(value) => value
