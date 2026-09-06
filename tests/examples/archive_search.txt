@@ -2,3 +2,4 @@ Archive search (UTC)
 09:30 (minute): 2 recordings
 09:30:00 (second): 1 recordings
 Around 09:30: no exact count without a search range
+Around 09:30 (declared minute alternatives): 3 possible, 0 definite recordings

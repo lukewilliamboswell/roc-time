@@ -5,9 +5,9 @@ EDTF/ISO adapters. Reuse validated calendars, local selections and zone cursors.
 
 ## Deliverables
 
-- Supply explicit admissible models for qualified values; preserve component
-  scope without inferred numeric tolerances. Preserve endpoint knowledge
-  separately from open-ended bounds.
+- Extend admissible models beyond finite, same-resolution calendar alternatives
+  when required by supported symbolic forms. Preserve component scope without
+  inferred numeric tolerances and endpoint knowledge separately from open bounds.
 - Interval descriptions with independent endpoint resolution, plus distinct
   alternatives and all-of selections. Define supported reasoning models and
   compare definite/possible/impossible results with small independent models.
@@ -26,7 +26,9 @@ or POSIX limits. Month/year bounds use the selected calendar and never a fixed
 elapsed duration. Starting labels used internally are canonical selection bounds,
 not evidence that omitted fields were supplied by the caller.
 
-Qualifications must remain descriptive until a caller supplies a supported
-admissible model. Select that model explicitly before exposing reasoning APIs.
+Qualifications remain descriptive until a caller supplies a supported model.
+Extend CalendarEvidence’s finite point-membership model only with explicit
+semantic intersections; do not treat calendar selections as uncertain instants
+or infer correlations between independently supplied endpoint alternatives.
 Do not use a parser-specific evaluation engine or claim EDTF/ISO conformance from
 native construction. Delete completed deliverables as acceptance is established.

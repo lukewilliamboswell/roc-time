@@ -66,8 +66,9 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 	qualifications = |description| description.qualifications
 
 	## Only an unqualified description has an unconditional certain selection.
-	## Qualified descriptions require an explicit admissible model, currently
-	## unsupported. NeedsModel is checked before any zone work or range lowering.
+	## Qualified descriptions require an explicit admissible model; CalendarEvidence
+	## provides finite-alternative point queries. NeedsModel is checked here before
+	## any zone work or range lowering.
 	selection_cursor : QualifiedCalendarValue, ZoneRules -> Try(ZoneRules.SelectionCursor, [NeedsModel, OutOfRange, EmptySelection, ReversedSelection, OutsideValidity, ..])
 	selection_cursor = |description, rules| {
 		if !description.qualifications.is_empty() {

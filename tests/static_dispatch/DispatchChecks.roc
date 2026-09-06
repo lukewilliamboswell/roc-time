@@ -1,4 +1,5 @@
 import time.CalendarValue
+import time.CalendarEvidence
 import time.QualifiedCalendarValue
 import time.CalendarDate
 import time.RfcPeriod
@@ -48,6 +49,12 @@ DispatchChecks :: [].{
 		qualified_minute = qualify(minute_value, [{ scope: Minute, qualifier: Approximate }, { scope: Whole, qualifier: Uncertain }])?
 		reordered = qualify(minute_value, [{ scope: Whole, qualifier: Uncertain }, { scope: Minute, qualifier: Approximate }])?
 		if Dict.get(Dict.insert(Dict.empty(), qualified_minute, 3.U64), reordered) != Ok(3) or !Str.inspect(qualified_minute).contains("Approximate") {
+			return Err(Failed)
+		}
+
+		evidence = evidence_for(qualified_minute, [minute_value, minute_value])?
+		singleton = evidence_for(reordered, [minute_value])?
+		if evidence != singleton or Dict.get(Dict.insert(Dict.empty(), evidence, 4.U64), singleton) != Ok(4) or !Str.inspect(evidence).contains("alternatives=1") {
 			return Err(Failed)
 		}
 
@@ -143,5 +150,10 @@ parse_period = |text| match RfcPeriod.parse(text) {
 
 qualify = |value, items| match QualifiedCalendarValue.new(value, items) {
 	Ok(found) => Ok(found)
+	Err(_) => Err(Failed)
+}
+
+evidence_for = |description, values| match CalendarEvidence.new(description, values) {
+	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }

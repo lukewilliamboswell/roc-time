@@ -4,6 +4,7 @@ package
 		CalendarDate,
 		CalendarValue,
 		QualifiedCalendarValue,
+		CalendarEvidence,
 		CalendarDelta,
 		CalendarArithmetic,
 		CalendarPattern,

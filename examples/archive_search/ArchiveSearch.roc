@@ -1,5 +1,6 @@
 import time.CalendarDate
 import time.CalendarValue
+import time.CalendarEvidence
 import time.QualifiedCalendarValue
 import time.RfcDateTime
 import time.FixedOffset
@@ -10,7 +11,7 @@ import time.Coverage
 
 ## Search by supplied calendar precision while retaining exact recording times.
 ArchiveSearch :: [].{
-	find = |date_fields, recording_times| {
+	find = |date_fields, recording_times, admissible_minutes| {
 		date = CalendarDate.from_fields(Gregorian, date_fields)?
 		minute = CalendarValue.minute(date, 9, 30)?
 		second = CalendarValue.second(date, 9, 30, 0)?
@@ -32,6 +33,31 @@ ArchiveSearch :: [].{
 			outcome = count_matches(query.value, rules, recordings)?
 			results = results.append({ label: query.label, outcome })
 		}
+		# These are declared alternatives for the unknown actual minute, not
+		# three minutes of certain coverage and not an inferred approximation.
+		var choices = []
+		for m in admissible_minutes {
+			choices = choices.append(CalendarValue.minute(date, 9, m)?)
+		}
+		model = CalendarEvidence.new(approximate, choices)?
+		var possible = 0.U64
+		var definite = 0.U64
+		for point in recordings {
+			cursor = CalendarEvidence.query(model, rules, point)?
+			batch = CalendarEvidence.Query.collect(cursor, { max_alternatives: 3 })
+			match batch.status {
+				Complete(Definite) => {
+					definite = definite + 1
+				}
+				Complete(Possible) => {
+					possible = possible + 1
+				}
+				Complete(Impossible) => {}
+				Limited(_) => return Err(SearchIncomplete)
+			}
+		}
+		results = results.append({ label: "Around 09:30 (declared minute alternatives)", outcome: ModelMatches({ possible, definite }) })
+
 		Ok(results)
 	}
 }

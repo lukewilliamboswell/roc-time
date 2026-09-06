@@ -300,7 +300,12 @@ A calendar-year selection additionally measures cursor construction and first
 segment consumption against 16 and 4096 transitions. The year contains trillions
 of local microseconds; a one-segment budget must return an incomplete result.
 Each phase uses the same 4 KiB traffic ceiling, with identical short/long-table
-traffic required. Input rule storage is outside these measured phases.
+traffic required. Input rule storage is outside these measured phases. Finite-evidence queries
+separately measure construction, first alternative and resumption against 16
+and 4096 candidate years. Opposing witnesses must establish Possible after two
+alternatives, preserving the original shared query. Model normalization and
+storage are outside those prefix measurements; each phase has a 4 KiB traffic
+ceiling and must match across sizes.
 These are explicit traffic budgets, not claims of live memory or zero-cost
 iteration. Short/vast traffic must still match exactly.
 A five-second process deadline catches catastrophic hidden traversal, and a

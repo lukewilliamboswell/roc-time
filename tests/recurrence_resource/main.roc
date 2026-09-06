@@ -1,6 +1,8 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.CalendarValue
+import time.QualifiedCalendarValue
+import time.CalendarEvidence
 import time.CalendarPattern
 import time.TimedSchedule
 import time.TimedOccurrence
@@ -618,7 +620,56 @@ main! = |args| {
 		Complete(_) => Host.assert!(False)
 	}
 
-	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before, override_after - override_before, explicit_after - explicit_before, resolved_after - resolved_before, cutoff_constructed - cutoff_before, cutoff_after - cutoff_constructed, description_constructed - description_before, description_after - description_constructed] }
+	# Explicit alternatives are input storage, never certain all-of coverage.
+	# Point membership in the first and not the second proves Possible without
+	# consuming the remaining 14 or 4094 years. Keep the original model shared.
+	evidence_description = match QualifiedCalendarValue.new(description, [{ scope: Whole, qualifier: Uncertain }]) {
+		Ok(value) => value
+		Err(_) => crash "Evidence description"
+	}
+	var evidence_values = []
+	var evidence_index = 0.I64
+	while evidence_index < description_size {
+		alternative = match CalendarValue.year(Gregorian, start_year + evidence_index) {
+			Ok(value) => value
+			Err(_) => crash "Evidence alternative"
+		}
+		evidence_values = evidence_values.append(alternative)
+		evidence_index = evidence_index + 1
+	}
+	evidence = match CalendarEvidence.new(evidence_description, evidence_values) {
+		Ok(value) => value
+		Err(_) => crash "Evidence model"
+	}
+	evidence_before = Host.allocated_bytes!({})
+	evidence_query = match CalendarEvidence.query(evidence, description_rules, PosixBoundary.from_microseconds(description_start)) {
+		Ok(value) => value
+		Err(_) => crash "Evidence point query"
+	}
+	evidence_constructed = Host.allocated_bytes!({})
+	evidence_first = CalendarEvidence.Query.collect(evidence_query, { max_alternatives: 1 })
+	evidence_after = Host.allocated_bytes!({})
+	Host.assert!(evidence_constructed - evidence_before <= ceiling and evidence_after - evidence_constructed <= ceiling and evidence_first.examined == 1)
+	evidence_resume = match evidence_first.status {
+		Limited(value) => value
+		Complete(_) => crash "One alternative cannot establish universal truth"
+	}
+	evidence_resuming = Host.allocated_bytes!({})
+	evidence_second = CalendarEvidence.Query.collect(evidence_resume, { max_alternatives: 1 })
+	evidence_resumed = Host.allocated_bytes!({})
+	Host.assert!(evidence_resumed - evidence_resuming <= ceiling and evidence_second.examined == 1)
+	match evidence_second.status {
+		Complete(Possible) => {}
+		_ => Host.assert!(False)
+	}
+	# Reuse the original snapshot to exercise sharing as well as early stop.
+	repeated = CalendarEvidence.Query.collect(evidence_query, { max_alternatives: 2 })
+	match repeated.status {
+		Complete(Possible) => Host.assert!(repeated.examined == 2)
+		_ => Host.assert!(False)
+	}
+
+	{ bytes: "prefix=1,resume=2,limited=1,zero=1\n".to_utf8(), work: [constructed - before, consumed - constructed, after - consumed, search_after - search_before, zero_after - zero_before, composition_after - composition_before, classification_after - classification_before, choice_after - choice_before, clock_after - clock_before, timed_after - timed_before, timed_stream_after - timed_stream_before, timed_zero_after - timed_zero_before, subdaily_after - subdaily_before, exclusion_after - exclusion_before, fixed_after - fixed_before, duration_after - duration_before, schedule_after - schedule_before, schedule_stream_after - schedule_stream_before, schedule_zero_after - schedule_zero_before, inclusion_after - inclusion_before, override_after - override_before, explicit_after - explicit_before, resolved_after - resolved_before, cutoff_constructed - cutoff_before, cutoff_after - cutoff_constructed, description_constructed - description_before, description_after - description_constructed, evidence_constructed - evidence_before, evidence_after - evidence_constructed, evidence_resumed - evidence_resuming] }
 }
 
 fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day }) {

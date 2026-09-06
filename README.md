@@ -78,8 +78,12 @@ selection cursor, preserving empty gaps and disconnected folds. This native
 finite profile does not yet model symbolic long years.
 [QualifiedCalendarValue](package/QualifiedCalendarValue.roc) attaches whole-value
 or supplied-component uncertainty/approximation without inventing a tolerance.
-Qualified selections return `NeedsModel`; numerical admissible models and
-uncertain-endpoint reasoning remain unfinished.
+Qualified selections return `NeedsModel` until the caller supplies a model.
+[CalendarEvidence](package/CalendarEvidence.roc) validates explicit finite
+alternatives and answers bounded POSIX point-membership queries as definite,
+possible or impossible. It preserves unqualified fields and does not merge
+alternatives into certain coverage. Uncertain-endpoint and general interval
+reasoning remain unfinished.
 
 [RfcDateRule](package/RfcDateRule.roc) accepts extracted date-only recurrence
 property values under its declared profile. It does not parse complete ICS
