@@ -350,52 +350,63 @@ ZoneRules :: {
 		## Shared cursor snapshots may copy retained buffers on append.
 		collect : ClassificationCursor, ClassificationLimits -> Try(ClassificationBatch, [OutOfRange, ..])
 		collect = |initial, limits| {
-			var state = initial
+			# Keep output buffers independently owned during the loop. Rebuilding
+			# a whole cursor on each append retains an alias to its old buffer.
+			rules = initial.rules
+			local = initial.local
+			var index = initial.index
+			var lower = initial.lower
+			var offset = initial.offset
+			var matches = initial.matches
+			var gaps = initial.gaps
+			var done = initial.done
 			var segments = 0.U64
 			while True {
-				buffered = state.matches.len() + state.gaps.len()
+				buffered = matches.len() + gaps.len()
 				if buffered > limits.max_candidates {
-					return Ok({ segments, buffered, status: Limited({ cursor: state, reason: BufferLimit }) })
+					return Ok({ segments, buffered, status: Limited({ cursor: { rules, local, index, lower, offset, matches, gaps, done }, reason: BufferLimit }) })
 				}
-				if state.done {
-					resolution = match state.matches {
+				if done {
+					resolution = match matches {
 						[] => Gap
 						[only] => Unique(only)
-						_ => Fold(state.matches)
+						_ => Fold(matches)
 					}
-					return Ok({ segments, buffered, status: Complete({ rules: state.rules, local: state.local, resolution, gaps: state.gaps }) })
+					return Ok({ segments, buffered, status: Complete({ rules, local, resolution, gaps }) })
 				}
 				if segments == limits.max_segments {
-					return Ok({ segments, buffered, status: Limited({ cursor: state, reason: WorkLimit }) })
+					return Ok({ segments, buffered, status: Limited({ cursor: { rules, local, index, lower, offset, matches, gaps, done }, reason: WorkLimit }) })
 				}
-				transition = state.rules.transitions.get(state.index)
+				transition = rules.transitions.get(index)
 				upper = match transition {
-					Ok(value) => value.at
-					Err(_) => PosixSpan.end(state.rules.validity)
+					Ok(entry) => entry.at
+					Err(_) => PosixSpan.end(rules.validity)
 				}
-				candidate = FixedOffset.resolve(state.offset, state.local)?
-				matches = candidate >= state.lower and candidate < upper
+				candidate = FixedOffset.resolve(offset, local)?
+				matched = candidate >= lower and candidate < upper
 				gap = match transition {
-					Ok(value) => candidate >= upper and FixedOffset.resolve(value.offset, state.local)? < upper
+					Ok(entry) => candidate >= upper and FixedOffset.resolve(entry.offset, local)? < upper
 					Err(_) => Bool.False
 				}
 				segments = segments + 1
-				if (matches or gap) and buffered == limits.max_candidates {
-					return Ok({ segments, buffered, status: Limited({ cursor: state, reason: BufferLimit }) })
+				if (matched or gap) and buffered == limits.max_candidates {
+					return Ok({ segments, buffered, status: Limited({ cursor: { rules, local, index, lower, offset, matches, gaps, done }, reason: BufferLimit }) })
 				}
-				if matches {
-					state = { ..state, matches: state.matches.append(candidate) }
+				if matched {
+					matches = matches.append(candidate)
 				}
-				state = match transition {
-					Ok(value) => {
-						gaps = if gap {
-							state.gaps.append({ at: upper, before: state.offset, after: value.offset })
-						} else {
-							state.gaps
+				match transition {
+					Ok(entry) => {
+						if gap {
+							gaps = gaps.append({ at: upper, before: offset, after: entry.offset })
 						}
-						{ ..state, gaps, index: state.index + 1, lower: upper, offset: value.offset }
+						index = index + 1
+						lower = upper
+						offset = entry.offset
 					}
-					Err(_) => { ..state, done: Bool.True }
+					Err(_) => {
+						done = True
+					}
 				}
 			}
 			crash "Classification loop returns an outcome"
@@ -486,44 +497,59 @@ ZoneRules :: {
 		## return Limited; no incomplete coverage is exposed as a complete value.
 		collect : SelectionCursor, SelectionLimits -> Try(SelectionBatch, [OutOfRange, ..])
 		collect = |initial, limits| {
-			var cursor = initial
+			rules = initial.rules
+			start = initial.start
+			end = initial.end
+			var index = initial.index
+			var lower = initial.lower
+			var offset = initial.offset
+			var builder = initial.builder
+			var done = initial.done
 			var segments = 0.U64
 			while True {
-				buffered = Coverage.SortedBuilder.member_count(cursor.builder)
+				buffered = Coverage.SortedBuilder.member_count(builder)
 				if buffered > limits.max_members {
-					return Ok({ segments, buffered, status: Limited({ cursor, reason: BufferLimit }) })
+					return Ok({ segments, buffered, status: Limited({ cursor: { rules, start, end, index, lower, offset, builder, done }, reason: BufferLimit }) })
 				}
-				if cursor.done {
-					return Ok({ segments, buffered, status: Complete(Coverage.SortedBuilder.to_coverage(cursor.builder)) })
+				if done {
+					return Ok({ segments, buffered, status: Complete(Coverage.SortedBuilder.to_coverage(builder)) })
 				}
 				if segments == limits.max_segments {
-					return Ok({ segments, buffered, status: Limited({ cursor, reason: WorkLimit }) })
+					return Ok({ segments, buffered, status: Limited({ cursor: { rules, start, end, index, lower, offset, builder, done }, reason: WorkLimit }) })
 				}
-				transition = List.get(cursor.rules.transitions, cursor.index)
+				transition = List.get(rules.transitions, index)
 				upper = match transition {
-					Ok(value) => value.at
-					Err(_) => PosixSpan.end(cursor.rules.validity)
+					Ok(entry) => entry.at
+					Err(_) => PosixSpan.end(rules.validity)
 				}
-				span = selected_span(cursor.lower, upper, cursor.offset, cursor.start, cursor.end)?
+				span = selected_span(lower, upper, offset, start, end)?
 				segments = segments + 1
 				match span {
 					None => {}
-					Some(value) => {
-						appended = match Coverage.SortedBuilder.append_bounded(cursor.builder, value, limits.max_members) {
+					Some(selected) => {
+						# The full result returns the unchanged builder, avoiding an
+						# alias retained solely for reconstructing a limited cursor.
+						appended = match Coverage.SortedBuilder.append_retaining(builder, selected, limits.max_members) {
 							Ok(result) => result
 							Err(_) => crash "Zone segments preserve output start order"
 						}
 						match appended {
-							Full => return Ok({ segments, buffered, status: Limited({ cursor, reason: BufferLimit }) })
-							Added(builder) => {
-								cursor = { ..cursor, builder }
+							Full(original) => return Ok({ segments, buffered, status: Limited({ cursor: { rules, start, end, index, lower, offset, builder: original, done }, reason: BufferLimit }) })
+							Added(updated) => {
+								builder = updated
 							}
 						}
 					}
 				}
-				cursor = match transition {
-					Ok(value) => { ..cursor, index: cursor.index + 1, lower: upper, offset: value.offset }
-					Err(_) => { ..cursor, done: Bool.True }
+				match transition {
+					Ok(entry) => {
+						index = index + 1
+						lower = upper
+						offset = entry.offset
+					}
+					Err(_) => {
+						done = True
+					}
 				}
 			}
 			crash "Selection loop returns a batch"
@@ -679,9 +705,16 @@ expect {
 		Complete(_) => False
 		Limited(progress) => {
 			finished = ZoneRules.ClassificationCursor.collect(progress.cursor, { max_segments: 2, max_candidates: 2 })?
+			# Keep the input cursor shared across continuation. Its original gap
+			# witness and blocked segment remain intact after the other branch.
+			retained = ZoneRules.ClassificationCursor.collect(progress.cursor, { max_segments: 0, max_candidates: 2 })?
+			retained_valid = match retained.status {
+				Limited(stopped) => retained.buffered == 1 and retained.segments == 0 and stopped.reason == WorkLimit
+				_ => False
+			}
 			match finished.status {
 				Limited(_) => False
-				Complete(value) => zero_valid and progress.reason == BufferLimit and limited.segments == 3 and finished.segments == 2 and
+				Complete(value) => retained_valid and zero_valid and progress.reason == BufferLimit and limited.segments == 3 and finished.segments == 2 and
 					ZoneRules.Classification.resolution(value) == Gap and ZoneRules.Classification.local(value) == local and
 						ZoneRules.Classification.choose(value, { occurrence: First, gap: UseOffsetBeforeGap }) == Err(AmbiguousGap) and
 							ZoneRules.Classification.gap_transitions(value) == [

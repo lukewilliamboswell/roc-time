@@ -99,6 +99,12 @@ both tables distinctly and answer the later query with its declared offset.
 These generated fixtures use supplied provenance; database provenance and
 malformed payloads have deterministic native fixtures.
 
+Civil snapshot persistence extends that target with independent two-second
+fold and gap models. Generated shifts preserve First/Last/MatchingOffset policy,
+modeled boundary positions, empty/disconnected coverage and mixed Gregorian/Julian
+endpoint identities. The expected preimages come from the declared piecewise
+integer offset function; persistence round trips supplement that model.
+
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
 Each traversal must preserve the same dates and respect work/output budgets.

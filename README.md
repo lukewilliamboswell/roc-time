@@ -67,8 +67,11 @@ supplied resolution and scoped qualifiers, including forms outside the text
 adapters. IXDTF snapshots retain their complete finite zone rules and strict
 interpretation policy, including when provider names and versions are reused.
 Loading validates the stored result against that saved context without fetching
-a database. Snapshot limits are 1,024 transitions and a 64 KiB envelope; other
-snapshot kinds remain outside this persistence profile.
+a database. Snapshot limits are 1,024 transitions, 1,024 coverage members and a
+64 KiB envelope; event and cursor kinds remain outside this persistence profile.
+Resolved civil
+boundaries retain their explicit fold policy; complete selection snapshots retain
+empty and disconnected coverage, both source calendars and their full rules.
 
 [Explanation](package/Explanation.roc) renders calendar descriptions, EDTF dates,
 offset timestamps, exact intervals, RFC date-time/duration/PERIOD values and
@@ -93,6 +96,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Explain event terms](examples/explain_event_terms/main.roc) | Review calendar-day versus clock-duration terms, local/UTC PERIOD inputs and an exact interval with different endpoint offsets |
 | [Explain annotations](examples/explain_annotations/main.roc) | Explain a declaration's context requirement and its stored interpretation with unsupported calendar presentation |
+| [Civil snapshot archive](examples/civil_snapshot_archive/main.roc) | Restore explicit fold choices and both windows of a repeated local range |
 | [Snapshot archive](examples/snapshot_persistence/main.roc) | Restore an interpretation with its original rules, then explicitly reinterpret it under changed data |
 | [Archive persistence](examples/archive_persistence/main.roc) | Save and restore an uncertain catalogue date, a recording declaration and its exact POSIX boundary |
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |

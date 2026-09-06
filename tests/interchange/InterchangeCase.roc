@@ -1,4 +1,7 @@
 import fuzz.Fuzz
+import time.ResolvedBoundary
+import time.ResolvedSelection
+import time.Coverage
 import time.Persistence
 import time.Explanation
 import time.SemanticFact
@@ -329,6 +332,7 @@ check_ixdtf = |input, timestamp, expected| {
 	}
 	_ = check_snapshot_persistence(snapshot, expected, offset)
 	check_transition_snapshot_persistence(expected)
+	check_civil_snapshot_persistence(expected)
 	check_snapshot_explanation(snapshot, expected, Gregorian, input.precision.to_u64())
 	presentation = match Ixdtf.Snapshot.presentation(snapshot) {
 		Ok(value) => value
@@ -683,4 +687,77 @@ check_transition_snapshot_persistence = |coordinate| {
 	if Dict.get(keyed, first) != Ok(1) or Dict.get(keyed, second) != Ok(2) {
 		crash "Snapshot equality/hash erased distinct immutable rule tables"
 	}
+}
+
+# R07/R09/R14: the two raw offset segments have independently known preimages.
+# Shifting their origin through the generated range does not change the model.
+# Mixed Gregorian/Julian endpoint declarations retain identity despite denoting
+# positions on the same local coordinate axis.
+check_civil_snapshot_persistence = |origin| {
+	fold = civil_fixture_rules(origin, 2, 0)
+	gap = civil_fixture_rules(origin, 0, 2)
+	lower = civil_fixture_label(origin + 500000, Gregorian)
+	upper = civil_fixture_label(origin + 750000, Julian)
+	expected = Coverage.from_spans([model_span(origin - 1500000, origin - 1250000), model_span(origin + 500000, origin + 750000)])
+	for choice in [{ policy: First, position: origin - 1500000, offset: 2.I32 }, { policy: Last, position: origin + 500000, offset: 0.I32 }, { policy: MatchingOffset(FixedOffset.from_seconds(2)), position: origin - 1500000, offset: 2.I32 }, { policy: MatchingOffset(FixedOffset.from_seconds(0)), position: origin + 500000, offset: 0.I32 }] {
+		snapshot = match ResolvedBoundary.resolve(fold, lower, choice.policy) {
+			Ok(found) => found
+			Err(_) => crash "Independent fold occurrence fixture rejected"
+		}
+		replay = match replay_snapshot_value(ResolvedBoundary(snapshot)) {
+			ResolvedBoundary(found) => found
+			_ => crash "Civil boundary persistence changed nominal kind"
+		}
+		if ResolvedBoundary.boundary(replay) != PosixBoundary.from_microseconds(choice.position) or
+			ResolvedBoundary.offset(replay) != FixedOffset.from_seconds(choice.offset) or
+				ResolvedBoundary.source(replay) != lower or ResolvedBoundary.policy(replay) != choice.policy or
+					ZoneRules.definition(ResolvedBoundary.rules(replay)) != ZoneRules.definition(fold) or replay != snapshot {
+			crash "Civil boundary persistence changed independently modeled occurrence or policy"
+		}
+	}
+	match ResolvedBoundary.resolve(gap, lower, First) {
+		Err(Gap) => {}
+		_ => crash "Gap occurrence invented a resolved boundary"
+	}
+	for fixture in [{ rules: fold, extent: expected }, { rules: gap, extent: Coverage.empty }] {
+		snapshot = match ResolvedSelection.resolve(fixture.rules, lower, upper) {
+			Ok(found) => found
+			Err(_) => crash "Independent civil selection fixture rejected"
+		}
+		replay = match replay_snapshot_value(ResolvedSelection(snapshot)) {
+			ResolvedSelection(found) => found
+			_ => crash "Civil selection persistence changed nominal kind"
+		}
+		if ResolvedSelection.coverage(replay) != fixture.extent or ResolvedSelection.start(replay) != lower or
+			ResolvedSelection.end(replay) != upper or
+				ZoneRules.definition(ResolvedSelection.rules(replay)) != ZoneRules.definition(fixture.rules) or replay != snapshot {
+			crash "Civil selection persistence erased empty/disconnected coverage or endpoint calendar identity"
+		}
+	}
+}
+
+civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded("Synthetic/CivilPersistence", "v1", model_span(origin - 4000000, origin + 4000000), FixedOffset.from_seconds(initial), [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 }) {
+	Ok(found) => found
+	Err(_) => crash "Valid two-segment civil fixture rules"
+}
+
+civil_fixture_label = |coordinate, calendar| match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(coordinate), calendar) {
+	Ok(found) => found
+	Err(_) => crash "Bounded civil fixture label"
+}
+
+replay_snapshot_value = |value| {
+	envelope = match Persistence.new(value) {
+		Ok(found) => found
+		Err(_) => crash "Small civil snapshot persistence rejected"
+	}
+	text = Persistence.to_text(envelope)
+	replay = match Persistence.parse(text) {
+		Ok(found) => found
+		Err(_) => crash "Civil snapshot canonical persistence failed"
+	}
+	if Persistence.to_text(replay) != text {
+		crash "Civil snapshot persistence is not canonically stable"
+	}
+	Persistence.value(replay)
 }

@@ -341,6 +341,34 @@ def verify_snapshot_persistence(target: str) -> None:
             raise RuntimeError(f"{mode}: snapshot persistence negative control failed")
         print(f"PASS snapshot persistence {mode}: allocation negative control")
 
+def verify_civil_persistence(target: str) -> None:
+    """Repeated civil labels preserve policies and disconnected selection members."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/civil_persistence_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"civil-persistence-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for form in ("boundary", "selection"):
+            for count in (0, 2, 64, 256, 512, 1023, 1024, 1025):
+                rejected = count > 1024 or (form == "selection" and count >= 1024)
+                result = subprocess.run([binary, str(count), form, "2097152"], capture_output=True, timeout=10)
+                expected = b"civil=rejected-before-encoding\n" if rejected else b"civil=restored,coverage=preserved\n"
+                if result.returncode or result.stdout != expected:
+                    raise RuntimeError(f"{mode}/{count}/{form}: civil persistence failed: {result.stderr!r}")
+                match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError(f"{mode}: missing civil persistence observations")
+                counts = tuple(int(value) for value in match[1].split(b","))
+                if (rejected and counts != (0,)) or (not rejected and (len(counts) != 6 or counts[3] != 0)):
+                    raise RuntimeError(f"{mode}: civil persistence resource assertions failed: {counts}")
+                print(f"PASS civil persistence {mode}/{form}/{count} transitions: requested bytes {counts}")
+        failed = subprocess.run([binary, "2", "selection", "0"], capture_output=True, timeout=10)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: civil persistence negative control failed")
+        print(f"PASS civil persistence {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -356,5 +384,6 @@ if __name__ == "__main__":
         verify_explanation(selected_target)
         verify_declaration_explanation(selected_target)
         verify_snapshot_persistence(selected_target)
+        verify_civil_persistence(selected_target)
     else:
         print(selected_target)

@@ -58,6 +58,13 @@ ResolvedSelection :: {
 	same_extent : ResolvedSelection, ResolvedSelection -> Bool
 	same_extent = |a, b| a.coverage == b.coverage
 
+	## Equality/hashing preserve civil source identity and complete rule evidence.
+	## same_extent instead compares only the resulting compatible-axis coverage.
+	is_eq : ResolvedSelection, ResolvedSelection -> Bool
+	is_eq = |a, b| a.start == b.start and a.end == b.end and a.coverage == b.coverage and ZoneRules.definition(a.rules) == ZoneRules.definition(b.rules)
+	to_hash : ResolvedSelection, Hasher -> Hasher
+	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.coverage.to_hash(value.end.to_hash(value.start.to_hash(hasher))))
+
 	to_inspect : ResolvedSelection -> Str
 	to_inspect = |snapshot| "ResolvedSelection(${Str.inspect(snapshot.coverage)}, start=${Str.inspect(snapshot.start)}, end=${Str.inspect(snapshot.end)})"
 }

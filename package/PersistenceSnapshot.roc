@@ -4,6 +4,8 @@ import FixedOffset
 import PosixBoundary
 import PosixSpan
 import PersistenceEnvelope
+import PersistenceFields
+import PersistenceRules
 
 ## Full immutable IXDTF interpretation, ixdtf-strict-snapshot-v1. The payload is
 ## a flat JSON array of strings: policy, source, stored boundary, stored offset,
@@ -28,7 +30,7 @@ import PersistenceEnvelope
 ## Size checks precede transition formatting; JSON syntax uses builtin hooks.
 ## The helper caches canonical payload text after validation.
 PersistenceSnapshot :: { bound : Ixdtf.Snapshot, text : Str }.{
-	RulesError : [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment]
+	RulesError : PersistenceRules.RulesError
 	Error : [TooLarge, Malformed, TooManyTransitions, UnsupportedPolicy, InvalidInteger, OutOfRange, InvalidSource(Ixdtf.Error), InvalidRules(RulesError), InvalidBounds([EmptySpan, ReversedBounds]), InvalidSnapshot(Ixdtf.ResolveError), StoredMismatch]
 	from_snapshot : Ixdtf.Snapshot -> Try(PersistenceSnapshot, [TooLarge, ..])
 	from_snapshot = |bound| {
@@ -36,8 +38,7 @@ PersistenceSnapshot :: { bound : Ixdtf.Snapshot, text : Str }.{
 		match context {
 			None => {}
 			Some(rules) => {
-				definition = ZoneRules.definition(rules)
-				if definition.transitions.len() > 1024 or !metadata_fits(definition) {
+				if !PersistenceRules.fits(rules) {
 					return Err(TooLarge)
 				}
 			}
@@ -48,15 +49,7 @@ PersistenceSnapshot :: { bound : Ixdtf.Snapshot, text : Str }.{
 				fields = fields.append("none")
 			}
 			Some(rules) => {
-				data = ZoneRules.definition(rules)
-				provenance = match data.provenance {
-					Supplied => ["supplied", "", "", "", ""]
-					DatabaseSource(p) => ["database", p.requested_name, p.canonical_name, p.source_digest, p.profile]
-				}
-				fields = fields.concat(["rules", data.name, data.version, PosixBoundary.to_microseconds(PosixSpan.start(data.validity)).to_str(), PosixBoundary.to_microseconds(PosixSpan.end(data.validity)).to_str(), FixedOffset.to_seconds(data.initial).to_str(), data.bounds.minimum.to_str(), data.bounds.maximum.to_str()]).concat(provenance).append(data.transitions.len().to_str())
-				for transition in data.transitions {
-					fields = fields.append(PosixBoundary.to_microseconds(transition.at).to_str()).append(FixedOffset.to_seconds(transition.offset).to_str())
-				}
+				fields = fields.append("rules").concat(PersistenceRules.to_fields(rules))
 			}
 		}
 		text = Json.to_str(fields)
@@ -108,55 +101,15 @@ PersistenceSnapshot :: { bound : Ixdtf.Snapshot, text : Str }.{
 				None
 			}
 			"rules" => {
-				if fields.len() < 18 {
-					return Err(Malformed)
-				}
-				count = integer(at(fields, 17))?
-				if count < 0 {
-					return Err(InvalidInteger)
-				}
-				if count > 1024 {
-					return Err(TooManyTransitions)
-				}
-				if fields.len() != 18 + count.to_u64_wrap() * 2 {
-					return Err(Malformed)
-				}
-				low = integer(at(fields, 7))?
-				high = integer(at(fields, 8))?
-				validity = match PosixSpan.new(PosixBoundary.from_microseconds(low), PosixBoundary.from_microseconds(high)) {
+				rules = match PersistenceRules.from_fields(fields.sublist({ start: 5, len: fields.len() - 5 })) {
 					Ok(value) => value
-					Err(EmptySpan) => return Err(InvalidBounds(EmptySpan))
-					Err(ReversedBounds) => return Err(InvalidBounds(ReversedBounds))
-				}
-				initial = offset_integer(at(fields, 9))?
-				minimum = offset_integer(at(fields, 10))?
-				maximum = offset_integer(at(fields, 11))?
-				provenance = match at(fields, 12) {
-					"supplied" => {
-						if at(fields, 13) != "" or at(fields, 14) != "" or at(fields, 15) != "" or at(fields, 16) != "" {
-							return Err(Malformed)
-						}
-						Supplied
-					}
-					"database" => DatabaseSource({ requested_name: at(fields, 13), canonical_name: at(fields, 14), source_digest: at(fields, 15), profile: at(fields, 16) })
-					_ => return Err(Malformed)
-				}
-				# Validate metadata before allocating the typed transition list.
-				base = { name: at(fields, 5), version: at(fields, 6), validity, initial: FixedOffset.from_seconds(initial), bounds: { minimum, maximum }, provenance, transitions: [] }
-				if !metadata_fits(base) {
-					return Err(TooLarge)
-				}
-				var transitions = []
-				var index = 18.U64
-				while index < fields.len() {
-					point = integer(at(fields, index))?
-					seconds = offset_integer(at(fields, index + 1))?
-					transitions = transitions.append({ at: PosixBoundary.from_microseconds(point), offset: FixedOffset.from_seconds(seconds) })
-					index = index + 2
-				}
-				rules = match ZoneRules.from_definition({ ..base, transitions }) {
-					Ok(value) => value
-					Err(error) => return Err(InvalidRules(error))
+					Err(TooLarge) => return Err(TooLarge)
+					Err(Malformed) => return Err(Malformed)
+					Err(TooManyTransitions) => return Err(TooManyTransitions)
+					Err(InvalidInteger) => return Err(InvalidInteger)
+					Err(OutOfRange) => return Err(OutOfRange)
+					Err(InvalidRules(error)) => return Err(InvalidRules(error))
+					Err(InvalidBounds(error)) => return Err(InvalidBounds(error))
 				}
 				Some(rules)
 			}
@@ -185,119 +138,28 @@ PersistenceSnapshot :: { bound : Ixdtf.Snapshot, text : Str }.{
 				encoding.parse_list_after_item : encoding, state -> Try([Continue(state), Done(state)], err),
 			]
 		parser_for = |encoding| {
-			Encoding : encoding
+			parse_fields = PersistenceFields.parser(encoding, 2066)
 			|state| {
-				opened = match Encoding.parse_list_start(encoding, state) {
-					Ok(v) => v
-					Err(e) => return Err(Encoding(e))
-				}
-				var rest = match opened {
-					Uncounted(s) => s
-					Counted(_) => return Err(UnsupportedContainer)
-				}
-				var entries = []
-				var done = Bool.False
-				while !done {
-					next = match Encoding.parse_list_next(encoding, rest) {
-						Ok(v) => v
-						Err(e) => return Err(Encoding(e))
-					}
-					match next {
-						Done(s) => {
-							rest = s
-							done = True
-						}
-						Item(s) => {
-							if entries.len() == 2066 {
-								return Err(TooManyFields)
-							}
-							field = match Encoding.parse_str(encoding, s) {
-								Ok(v) => v
-								Err(e) => return Err(Encoding(e))
-							}
-							entries = entries.append(field.value)
-							after = match Encoding.parse_list_after_item(encoding, field.rest) {
-								Ok(v) => v
-								Err(e) => return Err(Encoding(e))
-							}
-							match after {
-								Continue(s2) => {
-									rest = s2
-								}
-								Done(s2) => {
-									rest = s2
-									done = True
-								}
-							}
-						}
-					}
-				}
-				Ok({ value: { values: entries }, rest })
+				parsed = parse_fields(state)?
+				Ok({ value: { values: parsed.value }, rest: parsed.rest })
 			}
 		}
-	}
-}
 
-metadata_fits : ZoneRules.Definition -> Bool
-metadata_fits = |data| {
-	name = data.name.count_utf8_bytes()
-	version = data.version.count_utf8_bytes()
-	if name > 4096 or version > 4096 {
-		return False
-	}
-	total = name + version
-	if total > 4096 {
-		return False
-	}
-	match data.provenance {
-		Supplied => True
-		DatabaseSource(p) => {
-			requested = p.requested_name.count_utf8_bytes()
-			canonical = p.canonical_name.count_utf8_bytes()
-			digest = p.source_digest.count_utf8_bytes()
-			profile = p.profile.count_utf8_bytes()
-			if requested > 4096 or canonical > 4096 or digest > 4096 or profile > 4096 {
-				return False
-			}
-			total + requested + canonical + digest + profile <= 4096
-		}
 	}
 }
 
 integer : Str -> Try(I64, PersistenceSnapshot.Error)
-integer = |text| {
-	bytes = text.to_utf8()
-	if bytes.is_empty() {
-		return Err(InvalidInteger)
-	}
-	start = if bytes.first() == Ok(45) {
-		1.U64
-	} else {
-		0.U64
-	}
-	if bytes.len() == start {
-		return Err(InvalidInteger)
-	}
-	digits = bytes.sublist({ start, len: bytes.len() - start })
-	if !digits.all(|byte| byte >= 48 and byte <= 57) {
-		return Err(InvalidInteger)
-	}
-	if digits.first() == Ok(48) and (digits.len() > 1 or start == 1) {
-		return Err(InvalidInteger)
-	}
-	match I64.from_str(text) {
-		Ok(value) => Ok(value)
-		Err(_) => Err(OutOfRange)
-	}
+integer = |text| match PersistenceRules.integer(text) {
+	Ok(value) => Ok(value)
+	Err(OutOfRange) => Err(OutOfRange)
+	Err(_) => Err(InvalidInteger)
 }
 
 offset_integer : Str -> Try(I32, PersistenceSnapshot.Error)
-offset_integer = |text| {
-	value = integer(text)?
-	if value < -2147483648 or value > 2147483647 {
-		return Err(OutOfRange)
-	}
-	Ok(value.to_i32_wrap())
+offset_integer = |text| match PersistenceRules.offset_integer(text) {
+	Ok(value) => Ok(value)
+	Err(OutOfRange) => Err(OutOfRange)
+	Err(_) => Err(InvalidInteger)
 }
 
 at = |values, index| match values.get(index) {
@@ -335,7 +197,8 @@ expect {
 		None => crash "Fixture snapshot retains supplied rules"
 	}
 	definition = ZoneRules.definition(rules)
-	at(fields, 18) == "-5" and at(fields, 20) == "5" and PosixBoundary.to_microseconds(PosixSpan.start(definition.validity)) == -10 and PosixBoundary.to_microseconds(PosixSpan.end(definition.validity)) == 10 and value == restored
+	PersistenceSnapshot.to_text(value) == Json.to_str(["strict-v1", "1970-01-01T00:00:00Z[Fixture/Canonical][u-ca=hebrew]", "0", "0", "rules", "Fixture/Canonical", "microseconds", "-10", "10", "0", "0", "3600", "supplied", "", "", "", "", "2", "-5", "0", "5", "3600"]) and
+		at(fields, 18) == "-5" and at(fields, 20) == "5" and PosixBoundary.to_microseconds(PosixSpan.start(definition.validity)) == -10 and PosixBoundary.to_microseconds(PosixSpan.end(definition.validity)) == 10 and value == restored
 }
 expect {
 	value = fixture("Fixture/Canonical", "strict", False)?

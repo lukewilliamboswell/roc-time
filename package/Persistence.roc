@@ -1,3 +1,6 @@
+import PersistenceCivil
+import ResolvedBoundary
+import ResolvedSelection
 import PersistenceSnapshot
 import PersistenceCalendar
 import CalendarValue
@@ -17,7 +20,7 @@ import Coverage
 
 ## Version 1 native persistence for text and native calendar descriptions, plus
 ## POSIX boundary/displacement/span/coverage values and IXDTF interpretation
-## snapshots. The JSON envelope has seven required
+## snapshots, resolved civil boundaries and complete selections. The JSON envelope has seven required
 ## string fields: format, version, kind, profile, axis, unit and payload.
 ## Format is roc-time; version is 1. Unknown metadata errors before temporal
 ## payload interpretation. No private records or compiler union encoding leak.
@@ -26,7 +29,7 @@ import Coverage
 ## axis/unit none: they are source declarations, not resolved snapshots. This
 ## preserves resolution, qualifiers, UTC/local forms and ordered annotations;
 ## original spelling is not preserved. Declaration decoding never resolves zones.
-## Rule/event and other snapshot kinds remain unsupported.
+## Rule/event/cursor kinds remain unsupported.
 ##
 ## IxdtfSnapshot uses ixdtf-strict-snapshot-v1, axis posix-1970, unit microsecond.
 ## It stores the canonical IXDTF source, strict-v1 interpretation policy, saved
@@ -49,6 +52,25 @@ import Coverage
 ## denoted time. Equality/hashing include source and complete context; use the
 ## snapshot's same_position method for position comparison. Input/output and the
 ## restored table are materialized; allocation traffic is not retained memory.
+##
+## ResolvedBoundary and ResolvedSelection use civil-boundary-snapshot-v1 and
+## civil-selection-snapshot-v1, respectively, on posix-1970/microsecond. They
+## retain exact local labels with native calendar identity and full ZoneRules.
+## Boundary archives retain RequireUnique, First, Last or MatchingOffset and
+## the stored position/offset. Selection archives retain both labels and complete
+## canonical coverage, including empty or disconnected results. An unfinished
+## selection cursor is not a snapshot and has no persistence kind.
+## Decode validates source labels and rules, invokes the native resolver once,
+## then rejects a stored-result mismatch. No earliest/latest envelope replaces
+## selection coverage, and no fold choice is inferred. Exact local labels use
+## the native fraction-6 calendar transport grammar; this does not assert source
+## precision for a LocalDateTime. Field order is documented in PersistenceCivil.
+## The profiles accept at most 1024 transitions and 1024 coverage members, with
+## the same 4096 metadata/49152 payload/65536 envelope byte limits. Construction
+## checks counts before encoding and returns InvalidCivilSnapshot(TooLarge) if
+## unsupported; parsing distinguishes malformed sources, policies, contexts and
+## stored-result mismatches. Load follows native interpretation costs under those
+## finite caps. Formatting never enumerates the represented calendar span.
 ##
 ## Native CalendarValue/QualifiedCalendarValue profiles retain Gregorian/Julian
 ## provider range and every supplied resolution without resolving upper bounds.
@@ -101,12 +123,26 @@ import Coverage
 ## }
 ## ```
 Persistence :: { stored : Value, snapshot_payload : Str }.{
-	Value : [IxdtfSnapshot(Ixdtf.Snapshot), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
-	Error : [InvalidSnapshot(PersistenceSnapshot.Error), InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
-	new : Value -> Try(Persistence, [InvalidSnapshot(PersistenceSnapshot.Error), TooManyMembers, ..])
+	Value : [ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), IxdtfSnapshot(Ixdtf.Snapshot), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
+	Error : [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
+	new : Value -> Try(Persistence, [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), TooManyMembers, ..])
 	new = |stored| {
 		var snapshot_payload = ""
 		match stored {
+			ResolvedBoundary(snapshot) => {
+				encoded = match PersistenceCivil.from_boundary(snapshot) {
+					Ok(inner) => inner
+					Err(error) => return Err(InvalidCivilSnapshot(error))
+				}
+				snapshot_payload = PersistenceCivil.to_text(encoded)
+			}
+			ResolvedSelection(snapshot) => {
+				encoded = match PersistenceCivil.from_selection(snapshot) {
+					Ok(inner) => inner
+					Err(error) => return Err(InvalidCivilSnapshot(error))
+				}
+				snapshot_payload = PersistenceCivil.to_text(encoded)
+			}
 			IxdtfSnapshot(snapshot) => {
 				encoded = match PersistenceSnapshot.from_snapshot(snapshot) {
 					Ok(inner) => inner
@@ -149,6 +185,22 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 		}
 		if fields.unit != expected.unit {
 			return Err(UnsupportedUnit(fields.unit))
+		}
+		if fields.kind == "resolved-boundary" or fields.kind == "resolved-selection" {
+			parsed = if fields.kind == "resolved-boundary" {
+				PersistenceCivil.parse_boundary(fields.payload)
+			} else {
+				PersistenceCivil.parse_selection(fields.payload)
+			}
+			decoded = match parsed {
+				Ok(inner) => inner
+				Err(error) => return Err(InvalidCivilSnapshot(error))
+			}
+			stored = match PersistenceCivil.value(decoded) {
+				Boundary(inner) => ResolvedBoundary(inner)
+				Selection(inner) => ResolvedSelection(inner)
+			}
+			return Ok({ stored, snapshot_payload: PersistenceCivil.to_text(decoded) })
 		}
 		if fields.kind == "ixdtf-snapshot" {
 			decoded = match PersistenceSnapshot.parse(fields.payload) {
@@ -206,6 +258,8 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 	to_text : Persistence -> Str
 	to_text = |wrapped| {
 		{ kind, payload } = match wrapped.stored {
+			ResolvedBoundary(_) => { kind: "resolved-boundary", payload: wrapped.snapshot_payload }
+			ResolvedSelection(_) => { kind: "resolved-selection", payload: wrapped.snapshot_payload }
 			IxdtfSnapshot(_) => { kind: "ixdtf-snapshot", payload: wrapped.snapshot_payload }
 			EdtfDate(inner) => { kind: "edtf-date", payload: EdtfDate.to_text(inner) }
 			OffsetTimestamp(inner) => { kind: "offset-timestamp", payload: OffsetTimestamp.to_text(inner) }
@@ -242,6 +296,8 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 	is_eq = |a, b| a.stored == b.stored
 	to_hash : Persistence, Hasher -> Hasher
 	to_hash = |wrapped, hasher| match wrapped.stored {
+		ResolvedBoundary(inner) => inner.to_hash((14.U8).to_hash(hasher))
+		ResolvedSelection(inner) => inner.to_hash((15.U8).to_hash(hasher))
 		IxdtfSnapshot(inner) => inner.to_hash((13.U8).to_hash(hasher))
 		EdtfDate(inner) => inner.to_hash((0.U8).to_hash(hasher))
 		OffsetTimestamp(inner) => inner.to_hash((1.U8).to_hash(hasher))
@@ -260,6 +316,8 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 	to_inspect : Persistence -> Str
 	to_inspect = |wrapped| {
 		kind = match wrapped.stored {
+			ResolvedBoundary(_) => "resolved-boundary"
+			ResolvedSelection(_) => "resolved-selection"
 			IxdtfSnapshot(_) => "ixdtf-snapshot"
 			EdtfDate(_) => "edtf-date"
 			OffsetTimestamp(_) => "offset-timestamp"
@@ -281,6 +339,8 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 
 metadata = |kind| {
 	profile = match kind {
+		"resolved-boundary" => "civil-boundary-snapshot-v1"
+		"resolved-selection" => "civil-selection-snapshot-v1"
 		"ixdtf-snapshot" => "ixdtf-strict-snapshot-v1"
 		"edtf-date" => EdtfDate.profile
 		"offset-timestamp" => OffsetTimestamp.profile
@@ -297,7 +357,7 @@ metadata = |kind| {
 		"qualified-calendar-value" => "native-qualified-calendar-value-v1"
 		_ => return None
 	}
-	core = kind == "posix-boundary" or kind == "posix-delta" or kind == "posix-span" or kind == "coverage" or kind == "ixdtf-snapshot"
+	core = kind == "posix-boundary" or kind == "posix-delta" or kind == "posix-span" or kind == "coverage" or kind == "ixdtf-snapshot" or kind == "resolved-boundary" or kind == "resolved-selection"
 	Some({
 		profile,
 		axis: if core {

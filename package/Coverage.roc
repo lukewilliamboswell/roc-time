@@ -89,7 +89,16 @@ Coverage :: [Spans(List(PosixSpan))].{
 		## The limit counts canonical members, so touching/overlapping input can
 		## still merge at capacity. An already larger builder also returns Full.
 		append_bounded : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full], [UnsortedInput, ..])
-		append_bounded = |builder, span, limit| {
+		append_bounded = |builder, span, limit| match append_retaining(builder, span, limit)? {
+			Added(updated) => Ok(Added(updated))
+			Full(_) => Ok(Full)
+		}
+
+		## Internal cursor integration: return ownership of an unchanged full
+		## builder so callers need not retain an alias across a successful append.
+		## The public append_bounded adapter uses this same validation and merge.
+		append_retaining : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full(SortedBuilder)], [UnsortedInput, ..])
+		append_retaining = |builder, span, limit| {
 			match builder.previous {
 				Some(previous) => if previous > PosixSpan.start(span) {
 					return Err(UnsortedInput)
@@ -102,7 +111,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 			}
 			count = member_count(builder)
 			if count > limit or (adds_member and count == limit) {
-				return Ok(Full)
+				return Ok(Full(builder))
 			}
 			Ok(Added({ state: push(builder.state, span), previous: Some(PosixSpan.start(span)) }))
 		}

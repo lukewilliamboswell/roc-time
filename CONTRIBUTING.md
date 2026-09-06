@@ -387,6 +387,17 @@ properties distinguish contexts with identical labels and current results but
 different microsecond transitions. These are requested-allocation observations,
 not retained-memory measurements or authenticated database provenance.
 
+Civil persistence uses `tests/civil_persistence_resource/main.roc`: repeated
+one-microsecond selections produce many disconnected members under a finite
+synthetic fold table with full-I64 validity. Construction, encoding, loading
+and stored reads are measured separately. A retained partial cursor is resumed
+under a separate allocation ceiling, then checked unchanged through its original
+branch. Transition/member overflows must fail before encoding; both dev and speed
+builds include failing allocation controls.
+The interchange generator independently checks fold policies and empty gap
+coverage. Neither canonical text agreement nor allocation traffic establishes
+retained memory or correctness without the corresponding semantic fixtures.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced
