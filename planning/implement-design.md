@@ -44,16 +44,14 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 
 ## Adoption acceptance still needed
 
-- Release explicit core and zone roles. Test the exact supplied pair; do not
-  rebuild zone data from the checkout while claiming to test released artifacts.
-- Update release URL rewriting and previous-release discovery to select roles,
-  rather than assume one `.tar.zst`. The pinned publishing action accepts package
-  archives only; starter applications and compiler metadata need explicit assets.
+- Prepare starter applications and compiler compatibility metadata as explicit
+  release assets; the pinned publishing action accepts package archives only.
 - Verify the booking, archive and staffing starters from an extracted kit with an
   empty package cache and a working directory outside the checkout. Require exact
-  output fixtures for all three; staffing needs its independently expected
-  seven-hour spring-transition shift recorded. Exercise missing/corrupt bundles
-  and mistaken artifact roles so acquisition and dependency checks fail visibly.
+  output fixtures for all three. Extend acquisition/role rejection checks to the
+  extracted kit, missing companion modules and incompatible compiler selection.
+- Exercise the prepared release workflow in CI before claiming release readiness;
+  settle the initial release version and publish only with authorization.
 
 ## Zone database decisions and acceptance
 

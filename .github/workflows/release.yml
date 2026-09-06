@@ -7,6 +7,10 @@ on:
         description: "Release version, e.g. 1.0.1"
         required: true
         type: string
+      previous_core_url:
+        description: "Explicit core archive URL for a legacy release without role metadata"
+        required: false
+        type: string
   pull_request:
 
 permissions:
@@ -66,12 +70,13 @@ jobs:
       - name: Validate package
         run: python3 scripts/all_tests.py
 
-      - name: Resolve previous release
+      - name: Resolve previous core release
         if: github.event_name == 'workflow_dispatch'
         id: previous
-        uses: roc-lang/release-package/actions/resolve-previous-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
-        with:
-          github_token: ${{ github.token }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_CORE_URL: ${{ inputs.previous_core_url }}
+        run: python3 scripts/release_bundles.py previous --previous-core-url "$PREVIOUS_CORE_URL" --output .release/previous-url.txt --github-output "$GITHUB_OUTPUT"
 
       - name: Check version bump
         uses: roc-lang/release-package/actions/run-bump-check@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
@@ -85,14 +90,18 @@ jobs:
           previous_url: ${{ steps.previous.outputs.previous_url }}
 
       - name: Bundle package
-        run: python3 scripts/bundle.py --output-dir dist
+        run: python3 scripts/release_bundles.py build --output .release/bundle-manifest.json
 
       - name: Prepare release bundle metadata
         id: bundles
         uses: roc-lang/release-package/actions/prepare-bundles@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
-          bundle_glob: dist/*.tar.zst
+          bundle_glob: dist/*/*.tar.zst
+          bundle_manifest_path: .release/bundle-manifest.json
           test_os_json: '["ubuntu-latest"]'
+
+      - name: Record explicit release roles
+        run: python3 scripts/release_bundles.py metadata
 
       - name: Upload release bundles
         uses: actions/upload-artifact@v4
@@ -111,18 +120,14 @@ jobs:
             .release/previous-url.txt
             .release/release-bundles.json
             .release/test-matrix.json
+            .release/roc-time-bundles.json
           if-no-files-found: error
           retention-days: 7
 
   test-bundles:
-    name: Test ${{ matrix.bundle_name }} bundle (${{ matrix.os }})
+    name: Test exact core and zones bundle pair
     needs: build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.build.outputs.test_matrix) }}
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -143,13 +148,21 @@ jobs:
           name: release-bundles
           path: .release/test-bundles
 
-      - name: Test release bundle
-        uses: roc-lang/release-package/actions/test-bundle@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+      - name: Download release metadata
+        uses: actions/download-artifact@v4
         with:
-          test_bundle_command: python3 scripts/test_bundle_examples.py --bundle-path
-          bundle_path: .release/test-bundles/${{ matrix.artifact_file }}
-          bundle_name: ${{ matrix.bundle_name }}
-          release_version: ${{ needs.build.outputs.release_version }}
+          name: release-metadata
+          path: .release
+
+      - name: Resolve exact bundle roles
+        id: pair
+        run: python3 scripts/release_bundles.py paths --bundle-dir .release/test-bundles --github-output "$GITHUB_OUTPUT"
+
+      - name: Test supplied release pair
+        env:
+          CORE_BUNDLE: ${{ steps.pair.outputs.core }}
+          ZONE_BUNDLE: ${{ steps.pair.outputs.zones }}
+        run: python3 scripts/test_bundle_examples.py --bundle-path "$CORE_BUNDLE" --zone-bundle-path "$ZONE_BUNDLE"
 
   publish-release:
     name: Publish GitHub release
@@ -192,6 +205,12 @@ jobs:
           release_version: ${{ needs.build.outputs.release_version }}
           github_token: ${{ github.token }}
 
+      - name: Publish role metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
+        run: gh release upload "$RELEASE_VERSION" .release/roc-time-bundles.json --repo "$GITHUB_REPOSITORY"
+
   publish-docs:
     name: Publish versioned docs
     needs:
@@ -228,26 +247,17 @@ jobs:
           name: release-metadata
           path: .release
 
-      - name: Update example package URLs
+      - name: Resolve release URLs by role
+        id: urls
         env:
           RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
-        run: |
-          bundle_url="$(python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+        run: python3 scripts/release_bundles.py urls --github-output "$GITHUB_OUTPUT"
 
-          bundles = json.loads(Path(".release/release-bundles.json").read_text(encoding="utf-8"))
-          if len(bundles) != 1:
-              raise SystemExit(f"expected exactly one release bundle, found {len(bundles)}")
-
-          artifact_file = bundles[0]["artifact_file"]
-          repo = os.environ["GITHUB_REPOSITORY"]
-          version = os.environ["RELEASE_VERSION"]
-          print(f"https://github.com/{repo}/releases/download/{version}/{artifact_file}")
-          PY
-          )"
-          python3 scripts/update_example_urls.py --bundle-url "$bundle_url"
+      - name: Update example package URLs
+        env:
+          CORE_URL: ${{ steps.urls.outputs.core_url }}
+          ZONE_URL: ${{ steps.urls.outputs.zones_url }}
+        run: python3 scripts/update_example_urls.py --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
 
       - name: Validate updated examples
         run: |

@@ -110,6 +110,7 @@ def main() -> None:
     run([sys.executable, "scripts/test_zone_database.py"])
 
     heading("Checking scripts and examples...")
+    run([sys.executable, "scripts/release_bundles.py", "self-test"])
     for example in sorted((ROOT / "examples").rglob("main.roc")):
         run([ROC, "check", str(example.relative_to(ROOT))])
 
@@ -134,8 +135,22 @@ def main() -> None:
     if match is None:
         raise SystemExit("Error: could not extract bundle path from roc bundle output")
 
-    heading("Testing examples against localhost bundle...")
-    run([sys.executable, "scripts/test_bundle_examples.py", "--bundle-path", match.group(1)])
+    core_bundle = match.group(1)
+    heading("Bundling optional zone package...")
+    zone_completed = run(
+        [sys.executable, "scripts/bundle.py", "--package-dir", "tzdb/package", "--output-dir", str(bundle_dir)],
+        capture=True,
+    )
+    print(zone_completed.stdout, end="")
+    zone_match = CREATED_RE.search(zone_completed.stdout)
+    if zone_match is None:
+        raise SystemExit("Error: could not extract zone bundle path from roc bundle output")
+
+    heading("Testing examples against exact core and zone bundles...")
+    run([sys.executable, "scripts/test_bundle_examples.py", "--bundle-path", core_bundle,
+         "--zone-bundle-path", zone_match.group(1)])
+    run([sys.executable, "scripts/test_bundle_failures.py", "--bundle-path", core_bundle,
+         "--zone-bundle-path", zone_match.group(1)])
 
 
 if __name__ == "__main__":

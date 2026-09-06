@@ -41,7 +41,8 @@ third-party Python dependencies.
 | `bundle.py` | Bundle `package/` into a distributable `.tar.zst` |
 | `docs.py` | Generate API docs and the user landing guide into `www/<version>` |
 | `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
-| `test_bundle_examples.py` | Verify the examples against a bundled package served over localhost |
+| `test_bundle_examples.py` | Verify examples against exact core/zone archives with fresh HTTP acquisition |
+| `test_bundle_failures.py` | Reject missing, swapped and malformed candidate bundles |
 | `update_example_urls.py` | Point the examples at a released bundle URL |
 
 Python tooling orchestrates compiler subprocesses and localhost serving for
@@ -455,8 +456,13 @@ in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 Bundle the package for distribution using `python3 scripts/bundle.py --output-dir dist`.
 
 Run the release workflow from GitHub Actions with a release version such as `0.1.0`.
-It builds and tests the bundle, creates the GitHub release, generates versioned docs,
-commits the generated `www/` update, and publishes the docs to GitHub Pages.
+It builds and tests the exact core/zone pair, creates the GitHub release,
+generates versioned docs, opens a follow-up PR and publishes docs to GitHub Pages.
+The additional `roc-time-bundles.json` asset records the two roles and archive
+digests for later core-version comparisons. A legacy release without this
+metadata requires the explicit `previous_core_url` workflow input; archive count
+does not identify a package role. `scripts/release_bundles.py self-test` verifies
+role selection and rejection paths without publishing or contacting GitHub.
 
 ## Zone-data representation measurements
 
@@ -539,6 +545,12 @@ are separate costs; a static name alone does not prove unused-zone elimination.
 Use `update_example_urls.py --zone-bundle-url` alongside `--bundle-url` when
 updating both independently versioned dependencies. Example
 bundle checks rewrite both core and optional-data dependencies to local URLs.
+To test existing artifacts, pass both `--bundle-path CORE.tar.zst` and
+`--zone-bundle-path ZONES.tar.zst` to `scripts/test_bundle_examples.py`.
+Supplying neither builds both from source. The verifier isolates the package
+cache, requires successful acquisition of both archives and runs native examples
+from an empty working directory. Run `scripts/test_bundle_failures.py` with the
+same pair to verify acquisition and role-error diagnostics.
 
 Run `ROC=/path/to/pinned/roc python3 scripts/measure_gregorian.py` for the
 Gregorian conversion microbenchmark (LLVM speed, one million dates, three
