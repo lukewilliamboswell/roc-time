@@ -183,12 +183,12 @@ def verify_interchange(target: str) -> None:
                                         capture_output=True, timeout=5)
                 if result.returncode or result.stdout != b"instant=1000000,presentation=1000000,exact=0..2000000\n":
                     raise RuntimeError(f"{mode}/{tags}/{transitions}: interchange probe failed: {result.stderr!r}")
-                match = re.search(rb" work=((?:\d+,){6}\d+)\n$", result.stderr)
+                match = re.search(rb" work=((?:\d+,){10}\d+)\n$", result.stderr)
                 if match is None:
                     raise RuntimeError(f"{mode}: missing interchange resource observations")
                 counts = tuple(int(value) for value in match[1].split(b","))
-                if counts[3] != 0:
-                    raise RuntimeError(f"{mode}: stored snapshot reads allocated: {counts}")
+                if counts[3] != 0 or counts[9] != 0:
+                    raise RuntimeError(f"{mode}: stored snapshot reads or oversized rejection allocated: {counts}")
                 observations.append(counts)
             if observations[0] != observations[1]:
                 raise RuntimeError(f"{mode}: interchange traffic varies with retained rule size: {observations}")

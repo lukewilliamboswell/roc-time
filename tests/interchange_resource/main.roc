@@ -1,6 +1,7 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Ixdtf
+import time.Persistence
 import time.ExactInterval
 import time.PosixBoundary
 import time.PosixSpan
@@ -71,5 +72,27 @@ main! = |args| {
 	exact_output = ExactInterval.to_text(exact)
 	exact_serialized = Host.allocated_bytes!({})
 	Host.assert!(exact_output == exact_text and exact_serialized - exact_parsed <= ceiling)
-	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed] }
+	# Persist the declaration; the rule snapshot must be rebound explicitly.
+	saved = Persistence.new(Ixdtf(declaration))
+	persistence_before = Host.allocated_bytes!({})
+	encoded = Persistence.to_text(saved)
+	persistence_encoded = Host.allocated_bytes!({})
+	Host.assert!(persistence_encoded - persistence_before <= ceiling)
+	decoded = match Persistence.parse(encoded) {
+		Ok(v) => v
+		Err(_) => crash "persistence fixture"
+	}
+	persistence_decoded = Host.allocated_bytes!({})
+	Host.assert!(Persistence.value(decoded) == Ixdtf(declaration) and persistence_decoded - persistence_encoded <= ceiling)
+	oversized = " ".repeat(65537)
+	deep_unknown = "{\"unknown\":${"[".repeat(10000)}"
+	invalid_before = Host.allocated_bytes!({})
+	large_result = Persistence.parse(oversized)
+	invalid_large = Host.allocated_bytes!({})
+	Host.assert!(large_result == Err(Envelope(TooLarge)) and invalid_large == invalid_before)
+	deep_result = Persistence.parse(deep_unknown)
+	invalid_deep = Host.allocated_bytes!({})
+	Host.assert!(deep_result == Err(Envelope(UnknownField("unknown"))) and invalid_deep - invalid_large <= ceiling)
+
+	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, persistence_encoded - persistence_before, persistence_decoded - persistence_encoded, invalid_large - invalid_before, invalid_deep - invalid_large] }
 }

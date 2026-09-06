@@ -23,6 +23,7 @@ package
 		OffsetTimestamp,
 		ExactInterval,
 		Ixdtf,
+		Persistence,
 		RfcPeriod,
 		RfcTimedRule,
 		CivilDay,

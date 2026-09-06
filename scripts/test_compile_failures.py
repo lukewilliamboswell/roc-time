@@ -24,6 +24,7 @@ def main() -> None:
     if control.returncode != 0:
         raise SystemExit(f"Positive control failed:\n{control.stdout}")
     cases = {
+        "persistence_backing_codec": ["missing method", "encoder_for", "Persistence"],
         "invalid_date_literal": ["from_quote", "rejected it", "Invalid EdtfDate literal: Malformed"],
         "read_ixdtf_snapshot": ["not a record", "Snapshot", "source field"],
         "timestamp_as_selection": ["first argument", "OffsetTimestamp", "CalendarValue"],

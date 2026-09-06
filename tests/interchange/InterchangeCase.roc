@@ -1,4 +1,9 @@
 import fuzz.Fuzz
+import time.Persistence
+import time.RfcDateTime
+import time.RfcDuration
+import time.RfcPeriod
+import time.PosixDelta
 import time.EdtfDate
 import time.OffsetTimestamp
 import time.CalendarValue
@@ -70,6 +75,7 @@ check_edtf = |input, day, date_text| {
 		Ok(value) => value
 		Err(_) => crash "Generated valid EDTF date rejected"
 	}
+	check_persistence(EdtfDate(parsed), { kind: "edtf-date", profile: "edtf-gregorian-date-v1", payload: source, axis: "none", unit: "none" })
 	if EdtfDate.to_text(parsed) != source or EdtfDate.parse(EdtfDate.to_text(parsed)) != Ok(parsed) {
 		crash "EDTF canonical serialization changed supplied resolution or qualifier"
 	}
@@ -161,6 +167,7 @@ check_timestamp = |input, day, date_text| {
 		Ok(value) => value
 		Err(_) => crash "Generated valid offset timestamp rejected"
 	}
+	check_persistence(OffsetTimestamp(parsed), { kind: "offset-timestamp", profile: "rfc3339-microseconds-rfc9557-base-v1", payload: canonical, axis: "none", unit: "none" })
 	if OffsetTimestamp.to_text(parsed) != canonical or OffsetTimestamp.parse(canonical) != Ok(parsed) {
 		crash "Timestamp canonical serialization changed semantic parts"
 	}
@@ -210,6 +217,8 @@ check_timestamp = |input, day, date_text| {
 	}
 	check_exact_interval(input, date_text, parsed, expected, elapsed_days)
 	check_ixdtf(input, parsed, expected)
+	check_core_persistence(expected)
+	check_rfc_persistence(input, day, h, m, s)
 }
 
 # Mutations remain in the property's domain: ordinary structured public failures
@@ -242,6 +251,7 @@ check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
 		Ok(value) => value
 		Err(_) => crash "Valid generated exact interval rejected"
 	}
+	check_persistence(ExactInterval(interval), { kind: "exact-interval", profile: "exact-offset-interval-v1", payload: source, axis: "none", unit: "none" })
 	expected_span = model_span(expected, expected + 1000000)
 	if ExactInterval.span(interval) != expected_span or ExactInterval.to_text(interval) != source or
 		ExactInterval.parse(ExactInterval.to_text(interval)) != Ok(interval) or ExactInterval.new(timestamp, end) != Ok(interval) {
@@ -294,6 +304,7 @@ check_ixdtf = |input, timestamp, expected| {
 		Ok(value) => value
 		Err(_) => crash "Generated supported IXDTF annotations rejected"
 	}
+	check_persistence(Ixdtf(parsed), { kind: "ixdtf", profile: "rfc9557-microseconds-v1", payload: source, axis: "none", unit: "none" })
 	if Ixdtf.to_text(parsed) != source or Ixdtf.parse(Ixdtf.to_text(parsed)) != Ok(parsed) or
 		Ixdtf.parts(parsed).timestamp != timestamp or Ixdtf.preferred_calendar(parsed) != Some("gregory") or
 			Ixdtf.new(Ixdtf.parts(parsed)) != Ok(parsed) {
@@ -364,4 +375,69 @@ check_ixdtf = |input, timestamp, expected| {
 constant_rules = |boundary, offset, version| match ZoneRules.new_bounded("Synthetic/Interchange", version, model_span(boundary - 172800000000, boundary + 172800000000), FixedOffset.from_seconds(offset), [], { minimum: offset, maximum: offset }) {
 	Ok(value) => value
 	Err(_) => crash "Valid fixed synthetic interpretation context"
+}
+
+# R01/R14: versioned envelopes preserve nominal kind and exact string payloads.
+# Expected metadata is declared here independently of the serializer. The
+# underlying temporal fields/boundaries are checked against the models above;
+# this law adds persistence without using a round trip as the semantic oracle.
+check_persistence = |value, expected| {
+	envelope = Persistence.new(value)
+	text = Persistence.to_text(envelope)
+	fields : Try({ format : Str, version : Str, kind : Str, profile : Str, axis : Str, unit : Str, payload : Str }, [InvalidJson(Str), MissingRequiredField(Str)])
+	fields = Json.parse(text)
+	match fields {
+		Ok(record) => if record != { format: "roc-time", version: "1", kind: expected.kind, profile: expected.profile, axis: expected.axis, unit: expected.unit, payload: expected.payload } {
+			crash "Persistence envelope changed independently expected metadata or payload"
+		}
+		Err(_) => crash "Persistence envelope is not a JSON object of seven strings"
+	}
+	replay = match Persistence.parse(text) {
+		Ok(found) => found
+		Err(_) => crash "Canonical persistence envelope rejected"
+	}
+	if Persistence.value(replay) != value or Persistence.to_text(replay) != text {
+		crash "Persistence round trip lost nominal value or canonical text"
+	}
+}
+
+check_core_persistence = |generated| {
+	# These values cannot all be represented exactly by a JSON/F64 number.
+	# Keep them as decimal strings and verify both coordinate domain tags.
+	for coordinate in [I64.lowest, -9007199254740993, 0, 9007199254740993, I64.highest, generated] {
+		payload = coordinate.to_str()
+		check_persistence(PosixBoundary(PosixBoundary.from_microseconds(coordinate)), { kind: "posix-boundary", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "microsecond", payload })
+		check_persistence(PosixDelta(PosixDelta.from_microseconds(coordinate)), { kind: "posix-delta", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "microsecond", payload })
+	}
+	bad_version = Json.to_str({ format: "roc-time", version: "2", kind: "posix-boundary", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "microsecond", payload: generated.to_str() })
+	match Persistence.parse(bad_version) {
+		Err(UnknownVersion("2")) => {}
+		_ => crash "Unknown persistence version accepted"
+	}
+	bad_unit = Json.to_str({ format: "roc-time", version: "1", kind: "posix-boundary", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "nanosecond", payload: generated.to_str() })
+	match Persistence.parse(bad_unit) {
+		Err(UnsupportedUnit("nanosecond")) => {}
+		_ => crash "Persistence silently changed coordinate units"
+	}
+}
+
+check_rfc_persistence = |input, day, h, m, s| {
+	source = "${input.year.to_str()}${pad(input.month.to_u64(), 2)}${pad(day.to_u64(), 2)}T${pad(h.to_u64(), 2)}${pad(m.to_u64(), 2)}${pad(s.to_u64(), 2)}Z"
+	date = match RfcDateTime.parse(source) {
+		Ok(found) => found
+		Err(_) => crash "Generated supported RFC datetime rejected"
+	}
+	duration_source = "PT${(input.seconds + 1).to_str()}S"
+	duration = match RfcDuration.parse(duration_source) {
+		Ok(found) => found
+		Err(_) => crash "Generated positive RFC duration rejected"
+	}
+	period_source = "${source}/${duration_source}"
+	period = match RfcPeriod.parse(period_source) {
+		Ok(found) => found
+		Err(_) => crash "Generated supported RFC period rejected"
+	}
+	check_persistence(RfcDateTime(date), { kind: "rfc-date-time", profile: "rfc5545-datetime-values-v1", axis: "none", unit: "none", payload: source })
+	check_persistence(RfcDuration(duration), { kind: "rfc-duration", profile: "rfc5545-positive-duration-v1", axis: "none", unit: "none", payload: duration_source })
+	check_persistence(RfcPeriod(period), { kind: "rfc-period", profile: "rfc5545-period-values-v1", axis: "none", unit: "none", payload: period_source })
 }

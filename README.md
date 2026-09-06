@@ -45,8 +45,8 @@ complete timestamps into an exact half-open booking window. This native text
 profile is distinct from EDTF's uncertain date endpoints.
 [Ixdtf](package/Ixdtf.roc) preserves ordered annotations and critical flags, checks
 offset assertions against explicit rules, and retains calendar preferences.
-Only Gregorian presentation is currently supported. Native persistence remains
-separate work; module documentation states exact input limits and error profiles.
+Only Gregorian presentation is currently supported. Module documentation states
+exact input limits and error profiles.
 
 The text-format types provide custom `parser_for` / `encoder_for` methods, so
 generic encodings such as JSON store canonical strings and use the same checked
@@ -55,6 +55,13 @@ parsers. `from_quote` supports validated typed literals, for example an
 distinct from encoding errors. For runtime interpolated text, call `parse`
 explicitly so invalid input can return an error. These codecs do not define the
 versioned native persistence format.
+
+[Persistence](package/Persistence.roc) stores these seven declaration types and
+POSIX boundaries/deltas in a versioned JSON envelope with explicit semantic
+profiles, axis and units. Decimal strings preserve full-range signed microseconds.
+Unknown versions, incompatible metadata and duplicate fields return errors.
+This profile preserves declarations and scalar values; calendar values, coverage
+and interpretation snapshots require future persistence profiles.
 
 ## Examples
 
@@ -66,6 +73,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Room availability](examples/coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
 | [Booking exchange](examples/booking_exchange/main.roc) | Read exact booking windows with different offsets and serialize free windows in UTC |
 | [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
+| [Archive persistence](examples/archive_persistence/main.roc) | Save and restore an uncertain catalogue date, a recording declaration and its exact POSIX boundary |
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Overnight staffing](examples/staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |

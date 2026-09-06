@@ -17,10 +17,11 @@ reasoning model or declaring full ISO/EDTF conformance first.
 2. **Explain and save:** expose shared typed facts for each supported declaration
    and its bound interpretation result. Bounded renderers distinguish unresolved,
    unsupported, empty and limited results without re-resolution. Deliver this
-   with the first useful format slices, not after all standards support. Define
-   a versioned native persistence envelope with axis/units where applicable,
-   semantic payload, context/provenance policy and unknown-version rejection.
-   Standards text and debug inspection are not substitutes for that envelope.
+   with the first useful format slices, not after all standards support. Extend
+   native persistence to calendar descriptions, spans/coverage and snapshots.
+   Snapshot persistence must bind actual immutable interpretation data and
+   policies, not only provider names/version labels. Preserve qualifiers and
+   native calendar/resolution distinctions outside the text adapter profiles.
 3. **Calendar presentation:** choose the first additional provider from a sourced
    Tempo scenario and independent equal-day fixtures. Hebrew presentation is a
    candidate requiring stable leap-month identity and declared capabilities.

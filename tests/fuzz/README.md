@@ -53,6 +53,15 @@ snapshot retains its result and both keep the same instant. Unsupported calendar
 presentation and critical tags fail explicitly; fixed RFC module fixtures cover
 annotation grammar, critical duplicates and alias provenance separately.
 
+Persistence checks use the same generator and independently decode envelope
+metadata with builtin JSON. They cover all nine supported value kinds, compare
+stored boundaries with the existing Gregorian day-count oracle, and preserve
+qualifiers, fractional width and offset assertions. Fixed I64 endpoints and
+positive/negative 9007199254740993 exercise decimal string payloads beyond the
+common JSON floating-point integer range. Unknown versions and incompatible units
+must fail. Round trips supplement these independent field/coordinate checks;
+they do not establish snapshot persistence or support for other value kinds.
+
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.
 Each traversal must preserve the same dates and respect work/output budgets.
