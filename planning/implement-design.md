@@ -44,10 +44,6 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 
 ## Adoption acceptance still needed
 
-- Wire the starter ZIP and compiler compatibility metadata into versioned release
-  asset preparation and publication; the pinned publishing action accepts package
-  archives only. Validate the prepared kit's final role URLs against release
-  metadata before publication.
 - Exercise the prepared release workflow in CI before claiming release readiness;
   settle the initial release version and publish only with authorization.
 

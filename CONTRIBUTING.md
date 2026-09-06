@@ -44,6 +44,7 @@ third-party Python dependencies.
 | `test_bundle_examples.py` | Verify examples against exact core/zone archives with fresh HTTP acquisition |
 | `test_bundle_failures.py` | Reject missing, swapped and malformed candidate bundles |
 | `starter_kit.py` | Create a ZIP with complete starter apps, package URLs and the compiler pin |
+| `release_starter.py` | Bind a release ZIP to exact source contents, compiler pin, role URLs and archive digests |
 | `test_starter_kit.py` | Verify extracted starters from an outside working directory and reject broken inputs |
 | `update_example_urls.py` | Point the examples at a released bundle URL |
 
@@ -457,13 +458,18 @@ in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
 Bundle the package for distribution using `python3 scripts/bundle.py --output-dir dist`.
 
-Run the release workflow from GitHub Actions with a release version such as `0.1.0`.
+Run the release workflow from GitHub Actions with a release version such as `0.1.0`
+or `0.1.0-rc1`. The pinned release action marks RC versions as prereleases;
+their docs remain versioned and do not replace the stable docs redirect.
 It builds and tests the exact core/zone pair, creates the GitHub release,
 generates versioned docs, opens a follow-up PR and publishes docs to GitHub Pages.
 The additional `roc-time-bundles.json` asset records the two roles and archive
 digests for later core-version comparisons. A legacy release without this
 metadata requires the explicit `previous_core_url` workflow input; archive count
-does not identify a package role. `scripts/release_bundles.py self-test` verifies
+does not identify a package role. Automatic previous-release discovery selects
+the latest stable release; to compare a later RC against an earlier RC, supply
+that earlier RC's core archive as `previous_core_url`.
+`scripts/release_bundles.py self-test` verifies
 role selection and rejection paths without publishing or contacting GitHub.
 
 Prepare a starter ZIP for explicit core and zone URLs with:
@@ -480,7 +486,14 @@ candidate archives, acquires them through a fresh cache, and checks interpreter
 and native outputs while invoking from outside the checkout's working directory.
 Generated artifacts stay under `.roc-time-tmp/`. Failure controls cover missing
 companion modules, compiler mismatch and missing, corrupt or swapped archives.
-Publishing the starter ZIP remains a release-workflow deliverable.
+The release workflow prepares the ZIP with final role URLs, uploads it separately
+from the Roc package archives, and validates the downloaded artifact before tests
+and publication. The validator compares exact member contents, compiler metadata
+and archive digests and rejects missing, extra or modified entries. Tests extract
+that supplied ZIP and rebase only known dependency URLs in a copy to the local
+server. This proves prepared content and acquisition behavior; it does not prove
+availability of future GitHub release URLs. Release notes link the starter ZIP
+and its exact compiler release.
 
 ## Zone-data representation measurements
 

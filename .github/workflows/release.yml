@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       previous_core_url:
-        description: "Explicit core archive URL for a legacy release without role metadata"
+        description: "Explicit previous core archive URL (legacy release or earlier prerelease)"
         required: false
         type: string
   pull_request:
@@ -28,6 +28,7 @@ jobs:
       release_version: ${{ steps.validate.outputs.release_version }}
       docs_version: ${{ steps.validate.outputs.docs_version }}
       test_matrix: ${{ steps.bundles.outputs.test_matrix }}
+      candidate_version: ${{ steps.validate.outputs.release_version || 'unreleased-validation' }}
 
     steps:
       - name: Checkout
@@ -103,6 +104,19 @@ jobs:
       - name: Record explicit release roles
         run: python3 scripts/release_bundles.py metadata
 
+      - name: Prepare starter kit with final role URLs
+        env:
+          RELEASE_VERSION: ${{ steps.validate.outputs.release_version || 'unreleased-validation' }}
+        run: python3 scripts/release_starter.py prepare --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
+
+      - name: Upload starter kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-starter
+          path: .release/starter/roc-time-starter.zip
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload release bundles
         uses: actions/upload-artifact@v4
         with:
@@ -164,6 +178,19 @@ jobs:
           ZONE_BUNDLE: ${{ steps.pair.outputs.zones }}
         run: python3 scripts/test_bundle_examples.py --bundle-path "$CORE_BUNDLE" --zone-bundle-path "$ZONE_BUNDLE"
 
+      - name: Download starter kit
+        uses: actions/download-artifact@v4
+        with:
+          name: release-starter
+          path: .release/starter
+
+      - name: Test supplied starter kit
+        env:
+          CORE_BUNDLE: ${{ steps.pair.outputs.core }}
+          ZONE_BUNDLE: ${{ steps.pair.outputs.zones }}
+          RELEASE_VERSION: ${{ needs.build.outputs.candidate_version }}
+        run: python3 scripts/test_starter_kit.py --bundle-path "$CORE_BUNDLE" --zone-bundle-path "$ZONE_BUNDLE" --kit-path .release/starter/roc-time-starter.zip --role-metadata .release/roc-time-bundles.json --repo "$GITHUB_REPOSITORY" --release-version "$RELEASE_VERSION"
+
   publish-release:
     name: Publish GitHub release
     needs:
@@ -192,6 +219,17 @@ jobs:
           name: release-metadata
           path: .release
 
+      - name: Download starter kit
+        uses: actions/download-artifact@v4
+        with:
+          name: release-starter
+          path: .release/starter
+
+      - name: Validate starter kit before publication
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
+        run: python3 scripts/release_starter.py validate --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
+
       - name: Make release notes
         uses: roc-lang/release-package/actions/make-release-notes@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
@@ -199,17 +237,22 @@ jobs:
           docs_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ needs.build.outputs.docs_version }}/
           github_token: ${{ github.token }}
 
+      - name: Add starter download and compiler instructions
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
+        run: python3 scripts/release_starter.py notes --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip --notes-path .release/release-notes.md
+
       - name: Publish release
         uses: roc-lang/release-package/actions/publish-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
           release_version: ${{ needs.build.outputs.release_version }}
           github_token: ${{ github.token }}
 
-      - name: Publish role metadata
+      - name: Publish role metadata and starter kit
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
-        run: gh release upload "$RELEASE_VERSION" .release/roc-time-bundles.json --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$RELEASE_VERSION" .release/roc-time-bundles.json .release/starter/roc-time-starter.zip --repo "$GITHUB_REPOSITORY"
 
   publish-docs:
     name: Publish versioned docs

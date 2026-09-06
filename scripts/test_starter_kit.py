@@ -36,7 +36,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle-path", type=Path, required=True)
     parser.add_argument("--zone-bundle-path", type=Path, required=True)
+    parser.add_argument("--kit-path", type=Path, help="Validate and exercise a supplied release ZIP")
+    parser.add_argument("--role-metadata", type=Path)
+    parser.add_argument("--repo")
+    parser.add_argument("--release-version")
     args = parser.parse_args()
+    if args.kit_path and not all((args.role_metadata, args.repo, args.release_version)):
+        parser.error("a supplied kit requires --role-metadata, --repo and --release-version")
     for invalid in ("file:///tmp/a.tar.zst", "https://example.com\x7f/a.tar.zst",
                     "https://example.com\x00/a.tar.zst", "https://example.com/a.tar.zst\n"):
         try:
@@ -67,12 +73,33 @@ def main():
             duplicate = build(work / "duplicate.zip", core_url, zone_url)
             if archive.read_bytes() != duplicate.read_bytes():
                 raise RuntimeError("starter archive is not reproducible")
+            from release_starter import prepare, validate
+            if args.kit_path:
+                candidate = args.kit_path.resolve()
+                roles_path = args.role_metadata.resolve()
+                repo, version = args.repo, args.release_version
+            else:
+                from release_bundles import metadata as release_metadata
+                roles_path = work / "roles.json"
+                roles_path.write_text(json.dumps(release_metadata([
+                    {"name": "core", "artifact_file": core.name},
+                    {"name": "zones", "artifact_file": zones.name}], served)))
+                repo, version = "roc-time/validation", "unreleased-validation"
+                candidate = prepare(repo, version, roles_path, served, work / "candidate.zip")
+            # Validate the original artifact before extraction. Its release URLs
+            # cannot be fetched before publication; rebase only the extracted
+            # copy's known dependency URLs onto the local server below.
+            archive = validate(candidate, roles_path, served, repo, version)
             with zipfile.ZipFile(archive) as zipped:
                 zipped.extractall(work / "extracted")
             kit = work / "extracted/roc-time-starter"
             metadata = json.loads((kit / "manifest.json").read_text())
             if metadata["compiler"] != (ROOT / ".roc-version").read_text().strip():
                 raise RuntimeError("starter compiler pin differs from package")
+            from update_example_urls import update_examples
+            update_examples(kit / "examples", core_url, zone_url)
+            metadata["bundles"] = {"core": core_url, "zones": zone_url}
+            (kit / "manifest.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
             for starter in STARTERS:
                 expected = (ROOT / f"tests/examples/{starter}.txt").read_text()
                 invoke(kit, work / "cache", "check", starter)
