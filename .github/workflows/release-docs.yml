@@ -1,0 +1,123 @@
+name: Release docs
+
+on:
+  workflow_call:
+    inputs:
+      release_version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Existing release whose docs and examples should be published"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-docs-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish-docs:
+    name: Publish versioned docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout released documentation sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_version }}
+          path: .roc-time-tmp/release-source
+
+      - name: Read Roc version
+        id: roc-version
+        run: echo "nightly-tag=$(< .roc-time-tmp/release-source/.roc-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Roc
+        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
+        with:
+          version: nightly-new-compiler
+          nightly-tag: ${{ steps.roc-version.outputs.nightly-tag }}
+
+      - name: Download published role metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: gh release download "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --pattern roc-time-bundles.json --dir .release
+
+      - name: Resolve release URLs by role
+        id: urls
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: python3 scripts/release_bundles.py urls --manifest .release/roc-time-bundles.json --github-output "$GITHUB_OUTPUT"
+
+      - name: Update example package URLs
+        env:
+          CORE_URL: ${{ steps.urls.outputs.core_url }}
+          ZONE_URL: ${{ steps.urls.outputs.zones_url }}
+        run: python3 scripts/update_example_urls.py --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
+
+      - name: Validate updated examples
+        run: |
+          for example in examples/*/main.roc; do
+            roc check "$example" --no-cache
+          done
+
+      - name: Snapshot existing docs
+        uses: roc-lang/release-package/actions/docs-snapshot@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+        with:
+          docs_root: www
+
+      - name: Generate docs
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: python3 scripts/docs.py "$RELEASE_VERSION" --docs-root www --source-root .roc-time-tmp/release-source
+
+      - name: Update docs index
+        uses: roc-lang/release-package/actions/docs-index@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+        with:
+          docs_root: www
+          docs_version: ${{ inputs.release_version }}
+
+      - name: Validate docs
+        uses: roc-lang/release-package/actions/docs-validate@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+        with:
+          docs_root: www
+          docs_version: ${{ inputs.release_version }}
+
+      - name: Open release follow-up PR
+        uses: roc-lang/release-package/actions/create-followup-pr@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+        with:
+          release_version: ${{ inputs.release_version }}
+          paths: |
+            examples
+            www
+          branch_prefix: release-followup
+          base_branch: ${{ github.ref_name }}
+          commit_message: Update docs and examples for ${{ inputs.release_version }}
+          pr_title: Update docs and examples for ${{ inputs.release_version }}
+          github_token: ${{ github.token }}
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

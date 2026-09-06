@@ -463,8 +463,14 @@ or `0.1.0-rc1`. The pinned release action marks RC versions as prereleases;
 their docs remain versioned and do not replace the stable docs redirect.
 It builds and tests the exact core/zone pair, creates the GitHub release,
 generates versioned docs, opens a follow-up PR and publishes docs to GitHub Pages.
+If docs publication fails after the release succeeds, rerun the separate
+`Release docs` workflow with that existing release version. It reads published
+role metadata and does not recreate the release or tag.
 The additional `roc-time-bundles.json` asset records the two roles and archive
-digests for later core-version comparisons. A legacy release without this
+digests for later core-version comparisons. Published filenames use
+`roc-time-<hash>.tar.zst` and `roc-time-tzdb-<hash>.tar.zst`: Roc uses the
+filename prefix to distinguish packages sharing a versioned release path.
+The archive bytes and content hashes remain those produced by `roc bundle`. A legacy release without this
 metadata requires the explicit `previous_core_url` workflow input; archive count
 does not identify a package role. Automatic previous-release discovery selects
 the latest stable release; to compare a later RC against an earlier RC, supply

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate versioned package documentation.
 
-Writes the docs to `<docs-root>/<version>` and refreshes the redirecting
-`<docs-root>/index.html` that points at that version.
+Writes the docs to `<docs-root>/<version>`. Stable releases refresh the root
+redirect; prereleases preserve it.
 """
 from __future__ import annotations
 
@@ -17,7 +17,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_NAME = "roc-time"
-VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+NUMERIC = r"(?:0|[1-9][0-9]*)"
+PRERELEASE_IDENTIFIER = rf"(?:{NUMERIC}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+VERSION_RE = re.compile(
+    rf"{NUMERIC}\.{NUMERIC}\.{NUMERIC}"
+    rf"(?:-(?P<prerelease>{PRERELEASE_IDENTIFIER}(?:\.{PRERELEASE_IDENTIFIER})*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+)
 
 INDEX_TEMPLATE = """<!doctype html>
 <html lang="en">
@@ -50,7 +56,9 @@ def roc_command() -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("version", help="Release version, e.g. 0.1.0")
+    parser.add_argument("version", help="Release version, e.g. 0.1.0 or 0.1.0-rc1")
+    parser.add_argument("--source-root", type=Path, default=ROOT,
+                        help="Checkout whose package and overview to document")
     parser.add_argument(
         "--docs-root",
         type=Path,
@@ -59,10 +67,12 @@ def main() -> None:
     args = parser.parse_args()
 
     version = args.version.removeprefix("v")
-    if not VERSION_RE.match(version):
-        raise SystemExit(f"Error: version must be in the format x.y.z (e.g. 0.1.0), got {version}")
+    parsed_version = VERSION_RE.fullmatch(version)
+    if parsed_version is None:
+        raise SystemExit(f"Error: version must be SemVer (e.g. 0.1.0 or 0.1.0-rc1), got {version!r}")
 
-    docs_root = args.docs_root
+    source_root = args.source_root.resolve()
+    docs_root = args.docs_root.resolve()
     version_dir = docs_root / version
 
     shutil.rmtree(version_dir, ignore_errors=True)
@@ -70,7 +80,7 @@ def main() -> None:
 
     cmd = [roc_command(), "docs", "package/main.roc", f"--output={version_dir}"]
     print("+", " ".join(cmd), file=sys.stderr)
-    completed = subprocess.run(cmd, cwd=ROOT)
+    completed = subprocess.run(cmd, cwd=source_root)
     if completed.returncode != 0:
         raise SystemExit(completed.returncode)
 
@@ -80,7 +90,7 @@ def main() -> None:
     marker = '<div class="main-content">'
     if page.count(marker) != 1:
         raise SystemExit("Compiler docs layout changed; review landing-page insertion")
-    guide = (ROOT / "docs/overview.html").read_text()
+    guide = (source_root / "docs/overview.html").read_text()
     page = page.replace(marker, marker + "\n" + guide, 1)
     page = page.replace('<div class="index-decoration">', '<div class="index-decoration" style="display: none">', 1)
     index.write_text(page)
@@ -90,9 +100,10 @@ def main() -> None:
                       r'\1roc-time\2', html)
         generated_page.write_text(html)
 
-    (docs_root / "index.html").write_text(
-        INDEX_TEMPLATE.format(repo=REPO_NAME, version=version), encoding="utf-8"
-    )
+    if parsed_version.group("prerelease") is None:
+        (docs_root / "index.html").write_text(
+            INDEX_TEMPLATE.format(repo=REPO_NAME, version=version), encoding="utf-8"
+        )
 
     print(f"Generated docs for {version} in {version_dir}")
 
