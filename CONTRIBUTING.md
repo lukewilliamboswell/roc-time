@@ -492,8 +492,8 @@ and publication. The validator compares exact member contents, compiler metadata
 and archive digests and rejects missing, extra or modified entries. Tests extract
 that supplied ZIP and rebase only known dependency URLs in a copy to the local
 server. This proves prepared content and acquisition behavior; it does not prove
-availability of future GitHub release URLs. Release notes link the starter ZIP
-and its exact compiler release.
+availability of future GitHub release URLs. Release notes link both package archives, the starter ZIP
+and its exact compiler release, and include a runnable example importing both packages.
 
 ## Zone-data representation measurements
 

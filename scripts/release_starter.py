@@ -203,10 +203,33 @@ def main() -> None:
                 parser.error("notes requires --notes-path")
             manifest = json.loads(contents(validated)[starter_kit.PREFIX + "/manifest.json"])
             compiler = manifest["compiler"]
+            core = manifest["bundles"]["core"]
+            zones = manifest["bundles"]["zones"]
             link = f"https://github.com/{args.repo}/releases/download/{quote(args.version, safe='')}/roc-time-starter.zip"
             header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, archive search and staffing examples. "
                       f"Use [Roc {compiler}](https://github.com/roc-lang/nightlies/releases/tag/{compiler}); "
                       "the kit includes complete applications and checks the compiler version before running.\n\n")
+            header += (
+                "## Packages\n\n"
+                f"- [roc-time — temporal types and operations]({core})\n"
+                f"- [tzdb — optional time-zone database]({zones})\n\n"
+                "Copy this into `main.roc` and run `roc main.roc` with the compiler linked above:\n\n"
+                "```roc\n"
+                "app [main!] {\n"
+                f'\ttime: "{core}",\n'
+                f'\tzones: "{zones}",\n'
+                "}\n"
+                "import zones.Database\n"
+                "import time.ZoneRules\n\n"
+                "main! = |_args| {\n"
+                '\tdata = Database.get("Australia/Melbourne")?\n'
+                "\trules = ZoneRules.from_database(data)?\n"
+                "\techo!(ZoneRules.name(rules))\n"
+                "\tOk({})\n"
+                "}\n"
+                "```\n\n"
+                "The tzdb dependency is optional; omit it when using only core operations.\n\n"
+            )
             args.notes_path.write_text(header + args.notes_path.read_text())
         else:
             print(validated)
