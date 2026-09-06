@@ -461,28 +461,42 @@ PRs into `main`; development examples exercise the checkout's package source.
 The README, versioned docs and released starter kit provide the user-facing path
 for the latest release.
 
-A branch such as `release/0.1.x` maintains the package's `0.1.x` line. Cut it from
-a verified release tag, or from a reviewed descendant whose package sources and
-compiler pin still match that release. Release-engineering fixes may be included
-explicitly. The branch name describes compatibility scope, not a support term:
-no LTS duration, response time or paid support entitlement follows from its
-existence. Any extended support agreement or announced support policy is separate.
+A branch such as `release/roc-0.1.x` targets the upstream **Roc compiler**
+`0.1.x` compatibility line. It does not identify this package's version. Create
+it only from a commit validated with an actual supported compiler release in
+that line. The current pilot still uses an exact nightly; that does not establish
+compatibility with a future versioned compiler release.
+
+Package releases are independently versioned. Every published package change
+gets a new immutable release and content-addressed archive; never replace an
+existing package version's contents. For example, a future package release
+`2.4.1` could come from `release/roc-0.1.x` with compiler `0.1.3`. Its package
+version and compiler version serve different purposes.
+
+The branch name does not promise LTS duration, response time or paid support.
+Any extended support agreement or announced support policy is separate.
 
 Prefer fixing a bug on `main`, then backporting the reviewed fix with
-`git cherry-pick -x` on a PR into the maintenance branch. Adapt and test the fix
-with that branch's pinned compiler. If a fix starts on the maintenance line,
-forward-port it to `main` where applicable. Do not merge all development changes
-into a maintenance branch or automatically advance its compiler pin.
+`git cherry-pick -x` on a PR into the appropriate compiler-support branch. Adapt
+and test the fix with that branch's pinned compiler. Forward-port fixes originating
+there to `main` where applicable. Compiler patch updates within the supported
+line also require validated PRs; a different compiler minor line gets a different
+branch. The nightly updater does not perform these versioned compiler updates.
 
-To publish a patch, dispatch `Release` on `release/0.1.x` with a matching version
-such as `0.1.1`. The shared guard rejects a mismatched release line or checkout.
-Initial and new feature releases may be published from `main`. The workflow
-checks the exact event commit, tests the built package pair and supplied starter,
-then tags that commit and publishes those artifacts. A different merge commit
-must obtain its own validation; previous parent results do not validate it.
+To publish, dispatch `Release` on the compiler-support branch with a new package
+version. The shared guard checks that `.roc-version` belongs to the branch's
+compiler line and that the checkout matches the event SHA. It does not compare
+the package version with the branch name. Every publication requires a final
+compiler pin whose exact tag is a published, non-prerelease release with assets
+in the official Roc repository. This also applies to releases from `main`: a
+nightly pin cannot publish, even when upstream development has moved ahead.
+Adapt changes to the supported stable compiler and validate them before release.
+The workflow tests the exact commit, built package pair and supplied starter, then tags that
+commit and publishes those artifacts. A different merge commit needs its own
+validation; parent results do not validate it.
 
 To rehearse without publication, select `nightly_validation: true`. Supplying a
-`release_version` additionally exercises the branch/version guard; omitting it
+`release_version` additionally exercises the compiler-branch and package-version guard; omitting it
 lets ordinary compiler candidate branches run all validation. Neither case
 publishes packages or deploys docs. Never dispatch the default publishing mode
 merely to obtain CI checks.
@@ -494,7 +508,7 @@ update policy. Enabling bot PR creation and configuring required branch checks
 are repository settings, separate from installing the workflows. No bot approval
 or bypass is part of this policy.
 
-The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/5ae66558e8e3aa1286d5855e98be962955e79fb5/docs/maintenance-releases.md)
+The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/253138613ce994bc701d93838c2ebef0b77444c6/docs/maintenance-releases.md)
 describes the reusable policy. Source/workflow review, support commitments and
 OpenSSF evidence remain each project's responsibility.
 
@@ -511,8 +525,8 @@ branch and publishes docs to GitHub Pages. Released examples are validated in an
 isolated checkout of the tag using their release compiler and published URLs;
 development examples on `main` retain local source dependencies.
 Merge the previous docs follow-up before publishing another version: site
-assembly refuses missing earlier release documentation. A maintenance patch
-never replaces a newer stable version as the public documentation default.
+assembly refuses missing earlier release documentation. The highest stable package version remains the public documentation default;
+each release tag and starter manifest records its own compiler pin.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published
 role metadata and does not recreate the release or tag.
