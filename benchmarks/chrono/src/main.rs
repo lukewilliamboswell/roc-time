@@ -12,34 +12,31 @@ fn date_sum(d: NaiveDate) -> u64 {
 fn text_sum(s: &str) -> u64 {
     s.bytes().map(u64::from).sum()
 }
-fn run(data: &[Input], mode: &str, iterations: usize) -> u64 {
+fn run<T, F: Fn(&T) -> u64>(data: &[T], iterations: usize, operation: &F) -> u64 {
     let data = black_box(data);
     let iterations = black_box(iterations);
     let mut sum = 0;
     for i in 0..iterations {
-        let v = &data[i % data.len()];
-        sum += match mode {
-            "construct" => {
-                date_sum(NaiveDate::from_ymd_opt(v.fields.0, v.fields.1, v.fields.2).unwrap())
-            }
-            "roundtrip" => {
-                date_sum(NaiveDate::from_num_days_from_ce_opt(v.date.num_days_from_ce()).unwrap())
-            }
-            "add_days" => date_sum(v.date.checked_add_days(Days::new(17)).unwrap()),
-            "parse" => DateTime::parse_from_rfc3339(&v.text)
-                .unwrap()
-                .timestamp_micros()
-                .rem_euclid(1_000_000_007) as u64,
-            "format" => text_sum(&v.timestamp.to_rfc3339_opts(SecondsFormat::Micros, false)),
-            "end_to_end" => text_sum(
-                &DateTime::parse_from_rfc3339(&v.text)
-                    .unwrap()
-                    .to_rfc3339_opts(SecondsFormat::Micros, false),
-            ),
-            _ => panic!("unknown workload"),
-        };
+        sum += operation(&data[i % data.len()]);
     }
     black_box(sum)
+}
+fn sample<T, F: Fn(&T) -> u64>(
+    data: &[T],
+    iterations: usize,
+    warmups: usize,
+    samples: usize,
+    operation: F,
+) {
+    for _ in 0..warmups {
+        black_box(run(data, iterations, &operation));
+    }
+    for _ in 0..samples {
+        let start = Instant::now();
+        let checksum = run(data, iterations, &operation);
+        let nanos = start.elapsed().as_nanos();
+        println!("{nanos},{checksum}");
+    }
 }
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -73,13 +70,43 @@ fn main() {
         }
         return;
     }
-    for _ in 0..warmups {
-        black_box(run(&data, mode, iterations));
-    }
-    for _ in 0..samples {
-        let start = Instant::now();
-        let checksum = run(&data, mode, iterations);
-        let nanos = start.elapsed().as_nanos();
-        println!("{nanos},{checksum}");
+    // Prepare narrow input arrays outside all samples. Date kernels never load
+    // an unrelated String or timestamp from the original verification records.
+    let dates: Vec<_> = data.iter().map(|v| v.date).collect();
+    let fields: Vec<_> = data.iter().map(|v| v.fields).collect();
+    let texts: Vec<_> = data.iter().map(|v| v.text.clone()).collect();
+    let timestamps: Vec<_> = data.iter().map(|v| v.timestamp).collect();
+    // Dispatch outside timestamps; generic sample/run specialize each closure.
+    match mode.as_str() {
+        "date_control" => sample(&dates, iterations, warmups, samples, |v| date_sum(*v)),
+        "date_to_day" => sample(&dates, iterations, warmups, samples, |v| {
+            (i64::from(v.num_days_from_ce()) - 719163 + 1000000) as u64
+        }),
+        "construct" => sample(&fields, iterations, warmups, samples, |v| {
+            date_sum(NaiveDate::from_ymd_opt(v.0, v.1, v.2).unwrap())
+        }),
+        "roundtrip" => sample(&dates, iterations, warmups, samples, |v| {
+            date_sum(NaiveDate::from_num_days_from_ce_opt(v.num_days_from_ce()).unwrap())
+        }),
+        "add_days" => sample(&dates, iterations, warmups, samples, |v| {
+            date_sum(v.checked_add_days(Days::new(17)).unwrap())
+        }),
+        "parse" => sample(&texts, iterations, warmups, samples, |v| {
+            DateTime::parse_from_rfc3339(v)
+                .unwrap()
+                .timestamp_micros()
+                .rem_euclid(1_000_000_007) as u64
+        }),
+        "format" => sample(&timestamps, iterations, warmups, samples, |v| {
+            text_sum(&v.to_rfc3339_opts(SecondsFormat::Micros, false))
+        }),
+        "end_to_end" => sample(&texts, iterations, warmups, samples, |v| {
+            text_sum(
+                &DateTime::parse_from_rfc3339(v)
+                    .unwrap()
+                    .to_rfc3339_opts(SecondsFormat::Micros, false),
+            )
+        }),
+        _ => panic!("unknown workload"),
     }
 }

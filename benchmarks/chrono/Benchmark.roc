@@ -16,8 +16,8 @@ Benchmark := [].{
 			{ text, timestamp, date, fields: GregorianDate.to_fields(date) }
 		},
 	)
-	run : List(Input), Str, U64 -> U64
-	run = |data, mode, iterations| {
+	run : List(a), U64, (a -> U64) -> U64
+	run = |data, iterations, operation| {
 		var sum = 0.U64
 		var i = 0.U64
 		while i < iterations {
@@ -25,52 +25,66 @@ Benchmark := [].{
 				Ok(value) => value
 				Err(_) => crash "nonempty benchmark corpus"
 			}
-			result = match mode {
-				"construct" => date_sum(
-					match GregorianDate.from_fields(v.fields) {
-						Ok(value) => value
-						Err(_) => crash "valid fields"
-					},
-				)
-				"roundtrip" => date_sum(
-					match GregorianDate.from_civil_day(GregorianDate.to_civil_day(v.date)) {
-						Ok(value) => value
-						Err(_) => crash "valid civil day"
-					},
-				)
-				"add_days" => date_sum(
-					match GregorianDate.from_civil_day(CivilDay.from_day_number(CivilDay.to_day_number(GregorianDate.to_civil_day(v.date)) + 17)) {
-						Ok(value) => value
-						Err(_) => crash "bounded date addition"
-					},
-				)
-				"parse" => {
-					parsed = match OffsetTimestamp.parse(v.text) {
-						Ok(value) => value
-						Err(_) => crash "valid timestamp"
-					}
-					boundary = match OffsetTimestamp.boundary(parsed) {
-						Ok(value) => value
-						Err(_) => crash "bounded timestamp"
-					}
-					I64.mod_by(PosixBoundary.to_microseconds(boundary), 1000000007).to_u64_wrap()
-				}
-				"format" => text_sum(OffsetTimestamp.to_text(v.timestamp))
-				"end_to_end" => text_sum(
-					OffsetTimestamp.to_text(
-						match OffsetTimestamp.parse(v.text) {
-							Ok(value) => value
-							Err(_) => crash "valid timestamp"
-						},
-					),
-				)
-				_ => crash "unknown workload"
-			}
-			sum = sum + result
+			sum = sum + operation(v)
 			i = i + 1
 		}
 		sum
 	}
+	date_control : GregorianDate -> U64
+	date_control = |v| date_sum(v)
+
+	date_to_day : GregorianDate -> U64
+	date_to_day = |v| (CivilDay.to_day_number(GregorianDate.to_civil_day(v)) + 1000000).to_u64_wrap()
+
+	construct : GregorianDate.Fields -> U64
+	construct = |v| date_sum(
+		match GregorianDate.from_fields(v) {
+			Ok(value) => value
+			Err(_) => crash "valid fields"
+		},
+	)
+
+	roundtrip : GregorianDate -> U64
+	roundtrip = |v| date_sum(
+		match GregorianDate.from_civil_day(GregorianDate.to_civil_day(v)) {
+			Ok(value) => value
+			Err(_) => crash "valid civil day"
+		},
+	)
+
+	add_days : GregorianDate -> U64
+	add_days = |v| date_sum(
+		match GregorianDate.from_civil_day(CivilDay.from_day_number(CivilDay.to_day_number(GregorianDate.to_civil_day(v)) + 17)) {
+			Ok(value) => value
+			Err(_) => crash "bounded date addition"
+		},
+	)
+
+	parse : Str -> U64
+	parse = |v| {
+		parsed = match OffsetTimestamp.parse(v) {
+			Ok(value) => value
+			Err(_) => crash "valid timestamp"
+		}
+		boundary = match OffsetTimestamp.boundary(parsed) {
+			Ok(value) => value
+			Err(_) => crash "bounded timestamp"
+		}
+		I64.mod_by(PosixBoundary.to_microseconds(boundary), 1000000007).to_u64_wrap()
+	}
+
+	format : OffsetTimestamp -> U64
+	format = |v| text_sum(OffsetTimestamp.to_text(v))
+
+	end_to_end : Str -> U64
+	end_to_end = |v| text_sum(
+		OffsetTimestamp.to_text(
+			match OffsetTimestamp.parse(v) {
+				Ok(value) => value
+				Err(_) => crash "valid timestamp"
+			},
+		),
+	)
 	verify = |data| Str.join_with(
 		data.map(
 			|v| {

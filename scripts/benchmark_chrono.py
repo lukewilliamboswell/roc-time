@@ -19,7 +19,7 @@ import fixture_platform
 
 BASE = ROOT / "benchmarks/chrono"
 BUILD = ROOT / ".roc-time-tmp/chrono-benchmark"
-MODES = ("construct", "roundtrip", "add_days", "parse", "format", "end_to_end")
+MODES = ("date_control", "date_to_day", "construct", "roundtrip", "add_days", "parse", "format", "end_to_end")
 
 
 def run(command, **kwargs):
@@ -40,12 +40,19 @@ def expected_sum(corpus, mode, iterations):
         date = dt.datetime.fromisoformat(case["text"]).date()
         if mode == "add_days":
             date += dt.timedelta(days=17)
-        if mode in ("construct", "roundtrip", "add_days"):
+        if mode in ("date_control", "construct", "roundtrip", "add_days"):
             values.append(date.year * 10000 + date.month * 100 + date.day)
+        elif mode == "date_to_day":
+            shifted_day = case["day"] + 1000000
+            if not 0 <= shifted_day < 2**64:
+                raise ValueError("day-coordinate checksum outside unsigned range")
+            values.append(shifted_day)
         elif mode == "parse":
             values.append(case["microseconds"] % 1000000007)
-        else:
+        elif mode in ("format", "end_to_end"):
             values.append(sum(case["canonical"].encode("ascii")))
+        else:
+            raise ValueError(f"unknown workload: {mode}")
     cycles, tail = divmod(iterations, len(values))
     return cycles * sum(values) + sum(values[:tail])
 
