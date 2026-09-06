@@ -94,18 +94,18 @@ DispatchChecks :: [].{
 
 		period = parse_period("19970101T180000Z/PT1H")?
 		same_period = parse_period("19970101t180000z/+PT60M")?
-		if period != same_period or Dict.get(Dict.insert(Dict.empty(), period, 23.U64), same_period) != Ok(23) or Str.inspect(period) != "RfcPeriod(19970101T180000Z/PT3600S)" {
+		if period != same_period or Dict.get(Dict.insert(Dict.empty(), period, 23.U64), same_period) != Ok(23) or !Str.inspect(period).contains("RfcPeriod(form=Utc") or !Str.inspect(period).contains("coordinate_seconds=3600") {
 			return Err(Failed)
 		}
 		utc = parse_datetime("19700101T000000Z")?
 		lower = parse_datetime("19700101t000000z")?
 		local = parse_datetime("19700101T000000")?
-		if utc != lower or utc == local or Dict.get(Dict.insert(Dict.empty(), utc, 19.U64), lower) != Ok(19) or Str.inspect(local) != "RfcDateTime(19700101T000000, Local)" {
+		if utc != lower or utc == local or Dict.get(Dict.insert(Dict.empty(), utc, 19.U64), lower) != Ok(19) or !Str.inspect(local).contains("RfcDateTime(role=Standalone, form=Local") {
 			return Err(Failed)
 		}
 		week = parse_duration("P1W")?
 		days = parse_duration("P7D")?
-		if week != days or Dict.get(Dict.insert(Dict.empty(), week, 17.U64), days) != Ok(17) or Str.inspect(week) != "RfcDuration(P7D)" {
+		if week != days or Dict.get(Dict.insert(Dict.empty(), week, 17.U64), days) != Ok(17) or Str.inspect(week) != "RfcDuration(role=Standalone, calendar_days=7, coordinate_seconds=0)" {
 			return Err(Failed)
 		}
 		first = GregorianDate.from_fields({ year: -1, month: 12, day: 31 })?

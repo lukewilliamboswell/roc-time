@@ -82,8 +82,13 @@ clock and fractional-resolution fields, and require scoped qualifications and
 an explicit model requirement. Interchange explanation checks compare snapshot
 position facts with the independent date-count oracle and retain unsupported
 calendar presentation as a separate fact. Both exercise zero/small fact and byte
-budgets; incomplete rendering must never report `Complete`. These checks do not
-parse diagnostic prose to establish temporal meaning.
+budgets; incomplete rendering must never report `Complete`. Exact-interval facts
+are compared with independently calculated POSIX endpoints and the original
+source offsets and fractional widths, including reversed local-label order.
+RFC primitive facts retain local/UTC form, endpoint roles and separate calendar
+days and coordinate seconds; PERIOD facts do not infer a zone or expand a
+recurrence. These checks do not parse diagnostic prose to establish temporal
+meaning or establish allocation bounds.
 
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.

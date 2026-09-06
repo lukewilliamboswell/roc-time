@@ -1,3 +1,4 @@
+import SemanticFact
 import TimedRecurrence
 import CalendarPattern
 import GregorianDate
@@ -220,8 +221,22 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 		}
 		"P${day}${time}"
 	}
+
+	## Calendar days and accurate seconds remain separate components, without
+	## an invented anchor or conversion of calendar days to elapsed seconds.
+	fact_count : RfcDuration -> U64
+	fact_count = |_| 1
+	fact_at : RfcDuration, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| if index == 0 {
+		Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: value.days, seconds: value.seconds })))
+	} else {
+		End
+	}
 	to_inspect : RfcDuration -> Str
-	to_inspect = |value| "RfcDuration(${to_text(value)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "RFC duration has a first semantic fact"
+	}
 }
 
 upper : U8 -> U8
@@ -289,4 +304,15 @@ expect {
 		valid = valid and PosixSpan.coordinate_width(TimedOccurrence.span(result)) == Ok(PosixDelta.from_microseconds(case.hours * 3600000000))
 	}
 	valid and RfcDuration.parse("P1D") != RfcDuration.parse("PT24H")
+}
+
+expect {
+	day = RfcDuration.parse("P1D")?
+	hours = RfcDuration.parse("PT24H")?
+	huge = RfcDuration.parse("P9223372036854775807D")?
+	RfcDuration.fact_at(day, 0) == Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: 1, seconds: 0 }))) and
+		RfcDuration.fact_at(hours, 0) == Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: 0, seconds: 86400 }))) and
+			RfcDuration.fact_at(huge, 0) == Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: I64.highest, seconds: 0 }))) and
+				RfcDuration.fact_count(huge) == 1 and RfcDuration.fact_at(huge, 1) == End and
+					RfcDuration.fact_at(huge, U64.highest) == End and RfcDuration.to_inspect(huge).count_utf8_bytes() <= 256
 }

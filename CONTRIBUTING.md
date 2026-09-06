@@ -366,6 +366,17 @@ subprocess limit and failing allocation controls. Fact budgets count indexed
 facts; the preferred-calendar fact may inspect the adapter's bounded annotation
 list, but must never traverse zone transitions or resolve again. Metadata is
 previewed before formatting, so a large version string cannot force a full copy.
+Exact-interval fact checks must use the cached extent and retain both original
+endpoint declarations; inspecting or explaining them must not repeat boundary
+conversion. RFC primitive checks distinguish local/UTC forms and calendar days
+from coordinate seconds without interpreting a duration or expanding a series.
+Use `examples/explain_event_terms/main.roc` for the caller flow and the interchange
+fuzz target for generated semantic facts. Resource claims remain separate from
+these functional checks. `tests/declaration_explanation_resource/main.roc`
+checks fact reads, inspection and zero/tiny/full rendering budgets in dev and
+speed builds, including maximum-I64 calendar-day declarations and allocation
+ceiling negative controls. Its counters measure requested allocation bytes,
+not retained memory.
 
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired

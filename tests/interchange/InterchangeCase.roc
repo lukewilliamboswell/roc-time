@@ -255,6 +255,7 @@ check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
 	}
 	check_persistence(ExactInterval(interval), { kind: "exact-interval", profile: "exact-offset-interval-v1", payload: source, axis: "none", unit: "none" })
 	expected_span = model_span(expected, expected + 1000000)
+	check_exact_explanation(interval, expected_span, input.digits, timestamp, end)
 	if ExactInterval.span(interval) != expected_span or ExactInterval.to_text(interval) != source or
 		ExactInterval.parse(ExactInterval.to_text(interval)) != Ok(interval) or ExactInterval.new(timestamp, end) != Ok(interval) {
 		crash "Exact interval differs from independent endpoint extent"
@@ -448,6 +449,7 @@ check_rfc_persistence = |input, day, h, m, s| {
 	check_persistence(RfcDateTime(date), { kind: "rfc-date-time", profile: "rfc5545-datetime-values-v1", axis: "none", unit: "none", payload: source })
 	check_persistence(RfcDuration(duration), { kind: "rfc-duration", profile: "rfc5545-positive-duration-v1", axis: "none", unit: "none", payload: duration_source })
 	check_persistence(RfcPeriod(period), { kind: "rfc-period", profile: "rfc5545-period-values-v1", axis: "none", unit: "none", payload: period_source })
+	check_rfc_explanation(input, day, h, m, s, source, date, duration, period)
 }
 
 # R09/R12/R14: independent date-count oracle supplies the expected position.
@@ -487,5 +489,103 @@ check_snapshot_explanation = |snapshot, expected, presentation, budget| {
 		prefix.status != Limited(FactLimit) or prefix.visited_facts > budget or
 			tiny.text.count_utf8_bytes() > budget * 17 or tiny.status != Limited(ByteLimit) {
 		crash "Snapshot explanation did not respect independent fact/output limits"
+	}
+}
+
+# Facts preserve declaration distinctions independently of renderer wording.
+# The exact span oracle is the integer endpoint model above; RFC expectations
+# come from generated fields and separately declared calendar/coordinate units.
+explanation_fact = |source, index| match Explanation.fact_at(source, index) {
+	Item(fact) => SemanticFact.kind(fact)
+	End => crash "Expected declaration fact is absent"
+}
+
+check_exact_explanation = |interval, expected_span, digits, start, end| {
+	source = Explanation.new(ExactInterval(interval))
+	if explanation_fact(source, 0) != ExactIntervalDescription({ span: expected_span }) {
+		crash "Exact interval explanation changed independently modeled extent"
+	}
+	for entry in [{ index: 1.U64, role: Start, endpoint: start }, { index: 2.U64, role: End, endpoint: end }] {
+		match explanation_fact(source, entry.index) {
+			OffsetEndpoint(data) => if data.role != entry.role or data.fraction_digits != digits or data.local != OffsetTimestamp.local_label(entry.endpoint) or data.offset != OffsetTimestamp.parts(entry.endpoint).offset {
+				crash "Interval explanation lost endpoint role or supplied width"
+			}
+			_ => crash "Interval explanation omitted an endpoint assertion"
+		}
+	}
+	check_declaration_limits(source, digits.to_u64())
+}
+
+check_rfc_explanation = |input, day, h, m, s, utc_source, date, duration, period| {
+	local_text = match utc_source.drop_last_bytes(1) {
+		Ok(value) => value
+		Err(_) => crash "Generated RFC text has an ASCII UTC suffix"
+	}
+	local = match RfcDateTime.parse(local_text) {
+		Ok(value) => value
+		Err(_) => crash "Generated local RFC label rejected"
+	}
+	for entry in [{ value: date, form: Utc }, { value: local, form: Local }] {
+		source = Explanation.new(RfcDateTime(entry.value))
+		match explanation_fact(source, 0) {
+			RfcDateTimeDescription(data) => {
+				if data.role != Standalone or data.form != entry.form or
+					CalendarDate.to_fields(LocalDateTime.date(data.local)) != { year: input.year.to_i64(), month: input.month, day } or
+						ClockTime.to_fields(LocalDateTime.clock(data.local)) != { hour: h.to_u8_wrap(), minute: m.to_u8_wrap(), second: s.to_u8_wrap(), microsecond: 0 } {
+					crash "RFC explanation changed supplied fields or local/UTC form"
+				}
+			}
+			_ => crash "RFC datetime description fact absent"
+		}
+		if entry.form == Local and explanation_fact(source, 1) != Requirement(ZoneContext) {
+			crash "Local RFC label was explained without required context"
+		}
+		check_declaration_limits(source, input.digits.to_u64())
+	}
+	seconds = input.seconds.to_i64() + 1
+	coordinate = Explanation.new(RfcDuration(duration))
+	if explanation_fact(coordinate, 0) != RfcDurationDescription({ role: Standalone, days: 0, seconds }) {
+		crash "RFC coordinate duration was reinterpreted as calendar days"
+	}
+	days = input.precision.to_i64() + 1
+	calendar_duration = match RfcDuration.parse("P${days.to_str()}D") {
+		Ok(value) => value
+		Err(_) => crash "Generated positive calendar-day duration rejected"
+	}
+	calendar = Explanation.new(RfcDuration(calendar_duration))
+	if explanation_fact(calendar, 0) != RfcDurationDescription({ role: Standalone, days, seconds: 0 }) {
+		crash "RFC calendar duration was converted into fixed coordinate seconds"
+	}
+	for source in [coordinate, calendar, Explanation.new(RfcPeriod(period))] {
+		check_declaration_limits(source, input.digits.to_u64())
+	}
+	period_source = Explanation.new(RfcPeriod(period))
+	if explanation_fact(period_source, 2) != RfcDurationDescription({ role: PeriodEnding, days: 0, seconds }) {
+		crash "RFC period duration lost its supplied anchor role"
+	}
+	local_period = match RfcPeriod.parse("${local_text}/P${days.to_str()}D") {
+		Ok(value) => value
+		Err(_) => crash "Generated local RFC period rejected"
+	}
+	local_period_source = Explanation.new(RfcPeriod(local_period))
+	if explanation_fact(local_period_source, 3) != Requirement(ZoneContext) or
+		explanation_fact(local_period_source, 2) != RfcDurationDescription({ role: PeriodEnding, days, seconds: 0 }) {
+		crash "Local period explanation invented an interpreted endpoint"
+	}
+	check_declaration_limits(local_period_source, input.digits.to_u64())
+}
+
+check_declaration_limits = |source, bytes| {
+	full = Explanation.plain(source, { max_facts: 16, max_utf8_bytes: 8192 })
+	zero = Explanation.plain(source, { max_facts: 0, max_utf8_bytes: 8192 })
+	tiny = Explanation.plain(source, { max_facts: 16, max_utf8_bytes: bytes })
+	if full.status != Complete or full.visited_facts != Explanation.fact_count(source) or
+		zero.status != Limited(FactLimit) or zero.visited_facts != 0 or !zero.text.is_empty() or
+			tiny.status != Limited(ByteLimit) or tiny.text.count_utf8_bytes() > bytes {
+		crash "Declaration explanation ignored finite rendering limits"
+	}
+	match Explanation.fact_at(source, U64.highest) {
+		End => {}
+		_ => crash "Large fact index overflowed or fabricated a declaration fact"
 	}
 }

@@ -1,0 +1,17 @@
+P1D (Complete)
+RFC duration: 1 calendar day followed by 0 coordinate seconds; calendar days are not converted to 86400-second quantities. Applying it requires a start and explicit interpretation context.
+PT24H (Complete)
+RFC duration: 0 calendar days followed by 86400 coordinate seconds; calendar days are not converted to 86400-second quantities. Applying it requires a start and explicit interpretation context.
+20261003T120000/P1D (Complete)
+RFC period declaration: start year 2026, month 10, day 3, 12:00:00; local label requiring explicit interpretation context; duration ending retained. This explanation has not computed or resolved an end.
+Start date-time: year 2026, month 10, day 3, 12:00:00; local label requiring explicit interpretation context.
+Period ending duration: 1 calendar day followed by 0 coordinate seconds; calendar days are not converted to 86400-second quantities. Its start is supplied by the enclosing period; no end has been computed.
+Interpretation requires explicit zone context.
+20261003T120000Z/PT24H (Complete)
+RFC period declaration: start year 2026, month 10, day 3, 12:00:00; UTC label with explicit Z; duration ending retained. This explanation has not computed or resolved an end.
+Start date-time: year 2026, month 10, day 3, 12:00:00; UTC label with explicit Z.
+Period ending duration: 0 calendar days followed by 86400 coordinate seconds; calendar days are not converted to 86400-second quantities. Its start is supplied by the enclosing period; no end has been computed.
+2026-10-03T12:00:00+10:00/2026-10-04T12:00:00+11:00 (Complete)
+Exact interval: stored half-open POSIX extent [1790992800000000, 1791075600000000) microseconds since 1970-01-01; start included, end excluded.
+Start endpoint: year 2026, month 10, day 3, 12:00:00; 0 fractional digits; asserted local offset 36000 seconds.
+End endpoint: year 2026, month 10, day 4, 12:00:00; 0 fractional digits; asserted local offset 39600 seconds.

@@ -15,7 +15,7 @@ reasoning model or declaring full ISO/EDTF conformance first.
    Preserve metadata without needing a complete uncertainty solver. Interpretation
    uses shared native machinery or returns an explicit unsupported result.
 2. **Explain and save:** extend shared facts and bounded explanation to remaining
-   value kinds, especially exact intervals, RFC declarations and bound selection
+   value kinds, especially recurrence declarations, coverage and bound selection
    results. Preserve distinct unresolved, unsupported, empty and limited outcomes
    without re-resolution. Add explicit styled rendering over the same facts.
    Extend native persistence to interpretation snapshots.

@@ -1,3 +1,4 @@
+import SemanticFact
 import GregorianDate
 import CalendarDate
 import CalendarArithmetic
@@ -139,8 +140,45 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 			Duration(duration) => duration.to_hash((1.U8).to_hash(base))
 		}
 	}
+
+	## These are source-declaration facts, not a resolved span. Local endpoint
+	## ordering remains unresolved; a duration ending is not added to its start.
+	fact_count : RfcPeriod -> U64
+	fact_count = |value| if RfcDateTime.form(value.start) == Local {
+		4
+	} else {
+		3
+	}
+	fact_at : RfcPeriod, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| {
+		if index >= fact_count(value) {
+			return End
+		}
+		form = RfcDateTime.form(value.start)
+		match index {
+			0 => {
+				ending_fact = match value.ending {
+					End(end) => Endpoint(RfcDateTime.local_label(end))
+					Duration(duration) => Duration(RfcDuration.components(duration))
+				}
+				Item(SemanticFact.new(RfcPeriodDescription({ form, start: RfcDateTime.local_label(value.start), ending: ending_fact })))
+			}
+			1 => Item(SemanticFact.new(RfcDateTimeDescription({ role: Start, local: RfcDateTime.local_label(value.start), form })))
+			2 => match value.ending {
+				End(end) => Item(SemanticFact.new(RfcDateTimeDescription({ role: End, local: RfcDateTime.local_label(end), form })))
+				Duration(duration) => {
+					parts = RfcDuration.components(duration)
+					Item(SemanticFact.new(RfcDurationDescription({ role: PeriodEnding, days: parts.days, seconds: parts.seconds })))
+				}
+			}
+			_ => Item(SemanticFact.new(Requirement(ZoneContext)))
+		}
+	}
 	to_inspect : RfcPeriod -> Str
-	to_inspect = |value| "RfcPeriod(${to_text(value)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "RFC period has a first semantic fact"
+	}
 
 	## Add at most 4096 PERIOD inclusions to a native rule, preserving its
 	## existing inclusions, COUNT/UNTIL and source exclusions. Native inclusion
@@ -400,4 +438,22 @@ expect {
 test_period = |text| match RfcPeriod.parse(text) {
 	Ok(value) => value
 	Err(_) => crash "valid fixture period"
+}
+
+expect {
+	# Source ordering can differ from resolved ordering across offset changes;
+	# these local declaration facts must not imply a validated POSIX span.
+	local = RfcPeriod.parse("19970902T090000/19970902T080000")?
+	start = RfcDateTime.local_label(RfcPeriod.start(local))
+	end = RfcDateTime.local_label(RfcDateTime.parse("19970902T080000")?)
+	huge = RfcPeriod.parse("19970902T090000Z/P9223372036854775807D")?
+	RfcPeriod.fact_count(local) == 4 and RfcPeriod.fact_count(huge) == 3 and
+		RfcPeriod.fact_at(local, 0) == Item(SemanticFact.new(RfcPeriodDescription({ form: Local, start, ending: Endpoint(end) }))) and
+			RfcPeriod.fact_at(local, 1) == Item(SemanticFact.new(RfcDateTimeDescription({ role: Start, local: start, form: Local }))) and
+				RfcPeriod.fact_at(local, 2) == Item(SemanticFact.new(RfcDateTimeDescription({ role: End, local: end, form: Local }))) and
+					RfcPeriod.fact_at(local, 3) == Item(SemanticFact.new(Requirement(ZoneContext))) and
+						RfcPeriod.fact_at(huge, 0) == Item(SemanticFact.new(RfcPeriodDescription({ form: Utc, start, ending: Duration({ days: I64.highest, seconds: 0 }) }))) and
+							RfcPeriod.fact_at(huge, 2) == Item(SemanticFact.new(RfcDurationDescription({ role: PeriodEnding, days: I64.highest, seconds: 0 }))) and
+								RfcPeriod.fact_at(huge, 3) == End and RfcPeriod.fact_at(local, 4) == End and
+									RfcPeriod.fact_at(huge, U64.highest) == End and RfcPeriod.to_inspect(huge).count_utf8_bytes() <= 256
 }

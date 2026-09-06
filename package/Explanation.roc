@@ -10,6 +10,10 @@ import ClockTime
 import FixedOffset
 import PosixBoundary
 import PosixSpan
+import ExactInterval
+import RfcDateTime
+import RfcDuration
+import RfcPeriod
 
 ## Bounded explanation of descriptions and already-bound interpretation results.
 ## Typed facts come directly from the source; rendering never resolves zones,
@@ -26,7 +30,7 @@ import PosixSpan
 ## reports ByteLimit. ByteLimit takes precedence over field-preview truncation;
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
-	Source : [CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot)]
+	Source : [CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod)]
 	Budget : { max_facts : U64, max_utf8_bytes : U64 }
 	Report : { text : Str, status : [Complete, Limited([FactLimit, ByteLimit, TextLimit])], visited_facts : U64, total_facts : U64 }
 	new : Source -> Explanation
@@ -39,6 +43,10 @@ Explanation :: { source : Source }.{
 		OffsetTimestamp(v) => OffsetTimestamp.fact_count(v)
 		Ixdtf(v) => Ixdtf.fact_count(v)
 		Snapshot(v) => Ixdtf.Snapshot.fact_count(v)
+		ExactInterval(v) => ExactInterval.fact_count(v)
+		RfcDateTime(v) => RfcDateTime.fact_count(v)
+		RfcDuration(v) => RfcDuration.fact_count(v)
+		RfcPeriod(v) => RfcPeriod.fact_count(v)
 	}
 	fact_at : Explanation, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match value.source {
@@ -48,6 +56,10 @@ Explanation :: { source : Source }.{
 		OffsetTimestamp(v) => OffsetTimestamp.fact_at(v, index)
 		Ixdtf(v) => Ixdtf.fact_at(v, index)
 		Snapshot(v) => Ixdtf.Snapshot.fact_at(v, index)
+		ExactInterval(v) => ExactInterval.fact_at(v, index)
+		RfcDateTime(v) => RfcDateTime.fact_at(v, index)
+		RfcDuration(v) => RfcDuration.fact_at(v, index)
+		RfcPeriod(v) => RfcPeriod.fact_at(v, index)
 	}
 	plain : Explanation, Budget -> Report
 	plain = |value, budget| {
@@ -145,6 +157,45 @@ text_field = |text| {
 
 render : SemanticFact -> { text : Str, clipped : Bool }
 render = |fact| match SemanticFact.kind(fact) {
+	ExactIntervalDescription(data) => { text: "Exact interval: stored half-open POSIX extent [${PosixBoundary.to_microseconds(PosixSpan.start(data.span)).to_str()}, ${PosixBoundary.to_microseconds(PosixSpan.end(data.span)).to_str()}) microseconds since 1970-01-01; start included, end excluded.", clipped: False }
+	OffsetEndpoint(data) => { text: "${Str.inspect(data.role)} endpoint: ${local_fields(data.local, data.fraction_digits)}; ${data.fraction_digits.to_str()} fractional digits; ${offset_assertion(data.offset)}.", clipped: False }
+	RfcDateTimeDescription(data) => {
+		text: "${
+			match data.role {
+				Standalone => "RFC date-time"
+				Start => "Start date-time"
+				End => "End date-time"
+			}
+		}: ${local_fields(data.local, 0)}; ${rfc_form(data.form)}.",
+		clipped: False,
+	}
+	RfcDurationDescription(data) => {
+		text: "${
+			if data.role == Standalone {
+				"RFC duration"
+			} else {
+				"Period ending duration"
+			}
+		}: ${quantity(data.days, "calendar day", "calendar days")} followed by ${quantity(data.seconds, "coordinate second", "coordinate seconds")}; calendar days are not converted to 86400-second quantities. ${
+			if data.role == Standalone {
+				"Applying it requires a start and explicit interpretation context."
+			} else {
+				"Its start is supplied by the enclosing period; no end has been computed."
+			}
+		}",
+		clipped: False,
+	}
+	RfcPeriodDescription(data) => {
+		text: "RFC period declaration: start ${local_fields(data.start, 0)}; ${rfc_form(data.form)}; ${
+			match data.ending {
+				Endpoint(_) => "explicit end label retained"
+				Duration(_) => "duration ending retained"
+			}
+		}. This explanation has not computed or resolved an end.",
+		clipped: False,
+
+	}
+
 	CalendarDescription(data) => { text: "${Str.inspect(data.kind)}: ${Str.inspect(data.calendar)} calendar; supplied resolution ${Str.inspect(data.resolution)}; supplied ${calendar_fields(data.fields, data.clock, data.resolution)}; qualifications ${data.qualification_count.to_str()}.", clipped: False }
 	TimestampDescription(data) => { text: "${Str.inspect(data.kind)}: instant declaration at ${local_fields(data.local, data.fraction_digits)}; ${offset_assertion(data.offset)}; zone annotation ${Str.inspect(data.zone_present)}; additional annotations ${data.annotation_count.to_str()}.", clipped: False }
 	Qualification(data) => { text: "Qualification: ${Str.inspect(data.scope)} is ${Str.inspect(data.qualifier)}; no numeric tolerance is inferred.", clipped: False }
@@ -270,4 +321,37 @@ expect {
 	value = CalendarValue.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 120, digits: 3 })?
 	report = Explanation.plain(Explanation.new(CalendarValue(value)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.status == Complete and report.text.contains("fraction .120 (3 supplied digits)")
+}
+
+rfc_form = |form| match form {
+	Utc => "UTC label with explicit Z"
+	Local => "local label requiring explicit interpretation context"
+}
+
+expect {
+	exact = ExactInterval.parse("1970-01-01T00:00:00.000001+00:00/1970-01-01T00:00:00.000002Z")?
+	report = Explanation.plain(Explanation.new(ExactInterval(exact)), { max_facts: 3, max_utf8_bytes: 4096 })
+	report.status == Complete and report.text.contains("[1, 2)") and report.text.contains("Start endpoint") and report.text.contains("End endpoint") and report.text.contains("asserted local offset 0 seconds") and report.text.contains("no local-offset assertion")
+}
+expect {
+	duration = RfcDuration.parse("P9223372036854775807DT1S")?
+	period = RfcPeriod.parse("19700101T000000/P9223372036854775807DT1S")?
+	alone = Explanation.plain(Explanation.new(RfcDuration(duration)), { max_facts: 10, max_utf8_bytes: 4096 })
+	anchored = Explanation.plain(Explanation.new(RfcPeriod(period)), { max_facts: 10, max_utf8_bytes: 4096 })
+	alone.status == Complete and anchored.status == Complete and alone.text.contains("9223372036854775807 calendar days followed by 1 coordinate second") and alone.text.contains("requires a start") and !anchored.text.contains("requires a start") and anchored.text.contains("requires explicit zone context") and anchored.text.contains("no end has been computed")
+}
+
+quantity : I64, Str, Str -> Str
+quantity = |amount, singular, plural| "${amount.to_str()} ${
+	if amount == 1 {
+		singular
+	} else {
+		plural
+	}
+}"
+
+expect {
+	value = RfcDuration.parse("P1DT1S")?
+	report = Explanation.plain(Explanation.new(RfcDuration(value)), { max_facts: 10, max_utf8_bytes: 4096 })
+	report.text.contains("1 calendar day followed by 1 coordinate second;")
 }

@@ -1,3 +1,4 @@
+import SemanticFact
 import OffsetTimestamp
 import PosixSpan
 import PosixBoundary
@@ -127,8 +128,44 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 	is_eq = |a, b| a.start == b.start and a.end == b.end
 	to_hash : ExactInterval, Hasher -> Hasher
 	to_hash = |value, hasher| value.end.to_hash(value.start.to_hash(hasher))
+
+	## Stored extent plus original endpoint declarations, without re-resolution.
+	fact_count : ExactInterval -> U64
+	fact_count = |_| 3
+	fact_at : ExactInterval, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| {
+		if index == 0 {
+			return Item(SemanticFact.new(ExactIntervalDescription({ span: value.extent })))
+		}
+		if index > 2 {
+			return End
+		}
+		endpoint = if index == 1 {
+			value.start
+		} else {
+			value.end
+		}
+		parts = OffsetTimestamp.parts(endpoint)
+		Item(
+			SemanticFact.new(
+				OffsetEndpoint({
+					role: if index == 1 {
+						Start
+					} else {
+						End
+					},
+					local: OffsetTimestamp.local_label(endpoint),
+					fraction_digits: parts.fraction_digits,
+					offset: parts.offset,
+				}),
+			),
+		)
+	}
 	to_inspect : ExactInterval -> Str
-	to_inspect = |value| "ExactInterval(${to_text(value)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "ExactInterval always exposes its stored extent at index zero"
+	}
 }
 
 # Independent epoch-relative model: each positive hour is 3600000000
@@ -163,4 +200,25 @@ expect {
 						ExactInterval.parse("1970-01-01T00:00:00Z/..") == Err(End(Malformed)) and
 							ExactInterval.parse("a/b/c") == Err(Malformed) and
 								ExactInterval.parse("x".repeat(514)) == Err(TooLarge)
+}
+
+expect {
+	# Source label order is reversed, but explicit offsets establish [0,1h).
+	# Facts retain each declaration rather than reconstruct from the UTC span.
+	value = ExactInterval.parse("1970-01-01T02:00:00.000+02:00/1970-01-01T01:00:00.000+00:00")?
+	span = ExactInterval.span(value)
+	first = ExactInterval.endpoints(value).start
+	last = ExactInterval.endpoints(value).end
+	ExactInterval.fact_count(value) == 3 and
+		PosixBoundary.to_microseconds(PosixSpan.start(span)) == 0 and PosixBoundary.to_microseconds(PosixSpan.end(span)) == 3600000000 and
+			ExactInterval.fact_at(value, 0) == Item(
+				SemanticFact.new(
+					ExactIntervalDescription(
+						{ span: span },
+					),
+				),
+			) and
+				ExactInterval.fact_at(value, 1) == Item(SemanticFact.new(OffsetEndpoint({ role: Start, local: OffsetTimestamp.local_label(first), fraction_digits: 3, offset: OffsetTimestamp.parts(first).offset }))) and
+					ExactInterval.fact_at(value, 2) == Item(SemanticFact.new(OffsetEndpoint({ role: End, local: OffsetTimestamp.local_label(last), fraction_digits: 3, offset: OffsetTimestamp.parts(last).offset }))) and
+						ExactInterval.fact_at(value, 3) == End and ExactInterval.fact_at(value, U64.highest) == End
 }

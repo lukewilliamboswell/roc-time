@@ -284,6 +284,36 @@ def verify_explanation(target: str) -> None:
             raise RuntimeError(f"{mode}: explanation ceiling negative control failed")
         print(f"PASS explanation {mode}: allocation negative control")
 
+
+def verify_declaration_explanation(target: str) -> None:
+    """Large nominal quantities remain facts, without end computation."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/declaration_explanation_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"declaration-explanation-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for kind in range(5):
+            observations = []
+            for days in (1, 9223372036854775807):
+                for form in ("utc", "local"):
+                    result = subprocess.run([binary, str(kind), str(days), form, "65536"], capture_output=True, timeout=5)
+                    if result.returncode or result.stdout != b"facts=preserved,render=bounded,end=not-invented\n":
+                        raise RuntimeError(f"{mode}/{kind}/{days}/{form}: declaration explanation failed: {result.stderr!r}")
+                    match = re.search(rb" work=((?:\d+,){4}\d+)\n$", result.stderr)
+                    if match is None:
+                        raise RuntimeError(f"{mode}: missing declaration explanation observations")
+                    counts = tuple(int(value) for value in match[1].split(b","))
+                    if counts[:2] != (0, 0):
+                        raise RuntimeError(f"{mode}: declaration fact/zero budget reads allocated: {counts}")
+                    observations.append(counts)
+            print(f"PASS declaration explanation {mode}/kind{kind}: day1/max UTC/local requested bytes {observations}; 100000 fact reads")
+        failed = subprocess.run([binary, "4", "9223372036854775807", "local", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: declaration explanation negative control failed")
+        print(f"PASS declaration explanation {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -297,5 +327,6 @@ if __name__ == "__main__":
         verify_persistence(selected_target)
         verify_calendar_persistence(selected_target)
         verify_explanation(selected_target)
+        verify_declaration_explanation(selected_target)
     else:
         print(selected_target)

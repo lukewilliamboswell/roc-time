@@ -16,6 +16,7 @@ import PosixSpan
 SemanticFact :: { value : Kind }.{
 	Resolution : [Year, Month, Day, Hour, Minute, Second, Fraction(U8)]
 	Offset : [UnassertedUtc, Asserted(FixedOffset)]
+
 	## Fields/clock carry the canonical lower label; resolution identifies which
 	## components were supplied. Lower components filled by native construction
 	## are not additional source assertions and must not be rendered as such.
@@ -24,11 +25,17 @@ SemanticFact :: { value : Kind }.{
 	QualificationData : { scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction], qualifier : [Uncertain, Approximate, UncertainApproximate] }
 	ZoneData : { critical : Bool, identifier : [Named(Str), Numeric(FixedOffset)] }
 	AnnotationData : { critical : Bool, key : Str, value : Str }
+
 	## Local is the snapshot's stored Gregorian projection, not a claim that its
 	## preferred calendar is supported. The separate Presentation fact states that.
 	PositionData : { boundary : PosixBoundary, offset : FixedOffset, local : LocalDateTime }
 	ContextData : { name : Str, version : Str, validity : PosixSpan, provenance : [Supplied, DatabaseSource({ requested_name : Str, canonical_name : Str, source_digest : Str, profile : Str })] }
-	Kind : [CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
+	ExactIntervalData : { span : PosixSpan }
+	OffsetEndpointData : { role : [Start, End], local : LocalDateTime, fraction_digits : U8, offset : Offset }
+	RfcDateTimeData : { role : [Standalone, Start, End], local : LocalDateTime, form : [Utc, Local] }
+	RfcDurationData : { role : [Standalone, PeriodEnding], days : I64, seconds : I64 }
+	RfcPeriodData : { form : [Utc, Local], start : LocalDateTime, ending : [Endpoint(LocalDateTime), Duration({ days : I64, seconds : I64 })] }
+	Kind : [ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), RfcDateTimeDescription(RfcDateTimeData), RfcDurationDescription(RfcDurationData), RfcPeriodDescription(RfcPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
 	new : Kind -> SemanticFact
 	new = |kind| { value: kind }
 	kind : SemanticFact -> Kind
@@ -36,6 +43,23 @@ SemanticFact :: { value : Kind }.{
 
 	summary : SemanticFact -> Str
 	summary = |fact| match fact.value {
+		ExactIntervalDescription(data) => "ExactInterval(${Str.inspect(data.span)})"
+		OffsetEndpoint(data) => {
+			offset = match data.offset {
+				UnassertedUtc => "unasserted UTC"
+				Asserted(fixed) => "asserted ${FixedOffset.to_seconds(fixed).to_str()} seconds"
+			}
+			"OffsetEndpoint(role=${Str.inspect(data.role)}, local=${local_text(data.local, data.fraction_digits)}, fraction_digits=${data.fraction_digits.to_str()}, offset=${offset})"
+		}
+		RfcDateTimeDescription(data) => "RfcDateTime(role=${Str.inspect(data.role)}, form=${Str.inspect(data.form)}, label=${local_text(data.local, 0)})"
+		RfcDurationDescription(data) => "RfcDuration(role=${Str.inspect(data.role)}, calendar_days=${data.days.to_str()}, coordinate_seconds=${data.seconds.to_str()})"
+		RfcPeriodDescription(data) => {
+			ending = match data.ending {
+				Endpoint(local) => "endpoint=${local_text(local, 0)}"
+				Duration(duration) => "calendar_days=${duration.days.to_str()}, coordinate_seconds=${duration.seconds.to_str()}"
+			}
+			"RfcPeriod(form=${Str.inspect(data.form)}, start=${local_text(data.start, 0)}, ${ending})"
+		}
 		CalendarDescription(data) => {
 			name = match data.kind {
 				CalendarValue => "CalendarValue"
@@ -142,4 +166,23 @@ expect {
 	position = SemanticFact.new(ResolvedPosition({ boundary: PosixBoundary.from_microseconds(I64.lowest), offset: FixedOffset.from_seconds(I32.lowest), local }))
 	timestamp = SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local, fraction_digits: 255, offset: Asserted(FixedOffset.from_seconds(I32.lowest)), zone_present: True, annotation_count: U64.highest }))
 	SemanticFact.summary(position).count_utf8_bytes() <= 160 and SemanticFact.summary(timestamp).count_utf8_bytes() <= 256
+}
+
+local_text = |local, digits| {
+	date = LocalDateTime.date(local)
+	"${Calendar.to_name(CalendarDate.calendar(date))}:${date_text(CalendarDate.to_fields(date), Day)}T${clock_text(ClockTime.to_fields(LocalDateTime.clock(local)), digits)}"
+}
+
+expect {
+	local = FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(-1), Gregorian)?
+	span = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+	SemanticFact.summary(
+		SemanticFact.new(
+			ExactIntervalDescription(
+				{ span: span },
+			),
+		),
+	).count_utf8_bytes() <= 160 and
+		SemanticFact.summary(SemanticFact.new(RfcPeriodDescription({ form: Local, start: local, ending: Duration({ days: I64.lowest, seconds: I64.highest }) }))).count_utf8_bytes() <= 256 and
+			SemanticFact.summary(SemanticFact.new(OffsetEndpoint({ role: End, local, fraction_digits: 255, offset: Asserted(FixedOffset.from_seconds(I32.lowest)) }))).count_utf8_bytes() <= 256
 }

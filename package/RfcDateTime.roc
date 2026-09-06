@@ -1,3 +1,4 @@
+import SemanticFact
 import GregorianDate
 import CalendarDate
 import ClockTime
@@ -160,8 +161,31 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		}
 		marker.to_hash(value.clock.to_hash(value.date.to_hash(hasher)))
 	}
+
+	## Declaration facts retain local versus UTC form. A local value records
+	## its need for explicit zone context without choosing one or resolving it.
+	fact_count : RfcDateTime -> U64
+	fact_count = |value| if value.form == Local {
+		2
+	} else {
+		1
+	}
+	fact_at : RfcDateTime, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| {
+		if index >= fact_count(value) {
+			return End
+		}
+		if index == 0 {
+			Item(SemanticFact.new(RfcDateTimeDescription({ role: Standalone, local: local_label(value), form: value.form })))
+		} else {
+			Item(SemanticFact.new(Requirement(ZoneContext)))
+		}
+	}
 	to_inspect : RfcDateTime -> Str
-	to_inspect = |value| "RfcDateTime(${to_text(value)}, ${Str.inspect(value.form)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "RFC datetime has a first semantic fact"
+	}
 }
 
 # parse has proved the full length, digit positions and maximum four digits.
@@ -197,4 +221,15 @@ expect {
 		valid = valid and RfcDateTime.parse(text) == Err(Malformed)
 	}
 	valid
+}
+
+expect {
+	utc = RfcDateTime.parse("19970902T090000Z")?
+	local = RfcDateTime.parse("19970902T090000")?
+	RfcDateTime.fact_at(utc, 0) == Item(SemanticFact.new(RfcDateTimeDescription({ role: Standalone, local: RfcDateTime.local_label(utc), form: Utc }))) and
+		RfcDateTime.fact_at(local, 0) == Item(SemanticFact.new(RfcDateTimeDescription({ role: Standalone, local: RfcDateTime.local_label(utc), form: Local }))) and
+			RfcDateTime.fact_count(utc) == 1 and RfcDateTime.fact_count(local) == 2 and
+				RfcDateTime.fact_at(local, 1) == Item(SemanticFact.new(Requirement(ZoneContext))) and
+					RfcDateTime.fact_at(utc, 1) == End and RfcDateTime.fact_at(local, 2) == End and
+						RfcDateTime.fact_at(local, U64.highest) == End and RfcDateTime.to_inspect(local).count_utf8_bytes() <= 256
 }
