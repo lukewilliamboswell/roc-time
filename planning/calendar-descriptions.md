@@ -1,7 +1,9 @@
 # Calendar descriptions and uncertainty
 
-Implement the description foundations in R02, R07 and R13–R14 before adding
-EDTF/ISO adapters. Reuse validated calendars, local selections and zone cursors.
+Extend the description foundations in R02, R07 and R13–R14 as required by the
+selected [standards interchange slices](standards-interchange.md). Reuse validated
+calendars, local selections and zone cursors. Existing native forms can receive
+parsers and serializers without waiting for every symbolic reasoning model.
 
 ## Deliverables
 
@@ -59,5 +61,8 @@ boundary is not an inferred actual endpoint.
   General interval relationships need their own supported profile and oracle;
   point-membership evidence does not establish Allen reasoning over uncertainty.
 
-The next vertical slice should carry endpoint knowledge through real public
-construction and a bounded interpretation/query before interval interchange.
+Endpoint interchange first needs faithful public construction and serialization.
+It can preserve unknown/open bounds and independently qualified resolutions
+while returning explicit unsupported interpretation. Broader quantified civil
+endpoint reasoning is deferred until a selected caller needs it; syntax support
+must not advertise that reasoning as implemented.

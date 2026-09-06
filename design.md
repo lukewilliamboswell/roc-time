@@ -375,7 +375,9 @@ inclusive all-of ranges have distinct lowering contracts. In particular, EDTF
 `1964/2008` begins sometime in 1964 and ends sometime in 2008; replacing it with
 an exact interval between year starts invents knowledge. Mixed endpoint
 precision such as `2004-02-01/2005-02` remains meaningful. Component qualification
-in `2004-06~-11` is not whole-value approximation; `1984-1X` describes alternatives,
+in `2004-06~-11` applies to both year and month, while `2004-~06-11`
+qualifies only the month; neither is whole-value approximation.
+`1984-1X` describes alternatives,
 not certain coverage. Seasons may require location/context; significant-digit
 expressions preserve an estimate as well as admissible interpretations. These
 forms converge on shared semantic descriptions, not separate parser-specific

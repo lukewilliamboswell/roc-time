@@ -4,12 +4,31 @@ Objective: satisfy [design requirements R01–R16](../design.md#acceptance-requi
 
 ## Remaining deliverables and dependencies
 
-1. Complete remaining provider resource/portability evidence (R07–R09, R15–R16).
-2. Complete [recurrence execution](recurrence.md), a declared RFC profile, candidate/output budgets and resumptions (R11–R12). Preserve series state across windows; depend on calendar and zone interpretation rather than duplicating them.
-3. Complete [calendar descriptions and uncertainty](calendar-descriptions.md), including uncertain endpoint knowledge and component qualifications before standards adapters (R13–R14). Keep symbolic range distinct from finite materialization. Separate stable month identity and provider capabilities before extending beyond Gregorian/Julian calendar shapes.
-4. Implement shared semantic adapters and versioned persistence, including IXDTF offset assertions and presentation annotations. Declare edition/profile support separately for recognition, semantic preservation, interpretation and serialization.
-5. Implement bounded semantic explanation using shared typed facts, preserving the design's masked-year, uncertain-endpoint, fold/skip, missing-context and limited-result distinctions. Extend inspection budgets to nested descriptions and embedded text.
-6. Complete public examples and evidence across all requirements, including resource measurements and supported backend checks (R15–R16).
+The immediate critical path is [standards interchange](standards-interchange.md):
+usable text input, shared native operations, canonical text output, explanation
+and persistence for the same caller scenarios. Deliver parsing and serialization
+together. Extend native foundations only when a selected scenario needs them;
+general uncertainty reasoning and provider-wide measurements do not block the
+first bounded adapters. Each slice still requires its own correctness and
+resource evidence.
+
+1. Implement bounded date-description and offset-timestamp profiles, then exact
+   interval booking input/output and IXDTF annotations (R01–R02, R07–R09, R14–R16).
+2. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
+   selected EDTF endpoint, qualification, mask and set forms (R13–R14). Preserve
+   descriptions before implementing broader interpretation; never substitute
+   year starts for uncertain endpoints or treat unsupported reasoning as success.
+3. Add bounded semantic explanation and versioned persistence alongside these
+   adapters, using shared typed facts and explicit interpretation snapshots.
+   Keep standards interchange separate from the native persistence format.
+4. Extend calendar presentation and conversion for a sourced caller scenario.
+   Separate stable month identity and provider capabilities before calendars
+   beyond the Gregorian/Julian shape; preserve unsupported presentation requests.
+5. Complete remaining [recurrence execution](recurrence.md), provider evidence
+   and broader reasoning. Preserve series state across windows and resumptions.
+   Bring a deliverable forward when a selected interchange scenario needs it.
+6. Complete public examples and evidence across all requirements, including
+   resource measurements and supported backend checks (R15–R16).
 
 Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracle method](../AGENTS.md#oracle-evidence) for each slice. Do not change the architecture merely to record implementation progress.
 

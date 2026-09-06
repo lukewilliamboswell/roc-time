@@ -123,7 +123,7 @@ expect {
 }
 
 expect {
-	# Design's component-scoped example, 2004-06~-11, constructed natively.
+	# EDTF's individual-component form, 2004-~06-11, constructed natively.
 	# The day remains supplied and unqualified; this does not assert a tolerance.
 	date = CalendarDate.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
 	value = CalendarValue.day(date)
