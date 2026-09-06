@@ -230,6 +230,19 @@ check_timestamp = |input, day, date_text| {
 # Mutations remain in the property's domain: ordinary structured public failures
 # must be observed rather than discarded by the harness.
 check_malformed = |input, date_text| {
+	# Every fixed-field position is independently damaged, and every valid
+	# fixed-field prefix remains incomplete. Observe shared/sliced ASCII input.
+	bytes = "${date_text}T12:34:56Z".to_utf8()
+	var position = 0.U64
+	while position < 19 {
+		prefix = bytes.sublist({ start: 0, len: position })
+		suffix = bytes.sublist({ start: position + 1, len: bytes.len() - position - 1 })
+		if OffsetTimestamp.parse(ascii_text(prefix)) != Err(Incomplete) or
+			OffsetTimestamp.parse(ascii_text(prefix.append(64).concat(suffix))) != Err(Malformed) {
+			crash "Timestamp fixed-field mutation or prefix misclassified"
+		}
+		position = position + 1
+	}
 	invalid_day = month_days(input.year, input.month) + 1
 	invalid_date = "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}-${pad(invalid_day.to_u64(), 2)}"
 	if EdtfDate.parse(invalid_date) != Err(Malformed) or EdtfDate.parse("${input.year.to_str()}-") != Err(Incomplete) {
@@ -241,6 +254,20 @@ check_malformed = |input, date_text| {
 				OffsetTimestamp.parse("${date_text}T23:59:60Z") != Err(UnsupportedLeapSecond) {
 		crash "Timestamp malformed fields or unsupported precision misclassified"
 	}
+	# Mixed faults pin public error precedence rather than merely rejecting.
+	if OffsetTimestamp.parse("${input.year.to_str()}-99-01T00:00:0@Z") != Err(Malformed) or
+		OffsetTimestamp.parse("${invalid_date}T24:00:00Z") != Err(InvalidTime) or
+			OffsetTimestamp.parse("${date_text}T00:00:00+24") != Err(InvalidOffset) or
+				OffsetTimestamp.parse("${date_text}T00:00:00.0000000+0x") != Err(Malformed) or
+					OffsetTimestamp.parse("${date_text}T00:00:00.0000000Z[UTC]") != Err(UnsupportedAnnotations) or
+						OffsetTimestamp.parse("${date_text}T23:59:60") != Err(UnsupportedLeapSecond) {
+		crash "Timestamp mixed-fault precedence changed"
+	}
+}
+
+ascii_text = |bytes| match Str.from_utf8(bytes) {
+	Ok(text) => text
+	Err(_) => crash "ASCII mutation fixture invariant"
 }
 
 # R01/R08/R14: exact interval extent is independently calculated in integer

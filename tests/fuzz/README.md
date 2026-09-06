@@ -37,9 +37,13 @@ and zero through six fractional digits. An independent year/month counter from
 date-conversion algorithm. Native fields and source resolution are checked
 separately from canonical round trips. Invalid dates, incomplete prefixes,
 out-of-profile offsets, leap seconds and seventh fractional digits require
-specific errors. Four synthetic corpus patterns exercise this generator; they
-are not minimized discoveries. Module unit fixtures independently transcribe
-LOC date/qualification examples and RFC 3339/9557 offset facts, and cover the
+specific errors. Generated inputs also drive each fixed-field byte mutation,
+valid short prefixes and mixed-fault cases that pin syntax, range, leap-second,
+offset and precision error precedence.
+The mutations remain ordinary inputs and must return their structured errors.
+Four synthetic corpus patterns exercise this generator; they are not minimized
+discoveries. Module unit fixtures independently transcribe LOC date/qualification
+examples and RFC 3339/9557 offset facts, and cover the
 four-digit year endpoints outside this generated domain. Each generated input
 also drives a bounded direct-construction formatter grid at years 0000 and 9999,
 all seven fractional widths and unasserted UTC, asserted UTC and extreme offsets.
