@@ -5,6 +5,8 @@ from roc-automation without implying an LTS or response-time commitment.
 
 Remaining deliverables:
 
+- When upstream stable releases become available, remove the explicit nightly
+  bootstrap publication opt-in and configure the stable compiler installer.
 - Establish an actual upstream Roc release and verified compiler installer before
   creating a versioned compiler-support branch; an existing nightly pin is not
   evidence of stable compiler compatibility.
@@ -22,9 +24,10 @@ Remaining deliverables:
 A compiler-support branch identifies an upstream Roc compiler compatibility line;
 package releases are independently versioned and immutable. Support duration,
 backport scope and any funded LTS are separate policies. Publication remains an
-explicit action after exact candidate and bundle verification against a published
-stable Roc compiler. Nightly development cannot publish package releases, including
-from `main`. No automatic
+explicit action after exact candidate and bundle verification. Until versioned
+upstream releases exist, an explicit bootstrap opt-in permits the exact nightly
+pin on `main`. The intended future policy requires a supported stable compiler
+for every package publication, even when development moves ahead. No automatic
 cross-line compiler upgrade or merge bypass is part of this pilot.
 
 Remove this plan once the reviewed integration and live pilot are complete.

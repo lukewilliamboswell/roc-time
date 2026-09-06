@@ -483,17 +483,21 @@ there to `main` where applicable. Compiler patch updates within the supported
 line also require validated PRs; a different compiler minor line gets a different
 branch. The nightly updater does not perform these versioned compiler updates.
 
-To publish, dispatch `Release` on the compiler-support branch with a new package
-version. The shared guard checks that `.roc-version` belongs to the branch's
-compiler line and that the checkout matches the event SHA. It does not compare
-the package version with the branch name. Every publication requires a final
-compiler pin whose exact tag is a published, non-prerelease release with assets
-in the official Roc repository. This also applies to releases from `main`: a
-nightly pin cannot publish, even when upstream development has moved ahead.
-Adapt changes to the supported stable compiler and validate them before release.
-The workflow tests the exact commit, built package pair and supplied starter, then tags that
-commit and publishes those artifacts. A different merge commit needs its own
-validation; parent results do not validate it.
+Until upstream provides versioned stable Roc releases, publish from `main` using
+its exact nightly compiler pin. The pilot explicitly enables this temporary
+bootstrap mode; it does not claim stable compiler compatibility.
+
+Once a usable stable Roc release is available, our intended policy is to publish
+only packages validated against a supported stable compiler, even if upstream
+or our development `main` moves ahead. Remove the nightly bootstrap opt-in when
+adopting that policy and configure the stable compiler installer. Dispatch
+`Release` on the appropriate compiler-support branch with a new package version.
+The shared guard checks the compiler line, official stable release metadata and
+exact checkout; package versions remain independent of the branch name.
+
+In both modes, the workflow tests the exact commit, built package pair and
+supplied starter, then tags that commit and publishes those artifacts. A different
+merge commit needs its own validation; parent results do not validate it.
 
 To rehearse without publication, select `nightly_validation: true`. Supplying a
 `release_version` additionally exercises the compiler-branch and package-version guard; omitting it
@@ -508,7 +512,7 @@ update policy. Enabling bot PR creation and configuring required branch checks
 are repository settings, separate from installing the workflows. No bot approval
 or bypass is part of this policy.
 
-The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/253138613ce994bc701d93838c2ebef0b77444c6/docs/maintenance-releases.md)
+The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/d1f1742959696dd29d8b0fd35f472144f9c9ec5e/docs/maintenance-releases.md)
 describes the reusable policy. Source/workflow review, support commitments and
 OpenSSF evidence remain each project's responsibility.
 

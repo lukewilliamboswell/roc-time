@@ -43,10 +43,12 @@ jobs:
 
       - name: Check release branch and candidate identity
         if: github.event_name == 'workflow_dispatch' && (!inputs.nightly_validation || inputs.release_version != '')
-        uses: lukewilliamboswell/roc-automation/actions/check-release@253138613ce994bc701d93838c2ebef0b77444c6
+        uses: lukewilliamboswell/roc-automation/actions/check-release@d1f1742959696dd29d8b0fd35f472144f9c9ec5e
         with:
           version: ${{ inputs.release_version }}
           allow-default-branch: 'true'
+          # Remove when adopting upstream stable Roc releases.
+          allow-nightly-bootstrap: 'true'
 
       - name: Read Roc version
         id: roc-version
