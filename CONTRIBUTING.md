@@ -82,7 +82,7 @@ The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone, 448 calenda
 observations stored as JSONL under `tests/oracles/`. Each native fixture is
 compiled once. Python validates the corpus, passes only inputs as arguments to
 bounded parallel processes, and compares exact observations in corpus order.
-Use `--oracle gregorian`, `julian`, `zones`, `calendar_pattern` or `rfc_date` to select one corpus. Full-corpus expected
+Use `--oracle gregorian`, `julian`, `zones`, `calendar_pattern`, `rfc_date` or `rfc_timed` to select one corpus. Full-corpus expected
 results stay in the Python harness. Small typed scenarios retain
 interpreter coverage and comparator regression checks.
 
@@ -124,6 +124,17 @@ checking the same independently generated dates and one-day occurrence widths.
 That extension tests the shared date/timed semantic intersection, not subdaily
 selectors, zone transitions or general timed conformance. Fixed parser tests
 cover malformed inputs and profile boundaries.
+
+The timed corpus independently exercises twelve UTC templates with second,
+minute, hour, day and month frequencies, clock selectors, signed BYSETPOS,
+COUNT, inclusive UNTIL, duplicate additions/exclusions and later query windows.
+It compares integer POSIX microseconds with dateutil results and checks one-second
+appointment widths, consuming one output per batch with 17 source-work steps.
+Regenerate with CPython 3.12.3 and
+`python3 scripts/generate_rfc_timed_oracle.py /path/to/wheel-directory`;
+wheel hashes, generator hash and seed are pinned in its manifest. This corpus
+excludes local-zone transitions, leap seconds and PERIOD overrides. Those require
+separate sourced fixtures and models; UTC agreement does not establish them.
 
 Valid forward Gregorian cases in years 0001–9999 also exercise `RfcDateTime`
 parsing and explicit UTC midnight conversion against the same expected day.

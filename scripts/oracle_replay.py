@@ -147,6 +147,26 @@ def validate_rfc_date_cases(cases: list[dict]) -> None:
             raise ValueError('Invalid RFC date oracle observation')
 
 
+def validate_rfc_timed_cases(cases: list[dict]) -> None:
+    timestamp = r'[0-9]{8}T[0-9]{6}Z'
+    for case in cases:
+        inputs, expected = case['input'], case['expected']
+        if case['operation'] != 'rfc_timed' or len(inputs) != 6:
+            raise ValueError('Invalid RFC timed oracle operation/arity')
+        if any(not re.fullmatch(timestamp, value) for value in (inputs[0], inputs[4], inputs[5])):
+            raise ValueError('Invalid RFC timed timestamp transport')
+        if not inputs[1] or any(ord(char) < 33 or ord(char) > 126 for char in inputs[1]):
+            raise ValueError('Invalid RFC timed rule transport')
+        for value in inputs[2:4]:
+            if value != '-' and not re.fullmatch(timestamp + '(,' + timestamp + ')*', value):
+                raise ValueError('Invalid RFC timed inclusion/exclusion transport')
+        if not expected or expected[0] != 'ok' or any(not INTEGER.fullmatch(v) for v in expected[1:]):
+            raise ValueError('Invalid RFC timed observation')
+        numbers = list(map(int, expected[1:]))
+        if numbers != sorted(set(numbers)) or any(not -(2**63) <= n < 2**63 for n in numbers):
+            raise ValueError('Invalid RFC timed boundary order/range')
+
+
 def compare(case: dict, output: str) -> None:
     expected = "\t".join([case["id"], *case["expected"]]) + "\n"
     if output != expected:
@@ -248,6 +268,22 @@ def self_check(session: Path) -> None:
             pass
         else:
             raise ValueError("Oracle comparator accepted negative control")
+    timed = {"operation": "rfc_timed", "input": ["20240101T090000Z", "FREQ=HOURLY;COUNT=1", "-", "-", "20240101T000000Z", "20240102T000000Z"], "expected": ["ok", "1704099600000000"]}
+    validate_rfc_timed_cases([timed])
+    invalid_timed = [dict(timed, expected=values) for values in (
+        ["ok", "1", "1"], ["ok", "2", "1"], ["ok", "9223372036854775808"], ["ok", "1.5"], ["error"])]
+    for index, value in ((0, "20240101"), (2, "20240101T090000"), (1, "FREQ=HOURLY\n")):
+        inputs = timed["input"].copy()
+        inputs[index] = value
+        invalid_timed.append(dict(timed, input=inputs))
+    invalid_timed.append(dict(timed, operation="rfc_date"))
+    for invalid in invalid_timed:
+        try:
+            validate_rfc_timed_cases([invalid])
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Timed oracle validator accepted negative control")
     path = session / "invalid-corpus-control.jsonl"
     for data in ("", json.dumps(case) + "\n" + json.dumps(case) + "\n", '{"id":"0","id":"1"}\n', 'null\n'):
         path.write_text(data)

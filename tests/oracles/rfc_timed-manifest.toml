@@ -1,0 +1,15 @@
+version = 2
+corpus_format = "jsonl-v1"
+profile = "rfc5545-timed-values-v1"
+case_count = 384
+corpus_sha256 = "10a4ed5714b534ed92225d52e45255e35beef0376ccd17b893a6ff5ecbf4255a"
+smoke_case_count = 12
+smoke_sha256 = "192397de016aa2e12bbb700c5e69d6ffd3663c4e0f726ef14fa7e79f2a808d3c"
+generator_sha256 = "2b3eb2dfffc8f0b071bc566040d838c736da72420392f044095082c82124c13a"
+reference = "python-dateutil 2.9.0.post0 with six 1.17.0, CPython 3.12.3"
+seed = 20260906
+source_wheels = ["python_dateutil-2.9.0.post0-py2.py3-none-any.whl", "six-1.17.0-py2.py3-none-any.whl"]
+source_sha256 = ["a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"]
+sources = ["https://pypi.org/project/python-dateutil/2.9.0.post0/", "https://pypi.org/project/six/1.17.0/", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10"]
+license = "Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT."
+independence = "dateutil parses text and expands indexed calendar/clock masks; Roc uses native bounded cursors. Shared Gregorian and UTC conventions. Twelve synchronized templates, SECONDLY/MINUTELY/HOURLY/DAILY/MONTHLY, clock expansion/filtering and signed BYSETPOS, COUNT, inclusive UNTIL, duplicate RDATE/EXDATE and half-open windows. No local zones, leap seconds, PERIOD overrides, disputed yearly defaults or general RFC conformance claim."

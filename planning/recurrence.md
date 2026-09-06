@@ -11,8 +11,9 @@ finite immutable zone rules and event/coverage distinctions.
   an adjusted boundary cannot recover its original label.
 - Extend RFC adaptation to omitted yearly defaults and declared
   serialization/persistence, retaining the shared native execution engine.
-- Independently generated JSONL cases, RFC examples, synthetic zone transitions,
-  bounded fuzz models, invalid-input/domain checks and realistic applications.
+- Extend independent timed expectations beyond UTC to local-zone transitions
+  and exception/ending interactions as their supported profiles expand. Retain
+  bounded fuzz models, invalid-input checks and realistic applications.
 
 ## Decisions and acceptance still needed
 
@@ -43,12 +44,10 @@ combinations. Identify primary clarification and differential evidence rather
 than silently copying JSCalendar or dateutil behavior into the RFC profile.
 The candidate layer's native defaults remain explicit in CalendarPattern.
 
-Extend date-only executable scenarios to the adapter and timed paths: January
-31 → March 31 → May 31 for COUNT=3, with original COUNT retained under March
-queries and exclusions. Verify BYSETPOS over full interpreted periods, WKST/year
-boundaries, duplicate dates, all budget exhaustion points and resumptions,
-changing rule data, finite bounds and provider extremes. No unbounded scan may
-occur inside a single cursor step.
+When widening the profile, extend checks for BYSETPOS over full interpreted
+periods, WKST/year boundaries, duplicate dates, all budget exhaustion points and
+resumptions, changing rule data, finite bounds and provider extremes. No unbounded
+scan may occur inside a single cursor step.
 
 Remove completed deliverables from this task and delete the plan when acceptance
 is met. Contracts belong in design.md; evidence belongs in executable tests.
