@@ -13,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - name: Read Roc version
         id: roc-version
         run: echo "nightly-tag=$(< .roc-version)" >> "$GITHUB_OUTPUT"
@@ -25,7 +27,7 @@ jobs:
       - run: python3 scripts/fuzz.py --operation all --runs 10000000 --seconds 120 --seed 20260905
       - name: Preserve campaign evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: extended-fuzz-evidence
           path: .roc-time-tmp/fuzz/

@@ -1,0 +1,17 @@
+name: Update Roc nightly
+on:
+  schedule:
+    - cron: '19 13 * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: roc-nightly-update
+  cancel-in-progress: false
+jobs:
+  update:
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+      statuses: write
+    uses: lukewilliamboswell/roc-automation/.github/workflows/update-roc-nightly.yml@5ae66558e8e3aa1286d5855e98be962955e79fb5

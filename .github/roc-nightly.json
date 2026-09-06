@@ -1,0 +1,1 @@
+{"workflows": ["tests.yaml", "release.yml"], "auto_merge": false}

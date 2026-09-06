@@ -454,6 +454,50 @@ Run these opt-in benchmarks without concurrent builds or tests. They compare
 selected date and timestamp operations, not overall library capability; their
 in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
+## Development and maintenance releases
+
+`main` is the development branch. New features and ordinary fixes use reviewed
+PRs into `main`; development examples exercise the checkout's package source.
+The README, versioned docs and released starter kit provide the user-facing path
+for the latest release.
+
+A branch such as `release/0.1.x` maintains the package's `0.1.x` line. Cut it from
+a verified release tag, or from a reviewed descendant whose package sources and
+compiler pin still match that release. Release-engineering fixes may be included
+explicitly. The branch name describes compatibility scope, not a support term:
+no LTS duration, response time or paid support entitlement follows from its
+existence. Any extended support agreement or announced support policy is separate.
+
+Prefer fixing a bug on `main`, then backporting the reviewed fix with
+`git cherry-pick -x` on a PR into the maintenance branch. Adapt and test the fix
+with that branch's pinned compiler. If a fix starts on the maintenance line,
+forward-port it to `main` where applicable. Do not merge all development changes
+into a maintenance branch or automatically advance its compiler pin.
+
+To publish a patch, dispatch `Release` on `release/0.1.x` with a matching version
+such as `0.1.1`. The shared guard rejects a mismatched release line or checkout.
+Initial and new feature releases may be published from `main`. The workflow
+checks the exact event commit, tests the built package pair and supplied starter,
+then tags that commit and publishes those artifacts. A different merge commit
+must obtain its own validation; previous parent results do not validate it.
+
+To rehearse without publication, select `nightly_validation: true`. Supplying a
+`release_version` additionally exercises the branch/version guard; omitting it
+lets ordinary compiler candidate branches run all validation. Neither case
+publishes packages or deploys docs. Never dispatch the default publishing mode
+merely to obtain CI checks.
+
+The daily nightly updater runs from the default branch and proposes compiler-pin
+changes to `main`. Automatic merging is disabled in this pilot. The controller
+and its configuration check are SHA-pinned; maintenance branches are outside its
+update policy. Enabling bot PR creation and configuring required branch checks
+are repository settings, separate from installing the workflows. No bot approval
+or bypass is part of this policy.
+
+The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/5ae66558e8e3aa1286d5855e98be962955e79fb5/docs/maintenance-releases.md)
+describes the reusable policy. Source/workflow review, support commitments and
+OpenSSF evidence remain each project's responsibility.
+
 ## Packaging
 
 Bundle the package for distribution using `python3 scripts/bundle.py --output-dir dist`.
@@ -462,7 +506,13 @@ Run the release workflow from GitHub Actions with a release version such as `0.1
 or `0.1.0-rc1`. The pinned release action marks RC versions as prereleases;
 their docs remain versioned and do not replace the stable docs redirect.
 It builds and tests the exact core/zone pair, creates the GitHub release,
-generates versioned docs, opens a follow-up PR and publishes docs to GitHub Pages.
+generates versioned docs, opens a docs-only follow-up PR against the default
+branch and publishes docs to GitHub Pages. Released examples are validated in an
+isolated checkout of the tag using their release compiler and published URLs;
+development examples on `main` retain local source dependencies.
+Merge the previous docs follow-up before publishing another version: site
+assembly refuses missing earlier release documentation. A maintenance patch
+never replaces a newer stable version as the public documentation default.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published
 role metadata and does not recreate the release or tag.

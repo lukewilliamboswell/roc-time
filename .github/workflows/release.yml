@@ -3,9 +3,13 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      nightly_validation:
+        description: "Run validation only; never publish a release or deploy docs"
+        type: boolean
+        default: false
       release_version:
         description: "Release version, e.g. 1.0.1"
-        required: true
+        required: false
         type: string
       previous_core_url:
         description: "Explicit previous core archive URL (legacy release or earlier prerelease)"
@@ -17,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && format('release-{0}', github.repository) || format('release-validate-{0}-{1}', github.repository, github.ref) }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  group: ${{ (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation) && format('release-{0}', github.repository) || format('release-validate-{0}-{1}', github.repository, github.ref) }}
+  cancel-in-progress: ${{ (github.event_name != 'workflow_dispatch' || inputs.nightly_validation) }}
 
 jobs:
   build:
@@ -32,9 +36,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check release branch and candidate identity
+        if: github.event_name == 'workflow_dispatch' && (!inputs.nightly_validation || inputs.release_version != '')
+        uses: lukewilliamboswell/roc-automation/actions/check-release@5ae66558e8e3aa1286d5855e98be962955e79fb5
+        with:
+          version: ${{ inputs.release_version }}
+          allow-default-branch: 'true'
 
       - name: Read Roc version
         id: roc-version
@@ -56,23 +68,15 @@ jobs:
         id: validate
         uses: roc-lang/release-package/actions/validate-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
-          release_version: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '' }}
-          dry_run: ${{ github.event_name != 'workflow_dispatch' }}
+          release_version: ${{ (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation) && inputs.release_version || '' }}
+          dry_run: ${{ (github.event_name != 'workflow_dispatch' || inputs.nightly_validation) }}
           github_token: ${{ github.token }}
-
-      - name: Validate release branch
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          if [[ "${GITHUB_REF_TYPE:-}" != "branch" ]]; then
-            echo "Release workflow must be run from a branch so generated docs and examples can be committed."
-            exit 1
-          fi
 
       - name: Validate package
         run: python3 scripts/all_tests.py
 
       - name: Resolve previous core release
-        if: github.event_name == 'workflow_dispatch'
+        if: (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation)
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,7 +87,7 @@ jobs:
         uses: roc-lang/release-package/actions/run-bump-check@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
           release_version: ${{ steps.validate.outputs.release_version }}
-          dry_run: ${{ github.event_name != 'workflow_dispatch' }}
+          dry_run: ${{ (github.event_name != 'workflow_dispatch' || inputs.nightly_validation) }}
           # The previous release may not compile with the current Roc nightly,
           # which prevents roc bump from comparing the two public APIs.
           bump_check: warn
@@ -110,7 +114,7 @@ jobs:
         run: python3 scripts/release_starter.py prepare --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
 
       - name: Upload starter kit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-starter
           path: .release/starter/roc-time-starter.zip
@@ -118,7 +122,7 @@ jobs:
           retention-days: 7
 
       - name: Upload release bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-bundles
           path: .release/bundles/*
@@ -126,7 +130,7 @@ jobs:
           retention-days: 7
 
       - name: Upload release metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-metadata
           path: |
@@ -144,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Read Roc version
         id: roc-version
@@ -157,13 +161,13 @@ jobs:
           nightly-tag: ${{ steps.roc-version.outputs.nightly-tag }}
 
       - name: Download release bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-bundles
           path: .release/test-bundles
 
       - name: Download release metadata
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-metadata
           path: .release
@@ -179,7 +183,7 @@ jobs:
         run: python3 scripts/test_bundle_examples.py --bundle-path "$CORE_BUNDLE" --zone-bundle-path "$ZONE_BUNDLE"
 
       - name: Download starter kit
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-starter
           path: .release/starter
@@ -196,31 +200,31 @@ jobs:
     needs:
       - build
       - test-bundles
-    if: github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation)
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Download release bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-bundles
           path: .release/bundles
 
       - name: Download release metadata
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-metadata
           path: .release
 
       - name: Download starter kit
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-starter
           path: .release/starter
@@ -258,7 +262,7 @@ jobs:
     needs:
       - build
       - publish-release
-    if: github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation)
     permissions:
       contents: write
       pull-requests: write
