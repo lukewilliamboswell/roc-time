@@ -1,3 +1,4 @@
+import SemanticFact
 import CalendarValue
 import CalendarDate
 import FixedOffset
@@ -92,8 +93,45 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 		}
 		description.qualifications.len().to_hash(state)
 	}
+
+	## Summary, zone requirement, optional model requirement, then scoped facts.
+	## Indexing does not enumerate qualifications or interpret their meaning.
+	fact_count : QualifiedCalendarValue -> U64
+	fact_count = |description| if description.qualifications.is_empty() {
+		2
+	} else {
+		3 + description.qualifications.len()
+	}
+	fact_at : QualifiedCalendarValue, U64 -> [End, Item(SemanticFact)]
+	fact_at = |description, index| {
+		if index == 0 {
+			match CalendarValue.fact_at(description.value, 0) {
+				Item(fact) => match SemanticFact.kind(fact) {
+					CalendarDescription(data) => return Item(SemanticFact.new(CalendarDescription({ ..data, kind: QualifiedCalendarValue, qualification_count: description.qualifications.len() })))
+					_ => crash "CalendarValue index zero is its calendar summary"
+				}
+				End => crash "CalendarValue index zero exists"
+			}
+		}
+		if index == 1 {
+			return Item(SemanticFact.new(Requirement(ZoneContext)))
+		}
+		if description.qualifications.is_empty() {
+			return End
+		}
+		if index == 2 {
+			return Item(SemanticFact.new(Requirement(UncertaintyModel)))
+		}
+		match description.qualifications.get(index - 3) {
+			Ok(q) => Item(SemanticFact.new(Qualification(q)))
+			Err(_) => End
+		}
+	}
 	to_inspect : QualifiedCalendarValue -> Str
-	to_inspect = |description| "QualifiedCalendarValue(${Str.inspect(description.value)}, qualifications=${Str.inspect(description.qualifications)})"
+	to_inspect = |description| match fact_at(description, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "QualifiedCalendarValue always has a summary at index zero"
+	}
 }
 
 scope_rank : QualifiedCalendarValue.Scope -> U8
@@ -138,4 +176,15 @@ expect {
 	month_only != whole and denied and
 		QualifiedCalendarValue.qualifications(month_only) == [{ scope: Month, qualifier: Approximate }] and
 			QualifiedCalendarValue.described_value(month_only) == value
+}
+
+expect {
+	value = CalendarValue.year(Gregorian, 1984)?
+	plain = QualifiedCalendarValue.new(value, [])?
+	qualified = QualifiedCalendarValue.new(value, [{ scope: Whole, qualifier: Uncertain }])?
+	QualifiedCalendarValue.fact_count(plain) == 2 and QualifiedCalendarValue.fact_at(plain, 2) == End and
+		QualifiedCalendarValue.fact_count(qualified) == 4 and
+			QualifiedCalendarValue.fact_at(qualified, 2) == Item(SemanticFact.new(Requirement(UncertaintyModel))) and
+				QualifiedCalendarValue.fact_at(qualified, 3) == Item(SemanticFact.new(Qualification({ scope: Whole, qualifier: Uncertain }))) and
+					QualifiedCalendarValue.fact_at(qualified, U64.highest) == End
 }

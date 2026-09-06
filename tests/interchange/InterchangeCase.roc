@@ -1,5 +1,7 @@
 import fuzz.Fuzz
 import time.Persistence
+import time.Explanation
+import time.SemanticFact
 import time.RfcDateTime
 import time.RfcDuration
 import time.RfcPeriod
@@ -324,6 +326,7 @@ check_ixdtf = |input, timestamp, expected| {
 		Ixdtf.Snapshot.source(snapshot) != parsed or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) {
 		crash "IXDTF snapshot changed source position or rule offset"
 	}
+	check_snapshot_explanation(snapshot, expected, Gregorian, input.precision.to_u64())
 	presentation = match Ixdtf.Snapshot.presentation(snapshot) {
 		Ok(value) => value
 		Err(_) => crash "First elective Gregorian calendar did not win"
@@ -366,6 +369,7 @@ check_ixdtf = |input, timestamp, expected| {
 		Ixdtf.Snapshot.presentation(hebrew_snapshot) != Err(UnsupportedCalendar("hebrew")) {
 		crash "Calendar presentation preference changed timestamp meaning"
 	}
+	check_snapshot_explanation(hebrew_snapshot, expected, UnsupportedCalendar("hebrew"), input.precision.to_u64())
 	if Ixdtf.parse("${base}[!knort=v${input.digits.to_str()}]") != Err(UnknownCritical) or
 		Ixdtf.parse("${base}[!u-ca=gregory][u-ca=hebrew]") != Err(ConflictingCritical) {
 		crash "Critical annotation errors were ignored"
@@ -444,4 +448,44 @@ check_rfc_persistence = |input, day, h, m, s| {
 	check_persistence(RfcDateTime(date), { kind: "rfc-date-time", profile: "rfc5545-datetime-values-v1", axis: "none", unit: "none", payload: source })
 	check_persistence(RfcDuration(duration), { kind: "rfc-duration", profile: "rfc5545-positive-duration-v1", axis: "none", unit: "none", payload: duration_source })
 	check_persistence(RfcPeriod(period), { kind: "rfc-period", profile: "rfc5545-period-values-v1", axis: "none", unit: "none", payload: period_source })
+}
+
+# R09/R12/R14: independent date-count oracle supplies the expected position.
+# Unsupported presentation and resolved position coexist; rendering completeness
+# is a separate result and cannot erase either typed semantic fact.
+check_snapshot_explanation = |snapshot, expected, presentation, budget| {
+	source = Explanation.new(Snapshot(snapshot))
+	match Explanation.fact_at(source, 0) {
+		Item(fact) => match SemanticFact.kind(fact) {
+			ResolvedPosition(data) => if data.boundary != PosixBoundary.from_microseconds(expected) {
+				crash "Explanation changed independently modeled snapshot position"
+			}
+			_ => crash "Snapshot explanation omitted its stored position"
+		}
+		End => crash "Snapshot explanation is unexpectedly empty"
+	}
+	match Explanation.fact_at(source, 1) {
+		Item(fact) => if SemanticFact.kind(fact) != Presentation(presentation) {
+			crash "Snapshot explanation erased preferred-calendar status"
+		}
+		End => crash "Snapshot explanation omitted presentation status"
+	}
+	var index = 0.U64
+	while index < Explanation.fact_count(source) {
+		match Explanation.fact_at(source, index) {
+			Item(fact) => if SemanticFact.kind(fact) == Requirement(ZoneContext) {
+				crash "Bound snapshot was described as needing zone context again"
+			}
+			End => crash "Declared fact count exceeds available snapshot facts"
+		}
+		index = index + 1
+	}
+	full = Explanation.plain(source, { max_facts: 64, max_utf8_bytes: 16384 })
+	prefix = Explanation.plain(source, { max_facts: budget, max_utf8_bytes: 16384 })
+	tiny = Explanation.plain(source, { max_facts: 64, max_utf8_bytes: budget * 17 })
+	if full.status != Complete or full.visited_facts != Explanation.fact_count(source) or
+		prefix.status != Limited(FactLimit) or prefix.visited_facts > budget or
+			tiny.text.count_utf8_bytes() > budget * 17 or tiny.status != Limited(ByteLimit) {
+		crash "Snapshot explanation did not respect independent fact/output limits"
+	}
 }

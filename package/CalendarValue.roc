@@ -1,3 +1,4 @@
+import SemanticFact
 import Calendar
 import FixedOffset
 import PosixBoundary
@@ -143,8 +144,24 @@ CalendarValue :: { start : LocalDateTime, precision : Resolution }.{
 		}
 		code.to_hash(value.start.to_hash(hasher))
 	}
+
+	## Constant-cost random-access observations; no selection is resolved.
+	fact_count : CalendarValue -> U64
+	fact_count = |_| 2
+	fact_at : CalendarValue, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| match index {
+		0 => {
+			date = LocalDateTime.date(value.start)
+			Item(SemanticFact.new(CalendarDescription({ kind: CalendarValue, calendar: CalendarDate.calendar(date), fields: CalendarDate.to_fields(date), clock: ClockTime.to_fields(LocalDateTime.clock(value.start)), resolution: value.precision, qualification_count: 0 })))
+		}
+		1 => Item(SemanticFact.new(Requirement(ZoneContext)))
+		_ => End
+	}
 	to_inspect : CalendarValue -> Str
-	to_inspect = |value| "CalendarValue(start=${Str.inspect(value.start)}, resolution=${Str.inspect(value.precision)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "CalendarValue always has a summary fact at index zero"
+	}
 }
 
 # Both current providers have I32 years and twelve months. Validated selections
@@ -232,3 +249,15 @@ expect {
 	}
 }
 test_span = |start, end| PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end))
+
+expect {
+	date = CalendarDate.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
+	minute = CalendarValue.minute(date, 12, 30)?
+	second = CalendarValue.second(date, 12, 30, 0)?
+	short = CalendarValue.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { digits: 2, value: 12 })?
+	long = CalendarValue.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { digits: 3, value: 120 })?
+	CalendarValue.fact_at(minute, 0) != CalendarValue.fact_at(second, 0) and
+		CalendarValue.fact_at(short, 0) != CalendarValue.fact_at(long, 0) and
+			Str.inspect(short).contains(".12,") and Str.inspect(long).contains(".120,") and
+				CalendarValue.fact_count(minute) == 2 and CalendarValue.fact_at(minute, 2) == End and CalendarValue.fact_at(minute, U64.highest) == End
+}

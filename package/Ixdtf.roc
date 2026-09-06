@@ -1,3 +1,4 @@
+import SemanticFact
 import OffsetTimestamp
 import FixedOffset
 import PosixBoundary
@@ -270,14 +271,18 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 		value.tags.len().to_hash(state)
 	}
+
+	## Bounded declaration facts preserve ordered annotations and criticality.
+	## A named zone records its context requirement without looking up rules.
+	fact_count : Ixdtf -> U64
+	fact_count = |value| source_fact_count(value, Bool.True)
+	fact_at : Ixdtf, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| source_fact_at(value, index, Bool.True)
 	to_inspect : Ixdtf -> Str
-	to_inspect = |value| "Ixdtf(${OffsetTimestamp.to_text(value.timestamp)}, zone=${
-		if value.zone == None {
-			"absent"
-		} else {
-			"present"
-		}
-	}, tags=${value.tags.len().to_str()})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "IXDTF declaration has a first semantic fact"
+	}
 
 	## Strict interpretation: supplied context is required exactly for Named.
 	## Elective unknown tags are retained without acting on them. Unsupported
@@ -362,8 +367,55 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		reresolve = |snapshot, new_context| resolve(snapshot.source, new_context)
 		same_position : Snapshot, Snapshot -> Bool
 		same_position = |a, b| a.boundary == b.boundary
+
+		## Stored interpretation evidence only: no offset lookup, resolution or
+		## presentation conversion happens while reading these facts. The local
+		## position is the stored Gregorian projection even if a different
+		## requested presentation calendar is unsupported.
+		fact_count : Snapshot -> U64
+		fact_count = |snapshot| 2 + (
+			if snapshot.context == None {
+				0
+			} else {
+				1
+			}
+		) + source_fact_count(snapshot.source, Bool.False)
+		fact_at : Snapshot, U64 -> [End, Item(SemanticFact)]
+		fact_at = |snapshot, index| {
+			if index >= fact_count(snapshot) {
+				return End
+			}
+			if index == 0 {
+				return Item(SemanticFact.new(ResolvedPosition({ boundary: snapshot.boundary, offset: snapshot.offset, local: snapshot.local })))
+			}
+			if index == 1 {
+				preference = match preferred_calendar(snapshot.source) {
+					None => Gregorian
+					Some(name) => if name == "gregory" {
+						Gregorian
+					} else {
+						UnsupportedCalendar(name)
+					}
+				}
+				return Item(SemanticFact.new(Presentation(preference)))
+			}
+			var next = index - 2
+			match snapshot.context {
+				None => {}
+				Some(rules) => {
+					if next == 0 {
+						return Item(SemanticFact.new(Context({ name: ZoneRules.name(rules), version: ZoneRules.version(rules), validity: ZoneRules.validity(rules), provenance: ZoneRules.provenance(rules) })))
+					}
+					next = next - 1
+				}
+			}
+			source_fact_at(snapshot.source, next, Bool.False)
+		}
 		to_inspect : Snapshot -> Str
-		to_inspect = |snapshot| "Ixdtf.Snapshot(${Str.inspect(snapshot.boundary)}, offset=${Str.inspect(snapshot.offset)})"
+		to_inspect = |snapshot| match fact_at(snapshot, 0) {
+			Item(fact) => SemanticFact.summary(fact)
+			End => crash "IXDTF snapshot has a first semantic fact"
+		}
 	}
 }
 
@@ -587,4 +639,113 @@ expect {
 	Ixdtf.Snapshot.same_position(left, right) and Ixdtf.Snapshot.source(left) != Ixdtf.Snapshot.source(right) and
 		resolve_error(Ixdtf.resolve(Ixdtf.parse("1970-01-01T00:00:00Z[synthetic/Alias]")?, Some(rules))) == Some(ZoneMismatch) and
 			resolve_error(Ixdtf.resolve(Ixdtf.parse("1970-01-01T00:00:00Z[Synthetic/Other]")?, Some(rules))) == Some(ZoneMismatch)
+}
+
+# Counts depend only on stored collection lengths and the zone variant. In a
+# bound snapshot the named-zone requirement is already satisfied and omitted.
+source_fact_count : Ixdtf, Bool -> U64
+source_fact_count = |value, include_requirement| {
+	extra = match value.zone {
+		None => 0.U64
+		Some(zone) => if include_requirement and (match zone.identifier {
+			Named(_) => Bool.True
+			Numeric(_) => Bool.False
+		}) {
+			2
+		} else {
+			1
+		}
+	}
+	1 + extra + value.tags.len()
+}
+
+source_fact_at : Ixdtf, U64, Bool -> [End, Item(SemanticFact)]
+source_fact_at = |value, index, include_requirement| {
+	if index >= source_fact_count(value, include_requirement) {
+		return End
+	}
+	if index == 0 {
+		parts = OffsetTimestamp.parts(value.timestamp)
+		return Item(SemanticFact.new(TimestampDescription({ kind: Ixdtf, local: OffsetTimestamp.local_label(value.timestamp), fraction_digits: parts.fraction_digits, offset: parts.offset, zone_present: value.zone != None, annotation_count: value.tags.len() })))
+	}
+	var next = index - 1
+	match value.zone {
+		None => {}
+		Some(zone) => {
+			if next == 0 {
+				return Item(SemanticFact.new(ZoneAnnotation(zone)))
+			}
+			next = next - 1
+			needs_context = include_requirement and (match zone.identifier {
+				Named(_) => Bool.True
+				Numeric(_) => Bool.False
+			})
+			if needs_context {
+				if next == 0 {
+					return Item(SemanticFact.new(Requirement(ZoneContext)))
+				}
+				next = next - 1
+			}
+		}
+	}
+	match value.tags.get(next) {
+		Ok(tag) => Item(SemanticFact.new(Annotation(tag)))
+		Err(_) => End
+	}
+}
+
+expect {
+	source = Ixdtf.parse("1970-01-01T00:00:00.120Z[!Synthetic/Facts][u-ca=hebrew][knort=second]")?
+	point = PosixBoundary.from_microseconds(120000)
+	rules = test_rules("Synthetic/Facts", point, 3600)?
+	snapshot = Ixdtf.resolve(source, Some(rules))?
+	declaration = match Ixdtf.fact_at(source, 0) {
+		Item(fact) => Ok(SemanticFact.kind(fact))
+		End => Err(MissingFact)
+	}?
+	described = match declaration {
+		TimestampDescription(data) => data.kind == Ixdtf and data.fraction_digits == 3 and data.offset == UnassertedUtc and
+			data.zone_present and data.annotation_count == 2
+		_ => Bool.False
+	}
+	expected = [
+		ZoneAnnotation({ critical: Bool.True, identifier: Named("Synthetic/Facts") }),
+		Requirement(ZoneContext),
+		Annotation({ critical: Bool.False, key: "u-ca", value: "hebrew" }),
+		Annotation({ critical: Bool.False, key: "knort", value: "second" }),
+	]
+	var correct = described
+	var index = 1.U64
+	for kind in expected {
+		correct = correct and Ixdtf.fact_at(source, index) == Item(SemanticFact.new(kind))
+		index = index + 1
+	}
+	first = match Ixdtf.Snapshot.fact_at(snapshot, 0) {
+		Item(fact) => Ok(SemanticFact.kind(fact))
+		End => Err(MissingFact)
+	}?
+	position_valid = match first {
+		ResolvedPosition(data) => data.boundary == point and data.offset == FixedOffset.from_seconds(3600) and
+			ClockTime.to_fields(LocalDateTime.clock(data.local)) == { hour: 1, minute: 0, second: 0, microsecond: 120000 }
+		_ => Bool.False
+	}
+	index = 0
+	while index < Ixdtf.Snapshot.fact_count(snapshot) {
+		match Ixdtf.Snapshot.fact_at(snapshot, index) {
+			Item(fact) => if SemanticFact.kind(fact) == Requirement(ZoneContext) {
+				correct = Bool.False
+			}
+			End => {
+				correct = Bool.False
+			}
+		}
+		index = index + 1
+	}
+	correct and position_valid and Ixdtf.fact_count(source) == 5 and Ixdtf.Snapshot.fact_count(snapshot) == 7 and
+		Ixdtf.Snapshot.fact_at(snapshot, 1) == Item(SemanticFact.new(Presentation(UnsupportedCalendar("hebrew")))) and
+			Ixdtf.Snapshot.fact_at(snapshot, 2) == Item(SemanticFact.new(Context({ name: "Synthetic/Facts", version: "rfc9557-fixture-v1", validity: ZoneRules.validity(rules), provenance: Supplied }))) and
+				Ixdtf.Snapshot.presentation(snapshot) == Err(UnsupportedCalendar("hebrew")) and
+					Ixdtf.fact_at(source, 5) == End and Ixdtf.fact_at(source, U64.highest) == End and
+						Ixdtf.Snapshot.fact_at(snapshot, 7) == End and Ixdtf.Snapshot.fact_at(snapshot, U64.highest) == End and
+							Ixdtf.to_inspect(source).count_utf8_bytes() <= 256 and Ixdtf.Snapshot.to_inspect(snapshot).count_utf8_bytes() <= 160
 }

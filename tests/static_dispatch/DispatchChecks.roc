@@ -33,7 +33,7 @@ DispatchChecks :: [].{
 		}
 		archive = parse_archive("2004-06~")?
 		same_archive = parse_archive("2004-06~")?
-		if archive != same_archive or Dict.get(Dict.insert(Dict.empty(), archive, 31.U64), same_archive) != Ok(31) or !Str.inspect(archive).contains("2004-06~") {
+		if archive != same_archive or Dict.get(Dict.insert(Dict.empty(), archive, 31.U64), same_archive) != Ok(31) or (!Str.inspect(archive).contains("value=2004-06") or !Str.inspect(archive).contains("qualifications=1")) {
 			return Err(Failed)
 		}
 		stamp = parse_offset("1970-01-01T00:00:00.120Z")?
@@ -76,7 +76,7 @@ DispatchChecks :: [].{
 
 		qualified_minute = qualify(minute_value, [{ scope: Minute, qualifier: Approximate }, { scope: Whole, qualifier: Uncertain }])?
 		reordered = qualify(minute_value, [{ scope: Whole, qualifier: Uncertain }, { scope: Minute, qualifier: Approximate }])?
-		if Dict.get(Dict.insert(Dict.empty(), qualified_minute, 3.U64), reordered) != Ok(3) or !Str.inspect(qualified_minute).contains("Approximate") {
+		if Dict.get(Dict.insert(Dict.empty(), qualified_minute, 3.U64), reordered) != Ok(3) or !Str.inspect(qualified_minute).contains("qualifications=2") {
 			return Err(Failed)
 		}
 

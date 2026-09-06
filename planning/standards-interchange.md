@@ -14,11 +14,11 @@ reasoning model or declaring full ISO/EDTF conformance first.
    qualification representation before promising lossless native round trips.
    Preserve metadata without needing a complete uncertainty solver. Interpretation
    uses shared native machinery or returns an explicit unsupported result.
-2. **Explain and save:** expose shared typed facts for each supported declaration
-   and its bound interpretation result. Bounded renderers distinguish unresolved,
-   unsupported, empty and limited results without re-resolution. Deliver this
-   with the first useful format slices, not after all standards support. Extend
-   native persistence to interpretation snapshots.
+2. **Explain and save:** extend shared facts and bounded explanation to remaining
+   value kinds, especially exact intervals, RFC declarations and bound selection
+   results. Preserve distinct unresolved, unsupported, empty and limited outcomes
+   without re-resolution. Add explicit styled rendering over the same facts.
+   Extend native persistence to interpretation snapshots.
    Snapshot persistence must bind actual immutable interpretation data and
    policies, not only provider names/version labels. Preserve qualifiers and
    native calendar/resolution distinctions outside the text adapter profiles.

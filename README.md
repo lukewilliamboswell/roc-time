@@ -66,6 +66,14 @@ disconnected windows. Native Gregorian/Julian calendar descriptions retain their
 supplied resolution and scoped qualifiers, including forms outside the text
 adapters. Interpretation snapshots require a future persistence profile.
 
+[Explanation](package/Explanation.roc) renders calendar descriptions, EDTF dates,
+offset timestamps and IXDTF declarations/snapshots from shared
+[typed facts](package/SemanticFact.roc), with explicit fact and byte limits.
+Rendering a snapshot reads its stored result. A resolved instant can coexist
+with unsupported calendar presentation; truncated output reports `Limited`.
+Inspection of these types uses the same summary facts. Other value kinds and styled renderers
+remain outside this explanation profile.
+
 ## Examples
 
 Examples are small applications built around realistic caller tasks. Each has a
@@ -76,6 +84,7 @@ Examples are small applications built around realistic caller tasks. Each has a
 | [Room availability](examples/coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
 | [Booking exchange](examples/booking_exchange/main.roc) | Read bookings with different offsets, persist computed availability and serialize restored free windows in UTC |
 | [Annotation review](examples/annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
+| [Explain annotations](examples/explain_annotations/main.roc) | Explain a declaration's context requirement and its stored interpretation with unsupported calendar presentation |
 | [Archive persistence](examples/archive_persistence/main.roc) | Save and restore an uncertain catalogue date, a recording declaration and its exact POSIX boundary |
 | [Archive date](examples/calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](examples/invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |

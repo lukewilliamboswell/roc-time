@@ -1,3 +1,4 @@
+import SemanticFact
 import GregorianDate
 import CalendarDate
 import ClockTime
@@ -316,8 +317,22 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			Asserted(offset) => offset.to_hash((1.U8).to_hash(state))
 		}
 	}
+
+	## One bounded semantic fact, retaining supplied decimal width and offset
+	## assertion. Reading facts never resolves a zone or materializes coverage.
+	fact_count : OffsetTimestamp -> U64
+	fact_count = |_| 1
+	fact_at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| if index == 0 {
+		Item(SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local: local_label(value), fraction_digits: value.fraction_digits, offset: value.offset, zone_present: Bool.False, annotation_count: 0 })))
+	} else {
+		End
+	}
 	to_inspect : OffsetTimestamp -> Str
-	to_inspect = |value| "OffsetTimestamp(${to_text(value)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "Timestamp has one semantic fact"
+	}
 }
 
 fraction_unit = |count| {
@@ -436,4 +451,26 @@ expect {
 						OffsetTimestamp.parse("2000-01-01T24:") == Err(InvalidTime) and
 							OffsetTimestamp.parse("2000-01-01T23:60:") == Err(InvalidTime) and
 								OffsetTimestamp.parse("2000-01-01T00:00:00+24:") == Err(InvalidOffset)
+}
+
+expect {
+	shorter = OffsetTimestamp.parse("1970-01-01T00:00:00.12Z")?
+	longer = OffsetTimestamp.parse("1970-01-01T00:00:00.120+00:00")?
+	left = match OffsetTimestamp.fact_at(shorter, 0) {
+		Item(fact) => Ok(SemanticFact.kind(fact))
+		End => Err(MissingFact)
+	}?
+	right = match OffsetTimestamp.fact_at(longer, 0) {
+		Item(fact) => Ok(SemanticFact.kind(fact))
+		End => Err(MissingFact)
+	}?
+	facts_match = match (left, right) {
+		(TimestampDescription(a), TimestampDescription(b)) => a.kind == OffsetTimestamp and b.kind == OffsetTimestamp and
+			a.local == b.local and a.fraction_digits == 2 and b.fraction_digits == 3 and
+				a.offset == UnassertedUtc and b.offset == Asserted(FixedOffset.from_seconds(0)) and
+					!a.zone_present and a.annotation_count == 0
+		_ => Bool.False
+	}
+	facts_match and OffsetTimestamp.fact_count(shorter) == 1 and OffsetTimestamp.fact_at(shorter, 1) == End and
+		OffsetTimestamp.fact_at(longer, U64.highest) == End and OffsetTimestamp.to_inspect(longer).count_utf8_bytes() <= 256
 }

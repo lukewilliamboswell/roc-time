@@ -358,6 +358,15 @@ Input-byte and qualifier-count limits are checked with structured errors. The
 normal fixture gate runs dev/speed builds and a dedicated failing allocation
 ceiling; decoding error costs include the outer JSON envelope.
 
+`tests/explanation_resource/main.roc` compares bounded rendering against small
+and large retained rule tables and metadata strings. It checks zero-budget
+behavior, UTF-8 previews, rendering completeness and 100,000 paired snapshot fact
+reads with no requested allocations. The dev/speed gate uses a five-second
+subprocess limit and failing allocation controls. Fact budgets count indexed
+facts; the preferred-calendar fact may inspect the adapter's bounded annotation
+list, but must never traverse zone transitions or resolve again. Metadata is
+previewed before formatting, so a large version string cannot force a full copy.
+
 Finite resolved-interval evidence has a separate resource fixture at
 `tests/interval_resource/main.roc`. It varies 64, 512 and 4096 choices for paired
 intervals and independent endpoints, with owned, shared and retained sliced

@@ -1,3 +1,4 @@
+import SemanticFact
 import CalendarValue
 import QualifiedCalendarValue
 import CalendarDate
@@ -226,8 +227,25 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 	is_eq = |a, b| QualifiedCalendarValue.is_eq(a.raw, b.raw)
 	to_hash : EdtfDate, Hasher -> Hasher
 	to_hash = |value, hasher| QualifiedCalendarValue.to_hash(value.raw, hasher)
+	fact_count : EdtfDate -> U64
+	fact_count = |value| QualifiedCalendarValue.fact_count(value.raw)
+	fact_at : EdtfDate, U64 -> [End, Item(SemanticFact)]
+	fact_at = |value, index| match QualifiedCalendarValue.fact_at(value.raw, index) {
+		End => End
+		Item(fact) => if index == 0 {
+			match SemanticFact.kind(fact) {
+				CalendarDescription(data) => Item(SemanticFact.new(CalendarDescription({ ..data, kind: EdtfDate })))
+				_ => crash "QualifiedCalendarValue index zero is its calendar summary"
+			}
+		} else {
+			Item(fact)
+		}
+	}
 	to_inspect : EdtfDate -> Str
-	to_inspect = |value| "EdtfDate(${to_text(value)})"
+	to_inspect = |value| match fact_at(value, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "EdtfDate always has a summary at index zero"
+	}
 }
 
 digit = |byte| byte >= 48 and byte <= 57
@@ -298,3 +316,14 @@ expect {
 }
 
 expect EdtfDate.parse("1985-99-") == Err(Malformed) and EdtfDate.parse("1985-04-4") == Err(Malformed) and EdtfDate.parse("1985-04-3") == Err(Incomplete) and EdtfDate.parse("1985-9") == Err(Malformed)
+
+expect {
+	date = EdtfDate.parse("1984?")?
+	match EdtfDate.fact_at(date, 0) {
+		Item(fact) => match SemanticFact.kind(fact) {
+			CalendarDescription(data) => data.kind == EdtfDate and data.resolution == Year and data.fields.year == 1984 and data.qualification_count == 1 and EdtfDate.fact_at(date, EdtfDate.fact_count(date)) == End
+			_ => False
+		}
+		End => False
+	}
+}

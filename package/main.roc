@@ -24,6 +24,8 @@ package
 		ExactInterval,
 		Ixdtf,
 		Persistence,
+		SemanticFact,
+		Explanation,
 		RfcPeriod,
 		RfcTimedRule,
 		CivilDay,

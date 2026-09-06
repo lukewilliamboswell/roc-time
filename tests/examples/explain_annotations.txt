@@ -1,0 +1,12 @@
+Before interpretation (Complete)
+Ixdtf: instant declaration at year 2022, month 7, day 8, 0:14:07; UTC instant known; no local-offset assertion; zone annotation True; additional annotations 1.
+Zone annotation: "Europe/Paris"; critical False.
+Interpretation requires explicit zone context.
+Annotation: "u-ca" = "hebrew"; critical False.
+Stored interpretation (Complete)
+Resolved instant: 1657239247000000 POSIX microseconds since 1970-01-01; stored Gregorian local label year 2022, month 7, day 8, 2:14:07.000000; offset 7200 seconds.
+Presentation: calendar "hebrew" is unsupported; the resolved instant remains known.
+Context: zone "Europe/Paris", version "rfc9557-example", validity [1657238400000000, 1657242000000000) POSIX microseconds; supplied rules.
+Ixdtf: instant declaration at year 2022, month 7, day 8, 0:14:07; UTC instant known; no local-offset assertion; zone annotation True; additional annotations 1.
+Zone annotation: "Europe/Paris"; critical False.
+Annotation: "u-ca" = "hebrew"; critical False.

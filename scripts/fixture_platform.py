@@ -253,6 +253,37 @@ def verify_calendar_persistence(target: str) -> None:
             raise RuntimeError(f"{mode}: native calendar ceiling negative control failed")
         print(f"PASS calendar persistence {mode}: allocation negative control")
 
+
+def verify_explanation(target: str) -> None:
+    """Bound fact reads and embedded text independently of retained inputs."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/explanation_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"explanation-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for text_size in (4, 524288):
+            observations = []
+            for transitions in (2, 16384):
+                result = subprocess.run([binary, str(transitions), str(text_size), "65536"], capture_output=True, timeout=5)
+                if result.returncode or result.stdout != b"render=bounded,instant=known,presentation=unsupported\n":
+                    raise RuntimeError(f"{mode}/{text_size}/{transitions}: explanation resources failed: {result.stderr!r}")
+                match = re.search(rb" work=((?:\d+,){6}\d+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError(f"{mode}: missing explanation observations")
+                counts = tuple(int(value) for value in match[1].split(b","))
+                if counts[:3] != (0, 0, 0) or counts[6] != 0:
+                    raise RuntimeError(f"{mode}: explanation construction/zero-budget reads allocated: {counts}")
+                observations.append(counts)
+            if observations[0] != observations[1]:
+                raise RuntimeError(f"{mode}: rendering traffic depends on retained transitions: {observations}")
+            print(f"PASS explanation {mode}/{text_size * 2} metadata bytes: 2/16384 transitions requested bytes {observations[0]}; 100000 paired fact reads")
+        failed = subprocess.run([binary, "16384", "524288", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: explanation ceiling negative control failed")
+        print(f"PASS explanation {mode}: allocation negative control")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -265,5 +296,6 @@ if __name__ == "__main__":
         verify_interchange(selected_target)
         verify_persistence(selected_target)
         verify_calendar_persistence(selected_target)
+        verify_explanation(selected_target)
     else:
         print(selected_target)

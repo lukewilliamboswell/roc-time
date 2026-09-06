@@ -1,5 +1,7 @@
 import fuzz.Fuzz
 import time.Persistence
+import time.Explanation
+import time.SemanticFact
 import time.CalendarValue
 import time.IntervalEvidence
 import time.CalendarEvidence
@@ -438,6 +440,7 @@ check_calendar_persistence = |input, h, m, s, fraction| {
 			Err(_) => crash "Valid native fractional cell"
 		}
 		fraction_payload = "${name};fraction;1970;1;1;${h.to_str()};${m.to_str()};${s.to_str()};${input.digits.to_str()};${fraction.to_str()}"
+		check_explanation(fractional, calendar, input, h, m, s, fraction)
 		for item in [
 			{ value: year, payload: "${name};year;1970" },
 			{ value: month, payload: "${name};month;1970;1" },
@@ -498,6 +501,49 @@ check_calendar_persistence = |input, h, m, s, fraction| {
 			Err(InvalidQualifiedCalendarValue(UnsuppliedComponent(Day))) => {}
 			_ => crash "Persistence invented unsupplied qualified component"
 		}
+	}
+}
+
+# R12–R14: facts are compared with generated source fields, independently of
+# diagnostic strings and native bound resolution. Rendering limits concern the
+# report, never the truth of a description or the presence of an uncertainty model.
+check_explanation = |value, calendar, input, h, m, s, fraction| {
+	var width = 1.U32
+	var remaining = 6.U8 - input.digits
+	while remaining > 0 {
+		width = width * 10
+		remaining = remaining - 1
+	}
+	first = match CalendarValue.fact_at(value, 0) {
+		Item(fact) => SemanticFact.kind(fact)
+		End => crash "Calendar explanation omitted its source"
+	}
+	if first != CalendarDescription({ kind: CalendarValue, calendar, fields: { year: 1970, month: 1, day: 1 }, clock: { hour: h, minute: m, second: s, microsecond: fraction * width }, resolution: Fraction(input.digits), qualification_count: 0 }) {
+		crash "Calendar facts changed generated fields or supplied fractional width"
+	}
+	description = qualified(value, [{ scope: Fraction, qualifier: UncertainApproximate }])
+	model_fact = match QualifiedCalendarValue.fact_at(description, 2) {
+		Item(fact) => SemanticFact.kind(fact)
+		End => crash "Qualified description omitted its model requirement"
+	}
+	qualification = match QualifiedCalendarValue.fact_at(description, 3) {
+		Item(fact) => SemanticFact.kind(fact)
+		End => crash "Qualified description omitted supplied qualification"
+	}
+	if model_fact != Requirement(UncertaintyModel) or qualification != Qualification({ scope: Fraction, qualifier: UncertainApproximate }) {
+		crash "Explanation lost scoped uncertainty or invented a supplied model"
+	}
+	source = Explanation.new(QualifiedCalendarValue(description))
+	full = Explanation.plain(source, { max_facts: 16, max_utf8_bytes: 4096 })
+	zero = Explanation.plain(source, { max_facts: 0, max_utf8_bytes: 4096 })
+	no_text = Explanation.plain(source, { max_facts: 16, max_utf8_bytes: 0 })
+	if full.status != Complete or full.visited_facts != 4 or zero.status != Limited(FactLimit) or
+		!zero.text.is_empty() or zero.visited_facts != 0 or no_text.status != Limited(ByteLimit) or !no_text.text.is_empty() {
+		crash "Explanation limits masqueraded as complete or consumed unbudgeted facts"
+	}
+	match Explanation.fact_at(source, U64.highest) {
+		End => {}
+		_ => crash "Out-of-range fact index must end without overflow"
 	}
 }
 
