@@ -158,6 +158,14 @@ a 400-year table model outside that range. The model extension is not direct
 Python support. The forward formula shares our year-counting approach, so
 sequential tests and sourced conventions remain necessary alongside agreement.
 
+Civil query evidence runs with `ROC=/path/to/pinned/roc python3 scripts/test_civil_queries.py`.
+It replays pinned [CPython fixtures and labelled cycle extensions](tests/civil_query_checks/provenance.md)
+and independently walks all 146097 days of a Gregorian cycle in native dev/speed
+builds. The Gregorian fuzz target supplements this with generated full-range
+queries and successor laws. `scripts/fixture_platform.py --verify` measures input
+construction separately from query allocations over owned, shared and sliced
+dates; these are requested-byte counters, not retained-memory measurements.
+
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
 Howard Hinnant’s attributed public-domain March-based formulas, independent of

@@ -493,6 +493,33 @@ def verify_timestamp_format(target: str) -> None:
             raise RuntimeError(f"{mode}: formatter allocation negative control failed")
         print(f"PASS formatter {mode}: allocation negative control")
 
+def verify_civil_queries(target: str) -> None:
+    """Observe construction separately; queries over owned/shared/sliced dates allocate nothing."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/civil_query_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"civil-queries-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for ownership in ("owned", "shared", "sliced"):
+            for count in (1, 32, 32000):
+                result = subprocess.run([binary, str(count), ownership], capture_output=True, timeout=5)
+                if result.returncode or result.stdout != b"queries=exact\n":
+                    raise RuntimeError(f"{mode}/{count}/{ownership}: civil query fixture failed: {result.stderr!r}")
+                match = re.search(rb" work=((?:\d+,){4}\d+)\n$", result.stderr)
+                if match is None:
+                    raise RuntimeError("missing civil query observations")
+                counts = tuple(int(value) for value in match[1].split(b","))
+                if counts[2:4] != (0, 0) or counts[4] == 0:
+                    raise RuntimeError(f"civil queries allocated or lost output: {counts}")
+                print(f"PASS civil queries {mode}/{count}/{ownership}: construction calls/bytes, query calls/bytes, checksum {counts}")
+        failed = subprocess.run([binary, "32", "shared", "control"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: civil query allocation failure control failed")
+        print(f"PASS civil queries {mode}: allocation failure control")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -512,5 +539,6 @@ if __name__ == "__main__":
         verify_selection_explanation(selected_target)
         verify_recurrence_explanation(selected_target)
         verify_timestamp_format(selected_target)
+        verify_civil_queries(selected_target)
     else:
         print(selected_target)
