@@ -196,7 +196,32 @@ identities and native fractional labels. Its hosted resource gate varies
 0–4096 ending overrides, owned/shared/sliced inputs and finite query horizons,
 measuring construction, definition access and first/resumed consumption
 separately. Checked definitions prepare endings once; this evidence does not
-establish native persistence or retained-memory bounds.
+establish retained-memory bounds.
+
+The staged [schedule archive application](tests/schedule_archive/main.roc)
+stores an application JSON envelope containing a string `series_id` and a
+versioned `Persistence` archive of `ScheduleDefinition`. Loading recovers the
+identifier and the complete immutable interpretation context, then creates
+fresh cursors for overlapping windows. Query windows and cursor progress are
+not part of the archive. Native labels and policies remain distinct from the
+iCalendar origin; the native archive is not limited to RFC text precision or
+years. The codec's field grammar and caps belong in
+[PersistenceSchedule](package/PersistenceSchedule.roc).
+
+Run `ROC=/path/to/pinned/roc python3 scripts/test_local_examples.py` for the
+application and its composed checks, including native dev/speed execution.
+The runner stages the actual `ScheduleArchive.roc` beside
+[ScheduleArchiveChecks](tests/schedule_archive_checks/ScheduleArchiveChecks.roc),
+so the checks exercise the application's save/load functions. Their independent
+synthetic epoch model covers source identity, exceptions and differing endings,
+and distinguishes contexts with identical names/versions but different tables.
+Actual fold/gap labels exercise saved occurrence and gap policies, preserving
+ambiguity/rejection errors and explicit adjustment evidence after loading.
+Native fractional labels and year 10000 survive archive round trips while RFC
+export rejects them explicitly. Malformed/missing envelopes and wrong archive
+kinds fail. The full integration gate also runs the application against the
+distributable bundle; these staged APIs need a compatible release before public
+example promotion.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
@@ -320,6 +345,34 @@ controls test that behavior. Keep tested operations observable using runtime
 inputs and consumed outputs. Separate input construction, algorithm and output
 formatting when measuring. Resource evidence is specific to compiler, backend,
 input size and ownership; do not generalize one passing probe to all operations.
+
+The same `fixture_platform.py --verify` command runs the
+[schedule persistence resource fixture](tests/schedule_persistence_resource/main.roc).
+It measures input storage, definition preparation/access, archive construction,
+serialization, load, fresh cursor construction and first/resumed consumption
+separately. It varies 0, 1, 64 and 256 ending inputs over owned/shared/sliced
+collections and compares windows ending in years 2001 and 200000 for a `Forever`
+rule. Five-second subprocess bounds, observable semantic checks and deliberately
+failing hosted allocation assertions guard dev/speed builds against hidden
+enumeration or missing assertions. This is requested-byte traffic evidence,
+not a measurement of live or retained archive memory.
+
+The pinned compiler has a known list-update defect isolated by
+[list_append_match_concat](tests/compiler_repro/list_append_match_concat/README.md).
+That standalone reproducer fails in interpreter, native dev and native speed;
+it is not part of the passing semantic gate. `PersistenceEndings` uses the
+equivalent source form illustrated by its hoisted control, preserving archive
+fields and temporal meaning. When changing compiler pins or simplifying that
+source, rerun both reproducer roots and the public schedule persistence resource
+gate. The reproducer does not establish the compiler's internal failure cause.
+
+[structural_duration_hash](tests/compiler_repro/structural_duration_hash/README.md)
+isolates a compiler crash when deriving a structural hash key containing a
+nominal duration tail. Its scalar control checks and executes in interpreter,
+dev and speed modes. `ScheduleEndings` hashes the complete declaration fields
+explicitly; the schedule archive checks exercise dictionary lookup across
+save/load for both definitions and the public persistence value union. Recheck
+the failing root and its control when upgrading the compiler.
 
 The same command runs [recurrence prefix resource checks](tests/recurrence_resource/main.roc)
 in dev and speed builds. Runtime horizons ending in years 2001 and 2,000,000,000

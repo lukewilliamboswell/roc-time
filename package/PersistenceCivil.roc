@@ -1,3 +1,4 @@
+import PersistenceLocal
 import ResolvedBoundary
 import ResolvedSelection
 import ZoneRules
@@ -186,23 +187,12 @@ finish = |stored, fields, kind, profile| {
 	}
 }
 
-local_text = |local| {
-	date = LocalDateTime.date(local)
-	fields = CalendarDate.to_fields(date)
-	clock = ClockTime.to_fields(LocalDateTime.clock(local))
-	Str.join_with([Calendar.to_name(CalendarDate.calendar(date)), "fraction", fields.year.to_str(), fields.month.to_str(), fields.day.to_str(), clock.hour.to_str(), clock.minute.to_str(), clock.second.to_str(), "6", clock.microsecond.to_str()], ";")
-}
+local_text = PersistenceLocal.to_text
 
-parse_local : Str -> Try(LocalDateTime, PersistenceCivil.Error)
-parse_local = |text| {
-	parsed = match PersistenceCalendar.parse_value(text) {
-		Ok(result) => result
-		Err(error) => return Err(InvalidLocal(error))
-	}
-	if CalendarValue.resolution(parsed) != Fraction(6) {
-		return Err(Malformed)
-	}
-	Ok(CalendarValue.start_label(parsed))
+parse_local = |text| match PersistenceLocal.parse(text) {
+	Ok(value) => Ok(value)
+	Err(Malformed) => Err(Malformed)
+	Err(InvalidLocal(error)) => Err(InvalidLocal(error))
 }
 
 context : List(Str) -> Try(ZoneRules, PersistenceCivil.Error)
