@@ -13,7 +13,7 @@ Bookings occupy a window. An invoice falls due on a calendar date. A weekly meet
 | Generate recurring reservations without losing exceptions | [Schedules](schedules.html) |
 | Decide whether an input format is supported | [Profiles and limits](profiles.html) |
 
-The guides start from **0.1.0-rc3**, a published release candidate. The development branch contains newer APIs; those are called out separately. [Keep the compiler and package version together](versions.html).
+Get runnable applications, compiler requirements and API documentation from the [releases page](https://github.com/lukewilliamboswell/roc-time/releases).
 
 ## Why intervals, not just instants?
 

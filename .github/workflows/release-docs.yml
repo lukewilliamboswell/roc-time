@@ -86,6 +86,17 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: python3 .roc-time-tmp/workflow-source/scripts/release_bundles.py urls --manifest .release/roc-time-bundles.json --github-output "$GITHUB_OUTPUT"
 
+      - name: Promote staged applications from the release source
+        if: steps.roc-version.outputs.authority == 'header'
+        env:
+          CORE_URL: ${{ steps.urls.outputs.core_url }}
+          ZONE_URL: ${{ steps.urls.outputs.zones_url }}
+          RELEASE_COMPILER: ${{ steps.roc-version.outputs.nightly-tag }}
+        run: |
+          if [ -f .roc-time-tmp/release-source/scripts/promote_examples.py ]; then
+            python3 .roc-time-tmp/workflow-source/scripts/promote_examples.py --source-root .roc-time-tmp/release-source --compiler "$RELEASE_COMPILER" --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
+          fi
+
       - name: Bind released examples to published packages
         if: steps.roc-version.outputs.authority == 'header'
         env:
@@ -138,7 +149,7 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, '.roc-time-tmp/workflow-source/scripts')
           from compiler_pins import header_pin
-          pin = header_pin(Path('.roc-time-tmp/workflow-source/www/site/main.roc').read_text())[2]
+          pin = header_pin(Path('.roc-time-tmp/workflow-source/www/main.roc').read_text())[2]
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               print(f'pin={pin}', file=output)
           PYTHON
@@ -156,12 +167,6 @@ jobs:
         if: steps.roc-version.outputs.authority == 'header'
         run: rsync -a --delete .roc-time-tmp/release-source/examples/ examples/
 
-      - name: Update public release links
-        if: steps.roc-version.outputs.authority == 'header'
-        env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/update_release_links.py --version "$RELEASE_VERSION" --readme README.md
-
       - name: Open signed release follow-up PR
         if: steps.roc-version.outputs.authority == 'header'
         id: followup
@@ -170,7 +175,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EXPECTED_BASE: ${{ steps.docs-base.outputs.sha }}
-          FOLLOWUP_PATHS: 'examples README.md'
+          FOLLOWUP_PATHS: 'examples'
         run: |
           read -r -a followup_paths <<< "$FOLLOWUP_PATHS"
           python3 .roc-time-tmp/workflow-source/scripts/create_release_followup.py --expected-base "$EXPECTED_BASE" --paths "${followup_paths[@]}"

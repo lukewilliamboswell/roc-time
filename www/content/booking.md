@@ -36,8 +36,8 @@ Use the format's checked parser and serializer for values you store. The [catalo
 
 For availability, keep each separate span and serialize its endpoints. Your application owns the collection schema; standard timestamp strings alone do not define a standardized coverage document. Debug inspection is not a storage format.
 
-For expiry checks, the [clock deadline application in the repository](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/clock_deadline) also uses the published rc3 package. Its platform root reads the clock, while a pure module compares the supplied reading with an expiry. The saved status describes its recorded check time, not the time the JSON is loaded. This application was added after the rc3 starter kit and is not in that immutable ZIP.
+For expiry checks, the [clock deadline application in the repository](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/clock_deadline) declares its package and compiler in its header. Its platform root reads the clock, while a pure module compares the supplied reading with an expiry. The saved status describes its recorded check time, not the time the JSON is loaded.
 
 ## API reference
 
-[ExactInterval](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/ExactInterval/) · [OffsetTimestamp](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/OffsetTimestamp/) · [Coverage](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Coverage/)
+`ExactInterval` · `OffsetTimestamp` · `Coverage`

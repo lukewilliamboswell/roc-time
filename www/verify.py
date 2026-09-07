@@ -6,7 +6,6 @@ import argparse
 from urllib.parse import unquote, urlsplit
 
 SOURCE = Path(__file__).resolve().parent
-WWW = SOURCE.parent
 
 
 class Page(HTMLParser):

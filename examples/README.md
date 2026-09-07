@@ -11,9 +11,8 @@ No Python runner is required.
 
 Use the compiler named by the `roc` field in that application's header. Its
 package dependencies are immutable published URLs, so these examples do not
-require building the repository's development package. During this workflow pilot,
-`nightly-2026-09-05-b195f5b` stands in for a future supported stable compiler;
-it is still a nightly. Obtain it from the [exact upstream release](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b).
+require building the repository's development package. The header is the source
+of truth for the compiler and package versions needed to run that application.
 
 Development may use a newer compiler. CI validates these examples unchanged with
 their declared compiler, then tests temporary copies against development source

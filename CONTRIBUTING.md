@@ -217,15 +217,15 @@ To deliberately refresh expectations, use CPython 3.14.3 and run
 Generation checks the table model against all 3,652,059 dates in Python's domain.
 Never regenerate expected values from roc-time output or bless a mismatch.
 
-Zone provenance is in `tests/oracles/zones-manifest.toml`. The pinned tzdata
-2025.2 wheel contains IANA 2025b data; its URL and SHA-256 are recorded there.
+Zone provenance is in `tests/oracles/zones-manifest.toml`, including the source
+release, pinned wheel URL and SHA-256.
 The generator uses `ZoneInfo.from_file`, never the host database, and writes
 `tests/oracles/zones.jsonl` plus small typed smoke/rule fixtures in
 `tests/oracle_zones/Cases.roc`. To refresh with CPython 3.14.3, download that exact
 wheel under `.roc-time-tmp/` and run:
 
 ```bash
-python3 scripts/generate_zone_oracle.py .roc-time-tmp/tzdata-2025.2.whl
+python3 scripts/generate_zone_oracle.py .roc-time-tmp/tzdata.whl
 ```
 
 The three ten-day fixtures cover Lord Howe's 2024 half-hour fold/gap and Apia's
@@ -525,16 +525,13 @@ within the line require validation; another compiler minor line gets another
 branch. Support duration, funded LTS and response-time commitments are separate
 policies.
 
-The pilot uses `nightly-2026-09-05-b195f5b` on `roc-0.1.x` as a simulated stable
-compiler, while development uses `nightly-2026-09-06-d85e877`. The release guard
-accepts that simulation only for the explicitly configured line and exact pin,
-and verifies the nightly exists upstream. Release notes disclose the simulation.
-This does not claim that upstream Roc has released version 0.1. Once actual
-stable releases are available, replace the simulation with a verified stable
-compiler and installer, and remove the simulated-compiler mapping. Publication
-from development `main` is disabled in this pilot.
-The intended policy then requires stable compiler support for every package
-release, even when upstream or our development branch moves ahead.
+The release workflow declares any simulated stable compiler mapping explicitly
+until upstream stable releases are available. Read its support-line configuration
+and the branch's package headers for the selected pins. The release guard checks
+that mapping and upstream availability; release notes disclose simulation when
+used. Replace it with verified stable compiler support when upstream provides it.
+Publication from development `main` is disabled. Every package release targets
+supported stable Roc, even when development moves ahead.
 
 To release:
 
@@ -547,9 +544,9 @@ To release:
 3. Verify release notes, both package URLs, the starter archive and direct Roc
    execution against the actual published URLs. The app headers record the
    compiler used for that release.
-4. Review the release follow-up PR updating versioned docs and the public example
-   applications on `main`. These updates must preserve development package pins.
-   Retain previous versioned docs before deploying the next site.
+4. Review the release follow-up PR updating public example applications on
+   `main`. Preserve development package pins. API docs are restored from release
+   assets during deployment; the README uses durable navigation links.
 
 Configure the `github-pages` environment to allow the explicit supported
 compiler branches that publish documentation, as well as `main`. Keep that
@@ -591,7 +588,7 @@ base or generated branch moves, regenerate and validate against the current base
 the creator refuses to overwrite unrelated or unsigned branch work.
 API documentation is stored as immutable release assets and restored during
 Pages assembly. Generated pages are not checked into Git; authored guides live
-in `www/site/`. Assembly refuses missing earlier release documentation;
+in `www/`. Assembly refuses missing earlier release documentation;
 each release tag and starter manifest records its own compiler pin.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published
@@ -626,9 +623,10 @@ python3 scripts/starter_kit.py --output .roc-time-tmp/roc-time-starter.zip \
   --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
 ```
 
-The ZIP contains booking, archive-search and staffing applications, their
-companion modules, a license, the compiler pin and a runner that rejects an
-incompatible compiler. The full gate generates and extracts a kit against the
+The ZIP contains the applications selected by `scripts/starter_kit.py`, including
+the staged applications in `scripts/promote_examples.py`, their companion
+modules, license and compiler pin. Each application runs directly with Roc; the
+optional runner checks compiler compatibility. The full gate generates and extracts a kit against the
 candidate archives, acquires them through a fresh cache, and checks interpreter
 and native outputs while invoking from outside the checkout's working directory.
 Generated artifacts stay under `.roc-time-tmp/`. Failure controls cover missing
@@ -647,7 +645,7 @@ and its exact compiler release, and include a runnable example importing both pa
 With the pinned Roc compiler and CPython 3.14.3, run:
 
 ```sh
-ROC=/path/to/pinned/roc python3 scripts/measure_zone_roc.py .roc-time-tmp/tzdata-2025.2.whl --samples 3
+ROC=/path/to/pinned/roc python3 scripts/measure_zone_roc.py .roc-time-tmp/tzdata.whl --samples 3
 ```
 
 Use the same pinned wheel as the zone oracle generator. The script verifies its
@@ -671,12 +669,13 @@ Do not copy measurement transcripts into the architecture or active plan.
 Generate the optional bounded database into a new directory with:
 
 ```sh
-python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata-2025.2.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/pinned/roc
+python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/pinned/roc
 ```
 
-Generation requires CPython 3.14.3 and verifies the wheel hash. It exports
-1800-01-01 through 2200-01-01 exclusively, with future footer transitions
-expanded ahead of time and original alias/canonical identities from `tzdata.zi`.
+Generation verifies the configured interpreter and wheel hash. The generator
+and [package manifest](tzdb/package/manifest.json) declare the finite validity
+horizon. Future footer transitions are expanded ahead of time, with original
+alias/canonical identities from `tzdata.zi`.
 The output is a separate Roc package with `Database.get(name)` returning the
 structural record accepted by `ZoneRules.from_database`; core has no dependency
 on it. Unknown names fail at lookup and the imported rules enforce their horizon.
