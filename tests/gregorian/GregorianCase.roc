@@ -1,6 +1,7 @@
 import fuzz.Fuzz
 import time.CivilDay
 import time.GregorianDate
+import time.EnglishGregorian
 
 # R05: full provider day domain plus invalid day numbers and malformed fields.
 GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
@@ -71,6 +72,18 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 		expected_text = "${year_text}-${month_text}-${day_text}"
 		if GregorianDate.parse(expected_text) != Ok(date) or GregorianDate.to_text(date) != expected_text {
 			crash "R14 full-range Gregorian native text differs from field model"
+		}
+		# R14/R16: English month spellings independently checked against RFC9110
+		# (June 2022), section 5.6.7. Only month names are shared with HTTP dates;
+		# unpadded day and signed year output follow our native display profile.
+		# https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.7
+		month_name = match ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].get(fields.month.to_u64() - 1) {
+			Ok(name) => name
+			Err(_) => crash "validated month outside oracle table"
+		}
+		expected_display = "${fields.day.to_str()} ${month_name} ${year_text}"
+		if EnglishGregorian.date(date) != expected_display {
+			crash "English Gregorian date differs from independent field text"
 		}
 		# Independent month walk checks every boundary at the generated full-range
 		# year. January's coordinate anchors the year; summing month lengths does

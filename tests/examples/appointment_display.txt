@@ -1,0 +1,4 @@
+Appointment: 7 Sep 2026, 09:30
+Date: 7 Sep 2026
+Scheduled clock: 09:30:00
+Recorded local label: 7 Sep 2026, 09:30:00.125

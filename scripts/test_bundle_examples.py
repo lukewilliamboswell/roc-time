@@ -104,6 +104,15 @@ def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str, zone_url:
                          compiler=package_pin(ROOT))
 
 
+def copy_internal_examples(destination: Path, core: str) -> list[Path]:
+    """Stage unreleased caller evidence separately from published examples."""
+    from roc_version import package_pin
+    from update_example_urls import copy_examples
+    return copy_examples(destination / "appointment_display", core, "",
+                         compiler=package_pin(ROOT),
+                         source=ROOT / "tests" / "appointment_display")
+
+
 def run_example_checks(examples: list[Path], *, env: dict[str, str] | None = None) -> None:
     for example in examples:
         run([ROC, "check", example.name, "--no-cache"], cwd=example.parent, env=env)
@@ -117,7 +126,7 @@ def run_example_apps(examples: list[Path], *, env: dict[str, str] | None = None,
 
 def check_output(example: Path, actual: str, *, expected_dir: Path | None = None) -> None:
     expected = (expected_dir or ROOT / "tests" / "examples") / f"{example.parent.name}.txt"
-    if example.parent.name in {"booking_exchange", "archive_search", "staffing"} and not expected.is_file():
+    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display"} and not expected.is_file():
         raise SystemExit(f"Missing required output fixture: {expected}")
     if expected.exists() and actual != expected.read_text(encoding="utf-8"):
         raise SystemExit(f"Unexpected output from {example.parent.name}:\n{actual}")
@@ -201,8 +210,14 @@ def main() -> None:
             run_example_checks(examples, env=env)
             run_example_apps(examples, env=env)
 
+            internal = copy_internal_examples(tmp_dir / "internal-scenarios", bundle_url)
+            print("Testing unreleased caller scenarios against the same core archive.")
+            run_example_checks(internal, env=env)
+            run_example_apps(internal, env=env)
+
             if not args.skip_build_run:
                 build_and_run_examples(examples, build_dir, env=env)
+                build_and_run_examples(internal, tmp_dir / "internal-build", env=env)
             missing = {f"/{REHEARSAL_VERSION}/{bundle_path.name}", f"/{REHEARSAL_VERSION}/{zone_bundle.name}"} - set(requests)
             if missing:
                 raise SystemExit(f"Roc did not acquire both exact bundles from the isolated server: {sorted(missing)}")

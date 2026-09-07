@@ -24,6 +24,7 @@ def main() -> None:
     if control.returncode != 0:
         raise SystemExit(f"Positive control failed:\n{control.stdout}")
     cases = {
+        "description_as_display": ["first argument", "CalendarValue", "GregorianDate"],
         "persistence_backing_codec": ["missing method", "encoder_for", "Persistence"],
         "invalid_date_literal": ["from_quote", "rejected it", "Invalid EdtfDate literal: Malformed"],
         "invalid_gregorian_literal": ["from_quote", "rejected it", "Invalid GregorianDate literal: InvalidDay"],

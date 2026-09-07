@@ -6,6 +6,7 @@ import time.CivilDay
 import time.JulianDate
 import time.ClockTime
 import time.LocalDateTime
+import time.EnglishGregorian
 
 # R06: full Julian coordinate range, overlap with Gregorian and explicit errors.
 CalendarCase := { number : I64 }.{
@@ -72,6 +73,28 @@ CalendarCase := { number : I64 }.{
 			# narrowing the full provider range to POSIX or selecting a timezone.
 			if LocalDateTime.to_gregorian_text(local) != Err(UnsupportedCalendar(Julian)) {
 				crash "Local text silently discarded the Julian calendar"
+			}
+			# Presentation must preserve the same explicit calendar boundary.
+			for precision in [Minute, Second, Exact] {
+				if EnglishGregorian.local_datetime(local, precision) != Err(UnsupportedCalendar(Julian)) {
+					crash "English display silently relabelled a Julian local date"
+				}
+			}
+			day = match CalendarDate.as_gregorian(gregorian) {
+				Ok(value) => value
+				Err(_) => crash "Gregorian calendar accessor"
+			}
+			# Component output has independent field models in GregorianCase and
+			# ClockCase; this checks calendar/clock composition across provider range.
+			date_display = EnglishGregorian.date(day)
+			for precision in [Minute, Second, Exact] {
+				expected_display = match EnglishGregorian.clock(clock, precision) {
+					Ok(clock_display) => Ok("${date_display}, ${clock_display}")
+					Err(PrecisionLoss(requested)) => Err(PrecisionLoss(requested))
+				}
+				if EnglishGregorian.local_datetime(other, precision) != expected_display {
+					crash "Local English display changed component meaning or precision error"
+				}
 			}
 			text = match LocalDateTime.to_gregorian_text(other) {
 				Ok(value) => value

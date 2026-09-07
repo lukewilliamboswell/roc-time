@@ -71,6 +71,7 @@ These features work, but check that your input fits their scope.
 | --- | --- | --- |
 | Timestamp and booking text | Complete RFC offset timestamps, up to six fractional digits; exact start/end windows; canonical serialization | No leap-second or sub-microsecond input; this is not every ISO 8601 form |
 | Native civil text (development source) | Gregorian date, clock and explicitly Gregorian local-datetime parsing and canonical output; date/clock literals and generic string codecs | Not in rc3; local labels have no zone or supplied-field resolution; at most six fractional digits |
+| Everyday display (development source) | English Gregorian dates such as `7 Sep 2026` and local appointments such as `7 Sep 2026, 09:30` | Not in rc3; explicit minute/second/exact precision; hiding nonzero fields returns an error; no locale dataset |
 | EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%`; development source also supports individual and year/month group qualifications | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
 | IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
 | RFC recurrence import | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed profiles | No complete ICS files, mixed UTC/local exceptions, or recurrence export/persistence yet |
@@ -84,8 +85,8 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 
 ### Tier 3: Next, in user-impact order
 
-1. **Finish everyday date/time workflows.** Common form input, ordinary display,
-   named-zone appointments, clock/expiry integration and application records.
+1. **Finish everyday date/time workflows.** Named-zone appointments,
+   clock/expiry integration and application records.
    Add weekday, ordinal-day and ISO-week queries for reporting.
 2. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
@@ -152,6 +153,13 @@ need a timeline position; use description types when supplied resolution matters
 The module examples and [application-record test](tests/codecs/CodecChecks.roc)
 show these APIs using the development package. Published rc3 examples require
 their released APIs until a new release includes this slice.
+
+[EnglishGregorian](package/EnglishGregorian.roc) adds ordinary display with
+explicit precision: `local_datetime(appointment, Minute)` produces
+`7 Sep 2026, 09:30` for that local value. `Exact` retains all microseconds;
+`Minute` and `Second` return `PrecisionLoss` if they would hide nonzero fields.
+The [appointment-display application](tests/appointment_display/main.roc) uses
+the development source and is checked against both local sources and the bundle.
 
 ## Prior art
 

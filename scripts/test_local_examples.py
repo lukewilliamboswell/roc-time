@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise copied public examples against the development package sources."""
+"""Exercise copied public examples and unreleased caller scenarios locally."""
 from __future__ import annotations
 
 import os
@@ -9,7 +9,7 @@ import tempfile
 
 sys.dont_write_bytecode = True
 from roc_version import package_pin
-from test_bundle_examples import ROOT, run_example_apps, run_example_checks
+from test_bundle_examples import ROOT, build_and_run_examples, copy_internal_examples, run_example_apps, run_example_checks
 from update_example_urls import copy_examples
 
 
@@ -25,6 +25,11 @@ def main() -> None:
         )
         run_example_checks(examples)
         run_example_apps(examples)
+        internal = copy_internal_examples(Path(directory) / "internal-scenarios", str(ROOT / "package/main.roc"))
+        print("Testing unreleased caller scenarios against local sources.")
+        run_example_checks(internal)
+        run_example_apps(internal)
+        build_and_run_examples(internal, Path(directory) / "internal-build")
     if any(path.read_bytes() != content for path, content in originals.items()):
         raise SystemExit("Development example tests changed tracked example sources")
     print("Verified copied examples against local packages; public sources unchanged.")
