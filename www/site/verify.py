@@ -35,7 +35,7 @@ class Page(HTMLParser):
                 self.current.append(attrs["href"])
 
 
-def verify(output):
+def verify(output, api_root):
     output = output.resolve()
     expected = {path.with_suffix(".html").name for path in (SOURCE / "content").glob("*.md")}
     actual = {str(path.relative_to(output)) for path in output.rglob("*.html")}
@@ -55,7 +55,7 @@ def verify(output):
                     raise ValueError(f"{name}: unexpected external link scheme: {href}")
                 if link.netloc == "lukewilliamboswell.github.io" and link.path.startswith("/roc-time/"):
                     relative = unquote(link.path.removeprefix("/roc-time/"))
-                    target = WWW / relative
+                    target = api_root / relative
                     if target.is_dir():
                         target /= "index.html"
                     if not target.is_file():
@@ -80,4 +80,6 @@ def verify(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="generated HTML directory")
-    verify(parser.parse_args().output)
+    parser.add_argument("--api-root", type=Path, required=True, help="Restored release documentation tree")
+    args = parser.parse_args()
+    verify(args.output, args.api_root.resolve())

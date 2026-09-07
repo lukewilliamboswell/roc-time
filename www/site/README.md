@@ -15,7 +15,7 @@ roc version
 roc check www/site/main.roc
 roc build www/site/main.roc --output=.roc-time-tmp/docs-site-builder
 .roc-time-tmp/docs-site-builder www/site/content .roc-time-tmp/docs-site
-python3 www/site/verify.py .roc-time-tmp/docs-site
+python3 www/site/verify.py .roc-time-tmp/docs-site --api-root .roc-time-tmp/api-docs
 python3 -m http.server 8000 --directory .roc-time-tmp/docs-site --bind 127.0.0.1
 ```
 
@@ -46,7 +46,7 @@ Roc build may download the pinned dependency.
   check release-specific header rewriting before recommending a source tag’s
   dependency URLs. Keep the starter kit’s app/compiler/package pins together.
 - `verify.py` checks generated page coverage, titles/headings/navigation, local
-  links/fragments and release API links against checked-in documentation. It
+  links/fragments and release API links against explicitly restored release documentation. It
   does not claim live external link availability or execute example code.
 
 Rebuild into a fresh ignored output directory after deleting or renaming source
@@ -59,9 +59,18 @@ roc fmt --check www/site/main.roc www/site/Site.roc
 
 ## Publishing boundary
 
-This foundation does not change deployment. `scripts/docs.py` currently generates
-versioned API docs and owns the root redirect; `.github/workflows/release-docs.yml`
-publishes `www/`. Integrating this landing site must first settle ownership of
-`www/index.html`, stage only generated output and historical API directories,
-and preserve immutable release docs. See the scoped
-[documentation-site plan](../../planning/documentation-site.md).
+The release workflow stores deterministic versioned API archives as GitHub release
+assets. It restores historical assets into ignored storage, builds these authored
+guides and deploys their combined output. Generated API pages and guide HTML do
+not belong in Git. The authored guides own the root landing page; historical
+`/<version>/` API URLs stay unchanged. Missing historical assets stop deployment.
+
+For a complete local assembly, first restore release assets:
+
+```sh
+python3 scripts/release_docs.py fetch --output .roc-time-tmp/api-docs
+python3 scripts/assemble_docs_site.py --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
+```
+
+Use fresh output directories. The standalone verifier needs that same restored
+API directory; it does not depend on checked-in generated files.

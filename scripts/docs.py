@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate versioned package documentation.
 
-Writes the docs to `<docs-root>/<version>`. Stable releases point the root
-redirect at the highest stable version present; prereleases preserve it.
+Writes generated API documentation to ignored output; the authored site owns
+the deployment root.
 """
 from __future__ import annotations
 
@@ -25,54 +25,11 @@ VERSION_RE = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
 )
 
-INDEX_TEMPLATE = """<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Redirecting...</title>
-        <script>
-            window.location.href = "/{repo}/{version}/";
-        </script>
-    </head>
-    <body>
-        <noscript>
-            <p>
-                If you are not automatically redirected, please
-                <a href="/{repo}/{version}/">click here</a>.
-            </p>
-        </noscript>
-    </body>
-</html>
-"""
-
-
 def roc_command() -> str:
     roc = os.environ.get("ROC", "roc")
     if "/" in roc or "\\" in roc:
         return str(Path(roc).resolve())
     return roc
-
-
-def update_stable_index(docs_root: Path) -> str:
-    """Select numeric SemVer precedence from generated stable documentation only."""
-    candidates = []
-    for entry in docs_root.iterdir():
-        parsed = VERSION_RE.fullmatch(entry.name)
-        if (parsed is None or parsed.group("prerelease") is not None
-                or not entry.is_dir() or not (entry / "index.html").is_file()):
-            continue
-        # Build metadata does not affect precedence. The spelling is a stable
-        # tie-breaker if history contains two names for the same numeric release.
-        numbers = tuple(int(part) for part in entry.name.split("+", 1)[0].split("."))
-        candidates.append((numbers, entry.name))
-    if not candidates:
-        raise ValueError("No generated stable documentation available for the root redirect")
-    version = max(candidates)[1]
-    (docs_root / "index.html").write_text(
-        INDEX_TEMPLATE.format(repo=REPO_NAME, version=version), encoding="utf-8"
-    )
-    return version
 
 
 def main() -> None:
@@ -83,7 +40,7 @@ def main() -> None:
     parser.add_argument(
         "--docs-root",
         type=Path,
-        default=Path(os.environ.get("DOCS_ROOT", ROOT / "www")),
+        default=Path(os.environ.get("DOCS_ROOT", ROOT / ".roc-time-tmp" / "release-docs")),
     )
     args = parser.parse_args()
 
@@ -121,8 +78,6 @@ def main() -> None:
                       r'\1roc-time\2', html)
         generated_page.write_text(html)
 
-    if parsed_version.group("prerelease") is None:
-        update_stable_index(docs_root)
 
     print(f"Generated docs for {version} in {version_dir}")
 
