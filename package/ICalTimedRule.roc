@@ -16,6 +16,7 @@ import LocalDateTime
 import GregorianDate
 import CalendarPattern
 import ICalRuleText
+import ScheduleEndings
 
 ## Extracted RFC 5545 timed recurrence values, profile timed-values-v1.
 ## UTC, floating and zoned DTSTART modes are explicit. UTC starts require Z;
@@ -230,6 +231,13 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 	## and before-gap policies, and all native schedule budgets remain available.
 	schedule : id, ICalTimedRule, TimedRecurrence.Window, ICalPeriod.Context -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	schedule = |series, value, window, context| {
+		prepared = prepare(value, context)?
+		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
+	}
+	# Internal shared context validation and PERIOD preparation. No window or
+	# occurrence enumeration is needed to establish a checked declaration.
+	prepare : ICalTimedRule, ICalPeriod.Context -> Try({ rule : TimedRecurrence, endings : ScheduleEndings, context : TimedRecurrence.Context }, [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	prepare = |value, context| {
 		compatible = match (value.mode, context) {
 			(Utc, Utc) => Bool.True
 			(Floating, Local(_)) | (Zoned, Local(_)) => Bool.True
@@ -238,7 +246,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 		if !compatible {
 			return Err(IncompatibleContext)
 		}
-		ICalPeriod.schedule(series, value.rule, window, value.duration, value.periods, context)
+		ICalPeriod.prepare(value.rule, value.duration, value.periods, context)
 	}
 
 	## The wrapper retains RFC mode and policy, while native facts expose the

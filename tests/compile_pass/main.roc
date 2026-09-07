@@ -12,6 +12,7 @@ import time.GregorianDate
 import time.DateRecurrence
 import time.ICalDateRule
 import time.ICalTimedRule
+import time.ScheduleDefinition
 import time.LocalDateTime
 
 # Positive control for compile-failure checks: the same imports and valid
@@ -40,7 +41,8 @@ main! = |_args| {
 	}
 	lower = local("2025-01-01T00:00")?
 	upper = local("2026-01-01T00:00")?
-	_timed_cursor = ICalTimedRule.schedule(1.U64, timed, { start: lower, end: upper }, Utc)?
+	declaration = ScheduleDefinition.from_ical({ rule: timed, context: Utc }) ?? crash "valid declaration fixture"
+	_timed_cursor = ScheduleDefinition.cursor(1.U64, declaration, { start: lower, end: upper })?
 	Ok({})
 }
 

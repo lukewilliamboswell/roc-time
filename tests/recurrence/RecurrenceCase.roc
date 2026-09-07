@@ -2,6 +2,7 @@ import fuzz.Fuzz
 import time.Explanation
 import time.SemanticFact
 import time.TimedSchedule
+import time.ScheduleDefinition
 import time.TimedOccurrence
 import time.CalendarDelta
 import time.TimedRecurrence
@@ -795,6 +796,17 @@ check_subdaily = |input| {
 		},
 	)
 	check_timed_batches(whole_cursor, input.work.to_u64(), whole_sources, whole_boundaries)
+	# Preparation must preserve the native microsecond remainder even when
+	# RFC interchange correctly rejects it. Compare actual appointment starts
+	# against the same independent integer grid, with a one-microsecond ending.
+	fractional_context = { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }
+	fractional_window = { start: window_start, end }
+	fractional_duration = Coordinate(PosixDelta.from_microseconds(1))
+	fractional_definition = ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation"
+	fractional_cursor = ScheduleDefinition.cursor(73.U64, fractional_definition, fractional_window) ?? crash "fractional prepared cursor"
+	check_fractional_schedule(fractional_cursor, input.work.to_u64(), $expected)
+	fractional_direct = TimedSchedule.new(73.U64, rebuilt, fractional_window, fractional_duration, fractional_context) ?? crash "fractional direct cursor"
+	check_fractional_schedule(fractional_direct, input.work.to_u64(), $expected)
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 10000 {
@@ -822,6 +834,38 @@ check_subdaily = |input| {
 		$calls = $calls + 1
 	}
 	crash "subdaily grid resumption did not terminate"
+}
+
+check_fractional_schedule = |initial, work, expected| {
+	var $cursor = initial
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 10000 {
+		batch = TimedSchedule.collect($cursor, { work: { max_steps: work, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "fractional schedule execution"
+		if batch.steps > work or batch.zone_segments > 1 or batch.occurrences.len() > 1 {
+			crash "fractional schedule budget"
+		}
+		for item in batch.occurrences {
+			span = TimedOccurrence.span(item)
+			if TimedOccurrence.id(item).series != 73 or PosixSpan.coordinate_width(span) != Ok(PosixDelta.from_microseconds(1)) {
+				crash "fractional schedule identity or width"
+			}
+			$observed = $observed.append(PosixBoundary.to_microseconds(PosixSpan.start(span)))
+		}
+		match batch.status {
+			Complete => {
+				if $observed != expected {
+					crash "fractional schedule differs from integer model"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				$cursor = progress.cursor
+			}
+		}
+		$calls = $calls + 1
+	}
+	crash "fractional schedule resumption did not terminate"
 }
 
 # In fixed UTC, one calendar day plus one coordinate hour is exactly 25
@@ -959,11 +1003,16 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		AtLocal({ source: local(date(2024, 2, 6), 9), occurrence: First, gap: UseOffsetBeforeGap })
 	}
 	overrides = [{ source: anchor_source, ending: short_ending }, { source: extra_source, ending: extra_ending }, { source: anchor_source, ending: short_ending }]
-	var $current = if exclude_anchor {
-		match TimedSchedule.new_with_endings(42.U64, rule, window, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }), overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	(direct, prepared) = if exclude_anchor {
+		default_duration = Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
+		context = { rules, occurrence: RequireUnique, gap: RejectGap }
+		declaration = ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition"
+		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "native definition cursor"
+		direct_cursor = match TimedSchedule.new_with_endings(42.U64, rule, window, default_duration, overrides, context) {
 			Ok(value) => value
 			Err(_) => crash "schedule construction"
 		}
+		(direct_cursor, prepared_cursor)
 	} else {
 		fields = GregorianDate.to_fields(anchor)
 		hour = ClockTime.to_fields(anchor_clock).hour
@@ -993,11 +1042,16 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		# Preserve PERIOD ending intent and duplicate definitions across exchange;
 		# the existing independent grid below checks restored identities/widths.
 		restored = export_wrapper(parsed)
-		match ICalTimedRule.schedule(42.U64, restored, window, Local(rules)) {
+		declaration = ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition"
+		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "iCalendar definition cursor"
+		direct_cursor = match ICalTimedRule.schedule(42.U64, restored, window, Local(rules)) {
 			Ok(value) => value
 			Err(_) => crash "timed RFC schedule adaptation"
 		}
+		(direct_cursor, prepared_cursor)
 	}
+	var $current = prepared
+	var $direct = direct
 
 	var $index = 0.U64
 	var $calls = 0.U64
@@ -1005,6 +1059,17 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		batch = match TimedSchedule.collect($current, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "schedule collection"
+		}
+		direct_batch = TimedSchedule.collect($direct, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "direct schedule collection"
+		if direct_batch.occurrences.map(|item| { id: TimedOccurrence.id(item), span: TimedOccurrence.span(item) }) != batch.occurrences.map(|item| { id: TimedOccurrence.id(item), span: TimedOccurrence.span(item) }) {
+			crash "prepared schedule changed direct identities or spans"
+		}
+		match (direct_batch.status, batch.status) {
+			(Complete, Complete) => {}
+			(Limited(direct_progress), Limited(_)) => {
+				$direct = direct_progress.cursor
+			}
+			_ => crash "prepared schedule changed bounded completion"
 		}
 		if batch.steps > work or batch.zone_segments > 1 or batch.occurrences.len() > 1 {
 			crash "schedule exceeded shared budget"

@@ -198,6 +198,13 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	## supplied together as periods rather than merged from another schedule.
 	schedule : id, TimedRecurrence, TimedRecurrence.Window, ICalDuration, List(ICalPeriod), Context -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	schedule = |series, rule, window, duration, periods, context| {
+		prepared = prepare(rule, duration, periods, context)?
+		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
+	}
+	# Internal lowering shared with window-free schedule definitions. It retains
+	# the original PERIOD declaration separately at the calling wrapper layer.
+	prepare : TimedRecurrence, ICalDuration, List(ICalPeriod), Context -> Try({ rule : TimedRecurrence, endings : ScheduleEndings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	prepare = |rule, duration, periods, context| {
 		if periods.len() > 4096 {
 			return Err(TooManyPeriods)
 		}
@@ -233,7 +240,8 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 			Local(value) => value
 			Utc => utc_rules(I64.lowest, I64.highest)
 		}
-		TimedSchedule.new_with_endings(series, combined, window, ICalDuration.to_duration(duration), $overrides, { rules, occurrence: First, gap: UseOffsetBeforeGap })
+		endings = ScheduleEndings.new(ICalDuration.to_duration(duration), $overrides)?
+		Ok({ rule: combined, endings, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })
 	}
 }
 
@@ -457,3 +465,4 @@ expect {
 								ICalPeriod.fact_at(huge, 3) == End and ICalPeriod.fact_at(local, 4) == End and
 									ICalPeriod.fact_at(huge, U64.highest) == End and ICalPeriod.to_inspect(huge).count_utf8_bytes() <= 256
 }
+import ScheduleEndings

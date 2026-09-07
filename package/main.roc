@@ -13,6 +13,7 @@ package
 		TimedRecurrence,
 		TimedOccurrence,
 		TimedSchedule,
+		ScheduleDefinition,
 		SubdailyPattern,
 		AllDayOccurrence,
 		AllDayRecurrence,
