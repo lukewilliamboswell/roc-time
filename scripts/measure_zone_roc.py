@@ -64,7 +64,9 @@ def main(wheel, samples, encoding, smoke=False):
         raise SystemExit(f"Requires pinned CPython {python_pin} TZif decoder")
     if hashlib.sha256(wheel.read_bytes()).hexdigest() != WHEEL_SHA256:
         raise SystemExit("Wrong tzdata wheel")
-    roc = str(Path(os.environ["ROC"]).resolve())
+    roc = os.environ.get("ROC", "roc")
+    if "/" in roc or "\\" in roc:
+        roc = str(Path(roc).resolve())
     tmp = ROOT / ".roc-time-tmp"
     tmp.mkdir(exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="zone-roc-measure-", dir=tmp))
