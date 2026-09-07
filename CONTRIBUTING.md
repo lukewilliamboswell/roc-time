@@ -528,7 +528,7 @@ Automatic merging is disabled in this pilot. Bot PR creation and required checks
 are repository settings; installing workflows does not enable those settings.
 No bot approval or branch-protection bypass is part of this policy.
 
-The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/5e6663c1436f038a35cc076a1b2921983e9b954c/docs/maintenance-releases.md)
+The shared [maintainer guide](https://github.com/lukewilliamboswell/roc-automation/blob/ad3504508984be9817cfe8a05628e2ad3da8c4f3/docs/package-maintainer-guide.md)
 provides reusable guidance. OpenSSF evidence and support commitments remain each
 project's responsibility.
 
