@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout documentation history from main
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -45,14 +45,14 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout trusted workflow tooling
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           path: .roc-time-tmp/workflow-source
           persist-credentials: false
 
       - name: Checkout released documentation sources
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.release_version }}
           path: .roc-time-tmp/release-source
@@ -166,7 +166,7 @@ jobs:
       statuses: write
     steps:
       - name: Checkout trusted validation controller
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
