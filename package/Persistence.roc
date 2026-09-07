@@ -10,9 +10,9 @@ import EdtfDate
 import OffsetTimestamp
 import ExactInterval
 import Ixdtf
-import RfcDateTime
-import RfcDuration
-import RfcPeriod
+import ICalDateTime
+import ICalDuration
+import ICalPeriod
 import PosixBoundary
 import PosixDelta
 import PosixSpan
@@ -128,8 +128,8 @@ import Coverage
 ## }
 ## ```
 Persistence :: { stored : Value, snapshot_payload : Str }.{
-	Value : [ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), IxdtfSnapshot(Ixdtf.Snapshot), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
-	Error : [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
+	Value : [ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), IxdtfSnapshot(Ixdtf.Snapshot), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), ExactInterval(ExactInterval), Ixdtf(Ixdtf), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod), PosixBoundary(PosixBoundary), PosixDelta(PosixDelta), PosixSpan(PosixSpan), Coverage(Coverage), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue)]
+	Error : [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), InvalidCalendarValue(PersistenceCalendar.Error), InvalidQualifiedCalendarValue(PersistenceCalendar.Error), Envelope(PersistenceEnvelope.Error), UnknownFormat(Str), UnknownVersion(Str), UnknownKind(Str), UnsupportedProfile(Str), UnsupportedAxis(Str), UnsupportedUnit(Str), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidICalDateTime(ICalDateTime.Error), InvalidICalDuration(ICalDuration.Error), InvalidICalPeriod(ICalPeriod.Error), InvalidInteger, OutOfRange, MalformedSpan, IncompleteSpan, InvalidSpan([EmptySpan, ReversedBounds]), NonCanonicalCoverage, TooManyMembers]
 	new : Value -> Try(Persistence, [InvalidCivilSnapshot(PersistenceCivil.Error), InvalidSnapshot(PersistenceSnapshot.Error), TooManyMembers, ..])
 	new = |stored| {
 		var $snapshot_payload = ""
@@ -239,17 +239,17 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 				Ok(inner) => Ixdtf(inner)
 				Err(error) => return Err(InvalidIxdtf(error))
 			}
-			"rfc-date-time" => match RfcDateTime.parse(fields.payload) {
-				Ok(inner) => RfcDateTime(inner)
-				Err(error) => return Err(InvalidRfcDateTime(error))
+			"rfc-date-time" => match ICalDateTime.parse(fields.payload) {
+				Ok(inner) => ICalDateTime(inner)
+				Err(error) => return Err(InvalidICalDateTime(error))
 			}
-			"rfc-duration" => match RfcDuration.parse(fields.payload) {
-				Ok(inner) => RfcDuration(inner)
-				Err(error) => return Err(InvalidRfcDuration(error))
+			"rfc-duration" => match ICalDuration.parse(fields.payload) {
+				Ok(inner) => ICalDuration(inner)
+				Err(error) => return Err(InvalidICalDuration(error))
 			}
-			"rfc-period" => match RfcPeriod.parse(fields.payload) {
-				Ok(inner) => RfcPeriod(inner)
-				Err(error) => return Err(InvalidRfcPeriod(error))
+			"rfc-period" => match ICalPeriod.parse(fields.payload) {
+				Ok(inner) => ICalPeriod(inner)
+				Err(error) => return Err(InvalidICalPeriod(error))
 			}
 			"posix-boundary" => PosixBoundary(PosixBoundary.from_microseconds(integer(fields.payload)?))
 			"posix-delta" => PosixDelta(PosixDelta.from_microseconds(integer(fields.payload)?))
@@ -284,9 +284,9 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 			OffsetTimestamp(inner) => { kind: "offset-timestamp", payload: OffsetTimestamp.to_text(inner) }
 			ExactInterval(inner) => { kind: "exact-interval", payload: ExactInterval.to_text(inner) }
 			Ixdtf(inner) => { kind: "ixdtf", payload: Ixdtf.to_text(inner) }
-			RfcDateTime(inner) => { kind: "rfc-date-time", payload: RfcDateTime.to_text(inner) }
-			RfcDuration(inner) => { kind: "rfc-duration", payload: RfcDuration.to_text(inner) }
-			RfcPeriod(inner) => { kind: "rfc-period", payload: RfcPeriod.to_text(inner) }
+			ICalDateTime(inner) => { kind: "rfc-date-time", payload: ICalDateTime.to_text(inner) }
+			ICalDuration(inner) => { kind: "rfc-duration", payload: ICalDuration.to_text(inner) }
+			ICalPeriod(inner) => { kind: "rfc-period", payload: ICalPeriod.to_text(inner) }
 			PosixBoundary(inner) => { kind: "posix-boundary", payload: PosixBoundary.to_microseconds(inner).to_str() }
 			PosixDelta(inner) => { kind: "posix-delta", payload: PosixDelta.to_microseconds(inner).to_str() }
 			PosixSpan(inner) => { kind: "posix-span", payload: span_text(inner) }
@@ -330,9 +330,9 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 		OffsetTimestamp(inner) => inner.to_hash((1.U8).to_hash(hasher))
 		ExactInterval(inner) => inner.to_hash((2.U8).to_hash(hasher))
 		Ixdtf(inner) => inner.to_hash((3.U8).to_hash(hasher))
-		RfcDateTime(inner) => inner.to_hash((4.U8).to_hash(hasher))
-		RfcDuration(inner) => inner.to_hash((5.U8).to_hash(hasher))
-		RfcPeriod(inner) => inner.to_hash((6.U8).to_hash(hasher))
+		ICalDateTime(inner) => inner.to_hash((4.U8).to_hash(hasher))
+		ICalDuration(inner) => inner.to_hash((5.U8).to_hash(hasher))
+		ICalPeriod(inner) => inner.to_hash((6.U8).to_hash(hasher))
 		PosixBoundary(inner) => inner.to_hash((7.U8).to_hash(hasher))
 		PosixDelta(inner) => inner.to_hash((8.U8).to_hash(hasher))
 		PosixSpan(inner) => inner.to_hash((9.U8).to_hash(hasher))
@@ -350,9 +350,9 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 			OffsetTimestamp(_) => "offset-timestamp"
 			ExactInterval(_) => "exact-interval"
 			Ixdtf(_) => "ixdtf"
-			RfcDateTime(_) => "rfc-date-time"
-			RfcDuration(_) => "rfc-duration"
-			RfcPeriod(_) => "rfc-period"
+			ICalDateTime(_) => "rfc-date-time"
+			ICalDuration(_) => "rfc-duration"
+			ICalPeriod(_) => "rfc-period"
 			PosixBoundary(_) => "posix-boundary"
 			PosixDelta(_) => "posix-delta"
 			PosixSpan(_) => "posix-span"
@@ -373,9 +373,9 @@ metadata = |kind| {
 		"offset-timestamp" => OffsetTimestamp.profile
 		"exact-interval" => ExactInterval.profile
 		"ixdtf" => Ixdtf.profile
-		"rfc-date-time" => RfcDateTime.profile
-		"rfc-duration" => RfcDuration.profile
-		"rfc-period" => RfcPeriod.profile
+		"rfc-date-time" => ICalDateTime.profile
+		"rfc-duration" => ICalDuration.profile
+		"rfc-period" => ICalPeriod.profile
 		"posix-boundary" => "posix-microseconds-v1"
 		"posix-delta" => "posix-microseconds-v1"
 		"posix-span" => "posix-half-open-span-v1"
@@ -538,9 +538,9 @@ expect {
 		OffsetTimestamp(OffsetTimestamp.parse("2000-01-01T00:00:00.120+00:00")?),
 		ExactInterval(ExactInterval.parse("2000-01-01T00:00:00Z/2000-01-02T00:00:00Z")?),
 		Ixdtf(Ixdtf.parse("2000-01-01T00:00:00Z[u-ca=hebrew][knort=blargel]")?),
-		RfcDateTime(RfcDateTime.parse("20000101T000000")?),
-		RfcDuration(RfcDuration.parse("P1DT1H")?),
-		RfcPeriod(RfcPeriod.parse("20000101T000000/P1D")?),
+		ICalDateTime(ICalDateTime.parse("20000101T000000")?),
+		ICalDuration(ICalDuration.parse("P1DT1H")?),
+		ICalPeriod(ICalPeriod.parse("20000101T000000/P1D")?),
 	] {
 		value = Persistence.new(stored)?
 		$valid = $valid and Persistence.parse(Persistence.to_text(value)) == Ok(value)

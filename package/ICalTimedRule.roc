@@ -6,10 +6,10 @@ import ZoneRules
 import FixedOffset
 import CalendarDate
 import ClockTime
-import RfcRuleParts
-import RfcDateTime
-import RfcDuration
-import RfcPeriod
+import ICalRuleParts
+import ICalDateTime
+import ICalDuration
+import ICalPeriod
 import TimedRecurrence
 import TimedSchedule
 import LocalDateTime
@@ -23,7 +23,7 @@ import LocalDateTime
 ## DATE adapter's RRULE grammar. Disputed omitted YEARLY defaults remain explicit
 ## unsupported cases. BYSECOND=60 remains unsupported on the POSIX profile.
 ## RDATE/EXDATE entries are extracted values and may contain comma lists. PERIOD
-## entries use RfcPeriod. All inclusions/exclusions must match DTSTART's form;
+## entries use ICalPeriod. All inclusions/exclusions must match DTSTART's form;
 ## mixed UTC/local exception matching is explicitly unsupported. Zoned values
 ## assume one property TZID mapped by the caller to the supplied immutable rules.
 ## This does not parse content lines, folded ICS, property parameters or TZIDs.
@@ -33,13 +33,13 @@ import LocalDateTime
 ## applies when PERIOD values are added. Parsing constructs native definitions
 ## without enumerating occurrences or consulting rules. Source spelling and
 ## versioned persistence are outside this profile.
-RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List(RfcPeriod), mode : Mode }.{
+ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : List(ICalPeriod), mode : Mode }.{
 	Mode : [Utc, Floating, Zoned]
 	Parts : { start : Str, rule : Str, duration : Str, inclusions : List(Str), exclusions : List(Str), periods : List(Str), mode : Mode }
-	Error : [TooLarge, DateTime(Str, RfcDateTime.Error), Duration(RfcDuration.Error), Period(RfcPeriod.Error), Rule(RfcRuleParts.Error), Incompatible(Str), Unsupported(Str), InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])]
+	Error : [TooLarge, DateTime(Str, ICalDateTime.Error), Duration(ICalDuration.Error), Period(ICalPeriod.Error), Rule(ICalRuleParts.Error), Incompatible(Str), Unsupported(Str), InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])]
 	profile : Str
 	profile = "rfc5545-timed-values-v1"
-	parse : Parts -> Try(RfcTimedRule, Error)
+	parse : Parts -> Try(ICalTimedRule, Error)
 	parse = |parts| {
 		if parts.inclusions.len() > 4096 or parts.exclusions.len() > 4096 or parts.periods.len() > 4096 {
 			return Err(TooLarge)
@@ -56,14 +56,14 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 			Utc => Utc
 			_ => Local
 		}
-		if RfcDateTime.form(start) != expected_form {
+		if ICalDateTime.form(start) != expected_form {
 			return Err(Incompatible("DTSTART form and mode"))
 		}
-		duration = match RfcDuration.parse(parts.duration) {
+		duration = match ICalDuration.parse(parts.duration) {
 			Ok(value) => value
 			Err(error) => return Err(Duration(error))
 		}
-		fields = match RfcRuleParts.parse(parts.rule, Timed) {
+		fields = match ICalRuleParts.parse(parts.rule, Timed) {
 			Ok(value) => value
 			Err(error) => return Err(Rule(error))
 		}
@@ -74,16 +74,16 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 				end = timestamp(text, "UNTIL")?
 				match parts.mode {
 					Floating => {
-						if RfcDateTime.form(end) != Local {
+						if ICalDateTime.form(end) != Local {
 							return Err(Incompatible("floating DTSTART requires local UNTIL"))
 						}
-						Until(RfcDateTime.local_label(end))
+						Until(ICalDateTime.local_label(end))
 					}
 					Utc | Zoned => {
-						if RfcDateTime.form(end) != Utc {
+						if ICalDateTime.form(end) != Utc {
 							return Err(Incompatible("UTC or zoned DTSTART requires UTC UNTIL"))
 						}
-						boundary = match RfcDateTime.utc_boundary(end) {
+						boundary = match ICalDateTime.utc_boundary(end) {
 							Ok(value) => value
 							Err(_) => crash "validated UTC timestamp within year profile"
 						}
@@ -93,8 +93,8 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 			}
 		}
 		constructed = match fields.subdaily {
-			None => TimedRecurrence.new(RfcDateTime.source(start), { calendar: fields.pattern, clocks: fields.clocks, termination, by_set_pos: fields.positions })
-			Some(frequency) => TimedRecurrence.new_subdaily(RfcDateTime.source(start), { pattern: { frequency, interval: fields.pattern.interval, calendar: { by_month: fields.pattern.by_month, by_month_day: fields.pattern.by_month_day, by_year_day: fields.pattern.by_year_day, by_day: fields.pattern.by_day.map(|day| day.weekday) }, clocks: fields.clocks }, termination, by_set_pos: fields.positions })
+			None => TimedRecurrence.new(ICalDateTime.source(start), { calendar: fields.pattern, clocks: fields.clocks, termination, by_set_pos: fields.positions })
+			Some(frequency) => TimedRecurrence.new_subdaily(ICalDateTime.source(start), { pattern: { frequency, interval: fields.pattern.interval, calendar: { by_month: fields.pattern.by_month, by_month_day: fields.pattern.by_month_day, by_year_day: fields.pattern.by_year_day, by_day: fields.pattern.by_day.map(|day| day.weekday) }, clocks: fields.clocks }, termination, by_set_pos: fields.positions })
 		}
 		rule = match constructed {
 			Ok(value) => value
@@ -102,11 +102,11 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 		}
 		inclusions = timestamps(parts.inclusions, "RDATE", expected_form)?
 		exclusions = timestamps(parts.exclusions, "EXDATE", expected_form)?
-		included = match TimedRecurrence.with_inclusions(rule, inclusions.map(RfcDateTime.source)) {
+		included = match TimedRecurrence.with_inclusions(rule, inclusions.map(ICalDateTime.source)) {
 			Ok(value) => value
 			Err(_) => return Err(TooLarge)
 		}
-		filtered = match TimedRecurrence.with_exclusions(included, exclusions.map(RfcDateTime.local_label)) {
+		filtered = match TimedRecurrence.with_exclusions(included, exclusions.map(ICalDateTime.local_label)) {
 			Ok(value) => value
 			Err(_) => return Err(TooLarge)
 		}
@@ -116,11 +116,11 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 				if $periods.len() == 4096 {
 					return Err(TooLarge)
 				}
-				period = match RfcPeriod.parse(text) {
+				period = match ICalPeriod.parse(text) {
 					Ok(value) => value
 					Err(error) => return Err(Period(error))
 				}
-				if RfcDateTime.form(RfcPeriod.start(period)) != expected_form {
+				if ICalDateTime.form(ICalPeriod.start(period)) != expected_form {
 					return Err(Unsupported("mixed PERIOD and DTSTART forms"))
 				}
 				$periods = $periods.append(period)
@@ -133,7 +133,7 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 	## application for this evaluation; no timezone is inferred. Rules remain
 	## immutable in the native cursor. Start/end selection follows RFC first-fold
 	## and before-gap policies, and all native schedule budgets remain available.
-	schedule : id, RfcTimedRule, TimedRecurrence.Window, RfcPeriod.Context -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	schedule : id, ICalTimedRule, TimedRecurrence.Window, ICalPeriod.Context -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	schedule = |series, value, window, context| {
 		compatible = match (value.mode, context) {
 			(Utc, Utc) => Bool.True
@@ -143,20 +143,20 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 		if !compatible {
 			return Err(IncompatibleContext)
 		}
-		RfcPeriod.schedule(series, value.rule, window, value.duration, value.periods, context)
+		ICalPeriod.schedule(series, value.rule, window, value.duration, value.periods, context)
 	}
 
 	## The wrapper retains RFC mode and policy, while native facts expose the
 	## effective selectors after adapter defaults. No original RRULE spelling.
-	fact_count : RfcTimedRule -> U64
+	fact_count : ICalTimedRule -> U64
 	fact_count = |rule| 2 + rule.periods.len() + TimedRecurrence.fact_count(rule.rule)
-	fact_at : RfcTimedRule, U64 -> [End, Item(SemanticFact)]
+	fact_at : ICalTimedRule, U64 -> [End, Item(SemanticFact)]
 	fact_at = |rule, index| {
 		if index >= fact_count(rule) {
 			return End
 		}
 		if index == 0 {
-			return Item(SemanticFact.new(RfcTimedRuleDescription({ mode: rule.mode, period_count: rule.periods.len() })))
+			return Item(SemanticFact.new(ICalTimedRuleDescription({ mode: rule.mode, period_count: rule.periods.len() })))
 		}
 		if index == 1 {
 			context = match rule.mode {
@@ -166,13 +166,13 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 			return Item(SemanticFact.new(RecurrencePolicy({ context, occurrence: First, gap: UseOffsetBeforeGap })))
 		}
 		if index == 2 {
-			components = RfcDuration.components(rule.duration)
-			return Item(SemanticFact.new(RfcDurationDescription({ role: RecurrenceEnding, days: components.days, seconds: components.seconds })))
+			components = ICalDuration.components(rule.duration)
+			return Item(SemanticFact.new(ICalDurationDescription({ role: RecurrenceEnding, days: components.days, seconds: components.seconds })))
 		}
 		remaining = index - 3
 		if remaining < rule.periods.len() {
 			return match rule.periods.get(remaining) {
-				Ok(period) => RfcPeriod.fact_at(period, 0)
+				Ok(period) => ICalPeriod.fact_at(period, 0)
 				Err(_) => End
 			}
 		}
@@ -187,7 +187,7 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 			},
 		)
 	}
-	to_inspect : RfcTimedRule -> Str
+	to_inspect : ICalTimedRule -> Str
 	to_inspect = |value| {
 		summary = match fact_at(value, 0) {
 			Item(fact) => SemanticFact.summary(fact)
@@ -201,13 +201,13 @@ RfcTimedRule :: { rule : TimedRecurrence, duration : RfcDuration, periods : List
 	}
 }
 
-timestamp : Str, Str -> Try(RfcDateTime, RfcTimedRule.Error)
-timestamp = |text, part| match RfcDateTime.parse(text) {
+timestamp : Str, Str -> Try(ICalDateTime, ICalTimedRule.Error)
+timestamp = |text, part| match ICalDateTime.parse(text) {
 	Ok(value) => Ok(value)
 	Err(error) => Err(DateTime(part, error))
 }
 
-timestamps : List(Str), Str, RfcDateTime.Form -> Try(List(RfcDateTime), RfcTimedRule.Error)
+timestamps : List(Str), Str, ICalDateTime.Form -> Try(List(ICalDateTime), ICalTimedRule.Error)
 timestamps = |entries, part, form| {
 	var $values = []
 	for entry in entries {
@@ -216,7 +216,7 @@ timestamps = |entries, part, form| {
 				return Err(TooLarge)
 			}
 			value = timestamp(text, part)?
-			if RfcDateTime.form(value) != form {
+			if ICalDateTime.form(value) != form {
 				return Err(Unsupported("mixed ${part} and DTSTART forms"))
 			}
 			$values = $values.append(value)
@@ -227,18 +227,18 @@ timestamps = |entries, part, form| {
 
 test_parts = |start, rule, mode| { start, rule, mode, duration: "P1D", inclusions: [], exclusions: [], periods: [] }
 
-test_timestamp = |text| match RfcDateTime.parse(text) {
+test_timestamp = |text| match ICalDateTime.parse(text) {
 	Ok(value) => value
 	Err(_) => crash "valid timed-rule fixture timestamp"
 }
 
 test_observe = |parts, context, lower, upper| {
-	parsed = match RfcTimedRule.parse(parts) {
+	parsed = match ICalTimedRule.parse(parts) {
 		Ok(value) => value
 		Err(error) => return Err(Parse(error))
 	}
-	window = { start: RfcDateTime.local_label(test_timestamp(lower)), end: RfcDateTime.local_label(test_timestamp(upper)) }
-	var $cursor = RfcTimedRule.schedule(42.U64, parsed, window, context)?
+	window = { start: ICalDateTime.local_label(test_timestamp(lower)), end: ICalDateTime.local_label(test_timestamp(upper)) }
+	var $cursor = ICalTimedRule.schedule(42.U64, parsed, window, context)?
 	var $occurrences = []
 	var $calls = 0.U64
 	while $calls < 2000 {
@@ -272,7 +272,7 @@ expect {
 # https://www.rfc-editor.org/errata/eid3883
 # The September 1997 New York fixture is UTC-04:00 throughout this window.
 expect {
-	validity = PosixSpan.new(RfcDateTime.utc_boundary(test_timestamp("19970901T000000Z"))?, RfcDateTime.utc_boundary(test_timestamp("19970904T000000Z"))?)?
+	validity = PosixSpan.new(ICalDateTime.utc_boundary(test_timestamp("19970901T000000Z"))?, ICalDateTime.utc_boundary(test_timestamp("19970904T000000Z"))?)?
 	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
 	var $valid = Bool.True
 	for case in [{ until: "19970902T210000Z", expected: [9.U8, 12, 15] }, { until: "19970902T170000Z", expected: [9, 12] }, { until: "19970902T190000Z", expected: [9, 12, 15] }] {
@@ -286,7 +286,7 @@ expect {
 expect {
 	var $valid = Bool.True
 	for parts in [test_parts("20250101T090000Z", "FREQ=DAILY;UNTIL=20250102T090000", Utc), test_parts("20250101T090000", "FREQ=DAILY;UNTIL=20250102T090000Z", Floating), test_parts("20250101T090000", "FREQ=DAILY;UNTIL=20250102T090000", Zoned), test_parts("20250101T090000Z", "FREQ=DAILY", Zoned)] {
-		$valid = $valid and match RfcTimedRule.parse(parts) {
+		$valid = $valid and match ICalTimedRule.parse(parts) {
 			Err(Incompatible(_)) => Bool.True
 			_ => Bool.False
 		}
@@ -295,29 +295,29 @@ expect {
 }
 expect {
 	parts = { ..test_parts("20070311T023000", "FREQ=HOURLY;COUNT=2", Zoned), exclusions: ["20070311T073000Z"] }
-	match RfcTimedRule.parse(parts) {
+	match ICalTimedRule.parse(parts) {
 		Err(Unsupported("mixed EXDATE and DTSTART forms")) => Bool.True
 		_ => Bool.False
 	}
 }
 expect {
 	parts = test_parts("20250101T090000Z", "FREQ=DAILY;BYSECOND=60", Utc)
-	match RfcTimedRule.parse(parts) {
+	match ICalTimedRule.parse(parts) {
 		Err(InvalidRule(UnsupportedLeapSecond)) => Bool.True
 		_ => Bool.False
 	}
 }
 expect {
 	parts = test_parts("20250101T090000Z", "FREQ=DAILY;COUNT=1;COUNT=2", Utc)
-	match RfcTimedRule.parse(parts) {
+	match ICalTimedRule.parse(parts) {
 		Err(Rule(Duplicate("COUNT"))) => Bool.True
 		_ => Bool.False
 	}
 }
 
 expect {
-	rule = RfcTimedRule.parse({ start: "20250101T090000", rule: "FREQ=DAILY;COUNT=1", duration: "P1D", inclusions: [], exclusions: ["20250101T090000"], periods: [], mode: Zoned })?
+	rule = ICalTimedRule.parse({ start: "20250101T090000", rule: "FREQ=DAILY;COUNT=1", duration: "P1D", inclusions: [], exclusions: ["20250101T090000"], periods: [], mode: Zoned })?
 	# Exclusion preserves the one-count declaration; no occurrence is generated
 	# merely to explain it. Wrapper mode supplies RFC gap/fold policy.
-	RfcTimedRule.fact_at(rule, 0) == Item(SemanticFact.new(RfcTimedRuleDescription({ mode: Zoned, period_count: 0 }))) and RfcTimedRule.fact_at(rule, 1) == Item(SemanticFact.new(RecurrencePolicy({ context: Required, occurrence: First, gap: UseOffsetBeforeGap }))) and RfcTimedRule.fact_at(rule, 2) == Item(SemanticFact.new(RfcDurationDescription({ role: RecurrenceEnding, days: 1, seconds: 0 }))) and RfcTimedRule.fact_at(rule, 4) == Item(SemanticFact.new(RecurrenceTermination(Count(1)))) and RfcTimedRule.fact_at(rule, RfcTimedRule.fact_count(rule)) == End and RfcTimedRule.fact_at(rule, U64.highest) == End and RfcTimedRule.to_inspect(rule).count_utf8_bytes() <= 256
+	ICalTimedRule.fact_at(rule, 0) == Item(SemanticFact.new(ICalTimedRuleDescription({ mode: Zoned, period_count: 0 }))) and ICalTimedRule.fact_at(rule, 1) == Item(SemanticFact.new(RecurrencePolicy({ context: Required, occurrence: First, gap: UseOffsetBeforeGap }))) and ICalTimedRule.fact_at(rule, 2) == Item(SemanticFact.new(ICalDurationDescription({ role: RecurrenceEnding, days: 1, seconds: 0 }))) and ICalTimedRule.fact_at(rule, 4) == Item(SemanticFact.new(RecurrenceTermination(Count(1)))) and ICalTimedRule.fact_at(rule, ICalTimedRule.fact_count(rule)) == End and ICalTimedRule.fact_at(rule, U64.highest) == End and ICalTimedRule.to_inspect(rule).count_utf8_bytes() <= 256
 }

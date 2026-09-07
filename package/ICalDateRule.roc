@@ -1,5 +1,5 @@
-import RfcRuleParts
-import RfcDateTime
+import ICalRuleParts
+import ICalDateTime
 import CalendarPattern
 import DateRecurrence
 import GregorianDate
@@ -21,12 +21,12 @@ import GregorianDate
 ## Timed values and unsupported extensions return explicit errors.
 ##
 ## ```roc
-## import time.RfcDateRule
+## import time.ICalDateRule
 ## import time.GregorianDate
 ## import time.DateRecurrence
 ##
 ## expect {
-##     rule = RfcDateRule.parse({
+##     rule = ICalDateRule.parse({
 ##         start: "20250131",
 ##         rule: "FREQ=MONTHLY;COUNT=3",
 ##         inclusions: [],
@@ -43,7 +43,7 @@ import GregorianDate
 ## ```
 ##
 ## Examples assume a package dependency named `time`.
-RfcDateRule :: [].{
+ICalDateRule :: [].{
 	profile : Str
 	profile = "rfc5545-date-values-v1"
 	Parts : { start : Str, rule : Str, inclusions : List(Str), exclusions : List(Str) }
@@ -64,7 +64,7 @@ RfcDateRule :: [].{
 		definition = DateRecurrence.definition(rule)
 		spec = definition.spec
 		pattern = spec.pattern
-		match RfcRuleParts.validate_profile(pattern, spec.by_set_pos, { hours: [], minutes: [], seconds: [] }) {
+		match ICalRuleParts.validate_profile(pattern, spec.by_set_pos, { hours: [], minutes: [], seconds: [] }) {
 			Ok(_) => {}
 			Err(Malformed(part)) => return Err(Malformed(part))
 			Err(Duplicate(part)) => return Err(Duplicate(part))
@@ -161,7 +161,7 @@ RfcDateRule :: [].{
 			$remaining = $remaining - value.count_utf8_bytes()
 		}
 		anchor = parse_date(parts.start, "DTSTART")?
-		fields = match RfcRuleParts.parse(parts.rule, Date) {
+		fields = match ICalRuleParts.parse(parts.rule, Date) {
 			Ok(value) => value
 			Err(Malformed(part)) => return Err(Malformed(part))
 			Err(Duplicate(part)) => return Err(Duplicate(part))
@@ -185,7 +185,7 @@ RfcDateRule :: [].{
 	}
 }
 
-date_text : GregorianDate, Str -> Try(Str, RfcDateRule.Error)
+date_text : GregorianDate, Str -> Try(Str, ICalDateRule.Error)
 date_text = |date, part| {
 	fields = GregorianDate.to_fields(date)
 	if fields.year < 1 or fields.year > 9999 {
@@ -243,13 +243,13 @@ weekday_at = |index| match index {
 	_ => crash "Validated weekday index"
 }
 
-parse_date : Str, Str -> Try(GregorianDate, RfcDateRule.Error)
+parse_date : Str, Str -> Try(GregorianDate, ICalDateRule.Error)
 parse_date = |text, part| {
 	bytes = text.to_utf8()
 	if bytes.len() != 8 {
 		# Share DATE-TIME validation with the timed adapter. A recognized leap
 		# second is still a DATE-TIME/DATE mismatch in this date-only profile.
-		return match RfcDateTime.parse(text) {
+		return match ICalDateTime.parse(text) {
 			Ok(_) | Err(UnsupportedLeapSecond) => Err(Incompatible("DATE-TIME with DATE"))
 			Err(OutOfRange) => Err(OutOfRange(part))
 			Err(InvalidDate) => Err(InvalidDate(part))
@@ -276,7 +276,7 @@ parse_date = |text, part| {
 	}
 }
 
-parse_dates : List(Str), Str -> Try(List(GregorianDate), RfcDateRule.Error)
+parse_dates : List(Str), Str -> Try(List(GregorianDate), ICalDateRule.Error)
 parse_dates = |entries, part| {
 	var $dates = []
 	for entry in entries {
@@ -292,7 +292,7 @@ parse_dates = |entries, part| {
 
 test_rfcdaterule_parts = |start, rule| { start, rule, inclusions: [], exclusions: [] }
 
-test_rfcdaterule_status = |input| match RfcDateRule.parse(input) {
+test_rfcdaterule_status = |input| match ICalDateRule.parse(input) {
 	Ok(_) => Ok({})
 	Err(error) => Err(error)
 }
@@ -303,7 +303,7 @@ test_rfcdaterule_date = |year, month, day| match GregorianDate.from_fields({ yea
 }
 
 test_rfcdaterule_observe = |input, test_rfcdaterule_window| {
-	rule = RfcDateRule.parse(input)?
+	rule = ICalDateRule.parse(input)?
 	cursor = match DateRecurrence.cursor(rule, test_rfcdaterule_window) {
 		Ok(value) => value
 		Err(_) => crash "Invalid fixture query"
@@ -322,35 +322,35 @@ test_rfcdaterule_window = { start: test_rfcdaterule_date(2025, 1, 1), end: test_
 
 # Canonicalization changes spelling and selector order, not set semantics.
 expect {
-	rule = RfcDateRule.parse({
+	rule = ICalDateRule.parse({
 		start: "20250131",
 		rule: "byday=FR,MO,WE,TU,TH,FR;bysetpos=-1,-1;count=03;freq=monthly",
 		inclusions: ["20250704,20250704"],
 		exclusions: ["20250331"],
 	})?
-	parts = RfcDateRule.to_parts(rule)?
+	parts = ICalDateRule.to_parts(rule)?
 	parts == { start: "20250131", rule: "FREQ=MONTHLY;INTERVAL=1;COUNT=3;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;WKST=MO", inclusions: ["20250704"], exclusions: ["20250331"] } and
-		RfcDateRule.to_parts(RfcDateRule.parse(parts)?)? == parts
+		ICalDateRule.to_parts(ICalDateRule.parse(parts)?)? == parts
 }
 
 expect {
-	rule = RfcDateRule.parse(test_rfcdaterule_parts("20250131", "FREQ=MONTHLY;COUNT=3"))?
+	rule = ICalDateRule.parse(test_rfcdaterule_parts("20250131", "FREQ=MONTHLY;COUNT=3"))?
 	definition = DateRecurrence.definition(rule)
 	edited = DateRecurrence.new(definition.anchor, { ..definition.spec, exclusions: [test_rfcdaterule_date(2025, 3, 31)] })?
-	test_rfcdaterule_observe(RfcDateRule.to_parts(edited)?, test_rfcdaterule_window)? == [test_rfcdaterule_date(2025, 1, 31), test_rfcdaterule_date(2025, 5, 31)] and
+	test_rfcdaterule_observe(ICalDateRule.to_parts(edited)?, test_rfcdaterule_window)? == [test_rfcdaterule_date(2025, 1, 31), test_rfcdaterule_date(2025, 5, 31)] and
 		DateRecurrence.definition(rule).spec.exclusions.is_empty()
 }
 
 expect {
 	base = { pattern: CalendarPattern.defaults(Daily), termination: Forever, by_set_pos: [], inclusions: [], exclusions: [] }
 	anchor = test_rfcdaterule_date(2025, 1, 1)
-	RfcDateRule.to_parts(DateRecurrence.new(test_rfcdaterule_date(0, 1, 1), base)?) == Err(OutOfRange("DTSTART")) and
-		RfcDateRule.to_parts(DateRecurrence.new(anchor, { ..base, termination: Count(2147483648) })?) == Err(OutOfRange("COUNT")) and
+	ICalDateRule.to_parts(DateRecurrence.new(test_rfcdaterule_date(0, 1, 1), base)?) == Err(OutOfRange("DTSTART")) and
+		ICalDateRule.to_parts(DateRecurrence.new(anchor, { ..base, termination: Count(2147483648) })?) == Err(OutOfRange("COUNT")) and
 			(match DateRecurrence.new(anchor, { ..base, pattern: { ..base.pattern, interval: 2147483648 } }) {
 				Err(InvalidInterval) => True
 				_ => False
 			}) and
-				RfcDateRule.to_parts(DateRecurrence.new(anchor, { ..base, by_set_pos: [1] })?) == Err(Incompatible("BYSETPOS requires another BY selector"))
+				ICalDateRule.to_parts(DateRecurrence.new(anchor, { ..base, by_set_pos: [1] })?) == Err(Incompatible("BYSETPOS requires another BY selector"))
 }
 
 # RFC 5545 §3.3.10 invalid dates/COUNT and §3.8.5 exclusions.

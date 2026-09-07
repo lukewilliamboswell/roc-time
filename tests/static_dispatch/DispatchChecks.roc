@@ -3,13 +3,13 @@ import time.CalendarEvidence
 import time.IntervalEvidence
 import time.QualifiedCalendarValue
 import time.CalendarDate
-import time.RfcPeriod
-import time.RfcDateTime
+import time.ICalPeriod
+import time.ICalDateTime
 import time.EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
 import time.Ixdtf
-import time.RfcDuration
+import time.ICalDuration
 import time.CivilDay
 import time.GregorianDate
 import time.PosixBoundary
@@ -94,18 +94,18 @@ DispatchChecks :: [].{
 
 		period = parse_period("19970101T180000Z/PT1H")?
 		same_period = parse_period("19970101t180000z/+PT60M")?
-		if period != same_period or Dict.get(Dict.insert(Dict.empty(), period, 23.U64), same_period) != Ok(23) or !Str.inspect(period).contains("RfcPeriod(form=Utc") or !Str.inspect(period).contains("coordinate_seconds=3600") {
+		if period != same_period or Dict.get(Dict.insert(Dict.empty(), period, 23.U64), same_period) != Ok(23) or !Str.inspect(period).contains("ICalPeriod(form=Utc") or !Str.inspect(period).contains("coordinate_seconds=3600") {
 			return Err(Failed)
 		}
 		utc = parse_datetime("19700101T000000Z")?
 		lower = parse_datetime("19700101t000000z")?
 		local = parse_datetime("19700101T000000")?
-		if utc != lower or utc == local or Dict.get(Dict.insert(Dict.empty(), utc, 19.U64), lower) != Ok(19) or !Str.inspect(local).contains("RfcDateTime(role=Standalone, form=Local") {
+		if utc != lower or utc == local or Dict.get(Dict.insert(Dict.empty(), utc, 19.U64), lower) != Ok(19) or !Str.inspect(local).contains("ICalDateTime(role=Standalone, form=Local") {
 			return Err(Failed)
 		}
 		week = parse_duration("P1W")?
 		days = parse_duration("P7D")?
-		if week != days or Dict.get(Dict.insert(Dict.empty(), week, 17.U64), days) != Ok(17) or Str.inspect(week) != "RfcDuration(role=Standalone, calendar_days=7, coordinate_seconds=0)" {
+		if week != days or Dict.get(Dict.insert(Dict.empty(), week, 17.U64), days) != Ok(17) or Str.inspect(week) != "ICalDuration(role=Standalone, calendar_days=7, coordinate_seconds=0)" {
 			return Err(Failed)
 		}
 		first = GregorianDate.from_fields({ year: -1, month: 12, day: 31 })?
@@ -184,20 +184,20 @@ parse_offset = |text| match OffsetTimestamp.parse(text) {
 	Err(_) => Err(Failed)
 }
 
-parse_duration : Str -> Try(RfcDuration, [Failed, ..])
-parse_duration = |text| match RfcDuration.parse(text) {
+parse_duration : Str -> Try(ICalDuration, [Failed, ..])
+parse_duration = |text| match ICalDuration.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }
 
-parse_datetime : Str -> Try(RfcDateTime, [Failed, ..])
-parse_datetime = |text| match RfcDateTime.parse(text) {
+parse_datetime : Str -> Try(ICalDateTime, [Failed, ..])
+parse_datetime = |text| match ICalDateTime.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }
 
-parse_period : Str -> Try(RfcPeriod, [Failed, ..])
-parse_period = |text| match RfcPeriod.parse(text) {
+parse_period : Str -> Try(ICalPeriod, [Failed, ..])
+parse_period = |text| match ICalPeriod.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }

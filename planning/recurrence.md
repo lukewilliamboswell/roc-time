@@ -30,7 +30,7 @@ This is an R11–R12/R14/R16 deliverable, using the existing execution engine.
 Implement in reviewable slices:
 
 1. **Timed meeting exchange.** Add checked semantic access for `TimedRecurrence`
-   and `RfcTimedRule`, then canonical extracted-property output for the existing
+   and `ICalTimedRule`, then canonical extracted-property output for the existing
    timed profile. Reuse the calendar, clock and subdaily definition accessors;
    preserve start form, termination domain, inclusions, exclusions and PERIOD
    endings. Use an explicit local weekly meeting, COUNT, one excluded source and

@@ -1,5 +1,5 @@
-import time.RfcTimedRule
-import time.RfcDateTime
+import time.ICalTimedRule
+import time.ICalDateTime
 import time.TimedSchedule
 import time.TimedOccurrence
 import time.TimedRecurrence
@@ -8,7 +8,7 @@ import time.CalendarDate
 import time.ClockTime
 import time.PosixSpan
 import time.PosixDelta
-import time.RfcDateRule
+import time.ICalDateRule
 import time.DateRecurrence
 import time.GregorianDate
 
@@ -34,7 +34,7 @@ DateOracle :: [].{
 
 observe = |input| {
 	parts = { start: at(input, 0), rule: at(input, 1), inclusions: values(at(input, 2)), exclusions: values(at(input, 3)) }
-	rule = match RfcDateRule.parse(parts) {
+	rule = match ICalDateRule.parse(parts) {
 		Ok(value) => value
 		Err(error) => crash "Oracle rule rejected: ${Str.inspect(error)}"
 	}
@@ -130,12 +130,12 @@ observe_timed = |input| {
 			},
 		)
 	}
-	parsed = match RfcTimedRule.parse({ start: "${at(input, 0)}T000000Z", rule: Str.join_with($parts, ";"), mode: Utc, duration: "P1D", inclusions: timed_values(at(input, 2)), exclusions: timed_values(at(input, 3)), periods: [] }) {
+	parsed = match ICalTimedRule.parse({ start: "${at(input, 0)}T000000Z", rule: Str.join_with($parts, ";"), mode: Utc, duration: "P1D", inclusions: timed_values(at(input, 2)), exclusions: timed_values(at(input, 3)), periods: [] }) {
 		Ok(value) => value
 		Err(error) => crash "Timed oracle rule rejected: ${Str.inspect(error)}"
 	}
 	window = { start: midnight_label(at(input, 4)), end: midnight_label(at(input, 5)) }
-	var $cursor = match RfcTimedRule.schedule({}, parsed, window, Utc) {
+	var $cursor = match ICalTimedRule.schedule({}, parsed, window, Utc) {
 		Ok(value) => value
 		Err(_) => crash "Timed oracle window rejected"
 	}
@@ -171,7 +171,7 @@ timed_values = |text| if text == "-" {
 	text.split_on(",").map(|value| "${value}T000000Z")
 }
 
-midnight_label = |text| match RfcDateTime.parse("${text}T000000Z") {
-	Ok(value) => RfcDateTime.local_label(value)
+midnight_label = |text| match ICalDateTime.parse("${text}T000000Z") {
+	Ok(value) => ICalDateTime.local_label(value)
 	Err(_) => crash "Valid oracle midnight"
 }

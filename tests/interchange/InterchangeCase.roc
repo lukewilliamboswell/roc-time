@@ -5,9 +5,9 @@ import time.Coverage
 import time.Persistence
 import time.Explanation
 import time.SemanticFact
-import time.RfcDateTime
-import time.RfcDuration
-import time.RfcPeriod
+import time.ICalDateTime
+import time.ICalDuration
+import time.ICalPeriod
 import time.PosixDelta
 import time.EdtfDate
 import time.OffsetTimestamp
@@ -531,23 +531,23 @@ check_core_persistence = |generated| {
 
 check_rfc_persistence = |input, day, h, m, s| {
 	source = "${input.year.to_str()}${pad(input.month.to_u64(), 2)}${pad(day.to_u64(), 2)}T${pad(h.to_u64(), 2)}${pad(m.to_u64(), 2)}${pad(s.to_u64(), 2)}Z"
-	date = match RfcDateTime.parse(source) {
+	date = match ICalDateTime.parse(source) {
 		Ok(found) => found
 		Err(_) => crash "Generated supported RFC datetime rejected"
 	}
 	duration_source = "PT${(input.seconds + 1).to_str()}S"
-	duration = match RfcDuration.parse(duration_source) {
+	duration = match ICalDuration.parse(duration_source) {
 		Ok(found) => found
 		Err(_) => crash "Generated positive RFC duration rejected"
 	}
 	period_source = "${source}/${duration_source}"
-	period = match RfcPeriod.parse(period_source) {
+	period = match ICalPeriod.parse(period_source) {
 		Ok(found) => found
 		Err(_) => crash "Generated supported RFC period rejected"
 	}
-	check_persistence(RfcDateTime(date), { kind: "rfc-date-time", profile: "rfc5545-datetime-values-v1", axis: "none", unit: "none", payload: source })
-	check_persistence(RfcDuration(duration), { kind: "rfc-duration", profile: "rfc5545-positive-duration-v1", axis: "none", unit: "none", payload: duration_source })
-	check_persistence(RfcPeriod(period), { kind: "rfc-period", profile: "rfc5545-period-values-v1", axis: "none", unit: "none", payload: period_source })
+	check_persistence(ICalDateTime(date), { kind: "rfc-date-time", profile: "rfc5545-datetime-values-v1", axis: "none", unit: "none", payload: source })
+	check_persistence(ICalDuration(duration), { kind: "rfc-duration", profile: "rfc5545-positive-duration-v1", axis: "none", unit: "none", payload: duration_source })
+	check_persistence(ICalPeriod(period), { kind: "rfc-period", profile: "rfc5545-period-values-v1", axis: "none", unit: "none", payload: period_source })
 	check_rfc_explanation(input, day, h, m, s, source, date, duration, period)
 }
 
@@ -620,14 +620,14 @@ check_rfc_explanation = |input, day, h, m, s, utc_source, date, duration, period
 		Ok(value) => value
 		Err(_) => crash "Generated RFC text has an ASCII UTC suffix"
 	}
-	local = match RfcDateTime.parse(local_text) {
+	local = match ICalDateTime.parse(local_text) {
 		Ok(value) => value
 		Err(_) => crash "Generated local RFC label rejected"
 	}
 	for entry in [{ value: date, form: Utc }, { value: local, form: Local }] {
-		source = Explanation.new(RfcDateTime(entry.value))
+		source = Explanation.new(ICalDateTime(entry.value))
 		match explanation_fact(source, 0) {
-			RfcDateTimeDescription(data) => {
+			ICalDateTimeDescription(data) => {
 				if data.role != Standalone or data.form != entry.form or
 					CalendarDate.to_fields(LocalDateTime.date(data.local)) != { year: input.year.to_i64(), month: input.month, day } or
 						ClockTime.to_fields(LocalDateTime.clock(data.local)) != { hour: h.to_u8_wrap(), minute: m.to_u8_wrap(), second: s.to_u8_wrap(), microsecond: 0 } {
@@ -642,33 +642,33 @@ check_rfc_explanation = |input, day, h, m, s, utc_source, date, duration, period
 		check_declaration_limits(source, input.digits.to_u64())
 	}
 	seconds = input.seconds.to_i64() + 1
-	coordinate = Explanation.new(RfcDuration(duration))
-	if explanation_fact(coordinate, 0) != RfcDurationDescription({ role: Standalone, days: 0, seconds }) {
+	coordinate = Explanation.new(ICalDuration(duration))
+	if explanation_fact(coordinate, 0) != ICalDurationDescription({ role: Standalone, days: 0, seconds }) {
 		crash "RFC coordinate duration was reinterpreted as calendar days"
 	}
 	days = input.precision.to_i64() + 1
-	calendar_duration = match RfcDuration.parse("P${days.to_str()}D") {
+	calendar_duration = match ICalDuration.parse("P${days.to_str()}D") {
 		Ok(value) => value
 		Err(_) => crash "Generated positive calendar-day duration rejected"
 	}
-	calendar = Explanation.new(RfcDuration(calendar_duration))
-	if explanation_fact(calendar, 0) != RfcDurationDescription({ role: Standalone, days, seconds: 0 }) {
+	calendar = Explanation.new(ICalDuration(calendar_duration))
+	if explanation_fact(calendar, 0) != ICalDurationDescription({ role: Standalone, days, seconds: 0 }) {
 		crash "RFC calendar duration was converted into fixed coordinate seconds"
 	}
-	for source in [coordinate, calendar, Explanation.new(RfcPeriod(period))] {
+	for source in [coordinate, calendar, Explanation.new(ICalPeriod(period))] {
 		check_declaration_limits(source, input.digits.to_u64())
 	}
-	period_source = Explanation.new(RfcPeriod(period))
-	if explanation_fact(period_source, 2) != RfcDurationDescription({ role: PeriodEnding, days: 0, seconds }) {
+	period_source = Explanation.new(ICalPeriod(period))
+	if explanation_fact(period_source, 2) != ICalDurationDescription({ role: PeriodEnding, days: 0, seconds }) {
 		crash "RFC period duration lost its supplied anchor role"
 	}
-	local_period = match RfcPeriod.parse("${local_text}/P${days.to_str()}D") {
+	local_period = match ICalPeriod.parse("${local_text}/P${days.to_str()}D") {
 		Ok(value) => value
 		Err(_) => crash "Generated local RFC period rejected"
 	}
-	local_period_source = Explanation.new(RfcPeriod(local_period))
+	local_period_source = Explanation.new(ICalPeriod(local_period))
 	if explanation_fact(local_period_source, 3) != Requirement(ZoneContext) or
-		explanation_fact(local_period_source, 2) != RfcDurationDescription({ role: PeriodEnding, days, seconds: 0 }) {
+		explanation_fact(local_period_source, 2) != ICalDurationDescription({ role: PeriodEnding, days, seconds: 0 }) {
 		crash "Local period explanation invented an interpreted endpoint"
 	}
 	check_declaration_limits(local_period_source, input.digits.to_u64())

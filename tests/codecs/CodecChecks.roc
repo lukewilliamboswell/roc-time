@@ -2,9 +2,9 @@ import time.EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
 import time.Ixdtf
-import time.RfcDateTime
-import time.RfcDuration
-import time.RfcPeriod
+import time.ICalDateTime
+import time.ICalDuration
+import time.ICalPeriod
 import time.GregorianDate
 import time.ClockTime
 import time.LocalDateTime
@@ -14,8 +14,8 @@ import time.CalendarDate
 # state handling. The second encoding below proves the hooks are format-generic.
 # Strings are canonical standards declarations, never opaque native records.
 CodecChecks := [].{
-	Errors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error)]
-	Document : { date : EdtfDate, dates : List(EdtfDate), exact : ExactInterval, ixdtf : Ixdtf, rfc_date : RfcDateTime, rfc_duration : RfcDuration, rfc_period : RfcPeriod, stamp : OffsetTimestamp, tail : Str }
+	Errors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidICalDateTime(ICalDateTime.Error), InvalidICalDuration(ICalDuration.Error), InvalidICalPeriod(ICalPeriod.Error)]
+	Document : { date : EdtfDate, dates : List(EdtfDate), exact : ExactInterval, ixdtf : Ixdtf, rfc_date : ICalDateTime, rfc_duration : ICalDuration, rfc_period : ICalPeriod, stamp : OffsetTimestamp, tail : Str }
 	run = |input| {
 		check_civil(input.civil, input.civil_invalid_date, input.civil_invalid_clock)
 		check_civil_tokens(input.civil_tokens)
@@ -39,11 +39,11 @@ CodecChecks := [].{
 		exact = "2026-06-15T09:00:00Z/2026-06-15T10:00:00Z"
 		ixdtf : Ixdtf
 		ixdtf = "2022-07-08T00:14:07Z[Europe/Paris][u-ca=hebrew]"
-		rfc_date : RfcDateTime
+		rfc_date : ICalDateTime
 		rfc_date = "19970902T090000Z"
-		rfc_duration : RfcDuration
+		rfc_duration : ICalDuration
 		rfc_duration = "PT1H"
-		rfc_period : RfcPeriod
+		rfc_period : ICalPeriod
 		rfc_period = "19970902T090000Z/PT1H"
 		if document.date != date or document.stamp != stamp or document.exact != exact or document.ixdtf != ixdtf or
 			document.rfc_date != rfc_date or document.rfc_duration != rfc_duration or document.rfc_period != rfc_period {
@@ -77,19 +77,19 @@ CodecChecks := [].{
 		if invalid_ixdtf != Err(InvalidIxdtf(UnknownCritical)) {
 			crash "Lost IXDTF semantic error"
 		}
-		invalid_rfc_date : Try(RfcDateTime, Errors)
+		invalid_rfc_date : Try(ICalDateTime, Errors)
 		invalid_rfc_date = Json.parse(input.invalid_rfc_date)
-		if invalid_rfc_date != Err(InvalidRfcDateTime(InvalidDate)) {
+		if invalid_rfc_date != Err(InvalidICalDateTime(InvalidDate)) {
 			crash "Lost RFC datetime semantic error"
 		}
-		invalid_duration : Try(RfcDuration, Errors)
+		invalid_duration : Try(ICalDuration, Errors)
 		invalid_duration = Json.parse(input.invalid_duration)
-		if invalid_duration != Err(InvalidRfcDuration(NonPositive)) {
+		if invalid_duration != Err(InvalidICalDuration(NonPositive)) {
 			crash "Lost RFC duration semantic error"
 		}
-		invalid_period : Try(RfcPeriod, Errors)
+		invalid_period : Try(ICalPeriod, Errors)
 		invalid_period = Json.parse(input.invalid_period)
-		if invalid_period != Err(InvalidRfcPeriod(InvalidPeriod)) {
+		if invalid_period != Err(InvalidICalPeriod(InvalidPeriod)) {
 			crash "Lost RFC period semantic error"
 		}
 		syntax : Try(Document, Errors)

@@ -4,16 +4,26 @@ A date and time library for [Roc](https://www.roc-lang.org). Parse timestamps,
 find free booking windows, calculate calendar dates and generate schedules,
 with explicit calendar and time-zone choices.
 
-**[0.1.0-rc3 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3).** This is a release candidate, not a stable API. You can build
-working booking and calendar applications with it now. APIs may change, and the
-compiler is pinned. Broader standards support is still being built.
+**[0.1.0-rc3 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3).**
+You can build working booking and calendar applications with it now. This is a
+release candidate: APIs may change, and applications pin their Roc compiler.
 
-## Why intervals?
+## Will this help me?
 
-A booking occupies time. To find availability, you need to subtract that occupied
-time from an opening window and keep every gap that remains. `roc-time` represents
-this with spans and `Coverage`: a collection that merges overlapping or touching
-spans and supports union, intersection and difference.
+| I want to… | What works | Try it |
+| --- | --- | --- |
+| Find free booking windows | Parse offset timestamps, subtract occupied time and save availability | [Booking exchange](examples/booking_exchange/main.roc) |
+| Check an expiry | Compare a platform-clock reading with an expiry and write a typed JSON record | [Clock deadline](examples/clock_deadline/main.roc) |
+| Calculate dates | Gregorian/Julian conversion and calendar arithmetic with explicit month-end policies | [Invoice terms](examples/invoice/main.roc) |
+| Handle clock changes | Resolve repeated/skipped local times and overnight selections using explicit zone rules | [Overnight staffing](examples/staffing/main.roc) |
+| Generate schedules | Date and timed recurrence, additions/exclusions and bounded, resumable queries | [Equipment reservations](examples/reservations/main.roc) |
+| Retain imported date meaning | Preserve date precision and uncertainty; explain and save supported interpretations | [Archive search](examples/archive_search/main.roc) |
+
+## Why intervals, not just instants?
+
+A booking occupies time. To find availability, subtract that occupied time from
+an opening window and keep every gap that remains. `Coverage` merges overlapping
+or touching spans and supports union, intersection and difference.
 
 Spans include their start and exclude their end: `[09:00, 10:00)` and
 `[10:00, 11:00)` meet without overlapping. Adjacent bookings can share a boundary
@@ -21,9 +31,8 @@ without inventing an “end of hour” timestamp.
 
 Calendar meaning matters too. An archive value such as `2026-06` retains month
 precision; turning it into midnight on June 1 would lose that meaning. A local
-day needs explicit zone rules before it can be placed on a timeline, and a clock
-change can alter its coverage. Exact timestamps still represent instants, and
-events retain their identity even when they occupy the same time.
+day needs explicit zone rules before it can be placed on a timeline. Exact
+timestamps still represent instants, and events retain their separate identities.
 
 ## What it looks like
 
@@ -43,151 +52,60 @@ free_windows = || {
 
 The result covers **09:00–10:00 and 12:00–17:00 UTC** on June 15. Parsing returns
 structured errors for invalid or unsupported input. The complete
-[booking exchange application](examples/booking_exchange/main.roc) also handles
-multiple bookings, saves/restores availability and writes canonical timestamp
-text. [Try it below](#try-it) with the published package.
-
-## Will this help me?
-
-### Tier 1: Use today
-
-| I want to… | What works | Try it |
-| --- | --- | --- |
-| Find free booking windows | Parse exact timestamps with different offsets, subtract occupied time, save availability and write free windows back to text | [Booking exchange](examples/booking_exchange/main.roc) |
-| Check an expiry | Read a platform clock, compare an expiry boundary and write a typed JSON record with UTC microsecond timestamps | [Clock deadline](examples/clock_deadline/main.roc) |
-| Calculate dates | Gregorian/Julian conversion and calendar arithmetic with explicit month-end policies | [Invoice terms](examples/invoice/main.roc) |
-| Handle clock changes | Resolve repeated/skipped local times and overnight selections using supplied rules or the optional zone database | [Overnight staffing](examples/staffing/main.roc) |
-| Generate schedules | Date and timed recurrence, additions/exclusions, identified appointments and bounded queries that can resume | [Equipment reservations](examples/reservations/main.roc) |
-| Retain the meaning of an imported date | Preserve year/month/day precision and uncertainty; explain and save supported descriptions and interpretations | [Archive search](examples/archive_search/main.roc) |
-
-Exact calculations use signed 64-bit microseconds and half-open spans `[start, end)`.
-Invalid inputs and exhausted work limits are explicit results. The core does not
-choose your zone, read the clock or fetch data on your behalf.
-
-### Tier 2: Use within these supported profiles
-
-These features work, but check that your input fits their scope.
-
-| Feature | Supported now | Main boundary |
-| --- | --- | --- |
-| Timestamp and booking text | Complete RFC offset timestamps, up to six fractional digits; exact start/end windows; canonical serialization | No leap-second or sub-microsecond input; this is not every ISO 8601 form |
-| Native civil text (development source) | Gregorian date, clock and explicitly Gregorian local-datetime parsing and canonical output; date/clock literals and generic string codecs | Not in rc3; local labels have no zone or supplied-field resolution; at most six fractional digits |
-| Everyday display (development source) | English Gregorian dates such as `7 Sep 2026` and local appointments such as `7 Sep 2026, 09:30` | Not in rc3; explicit minute/second/exact precision; hiding nonzero fields returns an error; no locale dataset |
-| Civil reporting (development source) | Gregorian weekday, ordinal day and ISO week-date queries across the signed provider year range | Not in rc3; ISO week-year can differ from the calendar year; queries do not select a zone |
-| EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%`; development source also supports individual and year/month group qualifications | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
-| IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
-| iCalendar recurrence (RFC 5545) | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed import profiles; development source also exports canonical DATE rules | No complete ICS files, mixed UTC/local exceptions, timed-rule export or recurrence persistence yet |
-| Calendar and zone data | Gregorian and Julian; optional IANA 2025b data for 1800–2200 | Additional calendars are planned; zone data is a separate package dependency |
-| Explanation and persistence | Bounded plain-text explanations; versioned storage for supported descriptions, exact values, coverage and complete interpretation snapshots | No event/cursor persistence; snapshots have explicit size limits |
-
-See [API documentation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/),
-[text profiles](package/EdtfDate.roc), [timestamp profiles](package/OffsetTimestamp.roc),
-[recurrence profiles](package/RfcTimedRule.roc), [persistence limits](package/Persistence.roc)
-and [zone-data scope](tzdb/README.md) for exact contracts.
-
-### Tier 3: Next, in user-impact order
-
-The next release should first make the development civil text/display APIs and
-their appointment examples available with compatible compiler and package pins.
-
-1. **Complete schedule interchange.** Timed recurrence export and durable definitions, followed
-   by broader import where real calendar workflows need it. Complete ICS ingestion
-   is not available today.
-2. **Expand specialist support as callers need it.** Faithful archive interval
-   endpoints, masks and sets; additional calendars; broader uncertainty reasoning
-   and styled explanations. Each slice needs complete input/output and verified
-   interpretation within its declared scope.
-
-The ordering follows blocked user workflows. Additional internal refinements
-should support one of those workflows or fix demonstrated correctness/performance
-problems. The engineering tasks are in [the implementation plan](planning/implement-design.md);
-[design.md](design.md) defines the enduring semantic contracts.
+[booking exchange application](examples/booking_exchange/main.roc) handles
+multiple bookings, saves/restores availability and writes canonical timestamps.
 
 ## Try it
 
-Browse the [example applications](examples/README.md). Each folder contains a
-complete application with a `main.roc` entrypoint and companion modules. Its header
-declares the exact Roc compiler and published package URLs it needs.
-
-Download the whole application folder, or clone this repository, then run Roc
-directly with that compiler:
+Download the [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-starter.zip)
+and install the compiler declared in its application headers:
+[`nightly-2026-09-05-b195f5b`](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b).
+From the extracted kit folder, run:
 
 ```sh
-git clone https://github.com/lukewilliamboswell/roc-time.git
-cd roc-time
 roc version
 roc examples/booking_exchange/main.roc
 ```
 
-The examples require
-[`nightly-2026-09-05-b195f5b`](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b)
-until a versioned stable Roc release is available. Use the compiler declared in
-the example's header; the development package can require a newer compiler.
+No Python runner is required. Each example is a complete application with a
+`main.roc` entrypoint and companion modules; keep its whole folder together.
+The [example catalog](examples/README.md) contains more applications you can run
+from a repository checkout using their pinned compiler and published packages.
 
-The [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-starter.zip)
-also contains complete applications. Follow the compiler requirements shipped
-with that release, then run `roc examples/booking_exchange/main.roc` from the
-extracted kit folder. The [release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3)
-include both package URLs and an import example. No Python runner is required.
+For your own application, copy the `time` dependency and `roc` compiler fields
+from a released example's header. Named-zone applications also use the
+[optional zone-data package](tzdb/README.md). The
+[release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3)
+include both package URLs, and the
+[released API documentation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/)
+describes their supported operations.
 
-That example reads bookings, computes available windows, saves/restores the result
-and prints canonical timestamps. For historical-date input, run
-`roc examples/archive_search/main.roc`. The [example catalog](examples/README.md)
-contains the complete applications; [CONTRIBUTING.md](CONTRIBUTING.md) covers toolchain
-setup and verification. Other targets, including Wasm, need separate validation;
-see the [native verification scope](CONTRIBUTING.md#instrumented-fixture-platform).
+## Supported scope
 
-For your own application, copy the `time` dependency URL and compiler requirement
-from a released example's app header. Import modules as `time.Coverage`,
-`time.EdtfDate`, and so on. Interchange value
-types such as `EdtfDate` and `OffsetTimestamp` provide checked `parse` and canonical
-`to_text` operations, validated quoted
-literals and generic string codecs. Use `parse` for runtime interpolated text so
-validation errors can be handled. Named-zone applications also need explicit
-rules, such as those supplied by the [optional zone package](tzdb/README.md).
+Exact calculations use signed 64-bit microseconds. Invalid inputs and exhausted
+work limits are explicit results. The core does not choose your zone, read the
+clock or fetch data on your behalf.
 
-Run `roc examples/clock_deadline/main.roc` to check a deadline using the real
-platform clock. Its pure [Deadline module](examples/clock_deadline/Deadline.roc)
-also accepts supplied readings, so the same expiry and JSON operations can be
-tested deterministically. A record's `expired` status describes its `checked_at`
-reading; loading the record does not read the clock again.
+- **Text:** offset timestamps and exact intervals with canonical output; declared
+  EDTF date and IXDTF annotation profiles. No leap-second or sub-microsecond input,
+  and no claim to every ISO 8601 form.
+- **Calendars and zones:** Gregorian and Julian calendars; optional IANA 2025b
+  zone data for 1800–2200.
+- **Schedules:** declared RFC 5545 DATE and DATE-TIME property import profiles.
+  Complete ICS files, timed-rule export and durable schedule definitions are
+  still future work.
+- **Explanation and storage:** bounded explanations and versioned persistence
+  for supported descriptions, exact values, coverage and interpretation snapshots.
 
-For development-source callers, [GregorianDate](package/GregorianDate.roc) and
-[ClockTime](package/ClockTime.roc) accept inputs such as `2026-09-07` and `09:30`.
-[LocalDateTime.parse_gregorian](package/LocalDateTime.roc) accepts
-`2026-09-07T09:30`; `to_gregorian_text` writes `2026-09-07T09:30:00`.
-These are local boundary labels. Resolve them with explicit zone rules when you
-need a timeline position; use description types when supplied resolution matters.
-The module examples and [application-record test](tests/codecs/CodecChecks.roc)
-show these APIs using the development package. Published rc3 examples require
-their released APIs until a new release includes this slice.
+The development branch is ahead of rc3, including everyday civil text/display,
+reporting queries and date-only schedule export. Use the released documentation
+for rc3; development APIs may require a newer compiler.
 
-[EnglishGregorian](package/EnglishGregorian.roc) adds ordinary display with
-explicit precision: `local_datetime(appointment, Minute)` produces
-`7 Sep 2026, 09:30` for that local value. `Exact` retains all microseconds;
-`Minute` and `Second` return `PrecisionLoss` if they would hide nonzero fields.
-The [appointment-display application](tests/appointment_display/main.roc) uses
-the development source and is checked against both local sources and the bundle.
+## What comes next?
 
-The development [invoice report](tests/invoice_report/main.roc) groups accounting
-dates by ISO week while retaining separate invoices on the same date.
-`GregorianDate.weekday`, `ordinal_day` and `iso_week_date` provide the fields;
-for example, 1 January 2021 belongs to week 53 of **2020**. These civil queries
-need no clock or timezone.
-
-The development [named-zone appointment application](tests/zoned_appointment/main.roc)
-keeps a Paris appointment at the same local hour on the next civil day, displays
-it in New York, and shows why the two positions can be 23 or 25 hours apart on
-the POSIX timeline. It lists both choices for a repeated local time before making
-an explicit selection. Gaps, unknown zones and unavailable rule dates remain
-distinct results. Both core and zone-data packages are declared in its header.
-
-The development [schedule exchange application](tests/schedule_exchange/main.roc)
-imports a date-only monthly rule, edits its checked definition and exports
-canonical properties with `RfcDateRule.to_parts`. Reimporting preserves skipped
-month-days and COUNT-before-exclusion semantics. These are extracted RFC DATE
-values; timed export, complete ICS documents and native schedule archives remain
-separate work.
+First, make the everyday date and appointment improvements available in a
+compatible release. Then complete schedule export and durable definitions.
+Broader archive formats, calendars and reasoning follow concrete caller needs.
 
 ## Prior art
 
@@ -195,13 +113,11 @@ Inspired by [Kip Cole's Tempo](https://github.com/elixir-tempo/tempo), especiall
 calendar values at meaningful resolutions, calendar-aware durations and temporal
 set algebra. Credit to Kip and Tempo's contributors for that foundation.
 
-`roc-time` develops those ideas through distinct Roc types for calendar
-descriptions, exact boundaries, coverage and events. It is an independent
-implementation with its own supported profiles, not an API-compatible Tempo port.
-Tempo's [documentation](https://hexdocs.pm/ex_tempo/) is a useful introduction to
-the broader interval-oriented approach.
+`roc-time` is an independent implementation with distinct Roc types for calendar
+descriptions, boundaries, coverage and events. It is not an API-compatible Tempo
+port. Tempo's [documentation](https://hexdocs.pm/ex_tempo/) introduces the broader
+interval-oriented approach.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, verification, oracle checks and
-release tooling, and [AGENTS.md](AGENTS.md) for contributor methodology.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and verification.

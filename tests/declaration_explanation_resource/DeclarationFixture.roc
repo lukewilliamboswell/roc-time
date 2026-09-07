@@ -1,8 +1,8 @@
 import time.Explanation
 import time.ExactInterval
-import time.RfcDateTime
-import time.RfcDuration
-import time.RfcPeriod
+import time.ICalDateTime
+import time.ICalDuration
+import time.ICalPeriod
 import time.SemanticFact
 import time.PosixSpan
 import time.PosixBoundary
@@ -32,20 +32,20 @@ DeclarationFixture := [].{
 					Err(_) => crash "fixture exact"
 				},
 			)
-			1 => RfcDateTime(
-				match RfcDateTime.parse(date) {
+			1 => ICalDateTime(
+				match ICalDateTime.parse(date) {
 					Ok(v) => v
 					Err(_) => crash "fixture datetime"
 				},
 			)
-			2 => RfcDuration(
-				match RfcDuration.parse(duration) {
+			2 => ICalDuration(
+				match ICalDuration.parse(duration) {
 					Ok(v) => v
 					Err(_) => crash "fixture duration"
 				},
 			)
-			_ => RfcPeriod(
-				match RfcPeriod.parse(
+			_ => ICalPeriod(
+				match ICalPeriod.parse(
 					"${date}/${
 						if kind == 3 {
 							"19700101T000001${suffix}"
@@ -63,23 +63,23 @@ DeclarationFixture := [].{
 	inspect : Explanation.Source -> Str
 	inspect = |declaration| match declaration {
 		ExactInterval(v) => Str.inspect(v)
-		RfcDateTime(v) => Str.inspect(v)
-		RfcDuration(v) => Str.inspect(v)
-		RfcPeriod(v) => Str.inspect(v)
+		ICalDateTime(v) => Str.inspect(v)
+		ICalDuration(v) => Str.inspect(v)
+		ICalPeriod(v) => Str.inspect(v)
 		_ => crash "fixture source domain"
 	}
 	matches : SemanticFact, U8, I64, Bool -> Bool
 	matches = |fact, kind, days, local| match SemanticFact.kind(fact) {
 		ExactIntervalDescription(data) => kind == 0 and PosixSpan.start(data.span) == PosixBoundary.from_microseconds(1) and PosixSpan.end(data.span) == PosixBoundary.from_microseconds(2)
-		RfcDateTimeDescription(data) => kind == 1 and data.role == Standalone and data.form == (
+		ICalDateTimeDescription(data) => kind == 1 and data.role == Standalone and data.form == (
 			if local {
 				Local
 			} else {
 				Utc
 			}
 		) and ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(data.local)) == 0
-		RfcDurationDescription(data) => kind == 2 and data.role == Standalone and data.days == days and data.seconds == 1
-		RfcPeriodDescription(data) => (kind == 3 or kind == 4) and data.form == (
+		ICalDurationDescription(data) => kind == 2 and data.role == Standalone and data.days == days and data.seconds == 1
+		ICalPeriodDescription(data) => (kind == 3 or kind == 4) and data.form == (
 			if local {
 				Local
 			} else {

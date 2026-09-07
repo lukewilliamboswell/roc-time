@@ -3,7 +3,7 @@ import pf.Host
 import time.CalendarPattern
 import time.DateRecurrence
 import time.GregorianDate
-import time.RfcDateRule
+import time.ICalDateRule
 import ExportFixture
 
 # R11/R12/R14/R15. Input, native construction, definition access, export and
@@ -45,7 +45,7 @@ main! = |args| {
 	}
 	before_export = Host.allocated_bytes!({})
 	Host.assert!(before_export == before_access)
-	parts = match RfcDateRule.to_parts(rule) {
+	parts = match ICalDateRule.to_parts(rule) {
 		Ok(value) => value
 		Err(_) => crash "valid DATE export"
 	}
@@ -69,7 +69,7 @@ main! = |args| {
 	}
 	# The same saved declaration feeds a small window and a billion-year window;
 	# both must yield the same first two dates within a small work allowance.
-	restored = match RfcDateRule.parse(parts) {
+	restored = match ICalDateRule.parse(parts) {
 		Ok(value) => value
 		Err(_) => crash "resource export cannot be restored"
 	}
