@@ -9,7 +9,9 @@ reasoning model or declaring full ISO/EDTF conformance first.
 Prioritize gaps that block booking/availability and archive/date import. Deliver
 complete input/output paths before extending explanation styling or adding detail
 to already usable diagnostic APIs. Recurrence export/persistence is tracked in
-[recurrence execution](recurrence.md); it precedes presentation enhancements.
+[recurrence execution](recurrence.md); it precedes styled explanations and
+specialist presentation enhancements. Everyday date/time input and display take
+priority as described in the [implementation plan](implement-design.md).
 
 ## Remaining caller slices
 

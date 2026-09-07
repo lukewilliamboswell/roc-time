@@ -17,6 +17,37 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Decisions and acceptance still needed
 
+### Save and exchange a supported schedule
+
+Prioritize completing the currently supported profile before widening import.
+The caller must be able to import or construct a meeting schedule, change its
+definition through checked public construction, export canonical text, save/load
+the native definition and evaluate the restored schedule over a bounded window.
+This is an R11–R12/R14/R16 deliverable, using the existing execution engine.
+
+- Declare separately what RFC text can represent and what versioned native
+  persistence preserves. Reject unrepresentable native definitions explicitly;
+  do not silently drop selectors, exceptions, source identity or policies.
+- Expose a checked semantic definition for export where existing types lack
+  accessors. Preserve series identifiers, duration overrides and exception source
+  labels without parsing inspection output or expanding occurrences while saving.
+- Decide whether persistence embeds an immutable interpretation snapshot or
+  requires an explicitly identified snapshot on load. Test missing/mismatched
+  context; a zone name alone must not imply reproducible interpretation.
+- Distinguish saving a schedule definition from checkpointing an evaluation
+  cursor. Definition persistence comes first; do not promise resumable cursor
+  persistence without a declared compatible state format.
+- Validate canonical parse/export/parse against independent RFC fixtures and
+  malformed/version/unsupported-field cases. Verify original and restored
+  definitions produce the independently expected events, exceptions and bounded
+  incomplete outcomes across fixed gap/fold fixtures. Include multiple query
+  windows so a matching first result cannot hide lost series state.
+- Provide an executable multi-file application using the real public package
+  and distributable bundle. Describe the supported property profile explicitly;
+  this does not advertise a general ICS reader or writer.
+
+### Broader import and execution
+
 Use RFC 5545 §§3.3.10 and 3.8.5, with verified errata 1913/3779 for ordinal
 BYDAY. All-day calendar candidates can use the full Gregorian provider range;
 the text adapter must separately declare its representable year profile.
