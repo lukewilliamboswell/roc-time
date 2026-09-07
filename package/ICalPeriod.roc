@@ -6,8 +6,8 @@ import CalendarDelta
 import CalendarPattern
 import ClockTime
 import PosixDelta
-import RfcDateTime
-import RfcDuration
+import ICalDateTime
+import ICalDuration
 import TimedRecurrence
 import TimedSchedule
 import TimedOccurrence
@@ -19,7 +19,7 @@ import ZoneRules
 
 ## RFC 5545 section 3.3.9 PERIOD values, profile period-values-v1.
 ## Parse an extracted start/end or start/positive-duration value. Endpoint
-## values share RfcDateTime's year, precision and leap-second profile. Both
+## values share ICalDateTime's year, precision and leap-second profile. Both
 ## explicit endpoints must use the same UTC/local form; mixed forms are outside
 ## this profile. Property parameters, comma lists and ICS content lines belong
 ## to the calling adapter. Source spelling is not retained.
@@ -32,21 +32,21 @@ import ZoneRules
 ## for native rule execution with parsed period additions.
 ##
 ## ```roc
-## import time.RfcPeriod
+## import time.ICalPeriod
 ## expect {
-##     value = RfcPeriod.parse("19970101T180000Z/PT5H30M")?
-##     RfcPeriod.to_text(value) == "19970101T180000Z/PT19800S"
+##     value = ICalPeriod.parse("19970101T180000Z/PT5H30M")?
+##     ICalPeriod.to_text(value) == "19970101T180000Z/PT19800S"
 ## }
 ## ```
-RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
-	Ending : [End(RfcDateTime), Duration(RfcDuration)]
+ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
+	Ending : [End(ICalDateTime), Duration(ICalDuration)]
 	Context : [Utc, Local(ZoneRules)]
-	Error : [Malformed, TooLarge, Start(RfcDateTime.Error), End(RfcDateTime.Error), Duration(RfcDuration.Error), MixedForms, InvalidPeriod]
+	Error : [Malformed, TooLarge, Start(ICalDateTime.Error), End(ICalDateTime.Error), Duration(ICalDuration.Error), MixedForms, InvalidPeriod]
 
 	## Generic encodings carry canonical text, never the opaque backing record.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : RfcPeriod, rest : state }, [InvalidRfcPeriod(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ICalPeriod, rest : state }, [InvalidICalPeriod(Error), Encoding(err), ..]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]
@@ -59,12 +59,12 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidRfcPeriod(error))
+				Err(error) => Err(InvalidICalPeriod(error))
 			}
 		}
 	}
 
-	encoder_for : encoding -> (RfcPeriod, state -> Try(state, err))
+	encoder_for : encoding -> (ICalPeriod, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
 		]
@@ -75,15 +75,15 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 
 	## Typed quoted literals use the same checked profile at compile time.
 	## Runtime interpolation remains Str followed by an explicit parse call.
-	from_quote : Str -> Try(RfcPeriod, [BadQuotedBytes(Str)])
+	from_quote : Str -> Try(ICalPeriod, [BadQuotedBytes(Str)])
 	from_quote = |text| match parse(text) {
 		Ok(value) => Ok(value)
-		Err(error) => Err(BadQuotedBytes("Invalid RfcPeriod literal: ${Str.inspect(error)}"))
+		Err(error) => Err(BadQuotedBytes("Invalid ICalPeriod literal: ${Str.inspect(error)}"))
 	}
 
 	profile : Str
 	profile = "rfc5545-period-values-v1"
-	parse : Str -> Try(RfcPeriod, Error)
+	parse : Str -> Try(ICalPeriod, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 273 {
 			return Err(TooLarge)
@@ -92,47 +92,47 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 			[a, b] => (a, b)
 			_ => return Err(Malformed)
 		}
-		start = match RfcDateTime.parse(left) {
+		start = match ICalDateTime.parse(left) {
 			Ok(value) => value
 			Err(error) => return Err(Start(error))
 		}
 		first = right.to_utf8().get(0) ?? 0
 		ending = if first == 80 or first == 112 or first == 43 or first == 45 {
-			parsed_duration = match RfcDuration.parse(right) {
+			parsed_duration = match ICalDuration.parse(right) {
 				Ok(value) => value
 				Err(error) => return Err(Duration(error))
 			}
 			Duration(parsed_duration)
 		} else {
-			end = match RfcDateTime.parse(right) {
+			end = match ICalDateTime.parse(right) {
 				Ok(value) => value
 				Err(error) => return Err(End(error))
 			}
-			if RfcDateTime.form(start) != RfcDateTime.form(end) {
+			if ICalDateTime.form(start) != ICalDateTime.form(end) {
 				return Err(MixedForms)
 			}
-			if RfcDateTime.form(start) == Utc and LocalDateTime.compare_position(RfcDateTime.local_label(start), RfcDateTime.local_label(end)) != LT {
+			if ICalDateTime.form(start) == Utc and LocalDateTime.compare_position(ICalDateTime.local_label(start), ICalDateTime.local_label(end)) != LT {
 				return Err(InvalidPeriod)
 			}
 			End(end)
 		}
 		Ok({ start, ending })
 	}
-	start : RfcPeriod -> RfcDateTime
+	start : ICalPeriod -> ICalDateTime
 	start = |value| value.start
-	ending : RfcPeriod -> Ending
+	ending : ICalPeriod -> Ending
 	ending = |value| value.ending
-	to_text : RfcPeriod -> Str
+	to_text : ICalPeriod -> Str
 	to_text = |value| {
 		end_text = match value.ending {
-			End(end) => RfcDateTime.to_text(end)
-			Duration(duration) => RfcDuration.to_text(duration)
+			End(end) => ICalDateTime.to_text(end)
+			Duration(duration) => ICalDuration.to_text(duration)
 		}
-		"${RfcDateTime.to_text(value.start)}/${end_text}"
+		"${ICalDateTime.to_text(value.start)}/${end_text}"
 	}
-	is_eq : RfcPeriod, RfcPeriod -> Bool
+	is_eq : ICalPeriod, ICalPeriod -> Bool
 	is_eq = |a, b| a.start == b.start and a.ending == b.ending
-	to_hash : RfcPeriod, Hasher -> Hasher
+	to_hash : ICalPeriod, Hasher -> Hasher
 	to_hash = |value, hasher| {
 		base = value.start.to_hash(hasher)
 		match value.ending {
@@ -143,38 +143,38 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 
 	## These are source-declaration facts, not a resolved span. Local endpoint
 	## ordering remains unresolved; a duration ending is not added to its start.
-	fact_count : RfcPeriod -> U64
-	fact_count = |value| if RfcDateTime.form(value.start) == Local {
+	fact_count : ICalPeriod -> U64
+	fact_count = |value| if ICalDateTime.form(value.start) == Local {
 		4
 	} else {
 		3
 	}
-	fact_at : RfcPeriod, U64 -> [End, Item(SemanticFact)]
+	fact_at : ICalPeriod, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| {
 		if index >= fact_count(value) {
 			return End
 		}
-		form = RfcDateTime.form(value.start)
+		form = ICalDateTime.form(value.start)
 		match index {
 			0 => {
 				ending_fact = match value.ending {
-					End(end) => Endpoint(RfcDateTime.local_label(end))
-					Duration(duration) => Duration(RfcDuration.components(duration))
+					End(end) => Endpoint(ICalDateTime.local_label(end))
+					Duration(duration) => Duration(ICalDuration.components(duration))
 				}
-				Item(SemanticFact.new(RfcPeriodDescription({ form, start: RfcDateTime.local_label(value.start), ending: ending_fact })))
+				Item(SemanticFact.new(ICalPeriodDescription({ form, start: ICalDateTime.local_label(value.start), ending: ending_fact })))
 			}
-			1 => Item(SemanticFact.new(RfcDateTimeDescription({ role: Start, local: RfcDateTime.local_label(value.start), form })))
+			1 => Item(SemanticFact.new(ICalDateTimeDescription({ role: Start, local: ICalDateTime.local_label(value.start), form })))
 			2 => match value.ending {
-				End(end) => Item(SemanticFact.new(RfcDateTimeDescription({ role: End, local: RfcDateTime.local_label(end), form })))
+				End(end) => Item(SemanticFact.new(ICalDateTimeDescription({ role: End, local: ICalDateTime.local_label(end), form })))
 				Duration(duration) => {
-					parts = RfcDuration.components(duration)
-					Item(SemanticFact.new(RfcDurationDescription({ role: PeriodEnding, days: parts.days, seconds: parts.seconds })))
+					parts = ICalDuration.components(duration)
+					Item(SemanticFact.new(ICalDurationDescription({ role: PeriodEnding, days: parts.days, seconds: parts.seconds })))
 				}
 			}
 			_ => Item(SemanticFact.new(Requirement(ZoneContext)))
 		}
 	}
-	to_inspect : RfcPeriod -> Str
+	to_inspect : ICalPeriod -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "RFC period has a first semantic fact"
@@ -196,7 +196,7 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 	## Construction is O(n log n), with bounded input buffers; not a full RRULE
 	## parser or an ICS property adapter. Existing duration overrides must be
 	## supplied together as periods rather than merged from another schedule.
-	schedule : id, TimedRecurrence, TimedRecurrence.Window, RfcDuration, List(RfcPeriod), Context -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	schedule : id, TimedRecurrence, TimedRecurrence.Window, ICalDuration, List(ICalPeriod), Context -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	schedule = |series, rule, window, duration, periods, context| {
 		if periods.len() > 4096 {
 			return Err(TooManyPeriods)
@@ -205,35 +205,35 @@ RfcPeriod :: { start : RfcDateTime, ending : Ending }.{
 		var $overrides = []
 		for period in periods {
 			compatible = match context {
-				Utc => RfcDateTime.form(period.start) == Utc
-				Local(_) => RfcDateTime.form(period.start) == Local
+				Utc => ICalDateTime.form(period.start) == Utc
+				Local(_) => ICalDateTime.form(period.start) == Local
 			}
 			if !compatible {
 				return Err(IncompatibleContext)
 			}
-			$starts = $starts.append(RfcDateTime.source(period.start))
+			$starts = $starts.append(ICalDateTime.source(period.start))
 			native_ending = match period.ending {
-				Duration(value) => After(RfcDuration.to_duration(value))
+				Duration(value) => After(ICalDuration.to_duration(value))
 				End(value) => match context {
 					Utc => {
-						boundary = match RfcDateTime.utc_boundary(value) {
+						boundary = match ICalDateTime.utc_boundary(value) {
 							Ok(resolved) => resolved
 							Err(OutOfRange) => return Err(OutOfRange)
 							Err(NeedsContext) => crash "validated matching UTC period endpoints"
 						}
 						AtBoundary(boundary)
 					}
-					Local(_) => AtLocal({ source: RfcDateTime.local_label(value), occurrence: First, gap: UseOffsetBeforeGap })
+					Local(_) => AtLocal({ source: ICalDateTime.local_label(value), occurrence: First, gap: UseOffsetBeforeGap })
 				}
 			}
-			$overrides = $overrides.append({ source: RfcDateTime.local_label(period.start), ending: native_ending })
+			$overrides = $overrides.append({ source: ICalDateTime.local_label(period.start), ending: native_ending })
 		}
 		combined = TimedRecurrence.add_inclusions(rule, $starts)?
 		rules = match context {
 			Local(value) => value
 			Utc => utc_rules(I64.lowest, I64.highest)
 		}
-		TimedSchedule.new_with_endings(series, combined, window, RfcDuration.to_duration(duration), $overrides, { rules, occurrence: First, gap: UseOffsetBeforeGap })
+		TimedSchedule.new_with_endings(series, combined, window, ICalDuration.to_duration(duration), $overrides, { rules, occurrence: First, gap: UseOffsetBeforeGap })
 	}
 }
 
@@ -251,28 +251,28 @@ utc_rules = |lower, upper| {
 	}
 }
 
-expect RfcPeriod.parse("19970101T180000Z/19970101T180000Z") == Err(InvalidPeriod)
-expect RfcPeriod.parse("19970101T180000Z/19960101T180000Z") == Err(InvalidPeriod)
-expect RfcPeriod.parse("19970101T180000Z/19970102T070000") == Err(MixedForms)
-expect RfcPeriod.parse("19970101T180000Z/PT0S") == Err(Duration(NonPositive))
-expect RfcPeriod.parse("19970101T180000Z/-PT1H") == Err(Duration(NonPositive))
-expect RfcPeriod.parse("19970101T180000Z/") == Err(End(Incomplete))
-expect RfcPeriod.parse("19970101T180000Z/PT1H/PT2H") == Err(Malformed)
-expect RfcPeriod.parse("X".repeat(274)) == Err(TooLarge)
-expect RfcPeriod.to_text(RfcPeriod.parse("19970101t180000z/+pt5h30m")?) == "19970101T180000Z/PT19800S"
+expect ICalPeriod.parse("19970101T180000Z/19970101T180000Z") == Err(InvalidPeriod)
+expect ICalPeriod.parse("19970101T180000Z/19960101T180000Z") == Err(InvalidPeriod)
+expect ICalPeriod.parse("19970101T180000Z/19970102T070000") == Err(MixedForms)
+expect ICalPeriod.parse("19970101T180000Z/PT0S") == Err(Duration(NonPositive))
+expect ICalPeriod.parse("19970101T180000Z/-PT1H") == Err(Duration(NonPositive))
+expect ICalPeriod.parse("19970101T180000Z/") == Err(End(Incomplete))
+expect ICalPeriod.parse("19970101T180000Z/PT1H/PT2H") == Err(Malformed)
+expect ICalPeriod.parse("X".repeat(274)) == Err(TooLarge)
+expect ICalPeriod.to_text(ICalPeriod.parse("19970101t180000z/+pt5h30m")?) == "19970101T180000Z/PT19800S"
 
 # One rule start and its duplicate PERIOD inclusion must emit one appointment.
 # Finite resumes deliberately pause between start and end classification.
 test_period_span = |text, context, steps| {
-	period = match RfcPeriod.parse(text) {
+	period = match ICalPeriod.parse(text) {
 		Ok(value) => value
 		Err(error) => return Err(Parse(error))
 	}
-	source = RfcDateTime.source(RfcPeriod.start(period))
+	source = ICalDateTime.source(ICalPeriod.start(period))
 	end_date = CalendarArithmetic.shift_day(source.date, CalendarDelta.days(1), Reject)?
-	window = { start: RfcDateTime.local_label(RfcPeriod.start(period)), end: LocalDateTime.new(CalendarDate.from_gregorian(end_date), source.clock) }
+	window = { start: ICalDateTime.local_label(ICalPeriod.start(period)), end: LocalDateTime.new(CalendarDate.from_gregorian(end_date), source.clock) }
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	var $cursor = RfcPeriod.schedule(42.U64, rule, window, test_duration("PT1H"), [period, period], context)?
+	var $cursor = ICalPeriod.schedule(42.U64, rule, window, test_duration("PT1H"), [period, period], context)?
 	var $spans = []
 	var $calls = 0.U64
 	while $calls < 100 {
@@ -322,8 +322,8 @@ test_new_york = |spring| {
 	} else {
 		"20071104T060000Z"
 	}
-	validity = PosixSpan.new(RfcDateTime.utc_boundary(test_timestamp(lower))?, RfcDateTime.utc_boundary(test_timestamp(upper))?)?
-	at = RfcDateTime.utc_boundary(test_timestamp(transition))?
+	validity = PosixSpan.new(ICalDateTime.utc_boundary(test_timestamp(lower))?, ICalDateTime.utc_boundary(test_timestamp(upper))?)?
+	at = ICalDateTime.utc_boundary(test_timestamp(transition))?
 	ZoneRules.new_bounded(
 		"RFC5545/New_York",
 		"2007-examples",
@@ -357,7 +357,7 @@ expect {
 	rules = test_new_york(Bool.True)?
 	spans = test_period_span("20070311T023000/20070311T040000", Local(rules), 1)?
 	span = spans.get(0)?
-	spans.len() == 1 and PosixSpan.coordinate_width(span) == Ok(PosixDelta.from_microseconds(1800000000)) and PosixSpan.start(span) == RfcDateTime.utc_boundary(RfcDateTime.parse("20070311T073000Z")?)?
+	spans.len() == 1 and PosixSpan.coordinate_width(span) == Ok(PosixDelta.from_microseconds(1800000000)) and PosixSpan.start(span) == ICalDateTime.utc_boundary(ICalDateTime.parse("20070311T073000Z")?)?
 }
 expect {
 	rules = test_new_york(Bool.False)?
@@ -379,12 +379,12 @@ expect {
 	}
 }
 
-test_timestamp = |text| match RfcDateTime.parse(text) {
+test_timestamp = |text| match ICalDateTime.parse(text) {
 	Ok(value) => value
 	Err(_) => crash "valid fixture timestamp"
 }
 
-test_duration = |text| match RfcDuration.parse(text) {
+test_duration = |text| match ICalDuration.parse(text) {
 	Ok(value) => value
 	Err(_) => crash "valid fixture duration"
 }
@@ -395,11 +395,11 @@ expect {
 	rules = test_new_york(Bool.True)?
 	first = test_period("20070311T023000/PT1H")
 	second = test_period("20070311T033000/PT2H")
-	source = RfcDateTime.source(RfcPeriod.start(first))
+	source = ICalDateTime.source(ICalPeriod.start(first))
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	window = { start: RfcDateTime.local_label(RfcPeriod.start(first)), end: RfcDateTime.local_label(test_timestamp("20070312T000000")) }
+	window = { start: ICalDateTime.local_label(ICalPeriod.start(first)), end: ICalDateTime.local_label(test_timestamp("20070312T000000")) }
 	default_duration = test_duration("PT1H")
-	cursor = RfcPeriod.schedule({}, rule, window, default_duration, [first, second], Local(rules))?
+	cursor = ICalPeriod.schedule({}, rule, window, default_duration, [first, second], Local(rules))?
 	result = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 2 }, max_occurrences: 3 })?
 	a = result.occurrences.get(0)?
 	b = result.occurrences.get(1)?
@@ -407,8 +407,8 @@ expect {
 	span_b = TimedOccurrence.span(b)
 	valid = result.occurrences.len() == 2 and PosixSpan.start(span_a) == PosixSpan.start(span_b) and TimedOccurrence.id(a).source != TimedOccurrence.id(b).source and PosixSpan.coordinate_width(span_a) == Ok(PosixDelta.from_microseconds(3600000000)) and PosixSpan.coordinate_width(span_b) == Ok(PosixDelta.from_microseconds(7200000000))
 	# Excluding the original gap label must not exclude the other source.
-	excluded = TimedRecurrence.with_exclusions(rule, [RfcDateTime.local_label(RfcPeriod.start(first))])?
-	only_second = RfcPeriod.schedule({}, excluded, window, default_duration, [first, second], Local(rules))?
+	excluded = TimedRecurrence.with_exclusions(rule, [ICalDateTime.local_label(ICalPeriod.start(first))])?
+	only_second = ICalPeriod.schedule({}, excluded, window, default_duration, [first, second], Local(rules))?
 	remaining = TimedSchedule.collect(only_second, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 2 }, max_occurrences: 3 })?
 	valid and remaining.occurrences.len() == 1 and TimedOccurrence.id(remaining.occurrences.get(0)?).source == TimedOccurrence.id(b).source
 }
@@ -416,14 +416,14 @@ expect {
 expect {
 	first = test_period("19970101T180000Z/PT1H")
 	conflicting = test_period("19970101T180000Z/19970101T190000Z")
-	source = RfcDateTime.source(RfcPeriod.start(first))
+	source = ICalDateTime.source(ICalPeriod.start(first))
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	window = { start: RfcDateTime.local_label(RfcPeriod.start(first)), end: RfcDateTime.local_label(test_timestamp("19970102T180000Z")) }
-	conflict = match RfcPeriod.schedule({}, rule, window, test_duration("PT1H"), [first, conflicting], Utc) {
+	window = { start: ICalDateTime.local_label(ICalPeriod.start(first)), end: ICalDateTime.local_label(test_timestamp("19970102T180000Z")) }
+	conflict = match ICalPeriod.schedule({}, rule, window, test_duration("PT1H"), [first, conflicting], Utc) {
 		Err(ConflictingEnding(_)) => Bool.True
 		_ => Bool.False
 	}
-	large = match RfcPeriod.schedule({}, rule, window, test_duration("PT1H"), List.repeat(first, 4097), Utc) {
+	large = match ICalPeriod.schedule({}, rule, window, test_duration("PT1H"), List.repeat(first, 4097), Utc) {
 		Err(TooManyPeriods) => Bool.True
 		_ => Bool.False
 	}
@@ -435,7 +435,7 @@ expect {
 	conflict and large and combined_large
 }
 
-test_period = |text| match RfcPeriod.parse(text) {
+test_period = |text| match ICalPeriod.parse(text) {
 	Ok(value) => value
 	Err(_) => crash "valid fixture period"
 }
@@ -443,17 +443,17 @@ test_period = |text| match RfcPeriod.parse(text) {
 expect {
 	# Source ordering can differ from resolved ordering across offset changes;
 	# these local declaration facts must not imply a validated POSIX span.
-	local = RfcPeriod.parse("19970902T090000/19970902T080000")?
-	start = RfcDateTime.local_label(RfcPeriod.start(local))
-	end = RfcDateTime.local_label(RfcDateTime.parse("19970902T080000")?)
-	huge = RfcPeriod.parse("19970902T090000Z/P9223372036854775807D")?
-	RfcPeriod.fact_count(local) == 4 and RfcPeriod.fact_count(huge) == 3 and
-		RfcPeriod.fact_at(local, 0) == Item(SemanticFact.new(RfcPeriodDescription({ form: Local, start, ending: Endpoint(end) }))) and
-			RfcPeriod.fact_at(local, 1) == Item(SemanticFact.new(RfcDateTimeDescription({ role: Start, local: start, form: Local }))) and
-				RfcPeriod.fact_at(local, 2) == Item(SemanticFact.new(RfcDateTimeDescription({ role: End, local: end, form: Local }))) and
-					RfcPeriod.fact_at(local, 3) == Item(SemanticFact.new(Requirement(ZoneContext))) and
-						RfcPeriod.fact_at(huge, 0) == Item(SemanticFact.new(RfcPeriodDescription({ form: Utc, start, ending: Duration({ days: I64.highest, seconds: 0 }) }))) and
-							RfcPeriod.fact_at(huge, 2) == Item(SemanticFact.new(RfcDurationDescription({ role: PeriodEnding, days: I64.highest, seconds: 0 }))) and
-								RfcPeriod.fact_at(huge, 3) == End and RfcPeriod.fact_at(local, 4) == End and
-									RfcPeriod.fact_at(huge, U64.highest) == End and RfcPeriod.to_inspect(huge).count_utf8_bytes() <= 256
+	local = ICalPeriod.parse("19970902T090000/19970902T080000")?
+	start = ICalDateTime.local_label(ICalPeriod.start(local))
+	end = ICalDateTime.local_label(ICalDateTime.parse("19970902T080000")?)
+	huge = ICalPeriod.parse("19970902T090000Z/P9223372036854775807D")?
+	ICalPeriod.fact_count(local) == 4 and ICalPeriod.fact_count(huge) == 3 and
+		ICalPeriod.fact_at(local, 0) == Item(SemanticFact.new(ICalPeriodDescription({ form: Local, start, ending: Endpoint(end) }))) and
+			ICalPeriod.fact_at(local, 1) == Item(SemanticFact.new(ICalDateTimeDescription({ role: Start, local: start, form: Local }))) and
+				ICalPeriod.fact_at(local, 2) == Item(SemanticFact.new(ICalDateTimeDescription({ role: End, local: end, form: Local }))) and
+					ICalPeriod.fact_at(local, 3) == Item(SemanticFact.new(Requirement(ZoneContext))) and
+						ICalPeriod.fact_at(huge, 0) == Item(SemanticFact.new(ICalPeriodDescription({ form: Utc, start, ending: Duration({ days: I64.highest, seconds: 0 }) }))) and
+							ICalPeriod.fact_at(huge, 2) == Item(SemanticFact.new(ICalDurationDescription({ role: PeriodEnding, days: I64.highest, seconds: 0 }))) and
+								ICalPeriod.fact_at(huge, 3) == End and ICalPeriod.fact_at(local, 4) == End and
+									ICalPeriod.fact_at(huge, U64.highest) == End and ICalPeriod.to_inspect(huge).count_utf8_bytes() <= 256
 }

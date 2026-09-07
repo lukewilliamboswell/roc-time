@@ -1,6 +1,6 @@
 import time.DateRecurrence
 import time.GregorianDate
-import time.RfcDateRule
+import time.ICalDateRule
 
 ## Exchange extracted RFC 5545 DATE property values, not an ICS document or a
 ## versioned native archive. This date-only schedule needs no clock or zone.
@@ -25,7 +25,7 @@ ScheduleExchange :: [].{
 				exclusions: definition.spec.exclusions.append(removed),
 			},
 		)?
-		parts = match RfcDateRule.to_parts(edited) {
+		parts = match ICalDateRule.to_parts(edited) {
 			Ok(value) => value
 			Err(error) => return Err(Export(error))
 		}
@@ -70,7 +70,7 @@ ScheduleExchange :: [].{
 	}
 }
 
-import_parts = |parts| match RfcDateRule.parse(parts) {
+import_parts = |parts| match ICalDateRule.parse(parts) {
 	Ok(value) => Ok(value)
 	Err(error) => Err(Import(error))
 }

@@ -132,7 +132,7 @@ with 17 work steps and one output slot per batch. Regenerate with
 `python3 scripts/generate_rfc_date_oracle.py /path/to/wheel-directory` using the
 same pinned dateutil/six wheels. The manifest records its semantic intersection;
 it excludes timed rules, week-number selectors and disputed omitted yearly
-fields. Replay also lifts every case to UTC midnight through `RfcTimedRule`,
+fields. Replay also lifts every case to UTC midnight through `ICalTimedRule`,
 checking the same independently generated dates and one-day occurrence widths.
 That extension tests the shared date/timed semantic intersection, not subdaily
 selectors, zone transitions or general timed conformance. Fixed parser tests
@@ -149,7 +149,7 @@ wheel hashes, generator hash and seed are pinned in its manifest. This corpus
 excludes local-zone transitions, leap seconds and PERIOD overrides. Those require
 separate sourced fixtures and models; UTC agreement does not establish them.
 
-Valid forward Gregorian cases in years 0001–9999 also exercise `RfcDateTime`
+Valid forward Gregorian cases in years 0001–9999 also exercise `ICalDateTime`
 parsing and explicit UTC midnight conversion against the same expected day.
 This covers calendar-date interpretation, not named zones or leap seconds.
 
@@ -582,6 +582,11 @@ each release tag and starter manifest records its own compiler pin.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published
 role metadata and does not recreate the release or tag.
+Example rebinding migrates `Rfc*` iCalendar identifiers to `ICal*` only for
+release checkouts exporting the renamed API. Development copies and new starter
+kits use current names; published example sources and earlier releases retain
+their original names. The URL updater's `--migrate-ical` switch is explicit so
+recovering older documentation does not rewrite it for a newer package API.
 If publication fails after creating the tag, preserve its commit. Recover using
 the original successful run's bundle, role-metadata and starter artifacts; verify
 their digests and starter contents before creating the release with

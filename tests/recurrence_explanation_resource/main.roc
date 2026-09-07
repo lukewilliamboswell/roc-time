@@ -4,7 +4,7 @@ import time.Explanation
 import time.SemanticFact
 import time.DateRecurrence
 import time.TimedRecurrence
-import time.RfcTimedRule
+import time.ICalTimedRule
 import time.GregorianDate
 import time.CalendarDate
 import time.LocalDateTime
@@ -25,7 +25,7 @@ main! = |args| {
 	source = match kind {
 		"date" => DateRecurrence(input.date_rule)
 		"timed" => TimedRecurrence(input.timed_rule)
-		_ => RfcTimedRule(input.rfc_rule)
+		_ => ICalTimedRule(input.rfc_rule)
 	}
 	before = Host.allocated_bytes!({})
 	explanation = Explanation.new(source)
@@ -44,7 +44,7 @@ main! = |args| {
 							4
 						}
 					)
-					RfcTimedRuleDescription(data) => kind == "rfc" and data.mode == Floating and data.period_count == 0
+					ICalTimedRuleDescription(data) => kind == "rfc" and data.mode == Floating and data.period_count == 0
 					_ => False
 				},
 			)
@@ -102,7 +102,7 @@ main! = |args| {
 	summary = match source {
 		DateRecurrence(v) => Str.inspect(v)
 		TimedRecurrence(v) => Str.inspect(v)
-		RfcTimedRule(v) => Str.inspect(v)
+		ICalTimedRule(v) => Str.inspect(v)
 		_ => crash "source"
 	}
 	inspected = Host.allocated_bytes!({})

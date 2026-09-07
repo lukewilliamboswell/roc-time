@@ -33,9 +33,9 @@ SemanticFact :: { value : Kind }.{
 	ContextData : { name : Str, version : Str, validity : PosixSpan, provenance : [Supplied, DatabaseSource({ requested_name : Str, canonical_name : Str, source_digest : Str, profile : Str })] }
 	ExactIntervalData : { span : PosixSpan }
 	OffsetEndpointData : { role : [Start, End], local : LocalDateTime, fraction_digits : U8, offset : Offset }
-	RfcDateTimeData : { role : [Standalone, Start, End], local : LocalDateTime, form : [Utc, Local] }
-	RfcDurationData : { role : [Standalone, PeriodEnding, RecurrenceEnding], days : I64, seconds : I64 }
-	RfcPeriodData : { form : [Utc, Local], start : LocalDateTime, ending : [Endpoint(LocalDateTime), Duration({ days : I64, seconds : I64 })] }
+	ICalDateTimeData : { role : [Standalone, Start, End], local : LocalDateTime, form : [Utc, Local] }
+	ICalDurationData : { role : [Standalone, PeriodEnding, RecurrenceEnding], days : I64, seconds : I64 }
+	ICalPeriodData : { form : [Utc, Local], start : LocalDateTime, ending : [Endpoint(LocalDateTime), Duration({ days : I64, seconds : I64 })] }
 	CoverageData : { member_count : U64 }
 	CoverageMemberData : { index : U64, span : PosixSpan }
 	CivilBoundaryData : { source : LocalDateTime, policy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)], boundary : PosixBoundary, offset : FixedOffset }
@@ -50,8 +50,8 @@ SemanticFact :: { value : Kind }.{
 	Selector : [Month(U8), MonthDay(I8), YearDay(I16), WeekNo(I8), Weekday({ ordinal : I8, weekday : Weekday }), SetPosition(I16), Hour(U8), Minute(U8), Second(U8), Microsecond(U32)]
 	RecurrenceExceptionData : { kind : [Inclusion, Exclusion], source : RecurrenceAnchor }
 	RecurrencePolicyData : { context : [Required, FixedUtc], occurrence : [CallerSupplied, First], gap : [CallerSupplied, UseOffsetBeforeGap] }
-	RfcTimedRuleData : { mode : [Utc, Floating, Zoned], period_count : U64 }
-	Kind : [RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), RfcTimedRuleDescription(RfcTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), RfcDateTimeDescription(RfcDateTimeData), RfcDurationDescription(RfcDurationData), RfcPeriodDescription(RfcPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
+	ICalTimedRuleData : { mode : [Utc, Floating, Zoned], period_count : U64 }
+	Kind : [RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
 	new : Kind -> SemanticFact
 	new = |kind| { value: kind }
 	kind : SemanticFact -> Kind
@@ -76,7 +76,7 @@ SemanticFact :: { value : Kind }.{
 		RecurrenceSelector(selector) => "Selector(${Str.inspect(selector)})"
 		RecurrenceException(_) => "Recurrence exception"
 		RecurrencePolicy(_) => "Recurrence interpretation policy"
-		RfcTimedRuleDescription(data) => "RfcTimedRule(mode=${Str.inspect(data.mode)}, periods=${data.period_count.to_str()}, unresolved)"
+		ICalTimedRuleDescription(data) => "ICalTimedRule(mode=${Str.inspect(data.mode)}, periods=${data.period_count.to_str()}, unresolved)"
 		CoverageDescription(data) => "Coverage(members=${data.member_count.to_str()})"
 		CoverageMember(data) => "CoverageMember(index=${data.index.to_str()}, span=${Str.inspect(data.span)})"
 		CivilBoundaryDescription(data) => "ResolvedBoundary(source=${local_text(data.source, 6)}, policy=${Str.inspect(data.policy)}, boundary=${Str.inspect(data.boundary)}, offset=${FixedOffset.to_seconds(data.offset).to_str()} seconds)"
@@ -91,14 +91,14 @@ SemanticFact :: { value : Kind }.{
 			}
 			"OffsetEndpoint(role=${Str.inspect(data.role)}, local=${local_text(data.local, data.fraction_digits)}, fraction_digits=${data.fraction_digits.to_str()}, offset=${offset})"
 		}
-		RfcDateTimeDescription(data) => "RfcDateTime(role=${Str.inspect(data.role)}, form=${Str.inspect(data.form)}, label=${local_text(data.local, 0)})"
-		RfcDurationDescription(data) => "RfcDuration(role=${Str.inspect(data.role)}, calendar_days=${data.days.to_str()}, coordinate_seconds=${data.seconds.to_str()})"
-		RfcPeriodDescription(data) => {
+		ICalDateTimeDescription(data) => "ICalDateTime(role=${Str.inspect(data.role)}, form=${Str.inspect(data.form)}, label=${local_text(data.local, 0)})"
+		ICalDurationDescription(data) => "ICalDuration(role=${Str.inspect(data.role)}, calendar_days=${data.days.to_str()}, coordinate_seconds=${data.seconds.to_str()})"
+		ICalPeriodDescription(data) => {
 			ending = match data.ending {
 				Endpoint(local) => "endpoint=${local_text(local, 0)}"
 				Duration(duration) => "calendar_days=${duration.days.to_str()}, coordinate_seconds=${duration.seconds.to_str()}"
 			}
-			"RfcPeriod(form=${Str.inspect(data.form)}, start=${local_text(data.start, 0)}, ${ending})"
+			"ICalPeriod(form=${Str.inspect(data.form)}, start=${local_text(data.start, 0)}, ${ending})"
 		}
 		CalendarDescription(data) => {
 			name = match data.kind {
@@ -223,7 +223,7 @@ expect {
 			),
 		),
 	).count_utf8_bytes() <= 160 and
-		SemanticFact.summary(SemanticFact.new(RfcPeriodDescription({ form: Local, start: local, ending: Duration({ days: I64.lowest, seconds: I64.highest }) }))).count_utf8_bytes() <= 256 and
+		SemanticFact.summary(SemanticFact.new(ICalPeriodDescription({ form: Local, start: local, ending: Duration({ days: I64.lowest, seconds: I64.highest }) }))).count_utf8_bytes() <= 256 and
 			SemanticFact.summary(SemanticFact.new(OffsetEndpoint({ role: End, local, fraction_digits: 255, offset: Asserted(FixedOffset.from_seconds(I32.lowest)) }))).count_utf8_bytes() <= 256
 }
 

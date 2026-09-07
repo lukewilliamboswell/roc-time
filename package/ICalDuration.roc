@@ -26,18 +26,18 @@ import TimedOccurrence
 ## boundary or provider ranges. No rules are consulted during parsing.
 ##
 ## ```roc
-## import time.RfcDuration
+## import time.ICalDuration
 ## expect {
-##     value = RfcDuration.parse("P15DT5H0M20S")?
-##     RfcDuration.components(value) == { days: 15.I64, seconds: 18020.I64 }
+##     value = ICalDuration.parse("P15DT5H0M20S")?
+##     ICalDuration.components(value) == { days: 15.I64, seconds: 18020.I64 }
 ## }
 ## ```
-RfcDuration :: { days : I64, seconds : I64 }.{
+ICalDuration :: { days : I64, seconds : I64 }.{
 
 	## Generic encodings carry canonical text, never the opaque backing record.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : RfcDuration, rest : state }, [InvalidRfcDuration(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ICalDuration, rest : state }, [InvalidICalDuration(Error), Encoding(err), ..]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]
@@ -50,12 +50,12 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidRfcDuration(error))
+				Err(error) => Err(InvalidICalDuration(error))
 			}
 		}
 	}
 
-	encoder_for : encoding -> (RfcDuration, state -> Try(state, err))
+	encoder_for : encoding -> (ICalDuration, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
 		]
@@ -66,17 +66,17 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 
 	## Typed quoted literals use the same checked profile at compile time.
 	## Runtime interpolation remains Str followed by an explicit parse call.
-	from_quote : Str -> Try(RfcDuration, [BadQuotedBytes(Str)])
+	from_quote : Str -> Try(ICalDuration, [BadQuotedBytes(Str)])
 	from_quote = |text| match parse(text) {
 		Ok(value) => Ok(value)
-		Err(error) => Err(BadQuotedBytes("Invalid RfcDuration literal: ${Str.inspect(error)}"))
+		Err(error) => Err(BadQuotedBytes("Invalid ICalDuration literal: ${Str.inspect(error)}"))
 	}
 
 	profile : Str
 	profile = "rfc5545-positive-duration-v1"
 	Error : [Malformed, NonPositive, OutOfRange, TooLarge]
 
-	parse : Str -> Try(RfcDuration, Error)
+	parse : Str -> Try(ICalDuration, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 256 {
 			return Err(TooLarge)
@@ -184,18 +184,18 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 	}
 
 	## Equality compares nominal days and coordinate seconds, without an anchor.
-	is_eq : RfcDuration, RfcDuration -> Bool
+	is_eq : ICalDuration, ICalDuration -> Bool
 	is_eq = |a, b| a.days == b.days and a.seconds == b.seconds
-	to_hash : RfcDuration, Hasher -> Hasher
+	to_hash : ICalDuration, Hasher -> Hasher
 	to_hash = |value, hasher| value.seconds.to_hash(value.days.to_hash(hasher))
 
-	components : RfcDuration -> { days : I64, seconds : I64 }
+	components : ICalDuration -> { days : I64, seconds : I64 }
 	components = |value| { days: value.days, seconds: value.seconds }
 
 	## Lower into the shared appointment engine. Days advance the original
 	## source before the coordinate tail. The RFC timed policy selects the
 	## first fold occurrence and uses the offset before a gap (erratum 4271).
-	to_duration : RfcDuration -> TimedOccurrence.Duration
+	to_duration : ICalDuration -> TimedOccurrence.Duration
 	to_duration = |value| {
 		tail = PosixDelta.from_microseconds(value.seconds * 1000000)
 		if value.days == 0 {
@@ -207,7 +207,7 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 
 	## Canonical semantic value text, not a versioned persistence envelope.
 	## Weeks become days; accurate time components become seconds.
-	to_text : RfcDuration -> Str
+	to_text : ICalDuration -> Str
 	to_text = |value| {
 		day = if value.days == 0 {
 			""
@@ -224,15 +224,15 @@ RfcDuration :: { days : I64, seconds : I64 }.{
 
 	## Calendar days and accurate seconds remain separate components, without
 	## an invented anchor or conversion of calendar days to elapsed seconds.
-	fact_count : RfcDuration -> U64
+	fact_count : ICalDuration -> U64
 	fact_count = |_| 1
-	fact_at : RfcDuration, U64 -> [End, Item(SemanticFact)]
+	fact_at : ICalDuration, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| if index == 0 {
-		Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: value.days, seconds: value.seconds })))
+		Item(SemanticFact.new(ICalDurationDescription({ role: Standalone, days: value.days, seconds: value.seconds })))
 	} else {
 		End
 	}
-	to_inspect : RfcDuration -> Str
+	to_inspect : ICalDuration -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "RFC duration has a first semantic fact"
@@ -248,24 +248,24 @@ upper = |byte| if byte >= 97 and byte <= 122 {
 
 # Independently sourced examples: RFC 5545 section 3.3.6, September 2009.
 # https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.6
-expect RfcDuration.components(RfcDuration.parse("P15DT5H0M20S")?) == { days: 15.I64, seconds: 18020.I64 }
-expect RfcDuration.components(RfcDuration.parse("P7W")?) == { days: 49.I64, seconds: 0.I64 }
-expect RfcDuration.to_text(RfcDuration.parse("+p1dt2h3m4s")?) == "P1DT7384S"
+expect ICalDuration.components(ICalDuration.parse("P15DT5H0M20S")?) == { days: 15.I64, seconds: 18020.I64 }
+expect ICalDuration.components(ICalDuration.parse("P7W")?) == { days: 49.I64, seconds: 0.I64 }
+expect ICalDuration.to_text(ICalDuration.parse("+p1dt2h3m4s")?) == "P1DT7384S"
 expect {
 	var $valid = Bool.True
 	for text in ["", "P", "PT", "P1DT", "P1W1D", "P1WT1H", "PT1H1S", "PT1M1H", "PT1S1S", "P1D1D", "P1Y", "P1M", "PT1.5S", "P1D ", "P1DT1HT1M"] {
-		$valid = $valid and RfcDuration.parse(text) == Err(Malformed)
+		$valid = $valid and ICalDuration.parse(text) == Err(Malformed)
 	}
 	$valid
 }
-expect RfcDuration.parse("-PT1S") == Err(NonPositive)
-expect RfcDuration.parse("P0D") == Err(NonPositive)
-expect RfcDuration.parse("PT9223372036855S") == Err(OutOfRange)
-expect RfcDuration.parse("P9223372036854775808D") == Err(OutOfRange)
-expect RfcDuration.parse("P1317624576693539402W") == Err(OutOfRange)
-expect RfcDuration.components(RfcDuration.parse("PT9223372036854S")?).seconds == 9223372036854
-expect RfcDuration.components(RfcDuration.parse("P9223372036854775807D")?).days == I64.highest
-expect RfcDuration.parse("P${"0".repeat(256)}D") == Err(TooLarge)
+expect ICalDuration.parse("-PT1S") == Err(NonPositive)
+expect ICalDuration.parse("P0D") == Err(NonPositive)
+expect ICalDuration.parse("PT9223372036855S") == Err(OutOfRange)
+expect ICalDuration.parse("P9223372036854775808D") == Err(OutOfRange)
+expect ICalDuration.parse("P1317624576693539402W") == Err(OutOfRange)
+expect ICalDuration.components(ICalDuration.parse("PT9223372036854S")?).seconds == 9223372036854
+expect ICalDuration.components(ICalDuration.parse("P9223372036854775807D")?).days == I64.highest
+expect ICalDuration.parse("P${"0".repeat(256)}D") == Err(TooLarge)
 
 # R11/R12: independent piecewise offset model: [0,12h) has offset zero,
 # [12h,3d) has offset +1h. The next local midnight is therefore at 23h.
@@ -288,8 +288,8 @@ expect {
 	}
 	var $valid = Bool.True
 	for case in [{ text: "P1D", hours: 23.I64 }, { text: "PT24H", hours: 24 }, { text: "P1DT1H", hours: 24 }] {
-		parsed = RfcDuration.parse(case.text)?
-		pending = TimedOccurrence.cursor({}, start, RfcDuration.to_duration(parsed))?
+		parsed = ICalDuration.parse(case.text)?
+		pending = TimedOccurrence.cursor({}, start, ICalDuration.to_duration(parsed))?
 		paused = TimedOccurrence.Cursor.collect(pending, { max_segments: 0, max_candidates: 1 })?
 		result = match paused.status {
 			Complete(value) => value
@@ -303,16 +303,16 @@ expect {
 		}
 		$valid = $valid and PosixSpan.coordinate_width(TimedOccurrence.span(result)) == Ok(PosixDelta.from_microseconds(case.hours * 3600000000))
 	}
-	$valid and RfcDuration.parse("P1D") != RfcDuration.parse("PT24H")
+	$valid and ICalDuration.parse("P1D") != ICalDuration.parse("PT24H")
 }
 
 expect {
-	day = RfcDuration.parse("P1D")?
-	hours = RfcDuration.parse("PT24H")?
-	huge = RfcDuration.parse("P9223372036854775807D")?
-	RfcDuration.fact_at(day, 0) == Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: 1, seconds: 0 }))) and
-		RfcDuration.fact_at(hours, 0) == Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: 0, seconds: 86400 }))) and
-			RfcDuration.fact_at(huge, 0) == Item(SemanticFact.new(RfcDurationDescription({ role: Standalone, days: I64.highest, seconds: 0 }))) and
-				RfcDuration.fact_count(huge) == 1 and RfcDuration.fact_at(huge, 1) == End and
-					RfcDuration.fact_at(huge, U64.highest) == End and RfcDuration.to_inspect(huge).count_utf8_bytes() <= 256
+	day = ICalDuration.parse("P1D")?
+	hours = ICalDuration.parse("PT24H")?
+	huge = ICalDuration.parse("P9223372036854775807D")?
+	ICalDuration.fact_at(day, 0) == Item(SemanticFact.new(ICalDurationDescription({ role: Standalone, days: 1, seconds: 0 }))) and
+		ICalDuration.fact_at(hours, 0) == Item(SemanticFact.new(ICalDurationDescription({ role: Standalone, days: 0, seconds: 86400 }))) and
+			ICalDuration.fact_at(huge, 0) == Item(SemanticFact.new(ICalDurationDescription({ role: Standalone, days: I64.highest, seconds: 0 }))) and
+				ICalDuration.fact_count(huge) == 1 and ICalDuration.fact_at(huge, 1) == End and
+					ICalDuration.fact_at(huge, U64.highest) == End and ICalDuration.to_inspect(huge).count_utf8_bytes() <= 256
 }

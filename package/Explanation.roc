@@ -1,7 +1,7 @@
 import GregorianDate
 import DateRecurrence
 import TimedRecurrence
-import RfcTimedRule
+import ICalTimedRule
 import Coverage
 import ResolvedBoundary
 import ResolvedSelection
@@ -18,9 +18,9 @@ import FixedOffset
 import PosixBoundary
 import PosixSpan
 import ExactInterval
-import RfcDateTime
-import RfcDuration
-import RfcPeriod
+import ICalDateTime
+import ICalDuration
+import ICalPeriod
 
 ## Bounded explanation of descriptions and already-bound interpretation results.
 ## Typed facts come directly from the source; rendering never resolves zones,
@@ -46,7 +46,7 @@ import RfcPeriod
 ## reports ByteLimit. ByteLimit takes precedence over field-preview truncation;
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
-	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), RfcTimedRule(RfcTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), RfcDateTime(RfcDateTime), RfcDuration(RfcDuration), RfcPeriod(RfcPeriod)]
+	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
 	Budget : { max_facts : U64, max_utf8_bytes : U64 }
 	Report : { text : Str, status : [Complete, Limited([FactLimit, ByteLimit, TextLimit])], visited_facts : U64, total_facts : U64 }
 	new : Source -> Explanation
@@ -55,7 +55,7 @@ Explanation :: { source : Source }.{
 	fact_count = |value| match value.source {
 		DateRecurrence(v) => DateRecurrence.fact_count(v)
 		TimedRecurrence(v) => TimedRecurrence.fact_count(v)
-		RfcTimedRule(v) => RfcTimedRule.fact_count(v)
+		ICalTimedRule(v) => ICalTimedRule.fact_count(v)
 		Coverage(v) => Coverage.fact_count(v)
 		ResolvedBoundary(v) => ResolvedBoundary.fact_count(v)
 		ResolvedSelection(v) => ResolvedSelection.fact_count(v)
@@ -67,15 +67,15 @@ Explanation :: { source : Source }.{
 		Ixdtf(v) => Ixdtf.fact_count(v)
 		Snapshot(v) => Ixdtf.Snapshot.fact_count(v)
 		ExactInterval(v) => ExactInterval.fact_count(v)
-		RfcDateTime(v) => RfcDateTime.fact_count(v)
-		RfcDuration(v) => RfcDuration.fact_count(v)
-		RfcPeriod(v) => RfcPeriod.fact_count(v)
+		ICalDateTime(v) => ICalDateTime.fact_count(v)
+		ICalDuration(v) => ICalDuration.fact_count(v)
+		ICalPeriod(v) => ICalPeriod.fact_count(v)
 	}
 	fact_at : Explanation, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match value.source {
 		DateRecurrence(v) => DateRecurrence.fact_at(v, index)
 		TimedRecurrence(v) => TimedRecurrence.fact_at(v, index)
-		RfcTimedRule(v) => RfcTimedRule.fact_at(v, index)
+		ICalTimedRule(v) => ICalTimedRule.fact_at(v, index)
 		Coverage(v) => Coverage.fact_at(v, index)
 		ResolvedBoundary(v) => ResolvedBoundary.fact_at(v, index)
 		ResolvedSelection(v) => ResolvedSelection.fact_at(v, index)
@@ -87,9 +87,9 @@ Explanation :: { source : Source }.{
 		Ixdtf(v) => Ixdtf.fact_at(v, index)
 		Snapshot(v) => Ixdtf.Snapshot.fact_at(v, index)
 		ExactInterval(v) => ExactInterval.fact_at(v, index)
-		RfcDateTime(v) => RfcDateTime.fact_at(v, index)
-		RfcDuration(v) => RfcDuration.fact_at(v, index)
-		RfcPeriod(v) => RfcPeriod.fact_at(v, index)
+		ICalDateTime(v) => ICalDateTime.fact_at(v, index)
+		ICalDuration(v) => ICalDuration.fact_at(v, index)
+		ICalPeriod(v) => ICalPeriod.fact_at(v, index)
 	}
 	plain : Explanation, Budget -> Report
 	plain = |value, budget| {
@@ -229,7 +229,7 @@ render = |fact| match SemanticFact.kind(fact) {
 		}. No zone interpretation has been performed.",
 		clipped: False,
 	}
-	RfcTimedRuleDescription(data) => {
+	ICalTimedRuleDescription(data) => {
 		text: "RFC timed recurrence declaration: ${Str.inspect(data.mode)} mode; ${data.period_count.to_str()} explicit PERIOD entries. ${
 			match data.mode {
 				Utc => "UTC labels use the adapter's fixed UTC context."
@@ -298,7 +298,7 @@ render = |fact| match SemanticFact.kind(fact) {
 
 	ExactIntervalDescription(data) => { text: "Exact interval: stored half-open POSIX extent [${PosixBoundary.to_microseconds(PosixSpan.start(data.span)).to_str()}, ${PosixBoundary.to_microseconds(PosixSpan.end(data.span)).to_str()}) microseconds since 1970-01-01; start included, end excluded.", clipped: False }
 	OffsetEndpoint(data) => { text: "${Str.inspect(data.role)} endpoint: ${local_fields(data.local, data.fraction_digits)}; ${data.fraction_digits.to_str()} fractional digits; ${offset_assertion(data.offset)}.", clipped: False }
-	RfcDateTimeDescription(data) => {
+	ICalDateTimeDescription(data) => {
 		text: "${
 			match data.role {
 				Standalone => "RFC date-time"
@@ -308,7 +308,7 @@ render = |fact| match SemanticFact.kind(fact) {
 		}: ${local_fields(data.local, 0)}; ${rfc_form(data.form)}.",
 		clipped: False,
 	}
-	RfcDurationDescription(data) => {
+	ICalDurationDescription(data) => {
 		text: "${
 			match data.role {
 				Standalone => "RFC duration"
@@ -324,7 +324,7 @@ render = |fact| match SemanticFact.kind(fact) {
 		}",
 		clipped: False,
 	}
-	RfcPeriodDescription(data) => {
+	ICalPeriodDescription(data) => {
 		text: "RFC period declaration: start ${local_fields(data.start, 0)}; ${rfc_form(data.form)}; ${
 			match data.ending {
 				Endpoint(_) => "explicit end label retained"
@@ -473,10 +473,10 @@ expect {
 	report.status == Complete and report.text.contains("[1, 2)") and report.text.contains("Start endpoint") and report.text.contains("End endpoint") and report.text.contains("asserted local offset 0 seconds") and report.text.contains("no local-offset assertion")
 }
 expect {
-	duration = RfcDuration.parse("P9223372036854775807DT1S")?
-	period = RfcPeriod.parse("19700101T000000/P9223372036854775807DT1S")?
-	alone = Explanation.plain(Explanation.new(RfcDuration(duration)), { max_facts: 10, max_utf8_bytes: 4096 })
-	anchored = Explanation.plain(Explanation.new(RfcPeriod(period)), { max_facts: 10, max_utf8_bytes: 4096 })
+	duration = ICalDuration.parse("P9223372036854775807DT1S")?
+	period = ICalPeriod.parse("19700101T000000/P9223372036854775807DT1S")?
+	alone = Explanation.plain(Explanation.new(ICalDuration(duration)), { max_facts: 10, max_utf8_bytes: 4096 })
+	anchored = Explanation.plain(Explanation.new(ICalPeriod(period)), { max_facts: 10, max_utf8_bytes: 4096 })
 	alone.status == Complete and anchored.status == Complete and alone.text.contains("9223372036854775807 calendar days followed by 1 coordinate second") and alone.text.contains("requires a start") and !anchored.text.contains("requires a start") and anchored.text.contains("requires explicit zone context") and anchored.text.contains("no end has been computed")
 }
 
@@ -490,8 +490,8 @@ quantity = |amount, singular, plural| "${amount.to_str()} ${
 }"
 
 expect {
-	value = RfcDuration.parse("P1DT1S")?
-	report = Explanation.plain(Explanation.new(RfcDuration(value)), { max_facts: 10, max_utf8_bytes: 4096 })
+	value = ICalDuration.parse("P1DT1S")?
+	report = Explanation.plain(Explanation.new(ICalDuration(value)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.text.contains("1 calendar day followed by 1 coordinate second;")
 }
 
@@ -538,7 +538,7 @@ recurrence_selector = |selector| match selector {
 expect {
 	# The enclosing recurrence already supplies DTSTART and its interpretation
 	# mode. Its duration must not be explained as a standalone missing start.
-	rule = RfcTimedRule.parse({ start: "19700101T000000Z", rule: "FREQ=DAILY;COUNT=1", duration: "PT1H", inclusions: [], exclusions: [], periods: [], mode: Utc })?
-	report = Explanation.plain(Explanation.new(RfcTimedRule(rule)), { max_facts: 20, max_utf8_bytes: 8192 })
+	rule = ICalTimedRule.parse({ start: "19700101T000000Z", rule: "FREQ=DAILY;COUNT=1", duration: "PT1H", inclusions: [], exclusions: [], periods: [], mode: Utc })?
+	report = Explanation.plain(Explanation.new(ICalTimedRule(rule)), { max_facts: 20, max_utf8_bytes: 8192 })
 	report.status == Complete and report.text.contains("Each occurrence supplies its start") and !report.text.contains("requires a start")
 }

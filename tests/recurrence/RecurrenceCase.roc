@@ -19,10 +19,10 @@ import time.ZoneRules
 import time.CalendarPattern
 import time.DateRecurrence
 import time.GregorianDate
-import time.RfcTimedRule
-import time.RfcPeriod
-import time.RfcDuration
-import time.RfcDateRule
+import time.ICalTimedRule
+import time.ICalPeriod
+import time.ICalDuration
+import time.ICalDateRule
 
 # R11–R12: a finite calendar-table model, independent of CalendarPattern and
 # cursor execution. Enumerate 2024–2025 before applying count/union/exclusions.
@@ -101,13 +101,13 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				["20240331"]
 			},
 		}
-		parsed = match RfcDateRule.parse(parts) {
+		parsed = match ICalDateRule.parse(parts) {
 			Ok(value) => value
 			Err(_) => crash "Valid RFC date rule rejected"
 		}
 		# R11/R14: independently specified canonical spelling and set ordering.
 		# Reparse/export stability is paired with the finite calendar model below.
-		exported = match RfcDateRule.to_parts(rule) {
+		exported = match ICalDateRule.to_parts(rule) {
 			Ok(value) => value
 			Err(_) => crash "Supported native DATE rule failed export"
 		}
@@ -127,7 +127,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 				["20240331"]
 			},
 		}
-		if exported != expected_parts or RfcDateRule.to_parts(parsed) != Ok(expected_parts) {
+		if exported != expected_parts or ICalDateRule.to_parts(parsed) != Ok(expected_parts) {
 			crash "DATE export differs from canonical property model"
 		}
 		definition = DateRecurrence.definition(rule)
@@ -138,21 +138,21 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			Ok(value) => value
 			Err(_) => crash "Valid native large COUNT rejected"
 		}
-		if RfcDateRule.to_parts(oversized) != Err(OutOfRange("COUNT")) {
+		if ICalDateRule.to_parts(oversized) != Err(OutOfRange("COUNT")) {
 			crash "DATE export narrowed native COUNT"
 		}
-		restored = match RfcDateRule.parse(exported) {
+		restored = match ICalDateRule.parse(exported) {
 			Ok(value) => value
 			Err(_) => crash "Canonical DATE properties failed import"
 		}
-		if RfcDateRule.to_parts(restored) != Ok(exported) {
+		if ICalDateRule.to_parts(restored) != Ok(exported) {
 			crash "DATE canonical spelling is unstable"
 		}
 		restored_cursor = match DateRecurrence.cursor(restored, window) {
 			Ok(value) => value
 			Err(_) => crash "Restored query rejected"
 		}
-		match RfcDateRule.parse({ ..parts, rule: "${text};COUNT=1" }) {
+		match ICalDateRule.parse({ ..parts, rule: "${text};COUNT=1" }) {
 			Err(Duplicate("COUNT")) => {}
 			_ => crash "Duplicate rule part accepted"
 		}
@@ -730,22 +730,22 @@ check_subdaily = |input| {
 check_duration = |start, amount| {
 	# Generated H/M/S fields use an independent integer-second oracle. Parse,
 	# canonical reparse and shared occurrence execution all retain that width.
-	weeks = match RfcDuration.parse("P${amount.to_str()}W") {
+	weeks = match ICalDuration.parse("P${amount.to_str()}W") {
 		Ok(value) => value
 		Err(_) => crash "valid generated weeks rejected"
 	}
-	if RfcDuration.components(weeks) != { days: amount.to_i64() * 7, seconds: 0.I64 } or RfcDuration.parse(RfcDuration.to_text(weeks)) != Ok(weeks) {
+	if ICalDuration.components(weeks) != { days: amount.to_i64() * 7, seconds: 0.I64 } or ICalDuration.parse(ICalDuration.to_text(weeks)) != Ok(weeks) {
 		crash "nominal weeks differ from seven-day model"
 	}
 	text = "PT${amount.to_str()}H${amount.to_str()}M${amount.to_str()}S"
-	parsed = match RfcDuration.parse(text) {
+	parsed = match ICalDuration.parse(text) {
 		Ok(value) => value
 		Err(_) => crash "valid generated duration rejected"
 	}
-	if RfcDuration.parse(RfcDuration.to_text(parsed)) != Ok(parsed) or RfcDuration.parse("${text}S") != Err(Malformed) {
+	if ICalDuration.parse(ICalDuration.to_text(parsed)) != Ok(parsed) or ICalDuration.parse("${text}S") != Err(Malformed) {
 		crash "duration grammar or semantic round trip"
 	}
-	parsed_cursor = match TimedOccurrence.cursor(42.U64, start, RfcDuration.to_duration(parsed)) {
+	parsed_cursor = match TimedOccurrence.cursor(42.U64, start, ICalDuration.to_duration(parsed)) {
 		Ok(value) => value
 		Err(_) => crash "parsed duration construction"
 	}
@@ -875,11 +875,11 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		}
 		start_text = "202401${fields.day.to_str()}T${hour_text}0000"
 		anchor_text = "${start_text}/PT${work.to_str()}H"
-		anchor_period = match RfcPeriod.parse(anchor_text) {
+		anchor_period = match ICalPeriod.parse(anchor_text) {
 			Ok(value) => value
 			Err(_) => crash "generated anchor period"
 		}
-		if RfcPeriod.parse(RfcPeriod.to_text(anchor_period)) != Ok(anchor_period) {
+		if ICalPeriod.parse(ICalPeriod.to_text(anchor_period)) != Ok(anchor_period) {
 			crash "period semantic text round trip"
 		}
 		selectors = if input.last_monday {
@@ -887,11 +887,11 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		} else {
 			""
 		}
-		parsed = match RfcTimedRule.parse({ start: start_text, rule: "FREQ=MONTHLY;INTERVAL=${input.interval.to_str()};COUNT=${input.count.to_str()};BYHOUR=9,17${selectors}", mode: Zoned, duration: "P1DT1H", inclusions: ["20240101T090000", "20240204T090000", start_text, "20240204T090000"], exclusions: [], periods: [anchor_text, "20240204T090000/20240206T090000", anchor_text] }) {
+		parsed = match ICalTimedRule.parse({ start: start_text, rule: "FREQ=MONTHLY;INTERVAL=${input.interval.to_str()};COUNT=${input.count.to_str()};BYHOUR=9,17${selectors}", mode: Zoned, duration: "P1DT1H", inclusions: ["20240101T090000", "20240204T090000", start_text, "20240204T090000"], exclusions: [], periods: [anchor_text, "20240204T090000/20240206T090000", anchor_text] }) {
 			Ok(value) => value
 			Err(_) => crash "generated timed RFC rule rejected"
 		}
-		match RfcTimedRule.schedule(42.U64, parsed, window, Local(rules)) {
+		match ICalTimedRule.schedule(42.U64, parsed, window, Local(rules)) {
 			Ok(value) => value
 			Err(_) => crash "timed RFC schedule adaptation"
 		}
@@ -1157,11 +1157,11 @@ check_rfc_explanation = |input| {
 		} else {
 			"FREQ=DAILY"
 		}
-		parsed = match RfcTimedRule.parse({ start: start_text, rule: rule_text, mode, duration: "P1D", inclusions: [start_text, start_text], exclusions: [start_text], periods: ["${start_text}/PT1H"] }) {
+		parsed = match ICalTimedRule.parse({ start: start_text, rule: rule_text, mode, duration: "P1D", inclusions: [start_text, start_text], exclusions: [start_text], periods: ["${start_text}/PT1H"] }) {
 			Ok(value) => value
 			Err(_) => crash "Valid RFC explanation fixture rejected"
 		}
-		source = Explanation.new(RfcTimedRule(parsed))
+		source = Explanation.new(ICalTimedRule(parsed))
 		anchor = local(date(1970, 1, 1), 0)
 		termination = if input.exclude_anchor {
 			if mode == Floating {
@@ -1172,7 +1172,7 @@ check_rfc_explanation = |input| {
 		} else {
 			Forever
 		}
-		if recurrence_fact(source, 0) != RfcTimedRuleDescription({ mode, period_count: 1 }) or
+		if recurrence_fact(source, 0) != ICalTimedRuleDescription({ mode, period_count: 1 }) or
 			recurrence_fact(source, 1) != RecurrencePolicy({
 				context: if mode == Utc {
 					FixedUtc
@@ -1182,8 +1182,8 @@ check_rfc_explanation = |input| {
 				occurrence: First,
 				gap: UseOffsetBeforeGap,
 			}) or
-				recurrence_fact(source, 2) != RfcDurationDescription({ role: RecurrenceEnding, days: 1, seconds: 0 }) or
-					recurrence_fact(source, 3) != RfcPeriodDescription({
+				recurrence_fact(source, 2) != ICalDurationDescription({ role: RecurrenceEnding, days: 1, seconds: 0 }) or
+					recurrence_fact(source, 3) != ICalPeriodDescription({
 						form: if mode == Utc {
 							Utc
 						} else {

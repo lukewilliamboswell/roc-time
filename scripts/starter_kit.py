@@ -13,6 +13,7 @@ import zipfile
 
 sys.dont_write_bytecode = True
 from roc_version import package_pin, replace_pin
+from update_example_urls import migrate_ical_names
 
 ROOT = Path(__file__).resolve().parents[1]
 STARTERS = ("booking_exchange", "archive_search", "staffing", "clock_deadline")
@@ -164,7 +165,7 @@ def build(output: Path, bundle_url: str, zone_bundle_url: str) -> Path:
         for path in sources:
             if path.is_symlink():
                 raise ValueError(f"symlink source is not permitted: {path}")
-            source = path.read_text()
+            source = migrate_ical_names(path.read_text())
             if path.name == "main.roc":
                 source = replace_pin(source, compiler)
                 source, core_count = re.subn(r'(?m)^(\s*time:\s*)"[^"]+"', lambda match: f'{match[1]}"{bundle_url}"', source)

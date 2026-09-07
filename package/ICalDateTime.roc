@@ -24,21 +24,21 @@ import PosixBoundary
 ## No source spelling, full ICS or versioned persistence claim is made.
 ##
 ## ```roc
-## import time.RfcDateTime
+## import time.ICalDateTime
 ## import time.PosixBoundary
 ## expect {
-##     value = RfcDateTime.parse("19691231T235959Z")?
-##     RfcDateTime.utc_boundary(value) == Ok(PosixBoundary.from_microseconds(-1000000))
+##     value = ICalDateTime.parse("19691231T235959Z")?
+##     ICalDateTime.utc_boundary(value) == Ok(PosixBoundary.from_microseconds(-1000000))
 ## }
 ## ```
-RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
+ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 	Form : [Local, Utc]
 	Error : [Malformed, Incomplete, OutOfRange, InvalidDate, InvalidTime, UnsupportedLeapSecond]
 
 	## Generic encodings carry canonical text, never the opaque backing record.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : RfcDateTime, rest : state }, [InvalidRfcDateTime(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ICalDateTime, rest : state }, [InvalidICalDateTime(Error), Encoding(err), ..]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]
@@ -51,12 +51,12 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidRfcDateTime(error))
+				Err(error) => Err(InvalidICalDateTime(error))
 			}
 		}
 	}
 
-	encoder_for : encoding -> (RfcDateTime, state -> Try(state, err))
+	encoder_for : encoding -> (ICalDateTime, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
 		]
@@ -67,16 +67,16 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 
 	## Typed quoted literals use the same checked profile at compile time.
 	## Runtime interpolation remains Str followed by an explicit parse call.
-	from_quote : Str -> Try(RfcDateTime, [BadQuotedBytes(Str)])
+	from_quote : Str -> Try(ICalDateTime, [BadQuotedBytes(Str)])
 	from_quote = |text| match parse(text) {
 		Ok(value) => Ok(value)
-		Err(error) => Err(BadQuotedBytes("Invalid RfcDateTime literal: ${Str.inspect(error)}"))
+		Err(error) => Err(BadQuotedBytes("Invalid ICalDateTime literal: ${Str.inspect(error)}"))
 	}
 
 	profile : Str
 	profile = "rfc5545-datetime-values-v1"
 
-	parse : Str -> Try(RfcDateTime, Error)
+	parse : Str -> Try(ICalDateTime, Error)
 	parse = |text| {
 		length = text.count_utf8_bytes()
 		if length > 16 {
@@ -124,24 +124,24 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		Ok({ date, clock, form })
 	}
 
-	form : RfcDateTime -> Form
+	form : ICalDateTime -> Form
 	form = |value| value.form
-	source : RfcDateTime -> { date : GregorianDate, clock : ClockTime }
+	source : ICalDateTime -> { date : GregorianDate, clock : ClockTime }
 	source = |value| { date: value.date, clock: value.clock }
 
 	## A field label only; callers must preserve form when interpreting it.
-	local_label : RfcDateTime -> LocalDateTime
+	local_label : ICalDateTime -> LocalDateTime
 	local_label = |value| LocalDateTime.new(CalendarDate.from_gregorian(value.date), value.clock)
 
 	## Only explicit Z permits context-free POSIX conversion. A local value
 	## requires the caller's interpretation context, even if the fields are zero.
-	utc_boundary : RfcDateTime -> Try(PosixBoundary, [NeedsContext, OutOfRange, ..])
+	utc_boundary : ICalDateTime -> Try(PosixBoundary, [NeedsContext, OutOfRange, ..])
 	utc_boundary = |value| match value.form {
 		Local => Err(NeedsContext)
 		Utc => FixedOffset.resolve(FixedOffset.from_seconds(0), local_label(value))
 	}
 
-	to_text : RfcDateTime -> Str
+	to_text : ICalDateTime -> Str
 	to_text = |value| {
 		date = GregorianDate.to_fields(value.date)
 		clock = ClockTime.to_fields(value.clock)
@@ -151,9 +151,9 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		}
 		"${pad(date.year.to_str(), 4)}${pad(date.month.to_str(), 2)}${pad(date.day.to_str(), 2)}T${pad(clock.hour.to_str(), 2)}${pad(clock.minute.to_str(), 2)}${pad(clock.second.to_str(), 2)}${suffix}"
 	}
-	is_eq : RfcDateTime, RfcDateTime -> Bool
+	is_eq : ICalDateTime, ICalDateTime -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock and a.form == b.form
-	to_hash : RfcDateTime, Hasher -> Hasher
+	to_hash : ICalDateTime, Hasher -> Hasher
 	to_hash = |value, hasher| {
 		marker = match value.form {
 			Local => 0.U8
@@ -164,24 +164,24 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 
 	## Declaration facts retain local versus UTC form. A local value records
 	## its need for explicit zone context without choosing one or resolving it.
-	fact_count : RfcDateTime -> U64
+	fact_count : ICalDateTime -> U64
 	fact_count = |value| if value.form == Local {
 		2
 	} else {
 		1
 	}
-	fact_at : RfcDateTime, U64 -> [End, Item(SemanticFact)]
+	fact_at : ICalDateTime, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| {
 		if index >= fact_count(value) {
 			return End
 		}
 		if index == 0 {
-			Item(SemanticFact.new(RfcDateTimeDescription({ role: Standalone, local: local_label(value), form: value.form })))
+			Item(SemanticFact.new(ICalDateTimeDescription({ role: Standalone, local: local_label(value), form: value.form })))
 		} else {
 			Item(SemanticFact.new(Requirement(ZoneContext)))
 		}
 	}
-	to_inspect : RfcDateTime -> Str
+	to_inspect : ICalDateTime -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "RFC datetime has a first semantic fact"
@@ -202,34 +202,34 @@ digits = |bytes, start, length| {
 pad : Str, U64 -> Str
 pad = |text, width| "${"0".repeat(width - text.count_utf8_bytes())}${text}"
 
-expect RfcDateTime.utc_boundary(RfcDateTime.parse("19700101T000000Z")?) == Ok(PosixBoundary.from_microseconds(0))
-expect RfcDateTime.utc_boundary(RfcDateTime.parse("19691231T235959Z")?) == Ok(PosixBoundary.from_microseconds(-1000000))
-expect RfcDateTime.utc_boundary(RfcDateTime.parse("19700101T000000")?) == Err(NeedsContext)
-expect RfcDateTime.parse("19700101T000000") != RfcDateTime.parse("19700101T000000Z")
-expect RfcDateTime.to_text(RfcDateTime.parse("00010101t000000z")?) == "00010101T000000Z"
-expect RfcDateTime.to_text(RfcDateTime.parse("99991231T235959")?) == "99991231T235959"
-expect RfcDateTime.parse("00000101T000000Z") == Err(OutOfRange)
-expect RfcDateTime.parse("19000229T000000Z") == Err(InvalidDate)
-expect RfcDateTime.parse("20000229T240000Z") == Err(InvalidTime)
-expect RfcDateTime.parse("19970630T235960Z") == Err(UnsupportedLeapSecond)
+expect ICalDateTime.utc_boundary(ICalDateTime.parse("19700101T000000Z")?) == Ok(PosixBoundary.from_microseconds(0))
+expect ICalDateTime.utc_boundary(ICalDateTime.parse("19691231T235959Z")?) == Ok(PosixBoundary.from_microseconds(-1000000))
+expect ICalDateTime.utc_boundary(ICalDateTime.parse("19700101T000000")?) == Err(NeedsContext)
+expect ICalDateTime.parse("19700101T000000") != ICalDateTime.parse("19700101T000000Z")
+expect ICalDateTime.to_text(ICalDateTime.parse("00010101t000000z")?) == "00010101T000000Z"
+expect ICalDateTime.to_text(ICalDateTime.parse("99991231T235959")?) == "99991231T235959"
+expect ICalDateTime.parse("00000101T000000Z") == Err(OutOfRange)
+expect ICalDateTime.parse("19000229T000000Z") == Err(InvalidDate)
+expect ICalDateTime.parse("20000229T240000Z") == Err(InvalidTime)
+expect ICalDateTime.parse("19970630T235960Z") == Err(UnsupportedLeapSecond)
 expect {
 	var $valid = Bool.True
 	for text in ["", "1970", "19700101", "19700101T", "19700101T00000"] {
-		$valid = $valid and RfcDateTime.parse(text) == Err(Incomplete)
+		$valid = $valid and ICalDateTime.parse(text) == Err(Incomplete)
 	}
 	for text in ["X", "1970-", "19700101X000000", "19700101T000000+0000", "19700101T000000.0Z", "19700101T000000ZZ", "19700101T000000 "] {
-		$valid = $valid and RfcDateTime.parse(text) == Err(Malformed)
+		$valid = $valid and ICalDateTime.parse(text) == Err(Malformed)
 	}
 	$valid
 }
 
 expect {
-	utc = RfcDateTime.parse("19970902T090000Z")?
-	local = RfcDateTime.parse("19970902T090000")?
-	RfcDateTime.fact_at(utc, 0) == Item(SemanticFact.new(RfcDateTimeDescription({ role: Standalone, local: RfcDateTime.local_label(utc), form: Utc }))) and
-		RfcDateTime.fact_at(local, 0) == Item(SemanticFact.new(RfcDateTimeDescription({ role: Standalone, local: RfcDateTime.local_label(utc), form: Local }))) and
-			RfcDateTime.fact_count(utc) == 1 and RfcDateTime.fact_count(local) == 2 and
-				RfcDateTime.fact_at(local, 1) == Item(SemanticFact.new(Requirement(ZoneContext))) and
-					RfcDateTime.fact_at(utc, 1) == End and RfcDateTime.fact_at(local, 2) == End and
-						RfcDateTime.fact_at(local, U64.highest) == End and RfcDateTime.to_inspect(local).count_utf8_bytes() <= 256
+	utc = ICalDateTime.parse("19970902T090000Z")?
+	local = ICalDateTime.parse("19970902T090000")?
+	ICalDateTime.fact_at(utc, 0) == Item(SemanticFact.new(ICalDateTimeDescription({ role: Standalone, local: ICalDateTime.local_label(utc), form: Utc }))) and
+		ICalDateTime.fact_at(local, 0) == Item(SemanticFact.new(ICalDateTimeDescription({ role: Standalone, local: ICalDateTime.local_label(utc), form: Local }))) and
+			ICalDateTime.fact_count(utc) == 1 and ICalDateTime.fact_count(local) == 2 and
+				ICalDateTime.fact_at(local, 1) == Item(SemanticFact.new(Requirement(ZoneContext))) and
+					ICalDateTime.fact_at(utc, 1) == End and ICalDateTime.fact_at(local, 2) == End and
+						ICalDateTime.fact_at(local, U64.highest) == End and ICalDateTime.to_inspect(local).count_utf8_bytes() <= 256
 }

@@ -1,6 +1,6 @@
 import time.DateRecurrence
 import time.TimedRecurrence
-import time.RfcTimedRule
+import time.ICalTimedRule
 import time.CalendarPattern
 import time.GregorianDate
 import time.ClockTime
@@ -71,7 +71,7 @@ RecurrenceFixture := [].{
 			Ok(v) => v
 			Err(_) => crash "timed inclusions"
 		}
-		rfc_rule = match RfcTimedRule.parse({
+		rfc_rule = match ICalTimedRule.parse({
 			start: "19700101T000000",
 			rule: if finite {
 				"FREQ=DAILY;COUNT=2147483647"

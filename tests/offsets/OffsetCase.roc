@@ -1,4 +1,4 @@
-import time.RfcDateTime
+import time.ICalDateTime
 import fuzz.Fuzz
 import time.FixedOffset
 import time.PosixBoundary
@@ -38,11 +38,11 @@ OffsetCase := { number : I64, seconds : I32 }.{
 			"19700101"
 		}
 		text = "${date_text}T${two(hour)}${two(minute)}${two(second)}"
-		parsed = match RfcDateTime.parse("${text}Z") {
+		parsed = match ICalDateTime.parse("${text}Z") {
 			Ok(value) => value
 			Err(_) => crash "valid epoch grid text rejected"
 		}
-		parsed_local = match RfcDateTime.parse(text) {
+		parsed_local = match ICalDateTime.parse(text) {
 			Ok(value) => value
 			Err(_) => crash "valid local grid text rejected"
 		}
@@ -55,7 +55,7 @@ OffsetCase := { number : I64, seconds : I32 }.{
 				}
 			)
 		) * 1000000
-		if RfcDateTime.utc_boundary(parsed) != Ok(PosixBoundary.from_microseconds(expected_micros)) or RfcDateTime.utc_boundary(parsed_local) != Err(NeedsContext) or parsed == parsed_local or RfcDateTime.parse(RfcDateTime.to_text(parsed)) != Ok(parsed) or RfcDateTime.parse("${text}+0000") != Err(Malformed) {
+		if ICalDateTime.utc_boundary(parsed) != Ok(PosixBoundary.from_microseconds(expected_micros)) or ICalDateTime.utc_boundary(parsed_local) != Err(NeedsContext) or parsed == parsed_local or ICalDateTime.parse(ICalDateTime.to_text(parsed)) != Ok(parsed) or ICalDateTime.parse("${text}+0000") != Err(Malformed) {
 			crash "RFC value differs from epoch grid or lost UTC/local form"
 		}
 		boundary = PosixBoundary.from_microseconds(input.number)

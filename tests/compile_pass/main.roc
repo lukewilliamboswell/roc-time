@@ -10,7 +10,7 @@ import time.EventCollection
 import time.CalendarPattern
 import time.GregorianDate
 import time.DateRecurrence
-import time.RfcDateRule
+import time.ICalDateRule
 
 # Positive control for compile-failure checks: the same imports and valid
 # domain combinations must succeed independently of application examples.
@@ -24,7 +24,7 @@ main! = |_args| {
 	pattern = CalendarPattern.new(date, CalendarPattern.defaults(Monthly))?
 	_matches = CalendarPattern.matches(pattern, 0, date)?
 	rule = DateRecurrence.new(date, { pattern: CalendarPattern.defaults(Monthly), termination: Count(3), by_set_pos: [], inclusions: [], exclusions: [] })?
-	_exported = match RfcDateRule.to_parts(rule) {
+	_exported = match ICalDateRule.to_parts(rule) {
 		Ok(value) => value
 		Err(error) => return Err(Export(error))
 	}

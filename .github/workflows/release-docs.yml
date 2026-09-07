@@ -91,7 +91,12 @@ jobs:
         env:
           CORE_URL: ${{ steps.urls.outputs.core_url }}
           ZONE_URL: ${{ steps.urls.outputs.zones_url }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/update_example_urls.py --examples-dir .roc-time-tmp/release-source/examples --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL" --compiler "${{ steps.roc-version.outputs.nightly-tag }}"
+        run: |
+          api_args=()
+          if grep -q '^[[:space:]]*ICalDateRule,' .roc-time-tmp/release-source/package/main.roc; then
+            api_args+=(--migrate-ical)
+          fi
+          python3 .roc-time-tmp/workflow-source/scripts/update_example_urls.py --examples-dir .roc-time-tmp/release-source/examples --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL" --compiler "${{ steps.roc-version.outputs.nightly-tag }}" "${api_args[@]}"
 
       - name: Validate published examples with their release compiler
         if: steps.roc-version.outputs.authority == 'header'

@@ -4,7 +4,7 @@ import SubdailyPattern
 
 # Shared syntax lowering for the DATE and DATE-TIME adapters. This module is
 # internal to the package; execution remains in the native recurrence types.
-RfcRuleParts :: [].{
+ICalRuleParts :: [].{
 	Error : [Malformed(Str), Duplicate(Str), Missing(Str), Unsupported(Str), OutOfRange(Str), Incompatible(Str), TooLarge]
 	Fields : { pattern : CalendarPattern.Spec, clocks : ClockPattern.Spec, subdaily : [None, Some(SubdailyPattern.Frequency)], termination : [Forever, Count(U64), Until(Str)], positions : List(I16) }
 	parse : Str, [Date, Timed] -> Try(Fields, Error)
@@ -167,7 +167,7 @@ RfcRuleParts :: [].{
 
 }
 
-positive : Str, Str, U64, I64 -> Try(I64, RfcRuleParts.Error)
+positive : Str, Str, U64, I64 -> Try(I64, ICalRuleParts.Error)
 positive = |part, text, digits, limit| {
 	bytes = text.to_utf8()
 	if bytes.is_empty() or bytes.len() > digits {
@@ -193,7 +193,7 @@ positive = |part, text, digits, limit| {
 	Ok($value)
 }
 
-signed_number : Str, Str, U64, I64, Bool -> Try(I64, RfcRuleParts.Error)
+signed_number : Str, Str, U64, I64, Bool -> Try(I64, ICalRuleParts.Error)
 signed_number = |part, text, digits, limit, allow_sign| {
 	if allow_sign and text.starts_with("-") {
 		return Ok(-positive(part, text.drop_prefix("-"), digits, limit)?)
@@ -204,7 +204,7 @@ signed_number = |part, text, digits, limit, allow_sign| {
 	positive(part, text, digits, limit)
 }
 
-numbers : Str, Str, U64, I64, Bool -> Try(List(I64), RfcRuleParts.Error)
+numbers : Str, Str, U64, I64, Bool -> Try(List(I64), ICalRuleParts.Error)
 numbers = |part, text, digits, limit, allow_sign| {
 	var $result = []
 	for value in text.split_on(",") {
@@ -216,7 +216,7 @@ numbers = |part, text, digits, limit, allow_sign| {
 	Ok($result)
 }
 
-weekday : Str -> Try(CalendarPattern.Weekday, RfcRuleParts.Error)
+weekday : Str -> Try(CalendarPattern.Weekday, ICalRuleParts.Error)
 weekday = |text| match text {
 	"MO" => Ok(Monday)
 	"TU" => Ok(Tuesday)
@@ -228,7 +228,7 @@ weekday = |text| match text {
 	_ => Err(Malformed("weekday"))
 }
 
-ascii_upper : Str -> Try(Str, RfcRuleParts.Error)
+ascii_upper : Str -> Try(Str, ICalRuleParts.Error)
 ascii_upper = |text| {
 	var $bytes = []
 	for byte in text.iter_utf8() {
@@ -251,7 +251,7 @@ ascii = |bytes| match Str.from_utf8(bytes) {
 	Err(_) => crash "Validated ASCII bytes"
 }
 
-clock_numbers : Str, Str, I64 -> Try(List(U8), RfcRuleParts.Error)
+clock_numbers : Str, Str, I64 -> Try(List(U8), ICalRuleParts.Error)
 clock_numbers = |part, text, limit| {
 	var $result = []
 	for value in text.split_on(",") {

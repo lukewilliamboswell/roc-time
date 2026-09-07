@@ -1,4 +1,4 @@
-import time.RfcDateRule
+import time.ICalDateRule
 import time.DateRecurrence
 import time.CalendarPattern
 import time.GregorianDate
@@ -29,11 +29,11 @@ DateExportChecks :: [].{
 			"set-positions" => { start: "20250106", rule: "FREQ=MONTHLY;COUNT=4;BYDAY=MO;BYSETPOS=1,-1,1", inclusions: [], exclusions: [] }
 			_ => crash "Unknown date export fixture"
 		}
-		original = RfcDateRule.parse(parts) ?? crash "Fixture import rejected"
+		original = ICalDateRule.parse(parts) ?? crash "Fixture import rejected"
 		definition = DateRecurrence.definition(original)
 		rebuilt = DateRecurrence.new(definition.anchor, definition.spec) ?? crash "Definition reconstruction failed"
-		exported = RfcDateRule.to_parts(rebuilt) ?? crash "Fixture export rejected"
-		restored = RfcDateRule.parse(exported) ?? crash "Export cannot be imported"
+		exported = ICalDateRule.to_parts(rebuilt) ?? crash "Fixture export rejected"
+		restored = ICalDateRule.parse(exported) ?? crash "Export cannot be imported"
 		end = if name == "forever" or name == "count-max" {
 			date(2025, 1, 4)
 		} else if name == "ordinal-extremes" {
@@ -120,7 +120,7 @@ native = |name| {
 			crash "Native fixture rejected before export"
 		}
 	}
-	match RfcDateRule.to_parts(rule) {
+	match ICalDateRule.to_parts(rule) {
 		Err(error) => Str.inspect(error)
 		Ok(_) => crash "Native-only fixture unexpectedly exported"
 	}
@@ -142,13 +142,13 @@ exact_cap = || {
 	anchor = date(2025, 1, 1)
 	spec = { pattern: { ..CalendarPattern.defaults(Daily), interval: 1234 }, termination: Forever, by_set_pos: [], inclusions: dates_with_count(4096), exclusions: dates_with_count(4091) }
 	rule = DateRecurrence.new(anchor, spec) ?? crash "Exact cap construction"
-	parts = RfcDateRule.to_parts(rule) ?? crash "Exact byte cap rejected"
-	restored = RfcDateRule.parse(parts) ?? crash "Exact byte cap reimport rejected"
-	if (RfcDateRule.to_parts(restored) ?? crash "Exact cap reexport") != parts {
+	parts = ICalDateRule.to_parts(rule) ?? crash "Exact byte cap rejected"
+	restored = ICalDateRule.parse(parts) ?? crash "Exact byte cap reimport rejected"
+	if (ICalDateRule.to_parts(restored) ?? crash "Exact cap reexport") != parts {
 		crash "Exact cap semantic text changed"
 	}
 	oversized = DateRecurrence.new(anchor, { ..spec, exclusions: dates_with_count(4092) }) ?? crash "Oversize construction"
-	if RfcDateRule.to_parts(oversized) != Err(TooLarge) {
+	if ICalDateRule.to_parts(oversized) != Err(TooLarge) {
 		crash "One entry above cap accepted"
 	}
 	var $bytes = parts.start.count_utf8_bytes() + parts.rule.count_utf8_bytes()

@@ -1,4 +1,4 @@
-import time.RfcDateTime
+import time.ICalDateTime
 import time.PosixBoundary
 import time.CivilDay
 import time.GregorianDate
@@ -22,11 +22,11 @@ GregorianOracle := [Forward(I64, U8, U8), Inverse(I64)].{
 							m = month.to_str()
 							d = day.to_str()
 							text = "${"0".repeat(4 - y.count_utf8_bytes())}${y}${"0".repeat(2 - m.count_utf8_bytes())}${m}${"0".repeat(2 - d.count_utf8_bytes())}${d}T000000Z"
-							parsed = match RfcDateTime.parse(text) {
+							parsed = match ICalDateTime.parse(text) {
 								Ok(value) => value
 								Err(_) => crash "oracle date rejected by RFC adapter"
 							}
-							boundary = match RfcDateTime.utc_boundary(parsed) {
+							boundary = match ICalDateTime.utc_boundary(parsed) {
 								Ok(value) => value
 								Err(_) => crash "oracle UTC value failed to resolve"
 							}
