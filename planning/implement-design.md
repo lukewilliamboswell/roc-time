@@ -13,17 +13,11 @@ Keep the exact core, checked failures, explicit interpretation and microsecond
 contract. Prefer composition through existing public operations; add convenience
 APIs where a realistic caller otherwise has to reproduce temporal logic.
 
-1. **Connect clocks, numeric epochs and application records (R01/R02/R14/R16).**
-   Complete the integration path in [user time workflows](user-time-workflows.md).
-   Demonstrate a real supported platform clock reading converted to a boundary,
-   an expiry comparison and a timestamp inside an encoded application record.
-   Use a JSON codec where a supported integration is available; keep any missing
-   platform/codec dependency explicit. If the chosen platform supplies integer
-   milliseconds, provide checked conversion without caller-written overflowing
-   multiplication. Document how the six-digit
-   text profile interacts with nanosecond-producing services; add an explicitly
-   rounded text adapter only for a demonstrated integration. Clock acquisition,
-   timers and monotonic measurements remain platform responsibilities.
+1. **Publish the everyday workflows already implemented (R16).** Follow
+   [user time workflows](user-time-workflows.md) to deliver the staged civil
+   text/display and named-zone applications with compatible compiler and immutable
+   package URLs. Publication is separate from implementation acceptance; users
+   of the current release cannot yet use these development APIs.
 2. **Expose common civil queries (R05/R07/R16).** Follow
    [civil ergonomics](civil-ergonomics.md). An invoice/reporting caller can
    obtain a weekday, ordinal day and ISO week date,
