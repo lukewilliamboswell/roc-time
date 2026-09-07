@@ -68,6 +68,35 @@ class FollowupTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'file limit'):
                 followup.changes(self.root, ['README.md'])
 
+    def test_byte_limit_fails_before_encoding(self):
+        (self.root / 'README.md').write_bytes(b'over budget')
+        with patch.object(followup, 'MAX_BYTES', 1), patch.object(followup, 'run', side_effect=['README.md\0', '']):
+            with self.assertRaisesRegex(ValueError, 'byte limit'):
+                followup.changes(self.root, ['README.md'])
+
+    def test_new_signed_followup_emits_exact_identity(self):
+        sha = 'd' * 40
+        pr = {'number': 5, 'base': {'sha': self.base}, 'head': {'sha': sha}}
+        answers = [
+            {'object': {'sha': self.base}}, [], {},
+            {'data': {'createCommitOnBranch': {'commit': {'oid': sha}}}},
+            {'object': {'sha': self.base}}, {'object': {'sha': sha}}, [], pr,
+        ]
+        argv = ['creator', '--repo', 'owner/repo', '--version', '0.1.0-rc2',
+                '--base-branch', 'main', '--expected-base', self.base,
+                '--github-output', str(self.root / 'outputs')]
+        with patch.object(sys, 'argv', argv), patch.object(followup, 'run', side_effect=[str(self.root), self.base]), \
+                patch.object(followup, 'changes', return_value=({'additions': [], 'deletions': []}, self.blobs)), \
+                patch.object(followup, 'api', side_effect=answers) as requests, \
+                patch.object(followup, 'read_commit', return_value=self.commit):
+            followup.main()
+        output = (self.root / 'outputs').read_text()
+        self.assertIn(f'commit_sha={sha}\n', output)
+        self.assertIn('pull_request_number=5\n', output)
+        graphql = requests.call_args_list[3].args[1]
+        self.assertEqual(graphql['variables']['input']['expectedHeadOid'], self.base)
+        self.assertEqual(graphql['variables']['input']['branch']['branchName'], 'release-followup/0.1.0-rc2')
+
     def test_complete_paginated_commit(self):
         first = dict(self.commit, sha='d' * 40, files=[{'filename': f'www/{i}'} for i in range(100)])
         second = dict(self.commit, sha='d' * 40, files=[{'filename': 'www/last'}])
