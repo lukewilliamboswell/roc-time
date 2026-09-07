@@ -101,6 +101,8 @@ def main() -> None:
     run([sys.executable, "scripts/test_civil_queries.py"])
     heading("Checking DATE recurrence export against independent expectations...")
     run([sys.executable, "scripts/test_date_export.py"])
+    heading("Checking timed recurrence export against independent expectations...")
+    run([sys.executable, "scripts/test_timed_export.py"])
     heading("Checking named-zone appointment scenarios...")
     appointments = "tests/zoned_appointment_checks/main.roc"
     run([ROC, "check", appointments])

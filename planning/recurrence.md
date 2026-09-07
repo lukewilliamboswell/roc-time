@@ -7,12 +7,12 @@ finite immutable zone rules and event/coverage distinctions.
 ## Deliverables
 
 - Complete the supported schedule input/output workflow below before widening
-  recurrence import. Prioritize timed meeting exchange and durable interpretation.
+  recurrence import. Prioritize durable definitions and interpretation.
 - Resolve broader mixed UTC/local property support and UTC EXDATE matching
   against gap-adjusted sources before widening the timed profile: projecting
   an adjusted boundary cannot recover its original label.
-- Extend RFC adaptation to omitted yearly defaults and declared
-  serialization/persistence, retaining the shared native execution engine.
+- Resolve omitted yearly defaults before widening RFC adaptation, retaining
+  the shared native execution engine.
 - Extend independent timed expectations beyond UTC to local-zone transitions
   and exception/ending interactions as their supported profiles expand. Retain
   bounded fuzz models, invalid-input checks and realistic applications.
@@ -27,30 +27,38 @@ definition through checked public construction, export canonical text, save/load
 the native definition and evaluate the restored schedule over a bounded window.
 This is an R11–R12/R14/R16 deliverable, using the existing execution engine.
 
-Implement in reviewable slices:
+### Durable definition and context
 
-1. **Timed meeting exchange.** Add checked semantic access for `TimedRecurrence`
-   and `ICalTimedRule`, then canonical extracted-property output for the existing
-   timed profile. Reuse the calendar, clock and subdaily definition accessors;
-   preserve start form, termination domain, inclusions, exclusions and PERIOD
-   endings. Use an explicit local weekly meeting, COUNT, one excluded source and
-   one added occurrence with a different ending as the caller scenario. Change
-   the definition through checked construction, export it, import it again and
-   evaluate both across a fixed transition. Canonical output is semantic text,
-   not the original spelling or an ICS document.
-2. **Durable definition and context.** Introduce a checked schedule definition
-   separate from `TimedSchedule`, which is an evaluation cursor tied to a window.
-   Save/load the definition through a declared versioned persistence kind, then
-   create fresh bounded cursors for two overlapping windows. Resolve the context
-   and identity choices below before freezing the format. A saved RFC `Parts`
-   record alone does not preserve native policies, series identity or zone rules.
+Introduce a checked, window-free schedule definition separate from
+`TimedSchedule`, which is an evaluation cursor. Reuse native recurrence and zone
+rule definition accessors. Extract window-independent ending validation from the
+existing schedule constructor rather than inventing a validation window.
+
+Keep native and iCalendar definitions explicit: native storage must preserve
+fractional labels, calendar/elapsed duration policies and source-keyed ending
+overrides; iCalendar storage must retain mode, default duration and PERIOD ending
+intent. Reuse existing schedule constructors for bounded evaluation. Do not
+lower the archive to RFC text: native microseconds and years outside 1–9999 must
+survive saving even when interchange rejects them.
+
+Embed the immutable rule definition, including validity, transitions and
+provenance, using the existing persistence rule transport. A name/version pair
+alone is insufficient. Keep generic series IDs in an application envelope and
+show the restored ID passed into fresh cursors for two overlapping windows.
+The temporal persistence type must not encode arbitrary application types.
+
+Select the versioned kind and exact field grammar before implementation. Reuse
+the existing 65536-byte envelope, 49152-byte payload, 1024-transition and
+4096-byte rule-metadata limits where applicable; define selector, exception and
+override caps explicitly and preflight them before serialization. Determine how
+native and iCalendar variants share field encoding without obscuring their
+policy distinctions. A well-formed definition exceeding archive limits must
+return an explicit error.
 
 The smallest complete timed workflow must retain the meeting's series identity,
 original exception labels, default duration, explicit ending overrides and RFC
-mode/policy, plus reproducible interpretation. Choose whether identity belongs in
-an application envelope or a supported persistence type; generic application
-identifiers must not accidentally acquire a private compiler encoding. Keep
-query windows and evaluation progress outside the definition archive.
+mode/policy, plus reproducible interpretation. Keep query windows and evaluation
+progress outside the definition archive.
 
 Construction/export/save/load costs must depend on bounded definition bytes,
 selectors, exception entries and stored transitions, not occurrence count or
@@ -65,9 +73,9 @@ prove RFC export rejects precision/range loss instead of narrowing silently.
 - Expose a checked semantic definition for export where existing types lack
   accessors. Preserve series identifiers, duration overrides and exception source
   labels without parsing inspection output or expanding occurrences while saving.
-- Decide whether persistence embeds an immutable interpretation snapshot or
-  requires an explicitly identified snapshot on load. Test missing/mismatched
-  context; a zone name alone must not imply reproducible interpretation.
+- Test missing/malformed embedded context and same-name/version snapshots with
+  different transitions; a zone name alone must not imply reproducible
+  interpretation.
 - Distinguish saving a schedule definition from checkpointing an evaluation
   cursor. Definition persistence comes first; do not promise resumable cursor
   persistence without a declared compatible state format.

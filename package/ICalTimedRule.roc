@@ -13,6 +13,9 @@ import ICalPeriod
 import TimedRecurrence
 import TimedSchedule
 import LocalDateTime
+import GregorianDate
+import CalendarPattern
+import ICalRuleText
 
 ## Extracted RFC 5545 timed recurrence values, profile timed-values-v1.
 ## UTC, floating and zoned DTSTART modes are explicit. UTC starts require Z;
@@ -36,7 +39,99 @@ import LocalDateTime
 ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : List(ICalPeriod), mode : Mode }.{
 	Mode : [Utc, Floating, Zoned]
 	Parts : { start : Str, rule : Str, duration : Str, inclusions : List(Str), exclusions : List(Str), periods : List(Str), mode : Mode }
-	Error : [TooLarge, DateTime(Str, ICalDateTime.Error), Duration(ICalDuration.Error), Period(ICalPeriod.Error), Rule(ICalRuleParts.Error), Incompatible(Str), Unsupported(Str), InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])]
+	Error : [TooLarge, OutOfRange(Str), PrecisionLoss(Str), DateTime(Str, ICalDateTime.Error), Duration(ICalDuration.Error), Period(ICalPeriod.Error), Rule(ICalRuleParts.Error), Incompatible(Str), Unsupported(Str), InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])]
+	Definition : { rule : TimedRecurrence, duration : ICalDuration, periods : List(ICalPeriod), mode : Mode }
+
+	## Retains native source exceptions separately from PERIOD ending overrides.
+	## This is a semantic declaration, not a versioned persistence encoding.
+	definition : ICalTimedRule -> Definition
+	definition = |value| { rule: value.rule, duration: value.duration, periods: value.periods, mode: value.mode }
+
+	## Checked construction/editing for this extracted-property profile. Does not
+	## resolve zones or enumerate occurrences. Conflicting PERIOD endings remain
+	## visible and are rejected by schedule construction, never silently dropped.
+	## Validates by canonical rendering, including the exact aggregate byte cap;
+	## temporarily allocates that bounded output. Cost matches to_parts below.
+	new : Definition -> Try(ICalTimedRule, Error)
+	new = |spec| {
+		value = { rule: spec.rule, duration: spec.duration, periods: spec.periods, mode: spec.mode }
+		_ = to_parts(value)?
+		Ok(value)
+	}
+
+	## Canonical extracted property values, capped at 65536 total UTF-8 bytes.
+	## Effective clock fields are explicit, preserving subdaily limiting fields
+	## and lower-field expansion. Cost depends only on definition size: bounded
+	## selector sorting and output bytes, never clock products or occurrences.
+	## Output retains PERIOD order and ending intent; source spelling is absent.
+	## Order is FREQ, INTERVAL, termination, calendar selectors, BYHOUR,
+	## BYMINUTE, BYSECOND, BYSETPOS, WKST. All three effective clock fields
+	## are written, including inherited values or full subdaily filter ranges.
+	to_parts : ICalTimedRule -> Try(Parts, Error)
+	to_parts = |value| {
+		if value.periods.len() > 4096 {
+			return Err(TooLarge)
+		}
+		data = TimedRecurrence.definition(value.rule)
+		form = match value.mode {
+			Utc => Utc
+			Floating | Zoned => Local
+		}
+		start = local_text(data.anchor, form, "DTSTART")?
+		(pattern, subdaily) = match data.pattern {
+			Calendar(calendar) => (calendar, None)
+			Subdaily(part) => ({ ..CalendarPattern.defaults(Daily), interval: part.interval, by_month: part.calendar.by_month, by_month_day: part.calendar.by_month_day, by_year_day: part.calendar.by_year_day, by_day: part.calendar.by_day.map(|weekday| { weekday, ordinal: 0 }) }, Some(part.frequency))
+		}
+		termination = match data.termination {
+			Forever => Forever
+			Count(count) => Count(count)
+			Until(local) => {
+				if value.mode != Floating {
+					return Err(Incompatible("UTC or zoned DTSTART requires UTC UNTIL"))
+				}
+				Until(local_text(local, Local, "UNTIL")?)
+			}
+			UntilBoundary(boundary) => {
+				if value.mode == Floating {
+					return Err(Incompatible("floating DTSTART requires local UNTIL"))
+				}
+				local = match FixedOffset.project(FixedOffset.from_seconds(0), boundary, Gregorian) {
+					Ok(label) => label
+					Err(_) => return Err(OutOfRange("UNTIL"))
+				}
+				Until(local_text(local, Utc, "UNTIL")?)
+			}
+		}
+		rule = match ICalRuleText.render({ pattern, subdaily, clocks: data.clocks, termination, positions: data.by_set_pos }) {
+			Ok(text) => text
+			Err(OutOfRange(part)) => return Err(OutOfRange(part))
+			Err(error) => return Err(Rule(error))
+		}
+		var $inclusions = []
+		for local in data.inclusions {
+			$inclusions = $inclusions.append(local_text(local, form, "RDATE")?)
+		}
+		var $exclusions = []
+		for local in data.exclusions {
+			$exclusions = $exclusions.append(local_text(local, form, "EXDATE")?)
+		}
+		var $periods = []
+		for period in value.periods {
+			if ICalDateTime.form(ICalPeriod.start(period)) != form {
+				return Err(Unsupported("mixed PERIOD and DTSTART forms"))
+			}
+			$periods = $periods.append(ICalPeriod.to_text(period))
+		}
+		parts = { start, rule, duration: ICalDuration.to_text(value.duration), inclusions: $inclusions, exclusions: $exclusions, periods: $periods, mode: value.mode }
+		var $remaining = 65536.U64
+		for text in [parts.start, parts.rule, parts.duration].concat(parts.inclusions).concat(parts.exclusions).concat(parts.periods) {
+			if text.count_utf8_bytes() > $remaining {
+				return Err(TooLarge)
+			}
+			$remaining = $remaining - text.count_utf8_bytes()
+		}
+		Ok(parts)
+	}
 	profile : Str
 	profile = "rfc5545-timed-values-v1"
 	parse : Parts -> Try(ICalTimedRule, Error)
@@ -201,6 +296,28 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 	}
 }
 
+local_text : LocalDateTime, ICalDateTime.Form, Str -> Try(Str, ICalTimedRule.Error)
+local_text = |local, form, part| {
+	date = match CalendarDate.as_gregorian(LocalDateTime.date(local)) {
+		Ok(gregorian) => GregorianDate.to_fields(gregorian)
+		Err(_) => return Err(Unsupported("non-Gregorian ${part}"))
+	}
+	if date.year < 1 or date.year > 9999 {
+		return Err(OutOfRange(part))
+	}
+	clock = ClockTime.to_fields(LocalDateTime.clock(local))
+	if clock.microsecond != 0 {
+		return Err(PrecisionLoss(part))
+	}
+	suffix = match form {
+		Utc => "Z"
+		Local => ""
+	}
+	Ok("${pad(date.year.to_str(), 4)}${pad(date.month.to_str(), 2)}${pad(date.day.to_str(), 2)}T${pad(clock.hour.to_str(), 2)}${pad(clock.minute.to_str(), 2)}${pad(clock.second.to_str(), 2)}${suffix}")
+}
+
+pad = |text, width| Str.repeat("0", width - text.count_utf8_bytes()).concat(text)
+
 timestamp : Str, Str -> Try(ICalDateTime, ICalTimedRule.Error)
 timestamp = |text, part| match ICalDateTime.parse(text) {
 	Ok(value) => Ok(value)
@@ -226,6 +343,34 @@ timestamps = |entries, part, form| {
 }
 
 test_parts = |start, rule, mode| { start, rule, mode, duration: "P1D", inclusions: [], exclusions: [], periods: [] }
+
+# Effective subdaily high fields must remain filters, while lower fields
+# retain expansion. Reconstructing declarations must not replace them with
+# DTSTART defaults or materialize the field product.
+expect {
+	var $valid = Bool.True
+	for parts in [
+		test_parts("20250101T090000Z", "FREQ=SECONDLY;INTERVAL=7;COUNT=3", Utc),
+		test_parts("20250101T090000", "FREQ=MINUTELY;BYSECOND=0,30;COUNT=3", Floating),
+		test_parts("20250101T090000", "FREQ=HOURLY;BYMINUTE=0,30;UNTIL=20250102T000000Z", Zoned),
+		test_parts("20250101T090000", "FREQ=DAILY;UNTIL=20250102T090000", Floating),
+	] {
+		original = ICalTimedRule.parse(parts)?
+		declaration = ICalTimedRule.definition(original)
+		native = TimedRecurrence.definition(declaration.rule)
+		rebuilt = TimedRecurrence.from_definition(native)?
+		$valid = $valid and TimedRecurrence.definition(rebuilt) == native
+		canonical = ICalTimedRule.to_parts(ICalTimedRule.new({ ..declaration, rule: rebuilt })?)?
+		$valid = $valid and ICalTimedRule.to_parts(ICalTimedRule.parse(canonical)?)? == canonical
+	}
+	$valid
+}
+
+expect {
+	parts = { ..test_parts("20250101T090000", "FREQ=WEEKLY;COUNT=4", Zoned), inclusions: ["20250104T090000"], exclusions: ["20250108T090000"], periods: ["20250115T090000/PT2H", "20250122T090000/20250122T113000"] }
+	canonical = ICalTimedRule.to_parts(ICalTimedRule.parse(parts)?)?
+	canonical.rule == "FREQ=WEEKLY;INTERVAL=1;COUNT=4;BYHOUR=9;BYMINUTE=0;BYSECOND=0;WKST=MO" and canonical.periods == ["20250115T090000/PT7200S", "20250122T090000/20250122T113000"] and canonical.inclusions == parts.inclusions and canonical.exclusions == parts.exclusions
+}
 
 test_timestamp = |text| match ICalDateTime.parse(text) {
 	Ok(value) => value

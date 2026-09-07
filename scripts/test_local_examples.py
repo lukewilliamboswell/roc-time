@@ -31,7 +31,7 @@ def main() -> None:
         run_example_apps(internal)
         clock_example = [entry for entry in examples if entry.parent.name == "clock_deadline"]
         build_and_run_examples(internal + clock_example, Path(directory) / "internal-build")
-        composed_apps = [entry for entry in examples + internal if entry.parent.name in {"clock_deadline", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange"}]
+        composed_apps = [entry for entry in examples + internal if entry.parent.name in {"clock_deadline", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange", "meeting_exchange"}]
         build_and_run_examples(composed_apps, Path(directory) / "composition-speed", optimization="speed")
     if any(path.read_bytes() != content for path, content in originals.items()):
         raise SystemExit("Development example tests changed tracked example sources")

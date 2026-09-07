@@ -11,6 +11,8 @@ import time.CalendarPattern
 import time.GregorianDate
 import time.DateRecurrence
 import time.ICalDateRule
+import time.ICalTimedRule
+import time.LocalDateTime
 
 # Positive control for compile-failure checks: the same imports and valid
 # domain combinations must succeed independently of application examples.
@@ -31,5 +33,23 @@ main! = |_args| {
 	window_end = GregorianDate.from_fields({ year: 2001, month: 1, day: 1 })?
 	cursor = DateRecurrence.cursor(rule, { start: date, end: window_end })?
 	_batch = DateRecurrence.Cursor.collect(cursor, { max_steps: 1000, max_buffered: 366, max_occurrences: 10 })?
+	timed = timed_parse({ start: "20250101T090000Z", rule: "FREQ=DAILY", duration: "PT1H", inclusions: [], exclusions: [], periods: [], mode: Utc })?
+	_timed_parts = match ICalTimedRule.to_parts(timed) {
+		Ok(value) => value
+		Err(error) => return Err(TimedExport(error))
+	}
+	lower = local("2025-01-01T00:00")?
+	upper = local("2026-01-01T00:00")?
+	_timed_cursor = ICalTimedRule.schedule(1.U64, timed, { start: lower, end: upper }, Utc)?
 	Ok({})
+}
+
+local = |text| match LocalDateTime.parse_gregorian(text) {
+	Ok(value) => Ok(value)
+	Err(error) => Err(LocalInput(error))
+}
+
+timed_parse = |parts| match ICalTimedRule.parse(parts) {
+	Ok(value) => Ok(value)
+	Err(error) => Err(TimedParse(error))
 }

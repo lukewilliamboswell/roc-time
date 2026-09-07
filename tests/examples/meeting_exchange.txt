@@ -1,0 +1,13 @@
+Weekly Paris meeting exchange (extracted iCalendar property values)
+Edited: exclude 5 April; add a two-hour meeting on 30 March
+Canonical DTSTART value: 20260322T090000
+Canonical RRULE value: FREQ=WEEKLY;INTERVAL=1;COUNT=4;BYHOUR=9;BYMINUTE=0;BYSECOND=0;WKST=MO
+Canonical DURATION value: PT3600S
+Canonical EXDATE value: 20260405T090000
+Canonical RDATE PERIOD value: 20260330T090000/PT7200S
+Reimported meetings in [2026-03-20, 2026-04-15), using Europe/Paris:
+2026-03-22T09:00:00 Paris: 2026-03-22T08:00:00Z -> 2026-03-22T09:00:00Z
+2026-03-29T09:00:00 Paris: 2026-03-29T07:00:00Z -> 2026-03-29T08:00:00Z
+2026-03-30T09:00:00 Paris: 2026-03-30T07:00:00Z -> 2026-03-30T09:00:00Z
+2026-04-12T09:00:00 Paris: 2026-04-12T07:00:00Z -> 2026-04-12T08:00:00Z
+Complete: local 09:00 survives the clock change; COUNT is not replenished after exclusion.
