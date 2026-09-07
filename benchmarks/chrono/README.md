@@ -11,18 +11,24 @@ ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py
 ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --roc-opt dev --smoke
 ```
 
-For source-level hotspots, the profiling mode builds optimized Roc code with
-`--debug`, verifies every output, and records user-space CPU samples:
+The profiling mode verifies every output and records user-space CPU samples
+from the selected optimized build. Add `--debug` for Roc source locations:
 
 ```sh
 ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile parse --iterations 10000000 --samples 15
-ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile add_days --iterations 10000000 --samples 15
+ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile add_days --debug --iterations 10000000 --samples 15
 ```
 
 This requires Linux `perf` and permission to sample user-space events. Recordings
 and source-line reports stay under `.roc-time-tmp/chrono-benchmark/`. Profiling
 runs do not emit comparative timing results: sampling overhead is diagnostic.
+Comparative measurements require `--roc-opt speed` without `--debug`;
+`--debug` is accepted only with `--profile`.
 `perf annotate` on the printed recording can show instruction-level costs.
+On the pinned compiler, `--debug` also disables selected LLVM optimizations,
+including loop unrolling and SLP vectorization. Compare the normal optimized
+profile before attributing its runtime costs to a source-level debug profile;
+the two executables need not have equal performance.
 
 The scoped `.cargo/config.toml` also directs editor/Cargo builds started in this crate to ignored temporary output.
 
