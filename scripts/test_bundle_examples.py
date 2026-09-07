@@ -104,13 +104,16 @@ def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str, zone_url:
                          compiler=package_pin(ROOT))
 
 
-def copy_internal_examples(destination: Path, core: str) -> list[Path]:
+def copy_internal_examples(destination: Path, core: str, zones: str) -> list[Path]:
     """Stage unreleased caller evidence separately from published examples."""
     from roc_version import package_pin
     from update_example_urls import copy_examples
-    return copy_examples(destination / "appointment_display", core, "",
-                         compiler=package_pin(ROOT),
-                         source=ROOT / "tests" / "appointment_display")
+    entries = []
+    for name in ("appointment_display", "zoned_appointment"):
+        entries.extend(copy_examples(destination / name, core, zones,
+                                    compiler=package_pin(ROOT),
+                                    source=ROOT / "tests" / name))
+    return entries
 
 
 def run_example_checks(examples: list[Path], *, env: dict[str, str] | None = None) -> None:
@@ -126,7 +129,7 @@ def run_example_apps(examples: list[Path], *, env: dict[str, str] | None = None,
 
 def check_output(example: Path, actual: str, *, expected_dir: Path | None = None) -> None:
     expected = (expected_dir or ROOT / "tests" / "examples") / f"{example.parent.name}.txt"
-    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display"} and not expected.is_file():
+    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display", "zoned_appointment"} and not expected.is_file():
         raise SystemExit(f"Missing required output fixture: {expected}")
     if expected.exists() and actual != expected.read_text(encoding="utf-8"):
         raise SystemExit(f"Unexpected output from {example.parent.name}:\n{actual}")
@@ -210,7 +213,7 @@ def main() -> None:
             run_example_checks(examples, env=env)
             run_example_apps(examples, env=env)
 
-            internal = copy_internal_examples(tmp_dir / "internal-scenarios", bundle_url)
+            internal = copy_internal_examples(tmp_dir / "internal-scenarios", bundle_url, f"{base_url}/{zone_bundle.name}")
             print("Testing unreleased caller scenarios against the same core archive.")
             run_example_checks(internal, env=env)
             run_example_apps(internal, env=env)

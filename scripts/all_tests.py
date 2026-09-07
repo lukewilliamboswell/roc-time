@@ -97,6 +97,15 @@ def main() -> None:
         run([ROC, "build", codecs, f"--opt={mode}", f"--output={codec_binary}"])
         run([str(codec_binary)])
 
+    heading("Checking named-zone appointment scenarios...")
+    appointments = "tests/zoned_appointment_checks/main.roc"
+    run([ROC, "check", appointments])
+    run([ROC, appointments])
+    for mode in ("dev", "speed"):
+        appointment_binary = (tmp_dir / f"zoned-appointments-{mode}").resolve()
+        run([ROC, "build", appointments, f"--opt={mode}", f"--output={appointment_binary}"])
+        run([str(appointment_binary)])
+
     heading("Running bounded semantic fuzz checks and regression replay...")
     run([sys.executable, "scripts/fuzz.py", "--operation", "all"])
 
