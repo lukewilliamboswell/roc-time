@@ -220,6 +220,44 @@ check_timestamp = |input, day, date_text| {
 	if OffsetTimestamp.to_text(parsed) != canonical or OffsetTimestamp.parse(canonical) != Ok(parsed) {
 		crash "Timestamp canonical serialization changed semantic parts"
 	}
+	# Retained aliases and a suffix slice must preserve the independently
+	# generated fields below. These are input ownership cases, not new formats.
+	retained = [source, source]
+	prefixed = "prefix:${source}"
+	for shared in retained {
+		if OffsetTimestamp.parse(shared) != Ok(parsed) or OffsetTimestamp.parse(prefixed.drop_prefix("prefix:")) != Ok(parsed) {
+			crash "Timestamp input ownership changed interpretation"
+		}
+	}
+	if prefixed != "prefix:${source}" {
+		crash "Retained timestamp input mutated"
+	}
+	# Every proper fixed-field prefix of a valid complete timestamp is
+	# incomplete. An ASCII non-grammar byte anywhere in those fields is malformed.
+	bytes = source.to_utf8()
+	var $prefix = 0.U64
+	while $prefix <= 19 {
+		text = Str.from_utf8(bytes.sublist({ start: 0, len: $prefix })) ?? crash "ASCII prefix"
+		if OffsetTimestamp.parse(text) != Err(Incomplete) {
+			crash "Valid fixed timestamp prefix classification"
+		}
+		$prefix = $prefix + 1
+	}
+	var $invalid = []
+	var $at = 0.U64
+	for byte in bytes {
+		$invalid = $invalid.append(
+			if $at == input.seconds.to_u64() % 19 {
+				63.U8
+			} else {
+				byte
+			},
+		)
+		$at = $at + 1
+	}
+	if OffsetTimestamp.parse(Str.from_utf8($invalid) ?? crash "ASCII mutation") != Err(Malformed) {
+		crash "Malformed fixed timestamp byte classification"
+	}
 	parts = OffsetTimestamp.parts(parsed)
 	expected_offset = if unasserted {
 		UnassertedUtc

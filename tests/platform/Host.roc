@@ -2,6 +2,8 @@
 ## Counts start after argv construction and include output construction.
 ## Requested bytes count full alloc/realloc requests, not live or retained bytes.
 Host := [].{
+	## Identity whose result cannot be predicted by the Roc optimizer.
+	opaque_u64! : U64 => U64
 
 	## Monotonic nanoseconds from an unspecified epoch, for kernel timing only.
 	monotonic_ns! : {} => U64

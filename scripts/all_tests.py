@@ -99,6 +99,8 @@ def main() -> None:
 
     heading("Checking the Roc/Chrono benchmark harness (bounded correctness smoke)...")
     run([sys.executable, "scripts/benchmark_chrono.py", "--smoke", "--fetch"])
+    heading("Checking timestamp parser allocation regressions...")
+    run([sys.executable, "scripts/test_timestamp_parser.py"])
 
     heading("Checking independent Gregorian query expectations...")
     run([sys.executable, "scripts/test_civil_queries.py"])
