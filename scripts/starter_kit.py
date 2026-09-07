@@ -15,7 +15,7 @@ sys.dont_write_bytecode = True
 from roc_version import package_pin, replace_pin
 
 ROOT = Path(__file__).resolve().parents[1]
-STARTERS = ("booking_exchange", "archive_search", "staffing")
+STARTERS = ("booking_exchange", "archive_search", "staffing", "clock_deadline")
 PREFIX = "roc-time-starter"
 
 # Kept here so the generator is the complete source of every generated file.
@@ -28,7 +28,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent
-STARTERS = ("booking_exchange", "archive_search", "staffing")
+STARTERS = ("booking_exchange", "archive_search", "staffing", "clock_deadline")
 
 
 def main():
@@ -98,7 +98,7 @@ def validate_url(value: str) -> str:
 def readme(compiler: str) -> str:
     return f'''# roc-time starters
 
-This kit contains three complete applications and explicit core/zone package URLs.
+This kit contains complete applications and explicit core/zone package URLs.
 It runs without a roc-time checkout. An internet connection is needed on first use
 unless the referenced archives are already in the compiler's package cache.
 
@@ -117,7 +117,7 @@ cd roc-time-starter/examples/booking_exchange
 roc main.roc
 ```
 
-Run `roc main.roc` inside `archive_search` or `staffing` to try the other
+Run `roc main.roc` inside `archive_search`, `staffing` or `clock_deadline` to try the other
 applications, or `roc build main.roc` to create an executable. No Python setup
 is needed to run these Roc applications.
 
@@ -128,6 +128,7 @@ root. It checks the compiler version and places builds under `build/`. Set
 
 - `booking_exchange`: exchange explicit appointment timestamps and find availability.
 - `archive_search`: preserve archive date precision and qualification while searching.
+- `clock_deadline`: read the platform clock, check an expiry and encode a JSON record.
 - `staffing`: resolve a Melbourne overnight shift using the supplied immutable zone
   bundle. Its spring-transition example is seven elapsed hours, not eight.
 

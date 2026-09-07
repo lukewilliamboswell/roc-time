@@ -10,14 +10,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 
 sys.dont_write_bytecode = True
-from starter_kit import build, validate_url
+from starter_kit import STARTERS, build, validate_url
 from roc_version import package_pin
-from test_bundle_examples import ROOT, ROC, REHEARSAL_VERSION, bare_asset_name, release_asset_name, start_server
-
-STARTERS = ("booking_exchange", "archive_search", "staffing")
+from test_bundle_examples import ROOT, ROC, REHEARSAL_VERSION, bare_asset_name, release_asset_name, start_server, check_clock_output
 
 
 def invoke(kit, cache, command, starter, *, expected=None, diagnostic=None, roc=ROC):
@@ -114,22 +113,28 @@ def main():
             metadata["bundles"] = {"core": core_url, "zones": zone_url}
             (kit / "manifest.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
             for starter in STARTERS:
-                expected = (ROOT / f"tests/examples/{starter}.txt").read_text()
+                expected = None if starter == "clock_deadline" else (ROOT / f"tests/examples/{starter}.txt").read_text()
                 invoke(kit, work / "cache", "check", starter)
                 # This is the documented first-use path: Roc directly, without
                 # relying on the optional Python wrapper to rebind dependencies.
+                before = time.time_ns()
                 direct = subprocess.run([ROC, "main.roc"],
                                         cwd=kit / "examples" / starter,
                                         env={**os.environ, "XDG_CACHE_HOME": str(work / "cache")},
                                         capture_output=True, text=True, timeout=120)
-                if direct.returncode or direct.stdout != expected:
+                if direct.returncode or (expected is not None and direct.stdout != expected):
                     raise RuntimeError(f"Direct Roc starter failed: {starter}: {direct.stdout}\n{direct.stderr}")
+                if starter == "clock_deadline":
+                    check_clock_output(direct.stdout, (before, time.time_ns()))
                 invoke(kit, work / "cache", "build", starter)
                 binary = kit / "build" / starter
+                before = time.time_ns()
                 result = subprocess.run([str(binary)], cwd=outside, capture_output=True,
                                         text=True, timeout=10)
-                if result.returncode or result.stdout != expected:
+                if result.returncode or (expected is not None and result.stdout != expected):
                     raise RuntimeError(f"Native starter mismatch: {starter}: {result.stdout}\n{result.stderr}")
+                if starter == "clock_deadline":
+                    check_clock_output(result.stdout, (before, time.time_ns()))
             if not {f"/{REHEARSAL_VERSION}/{core.name}", f"/{REHEARSAL_VERSION}/{zones.name}"} <= set(requests):
                 raise RuntimeError("starter did not acquire both exact archives from its fresh cache")
             print("PASS extracted starters: exact output, cold acquisition, interpreter/native, outside working directory")

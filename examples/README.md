@@ -24,6 +24,7 @@ without changing the development package compiler.
 | --- | --- |
 | [Room availability](coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
 | [Booking exchange](booking_exchange/main.roc) | Read bookings with different offsets, persist computed availability and serialize restored free windows in UTC |
+| [Clock deadline](clock_deadline/main.roc) | Read the platform clock, check an expiry boundary and emit a typed JSON record with exact UTC microseconds |
 | [Annotation review](annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Explain event terms](explain_event_terms/main.roc) | Review calendar-day versus clock-duration terms, local/UTC PERIOD inputs and an exact interval with different endpoint offsets |
 | [Explain annotations](explain_annotations/main.roc) | Explain a declaration's context requirement and its stored interpretation with unsupported calendar presentation |
@@ -44,4 +45,3 @@ without changing the development package compiler.
 | [Outage evidence](outage_evidence/main.roc) | Compare paired outage reports with independent endpoint notes without inventing correlations |
 | [Archive search](archive_search/main.roc) | Import EDTF dates and offset timestamps; preserve search precision and unresolved qualifications |
 | [Recorder handoff](sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
-

@@ -29,7 +29,10 @@ def main() -> None:
         print("Testing unreleased caller scenarios against local sources.")
         run_example_checks(internal)
         run_example_apps(internal)
-        build_and_run_examples(internal, Path(directory) / "internal-build")
+        clock_example = [entry for entry in examples if entry.parent.name == "clock_deadline"]
+        build_and_run_examples(internal + clock_example, Path(directory) / "internal-build")
+        clock_apps = [entry for entry in examples + internal if entry.parent.name in {"clock_deadline", "clock_deadline_checks"}]
+        build_and_run_examples(clock_apps, Path(directory) / "clock-speed", optimization="speed")
     if any(path.read_bytes() != content for path, content in originals.items()):
         raise SystemExit("Development example tests changed tracked example sources")
     print("Verified copied examples against local packages; public sources unchanged.")

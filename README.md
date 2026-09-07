@@ -54,6 +54,7 @@ text. [Try it below](#try-it) with the published package.
 | I want to… | What works | Try it |
 | --- | --- | --- |
 | Find free booking windows | Parse exact timestamps with different offsets, subtract occupied time, save availability and write free windows back to text | [Booking exchange](examples/booking_exchange/main.roc) |
+| Check an expiry | Read a platform clock, compare an expiry boundary and write a typed JSON record with UTC microsecond timestamps | [Clock deadline](examples/clock_deadline/main.roc) |
 | Calculate dates | Gregorian/Julian conversion and calendar arithmetic with explicit month-end policies | [Invoice terms](examples/invoice/main.roc) |
 | Handle clock changes | Resolve repeated/skipped local times and overnight selections using supplied rules or the optional zone database | [Overnight staffing](examples/staffing/main.roc) |
 | Generate schedules | Date and timed recurrence, additions/exclusions, identified appointments and bounded queries that can resume | [Equipment reservations](examples/reservations/main.roc) |
@@ -85,9 +86,11 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 
 ### Tier 3: Next, in user-impact order
 
-1. **Finish everyday date/time workflows.** Clock/expiry integration and
-   application records.
-   Add weekday, ordinal-day and ISO-week queries for reporting.
+The next release should first make the development civil text/display APIs and
+their appointment examples available with compatible compiler and package pins.
+
+1. **Add civil reporting queries.** Weekday, ordinal-day and ISO-week accessors
+   with independently verified year-boundary behavior.
 2. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
    is not available today.
@@ -143,6 +146,12 @@ types such as `EdtfDate` and `OffsetTimestamp` provide checked `parse` and canon
 literals and generic string codecs. Use `parse` for runtime interpolated text so
 validation errors can be handled. Named-zone applications also need explicit
 rules, such as those supplied by the [optional zone package](tzdb/README.md).
+
+Run `roc examples/clock_deadline/main.roc` to check a deadline using the real
+platform clock. Its pure [Deadline module](examples/clock_deadline/Deadline.roc)
+also accepts supplied readings, so the same expiry and JSON operations can be
+tested deterministically. A record's `expired` status describes its `checked_at`
+reading; loading the record does not read the clock again.
 
 For development-source callers, [GregorianDate](package/GregorianDate.roc) and
 [ClockTime](package/ClockTime.roc) accept inputs such as `2026-09-07` and `09:30`.

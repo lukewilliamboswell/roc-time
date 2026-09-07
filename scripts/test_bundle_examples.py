@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import functools
 import http.server
+import json
 import os
 import re
 import shutil
@@ -11,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -109,10 +112,14 @@ def copy_internal_examples(destination: Path, core: str, zones: str) -> list[Pat
     from roc_version import package_pin
     from update_example_urls import copy_examples
     entries = []
-    for name in ("appointment_display", "zoned_appointment"):
+    for name in ("appointment_display", "zoned_appointment", "clock_deadline_checks"):
         entries.extend(copy_examples(destination / name, core, zones,
                                     compiler=package_pin(ROOT),
                                     source=ROOT / "tests" / name))
+    # The deterministic root drives the exact pure module used by the real
+    # clock application. Never maintain a test-local copy of its implementation.
+    shutil.copy2(ROOT / "examples/clock_deadline/Deadline.roc",
+                 destination / "clock_deadline_checks/Deadline.roc")
     return entries
 
 
@@ -123,19 +130,56 @@ def run_example_checks(examples: list[Path], *, env: dict[str, str] | None = Non
 
 def run_example_apps(examples: list[Path], *, env: dict[str, str] | None = None, expected_dir: Path | None = None) -> None:
     for example in examples:
+        before = time.time_ns()
         result = run([ROC, example.name, "--no-cache"], cwd=example.parent, env=env)
-        check_output(example, result.stdout, expected_dir=expected_dir)
+        check_output(example, result.stdout, expected_dir=expected_dir,
+                     clock_window=(before, time.time_ns()))
 
 
-def check_output(example: Path, actual: str, *, expected_dir: Path | None = None) -> None:
+def check_clock_output(actual: str, window: tuple[int, int]) -> None:
+    """Real-clock smoke evidence; fixed temporal fixtures never read the clock."""
+    try:
+        record = json.loads(actual)
+        if not isinstance(record, dict) or set(record) != {"checked_at", "expires_at", "expired"}:
+            raise ValueError("unexpected record fields")
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        points = {}
+        for name in ("checked_at", "expires_at"):
+            text = record[name]
+            if not isinstance(text, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z", text):
+                raise ValueError("expected exact UTC microsecond text")
+            delta = datetime.fromisoformat(text[:-1] + "+00:00") - epoch
+            points[name] = (delta.days * 86400 + delta.seconds) * 1_000_000 + delta.microseconds
+        if record["expires_at"] != "2030-01-01T00:00:00.000000Z":
+            raise ValueError("expiry changed")
+        if type(record["expired"]) is not bool or record["expired"] != (points["checked_at"] >= points["expires_at"]):
+            raise ValueError("expiry status disagrees with record boundaries")
+        # Bracket the reading with wall-clock observations and a small tolerance.
+        # This witnesses a current reading, not clock accuracy or stability;
+        # wall-clock steps can widen the bracket in either direction.
+        lower, upper = min(window) // 1000 - 1_000_000, max(window) // 1000 + 1_000_000
+        if points["checked_at"] <= 0 or not lower <= points["checked_at"] <= upper:
+            raise ValueError("reading is not near the actual host clock")
+    except (ValueError, TypeError, OverflowError) as error:
+        raise SystemExit(f"Invalid live clock record: {error}") from error
+
+
+def check_output(example: Path, actual: str, *, expected_dir: Path | None = None,
+                 clock_window: tuple[int, int] | None = None) -> None:
+    if example.parent.name == "clock_deadline":
+        if clock_window is None:
+            raise SystemExit("Missing live clock observation window")
+        check_clock_output(actual, clock_window)
+        return
     expected = (expected_dir or ROOT / "tests" / "examples") / f"{example.parent.name}.txt"
-    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display", "zoned_appointment"} and not expected.is_file():
+    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display", "zoned_appointment", "clock_deadline_checks"} and not expected.is_file():
         raise SystemExit(f"Missing required output fixture: {expected}")
     if expected.exists() and actual != expected.read_text(encoding="utf-8"):
         raise SystemExit(f"Unexpected output from {example.parent.name}:\n{actual}")
 
 
-def build_and_run_examples(examples: list[Path], build_dir: Path, *, env: dict[str, str] | None = None) -> None:
+def build_and_run_examples(examples: list[Path], build_dir: Path, *, env: dict[str, str] | None = None,
+                           optimization: str = "dev") -> None:
     build_dir.mkdir(parents=True, exist_ok=True)
     empty_cwd = build_dir / "empty-cwd"
     empty_cwd.mkdir()
@@ -143,9 +187,10 @@ def build_and_run_examples(examples: list[Path], build_dir: Path, *, env: dict[s
 
     for example in examples:
         output = build_dir / f"{example.parent.name}{exe_suffix}"
-        run([ROC, "build", example.name, f"--output={output}", "--no-cache"], cwd=example.parent, env=env)
+        run([ROC, "build", example.name, f"--opt={optimization}", f"--output={output}", "--no-cache"], cwd=example.parent, env=env)
+        before = time.time_ns()
         result = run([str(output)], cwd=empty_cwd, env=env)
-        check_output(example, result.stdout)
+        check_output(example, result.stdout, clock_window=(before, time.time_ns()))
 
 
 def main() -> None:
