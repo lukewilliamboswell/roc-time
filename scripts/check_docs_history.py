@@ -28,7 +28,7 @@ def check_history(releases, docs_root, current):
         if version != current and not (docs_root / version / "index.html").is_file():
             missing.append(tag)
     if missing:
-        raise ValueError("Merge or recover earlier documentation follow-up PRs before deployment: " + ", ".join(sorted(missing)))
+        raise ValueError("Restore immutable earlier documentation release assets before deployment: " + ", ".join(sorted(missing)))
 
 
 class HistoryTests(unittest.TestCase):
@@ -55,7 +55,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo")
     parser.add_argument("--version")
-    parser.add_argument("--docs-root", type=Path, default=Path("www"))
+    parser.add_argument("--docs-root", type=Path, default=Path(".roc-time-tmp/api-docs"))
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:

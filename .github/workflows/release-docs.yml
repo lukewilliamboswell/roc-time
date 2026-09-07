@@ -34,7 +34,7 @@ jobs:
       followup_pr: ${{ steps.followup.outputs.pull_request_number }}
 
     steps:
-      - name: Checkout documentation history from main
+      - name: Checkout authored documentation and public examples
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.repository.default_branch }}
@@ -102,34 +102,55 @@ jobs:
         if: steps.roc-version.outputs.authority == 'header'
         run: python3 .roc-time-tmp/workflow-source/scripts/test_published_examples.py --examples-dir .roc-time-tmp/release-source/examples --expected-dir .roc-time-tmp/release-source/tests/examples
 
-      - name: Recover missing historical docs from the release checkout
-        run: |
-          if [ -d .roc-time-tmp/release-source/www ]; then
-            mkdir -p www
-            rsync -a --ignore-existing .roc-time-tmp/release-source/www/ www/
-          fi
+      - name: Restore immutable historical API documentation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: python3 .roc-time-tmp/workflow-source/scripts/release_docs.py fetch --allow-missing "$RELEASE_VERSION" --output .roc-time-tmp/api-docs
 
       - name: Require earlier release documentation history
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/check_docs_history.py --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --docs-root www
+        run: python3 .roc-time-tmp/workflow-source/scripts/check_docs_history.py --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs
 
-      - name: Snapshot existing docs
-        uses: roc-lang/release-package/actions/docs-snapshot@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
-        with:
-          docs_root: www
-
-      - name: Generate docs
+      - name: Generate release API documentation
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/docs.py "$RELEASE_VERSION" --docs-root www --source-root .roc-time-tmp/release-source
+        run: |
+          if [ ! -d ".roc-time-tmp/api-docs/$RELEASE_VERSION" ]; then
+            python3 .roc-time-tmp/workflow-source/scripts/docs.py "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --source-root .roc-time-tmp/release-source
+          fi
 
-      - name: Validate docs
-        uses: roc-lang/release-package/actions/docs-validate@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+      - name: Preserve release API documentation as an immutable asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          python3 .roc-time-tmp/workflow-source/scripts/release_docs.py pack "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --output .roc-time-tmp/docs-assets
+          python3 .roc-time-tmp/workflow-source/scripts/release_docs.py publish "$RELEASE_VERSION" ".roc-time-tmp/docs-assets/roc-time-docs-$RELEASE_VERSION.tar.gz"
+
+      - name: Read authored site compiler
+        id: site-compiler
+        run: |
+          python3 - <<'PYTHON'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, '.roc-time-tmp/workflow-source/scripts')
+          from compiler_pins import header_pin
+          pin = header_pin(Path('.roc-time-tmp/workflow-source/www/site/main.roc').read_text())[2]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print(f'pin={pin}', file=output)
+          PYTHON
+
+      - name: Install authored site compiler
+        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
         with:
-          docs_root: www
-          docs_version: ${{ inputs.release_version }}
+          version: nightly-new-compiler
+          nightly-tag: ${{ steps.site-compiler.outputs.pin }}
+
+      - name: Assemble authored guides and versioned API documentation
+        run: python3 .roc-time-tmp/workflow-source/scripts/assemble_docs_site.py --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
 
       - name: Promote the verified public applications
         if: steps.roc-version.outputs.authority == 'header'
@@ -142,13 +163,14 @@ jobs:
         run: python3 .roc-time-tmp/workflow-source/scripts/update_release_links.py --version "$RELEASE_VERSION" --readme README.md
 
       - name: Open signed release follow-up PR
+        if: steps.roc-version.outputs.authority == 'header'
         id: followup
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           EXPECTED_BASE: ${{ steps.docs-base.outputs.sha }}
-          FOLLOWUP_PATHS: ${{ steps.roc-version.outputs.authority == 'header' && 'www examples README.md' || 'www' }}
+          FOLLOWUP_PATHS: 'examples README.md'
         run: |
           read -r -a followup_paths <<< "$FOLLOWUP_PATHS"
           python3 .roc-time-tmp/workflow-source/scripts/create_release_followup.py --expected-base "$EXPECTED_BASE" --paths "${followup_paths[@]}"
@@ -156,7 +178,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
-          path: www
+          path: .roc-time-tmp/pages-site
 
   validate-followup:
     name: Validate generated release follow-up

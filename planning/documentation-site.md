@@ -1,40 +1,27 @@
-# Documentation website integration
+# Documentation website publication
 
-Objective: make task-oriented guides the repository website entrypoint while
-preserving version-specific API documentation and working released examples.
-The authored foundation lives in `www/site/`; its local build uses basic-ssg.
+Objective: publish authored task guides and immutable versioned API documentation
+without tracking generated HTML in Git.
 
-## Remaining deliverables
+## Remaining publication dependencies
 
-- Integrate the generator into the documentation release pipeline. Decide one
-  owner for `www/index.html`: `scripts/docs.py` currently writes a version
-  redirect, so it must not overwrite the authored landing page.
-- Stage a deployment artifact containing generated guide HTML and historical
-  versioned API documentation. Exclude `www/site/` source/build tooling from
-  that artifact; preserve the release-docs snapshot and history checks.
-- Bind guide release labels, API links and starter-kit links to a deliberately
-  selected published package/compiler pair. Updating the package must not
-  silently promote unreleased API claims. Retain clearly separated development
-  source/API navigation.
-- Add the build/link gate to an appropriate documentation workflow with pinned
-  toolchain/action dependencies. Keep publishing permissions in the deployment
-  job; a local build or pull request must not deploy.
-- Expand guides when their linked workflows gain a supported release: first
-  appointment/reporting convenience and schedule interchange/storage. Promote
-  complete runnable applications and verify their released bundles before
-  replacing development labels with release claims.
+- Upload the byte-preserved documentation archives for `0.1.0-rc1`,
+  `0.1.0-rc2` and `0.1.0-rc3` to their corresponding releases before deploying
+  this workflow. Recover source bytes from the Git parent that still contains
+  `www/<version>/`; use `scripts/release_docs.py pack` and verify restored files
+  byte-for-byte. Never regenerate or replace those historical pages.
+- Verify the published asset digests and run the docs workflow. Confirm the
+  authored root and existing version URLs, including retry behavior. Missing
+  historical assets deliberately block deployment.
+- Bind guide release labels, API links and starter links to the selected public
+  release when promoting new applications. Keep development claims separate.
 
 ## Acceptance
 
-The site builds with its pinned basic-ssg release and compiler, including at a
-repository URL prefix. Its landing page leads to getting started, substantive
-task guides, declared scope, API navigation and version guidance. Published
-example instructions use complete application folders and compatible immutable
-dependencies. Every generated internal link resolves; historical API pages are
-unchanged. The deployed root is the intended landing page after subsequent
-stable and prerelease documentation updates, and the artifact contains no site
-source files or development binaries.
+The Pages artifact contains generated guides plus restored version directories,
+without authored source or compiler binaries. Prior API bytes are unchanged.
+Follow-up PRs contain public example and README updates, not generated pages.
+Local assembly and tests use explicit restored docs roots. Publication succeeds
+with narrowly scoped permissions and pinned tool/action dependencies.
 
-Remove this plan when pipeline integration and release promotion behavior meet
-these criteria. Build instructions belong in `www/site/README.md`; user content
-belongs in its Markdown sources, not in the repository README or this plan.
+Remove this plan when remote migration and deployment acceptance are complete.
