@@ -7,8 +7,7 @@ finite immutable zone rules and event/coverage distinctions.
 ## Deliverables
 
 - Complete the supported schedule input/output workflow below before widening
-  recurrence import. Deliver canonical DATE export as a small independent slice,
-  then timed meeting definitions and durable interpretation.
+  recurrence import. Prioritize timed meeting exchange and durable interpretation.
 - Resolve broader mixed UTC/local property support and UTC EXDATE matching
   against gap-adjusted sources before widening the timed profile: projecting
   an adjusted boundary cannot recover its original label.
@@ -30,16 +29,7 @@ This is an R11–R12/R14/R16 deliverable, using the existing execution engine.
 
 Implement in reviewable slices:
 
-1. **Checked DATE export.** Add a semantic definition accessor to
-   `DateRecurrence` and canonical extracted-property output to `RfcDateRule`.
-   Reuse `CalendarPattern.definition`; reconstruct edits through
-   `DateRecurrence.new`. Export checks the adapter's year range and unsupported
-   selector/default combinations before returning `Parts`. Native definitions
-   outside the declared RFC profile fail explicitly. Test a monthly day-31
-   schedule with COUNT and an exclusion: exporting must not turn skipped months
-   into clamped dates or replenish excluded occurrences. This is useful on its
-   own, but does not complete timed schedules or durable native persistence.
-2. **Timed meeting exchange.** Add checked semantic access for `TimedRecurrence`
+1. **Timed meeting exchange.** Add checked semantic access for `TimedRecurrence`
    and `RfcTimedRule`, then canonical extracted-property output for the existing
    timed profile. Reuse the calendar, clock and subdaily definition accessors;
    preserve start form, termination domain, inclusions, exclusions and PERIOD
@@ -48,7 +38,7 @@ Implement in reviewable slices:
    the definition through checked construction, export it, import it again and
    evaluate both across a fixed transition. Canonical output is semantic text,
    not the original spelling or an ICS document.
-3. **Durable definition and context.** Introduce a checked schedule definition
+2. **Durable definition and context.** Introduce a checked schedule definition
    separate from `TimedSchedule`, which is an evaluation cursor tied to a window.
    Save/load the definition through a declared versioned persistence kind, then
    create fresh bounded cursors for two overlapping windows. Resolve the context

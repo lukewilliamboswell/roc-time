@@ -76,7 +76,7 @@ These features work, but check that your input fits their scope.
 | Civil reporting (development source) | Gregorian weekday, ordinal day and ISO week-date queries across the signed provider year range | Not in rc3; ISO week-year can differ from the calendar year; queries do not select a zone |
 | EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%`; development source also supports individual and year/month group qualifications | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
 | IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
-| RFC recurrence import | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed profiles | No complete ICS files, mixed UTC/local exceptions, or recurrence export/persistence yet |
+| iCalendar recurrence (RFC 5545) | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed import profiles; development source also exports canonical DATE rules | No complete ICS files, mixed UTC/local exceptions, timed-rule export or recurrence persistence yet |
 | Calendar and zone data | Gregorian and Julian; optional IANA 2025b data for 1800–2200 | Additional calendars are planned; zone data is a separate package dependency |
 | Explanation and persistence | Bounded plain-text explanations; versioned storage for supported descriptions, exact values, coverage and complete interpretation snapshots | No event/cursor persistence; snapshots have explicit size limits |
 
@@ -90,7 +90,7 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 The next release should first make the development civil text/display APIs and
 their appointment examples available with compatible compiler and package pins.
 
-1. **Complete schedule interchange.** Recurrence export and persistence, followed
+1. **Complete schedule interchange.** Timed recurrence export and durable definitions, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
    is not available today.
 2. **Expand specialist support as callers need it.** Faithful archive interval
@@ -181,6 +181,13 @@ it in New York, and shows why the two positions can be 23 or 25 hours apart on
 the POSIX timeline. It lists both choices for a repeated local time before making
 an explicit selection. Gaps, unknown zones and unavailable rule dates remain
 distinct results. Both core and zone-data packages are declared in its header.
+
+The development [schedule exchange application](tests/schedule_exchange/main.roc)
+imports a date-only monthly rule, edits its checked definition and exports
+canonical properties with `RfcDateRule.to_parts`. Reimporting preserves skipped
+month-days and COUNT-before-exclusion semantics. These are extracted RFC DATE
+values; timed export, complete ICS documents and native schedule archives remain
+separate work.
 
 ## Prior art
 

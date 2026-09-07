@@ -129,20 +129,7 @@ RfcRuleParts :: [].{
 		if $seen.contains("COUNT") and $seen.contains("UNTIL") {
 			return Err(Incompatible("COUNT and UNTIL"))
 		}
-		if !$positions.is_empty() and $pattern.by_month.is_empty() and $pattern.by_month_day.is_empty() and $pattern.by_year_day.is_empty() and $pattern.by_week_no.is_empty() and $pattern.by_day.is_empty() and $clocks.hours.is_empty() and $clocks.minutes.is_empty() and $clocks.seconds.is_empty() {
-			return Err(Incompatible("BYSETPOS requires another BY selector"))
-		}
-		# RFC 5545's derivation prose/table and RFC 8984's explicit implicit-field
-		# rules are not interchangeable. Require explicit fields in the disputed
-		# intersection rather than silently adopt dateutil or JSCalendar defaults.
-		if $pattern.frequency == Yearly and $pattern.by_year_day.is_empty() {
-			if $pattern.by_month.is_empty() and $pattern.by_week_no.is_empty() and !$pattern.by_month_day.is_empty() {
-				return Err(Unsupported("YEARLY BYMONTHDAY requires explicit BYMONTH in this profile"))
-			}
-			if !$pattern.by_week_no.is_empty() and $pattern.by_month_day.is_empty() and $pattern.by_day.is_empty() {
-				return Err(Unsupported("YEARLY BYWEEKNO requires explicit BYDAY in this profile"))
-			}
-		}
+		validate_profile($pattern, $positions, $clocks)?
 		match $subdaily {
 			Some(_) => {
 				if !$pattern.by_week_no.is_empty() {
@@ -158,6 +145,26 @@ RfcRuleParts :: [].{
 		}
 		Ok({ pattern: $pattern, clocks: $clocks, subdaily: $subdaily, termination: $termination, positions: $positions })
 	}
+	# Shared adapter restrictions; native constructors own semantic validation.
+	validate_profile : CalendarPattern.Spec, List(I16), ClockPattern.Spec -> Try({}, Error)
+	validate_profile = |pattern, positions, clocks| {
+		if !positions.is_empty() and pattern.by_month.is_empty() and pattern.by_month_day.is_empty() and pattern.by_year_day.is_empty() and pattern.by_week_no.is_empty() and pattern.by_day.is_empty() and clocks.hours.is_empty() and clocks.minutes.is_empty() and clocks.seconds.is_empty() {
+			return Err(Incompatible("BYSETPOS requires another BY selector"))
+		}
+		# RFC 5545's derivation prose/table and RFC 8984's explicit implicit-field
+		# rules are not interchangeable. Require explicit fields in the disputed
+		# intersection rather than silently adopt dateutil or JSCalendar defaults.
+		if pattern.frequency == Yearly and pattern.by_year_day.is_empty() {
+			if pattern.by_month.is_empty() and pattern.by_week_no.is_empty() and !pattern.by_month_day.is_empty() {
+				return Err(Unsupported("YEARLY BYMONTHDAY requires explicit BYMONTH in this profile"))
+			}
+			if !pattern.by_week_no.is_empty() and pattern.by_month_day.is_empty() and pattern.by_day.is_empty() {
+				return Err(Unsupported("YEARLY BYWEEKNO requires explicit BYDAY in this profile"))
+			}
+		}
+		Ok({})
+	}
+
 }
 
 positive : Str, Str, U64, I64 -> Try(I64, RfcRuleParts.Error)

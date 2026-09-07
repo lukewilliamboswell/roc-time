@@ -166,6 +166,18 @@ queries and successor laws. `scripts/fixture_platform.py --verify` measures inpu
 construction separately from query allocations over owned, shared and sliced
 dates; these are requested-byte counters, not retained-memory measurements.
 
+DATE recurrence export evidence runs with
+`ROC=/path/to/pinned/roc python3 scripts/test_date_export.py`. Its
+[sourced/profile fixtures](tests/date_export_checks/PROVENANCE.md) distinguish
+RFC occurrence facts from our canonical spelling and native-profile limits.
+The recurrence fuzz target checks exported properties and restored cursors
+against an independent finite calendar model. The hosted DATE export resource
+gate separates input storage, native construction, definition access, export,
+cursor construction and first/resumed consumption. It varies selector sizes,
+ownership and finite query horizons over an unbounded rule; allocation failure
+controls run in both dev and speed builds. Normal replay never regenerates
+expected output from the package under test.
+
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
 Howard Hinnant’s attributed public-domain March-based formulas, independent of

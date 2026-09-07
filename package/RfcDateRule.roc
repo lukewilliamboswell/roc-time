@@ -11,7 +11,8 @@ import GregorianDate
 ## supported. Return the same DateRecurrence used by native constructors.
 ## Timed values, subdaily frequencies, extensions and implicit YEARLY defaults
 ## described below are explicit unsupported scopes. No source spelling,
-## serialization, full iCalendar, or full RFC conformance claim is made.
+## full iCalendar or full RFC conformance claim is made. Canonical output
+## preserves the supported definition's meaning, not original spelling.
 ##
 ## Example
 ##
@@ -47,6 +48,99 @@ RfcDateRule :: [].{
 	profile = "rfc5545-date-values-v1"
 	Parts : { start : Str, rule : Str, inclusions : List(Str), exclusions : List(Str) }
 	Error : [Malformed(Str), Duplicate(Str), Missing(Str), Unsupported(Str), OutOfRange(Str), Incompatible(Str), InvalidDate(Str), TooLarge, InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])]
+
+	## Export extracted values without expanding occurrences. Reject native
+	## definitions outside this profile; this is not versioned persistence.
+	## Order: FREQ, INTERVAL, termination, BYMONTH, BYWEEKNO, BYYEARDAY,
+	## BYMONTHDAY, BYDAY, BYSETPOS, WKST. INTERVAL and WKST are explicit.
+	## Numeric sets sort ascending; BYDAY sorts Monday–Sunday, then ordinal.
+	## Exceptions are sorted unique individual YYYYMMDD entries. Total output
+	## is limited to 65536 bytes. Cost O(s log s + n + output bytes), for
+	## supplied selectors s and explicit dates n, independent of series length.
+	## Native construction already checks the RFC interval range; export also
+	## checks COUNT, whose native U64 domain is wider than RFC's signed integer.
+	to_parts : DateRecurrence -> Try(Parts, Error)
+	to_parts = |rule| {
+		definition = DateRecurrence.definition(rule)
+		spec = definition.spec
+		pattern = spec.pattern
+		match RfcRuleParts.validate_profile(pattern, spec.by_set_pos, { hours: [], minutes: [], seconds: [] }) {
+			Ok(_) => {}
+			Err(Malformed(part)) => return Err(Malformed(part))
+			Err(Duplicate(part)) => return Err(Duplicate(part))
+			Err(Missing(part)) => return Err(Missing(part))
+			Err(Unsupported(part)) => return Err(Unsupported(part))
+			Err(OutOfRange(part)) => return Err(OutOfRange(part))
+			Err(Incompatible(part)) => return Err(Incompatible(part))
+			Err(TooLarge) => return Err(TooLarge)
+		}
+		start = date_text(definition.anchor, "DTSTART")?
+		frequency = match pattern.frequency {
+			Daily => "DAILY"
+			Weekly => "WEEKLY"
+			Monthly => "MONTHLY"
+			Yearly => "YEARLY"
+		}
+		var $fields = ["FREQ=${frequency}", "INTERVAL=${pattern.interval.to_str()}"]
+		match spec.termination {
+			Forever => {}
+			Count(count) => {
+				if count > 2147483647 {
+					return Err(OutOfRange("COUNT"))
+				}
+				$fields = $fields.append("COUNT=${count.to_str()}")
+			}
+			Until(date) => {
+				$fields = $fields.append("UNTIL=${date_text(date, "UNTIL")?}")
+			}
+		}
+		for (name, values) in [
+			("BYMONTH", pattern.by_month.map(|n| n.to_i64())),
+			("BYWEEKNO", pattern.by_week_no.map(|n| n.to_i64())),
+			("BYYEARDAY", pattern.by_year_day.map(|n| n.to_i64())),
+			("BYMONTHDAY", pattern.by_month_day.map(|n| n.to_i64())),
+		] {
+			if !values.is_empty() {
+				$fields = $fields.append("${name}=${number_set(values)}")
+			}
+		}
+		if !pattern.by_day.is_empty() {
+			keys = pattern.by_day.map(|day| weekday_number(day.weekday) * 128 + day.ordinal.to_i64() + 53)
+			days = unique_numbers(keys).map(
+				|key| {
+					ordinal = I64.mod_by(key, 128) - 53
+					prefix = if ordinal == 0 {
+						""
+					} else {
+						ordinal.to_str()
+					}
+					"${prefix}${weekday_at(I64.div_trunc_by(key, 128))}"
+				},
+			)
+			$fields = $fields.append("BYDAY=${Str.join_with(days, ",")}")
+		}
+		if !spec.by_set_pos.is_empty() {
+			$fields = $fields.append("BYSETPOS=${number_set(spec.by_set_pos.map(|n| n.to_i64()))}")
+		}
+		$fields = $fields.append("WKST=${weekday_at(weekday_number(pattern.week_start))}")
+		var $inclusions = []
+		for date in spec.inclusions {
+			$inclusions = $inclusions.append(date_text(date, "RDATE")?)
+		}
+		var $exclusions = []
+		for date in spec.exclusions {
+			$exclusions = $exclusions.append(date_text(date, "EXDATE")?)
+		}
+		parts = { start, rule: Str.join_with($fields, ";"), inclusions: $inclusions, exclusions: $exclusions }
+		var $remaining = 65536.U64
+		for value in [parts.start, parts.rule].concat(parts.inclusions).concat(parts.exclusions) {
+			if value.count_utf8_bytes() > $remaining {
+				return Err(TooLarge)
+			}
+			$remaining = $remaining - value.count_utf8_bytes()
+		}
+		Ok(parts)
+	}
 
 	## At most 65536 input bytes in total and 4096 supplied inclusion/exclusion
 	## strings each. RDATE/EXDATE entries may contain comma-separated dates;
@@ -89,6 +183,64 @@ RfcDateRule :: [].{
 			Err(error) => Err(InvalidRule(error))
 		}
 	}
+}
+
+date_text : GregorianDate, Str -> Try(Str, RfcDateRule.Error)
+date_text = |date, part| {
+	fields = GregorianDate.to_fields(date)
+	if fields.year < 1 or fields.year > 9999 {
+		return Err(OutOfRange(part))
+	}
+	Ok("${pad(fields.year.to_str(), 4)}${pad(fields.month.to_str(), 2)}${pad(fields.day.to_str(), 2)}")
+}
+
+pad = |text, width| Str.repeat("0", width - text.count_utf8_bytes()).concat(text)
+
+unique_numbers : List(I64) -> List(I64)
+unique_numbers = |values| {
+	ordered = values.sort_with(
+		|a, b| if a < b {
+			Before
+		} else if a > b {
+			After
+		} else {
+			Same
+		},
+	)
+	var $result = []
+	var $previous = None
+	for value in ordered {
+		if $previous != Some(value) {
+			$result = $result.append(value)
+		}
+		$previous = Some(value)
+	}
+	$result
+}
+
+number_set = |values| Str.join_with(unique_numbers(values).map(|n| n.to_str()), ",")
+
+weekday_number : CalendarPattern.Weekday -> I64
+weekday_number = |day| match day {
+	Monday => 0
+	Tuesday => 1
+	Wednesday => 2
+	Thursday => 3
+	Friday => 4
+	Saturday => 5
+	Sunday => 6
+}
+
+# Only called with the quotient of a validated weekday/ordinal encoding.
+weekday_at = |index| match index {
+	0 => "MO"
+	1 => "TU"
+	2 => "WE"
+	3 => "TH"
+	4 => "FR"
+	5 => "SA"
+	6 => "SU"
+	_ => crash "Validated weekday index"
 }
 
 parse_date : Str, Str -> Try(GregorianDate, RfcDateRule.Error)
@@ -167,6 +319,39 @@ test_rfcdaterule_observe = |input, test_rfcdaterule_window| {
 }
 
 test_rfcdaterule_window = { start: test_rfcdaterule_date(2025, 1, 1), end: test_rfcdaterule_date(2026, 1, 1) }
+
+# Canonicalization changes spelling and selector order, not set semantics.
+expect {
+	rule = RfcDateRule.parse({
+		start: "20250131",
+		rule: "byday=FR,MO,WE,TU,TH,FR;bysetpos=-1,-1;count=03;freq=monthly",
+		inclusions: ["20250704,20250704"],
+		exclusions: ["20250331"],
+	})?
+	parts = RfcDateRule.to_parts(rule)?
+	parts == { start: "20250131", rule: "FREQ=MONTHLY;INTERVAL=1;COUNT=3;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;WKST=MO", inclusions: ["20250704"], exclusions: ["20250331"] } and
+		RfcDateRule.to_parts(RfcDateRule.parse(parts)?)? == parts
+}
+
+expect {
+	rule = RfcDateRule.parse(test_rfcdaterule_parts("20250131", "FREQ=MONTHLY;COUNT=3"))?
+	definition = DateRecurrence.definition(rule)
+	edited = DateRecurrence.new(definition.anchor, { ..definition.spec, exclusions: [test_rfcdaterule_date(2025, 3, 31)] })?
+	test_rfcdaterule_observe(RfcDateRule.to_parts(edited)?, test_rfcdaterule_window)? == [test_rfcdaterule_date(2025, 1, 31), test_rfcdaterule_date(2025, 5, 31)] and
+		DateRecurrence.definition(rule).spec.exclusions.is_empty()
+}
+
+expect {
+	base = { pattern: CalendarPattern.defaults(Daily), termination: Forever, by_set_pos: [], inclusions: [], exclusions: [] }
+	anchor = test_rfcdaterule_date(2025, 1, 1)
+	RfcDateRule.to_parts(DateRecurrence.new(test_rfcdaterule_date(0, 1, 1), base)?) == Err(OutOfRange("DTSTART")) and
+		RfcDateRule.to_parts(DateRecurrence.new(anchor, { ..base, termination: Count(2147483648) })?) == Err(OutOfRange("COUNT")) and
+			(match DateRecurrence.new(anchor, { ..base, pattern: { ..base.pattern, interval: 2147483648 } }) {
+				Err(InvalidInterval) => True
+				_ => False
+			}) and
+				RfcDateRule.to_parts(DateRecurrence.new(anchor, { ..base, by_set_pos: [1] })?) == Err(Incompatible("BYSETPOS requires another BY selector"))
+}
 
 # RFC 5545 §3.3.10 invalid dates/COUNT and §3.8.5 exclusions.
 expect {

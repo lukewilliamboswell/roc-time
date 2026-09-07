@@ -11,6 +11,7 @@ query APIs, promote these staged applications into the public example collection
 - [Named-zone appointment](../tests/zoned_appointment/main.roc), with both core and zone dependencies.
 - [Appointment display](../tests/appointment_display/main.roc), with the core dependency.
 - [Invoice report](../tests/invoice_report/main.roc), with the core dependency.
+- [Schedule exchange](../tests/schedule_exchange/main.roc), with the core dependency and DATE export APIs.
 
 Pin each compiler and immutable package URL. Include the applications in the
 starter kit and preserve their independent fixtures, scenario checks and exact

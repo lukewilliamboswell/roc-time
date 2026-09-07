@@ -1,0 +1,12 @@
+Date-only schedule exchange (extracted RFC property values)
+Imported: monthly on the 31st, COUNT=3
+Edited: exclude 31 March; add 4 July
+Canonical DTSTART value: 20250131
+Canonical RRULE value: FREQ=MONTHLY;INTERVAL=1;COUNT=3;WKST=MO
+Canonical RDATE value: 20250704
+Canonical EXDATE value: 20250331
+Reimported dates in [2025-01-01, 2025-08-01):
+2025-01-31
+2025-05-31
+2025-07-04
+Complete: missing month-days are skipped; exclusions do not replenish COUNT.

@@ -1,0 +1,27 @@
+{"input":"monthly","expected":{"parts":{"start":"20250131","rule":"FREQ=MONTHLY;INTERVAL=1;COUNT=3;WKST=MO","inclusions":["20250204","20250331"],"exclusions":["20250331"]},"dates":["2025-01-31","2025-02-04","2025-05-31"]}}
+{"input":"until","expected":{"parts":{"start":"20250101","rule":"FREQ=DAILY;INTERVAL=1;UNTIL=20250103;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2025-01-01","2025-01-02","2025-01-03"]}}
+{"input":"wkst-mo","expected":{"parts":{"start":"19970805","rule":"FREQ=WEEKLY;INTERVAL=2;COUNT=4;BYDAY=TU,SU;WKST=MO","inclusions":[],"exclusions":[]},"dates":["1997-08-05","1997-08-10","1997-08-19","1997-08-24"]}}
+{"input":"wkst-su","expected":{"parts":{"start":"19970805","rule":"FREQ=WEEKLY;INTERVAL=2;COUNT=4;BYDAY=TU,SU;WKST=SU","inclusions":[],"exclusions":[]},"dates":["1997-08-05","1997-08-17","1997-08-19","1997-08-31"]}}
+{"input":"last-weekday","expected":{"parts":{"start":"19970930","rule":"FREQ=MONTHLY;INTERVAL=1;COUNT=3;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;WKST=MO","inclusions":[],"exclusions":[]},"dates":["1997-09-30","1997-10-31","1997-11-28"]}}
+{"input":"forever","expected":{"parts":{"start":"20250101","rule":"FREQ=DAILY;INTERVAL=1;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2025-01-01","2025-01-02","2025-01-03"]}}
+{"input":"native-start-zero","error":"OutOfRange(\"DTSTART\")"}
+{"input":"native-start-high","error":"OutOfRange(\"DTSTART\")"}
+{"input":"native-until-zero","error":"OutOfRange(\"DTSTART\")"}
+{"input":"native-until-high","error":"OutOfRange(\"UNTIL\")"}
+{"input":"native-rdate-zero","error":"OutOfRange(\"RDATE\")"}
+{"input":"native-rdate-high","error":"OutOfRange(\"RDATE\")"}
+{"input":"native-exdate-zero","error":"OutOfRange(\"EXDATE\")"}
+{"input":"native-exdate-high","error":"OutOfRange(\"EXDATE\")"}
+{"input":"native-count","error":"OutOfRange(\"COUNT\")"}
+{"input":"native-interval","error":"InvalidInterval"}
+{"input":"native-year-monthday","error":"Unsupported(\"YEARLY BYMONTHDAY requires explicit BYMONTH in this profile\")"}
+{"input":"native-year-weekno","error":"Unsupported(\"YEARLY BYWEEKNO requires explicit BYDAY in this profile\")"}
+{"input":"native-setpos","error":"Incompatible(\"BYSETPOS requires another BY selector\")"}
+{"input":"native-size","error":"TooLarge"}
+{"input":"count-max","expected":{"parts":{"start":"20250101","rule":"FREQ=DAILY;INTERVAL=1;COUNT=2147483647;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2025-01-01","2025-01-02","2025-01-03"]}}
+{"input":"ordinal-extremes","expected":{"parts":{"start":"20180101","rule":"FREQ=YEARLY;INTERVAL=1;COUNT=2;BYDAY=-53MO,MO,1MO,-53SU,53SU;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2018-01-01","2018-01-08"]}}
+{"input":"week-numbers","expected":{"parts":{"start":"20200101","rule":"FREQ=YEARLY;INTERVAL=1;COUNT=2;BYWEEKNO=-1,1;BYDAY=WE;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2020-01-01","2020-12-30"]}}
+{"input":"year-days","expected":{"parts":{"start":"20250101","rule":"FREQ=YEARLY;INTERVAL=1;COUNT=2;BYYEARDAY=-1,1;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2025-01-01","2025-12-31"]}}
+{"input":"month-days","expected":{"parts":{"start":"20250101","rule":"FREQ=YEARLY;INTERVAL=1;COUNT=4;BYMONTH=1,12;BYMONTHDAY=-1,1;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2025-01-01","2025-01-31","2025-12-01","2025-12-31"]}}
+{"input":"set-positions","expected":{"parts":{"start":"20250106","rule":"FREQ=MONTHLY;INTERVAL=1;COUNT=4;BYDAY=MO;BYSETPOS=-1,1;WKST=MO","inclusions":[],"exclusions":[]},"dates":["2025-01-06","2025-01-27","2025-02-03","2025-02-24"]}}
+{"input":"exact-cap","expected":{"bytes":65536,"start":"20250101","rule":"FREQ=DAILY;INTERVAL=1234;WKST=MO","inclusions":4096,"exclusions":4091}}
