@@ -315,7 +315,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	from_civil_day : CivilDay -> Try(GregorianDate, [OutOfRange, ..])
 	from_civil_day = |day| {
 		number = CivilDay.to_day_number(day)
-		if number < year_start(-2147483648) or number >= year_start(2147483648) {
+		if number < first_supported_day or number >= after_last_supported_day {
 			return Err(OutOfRange)
 		}
 		# March-based Gregorian eras, adapted from Howard Hinnant's
@@ -502,6 +502,13 @@ pad_two = |value| if value < 10 {
 } else {
 	value.to_str()
 }
+
+# Provider bounds are immutable and evaluated once at compile time. Every
+# inverse conversion validates against them without recomputing either year.
+first_supported_day : I64
+first_supported_day = year_start(-2147483648)
+after_last_supported_day : I64
+after_last_supported_day = year_start(2147483648)
 
 # Counts complete years before January 1 relative to Gregorian 1970-01-01.
 # All callers constrain year to [-2147483648, 2147483648]; intermediates fit I64.
