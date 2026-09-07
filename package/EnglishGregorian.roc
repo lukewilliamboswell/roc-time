@@ -40,19 +40,31 @@ import LocalDateTime
 ##
 ## Examples assume a package dependency named `time`.
 EnglishGregorian :: [].{
+
+	## Minute displays hours/minutes, Second includes seconds, and Exact includes
+	## the shortest exact fractional seconds. Coarser choices reject lost precision.
 	Precision : [Minute, Second, Exact]
+
+	## The requested clock precision would omit a nonzero field.
 	PrecisionError : [PrecisionLoss(Precision)]
+
+	## The local label uses an unsupported calendar or would lose clock precision.
 	Error : [UnsupportedCalendar(Calendar), PrecisionLoss(Precision)]
 
+	## Identifier of this fixed English Gregorian display convention.
 	profile : Str
 	profile = "english-gregorian-short-v1"
 
+	## Display a Gregorian date using an unpadded day and abbreviated English month,
+	## with astronomical year numbering across the supported signed year range.
 	date : GregorianDate -> Str
 	date = |value| {
 		fields = GregorianDate.to_fields(value)
 		"${fields.day.to_str()} ${month_name(fields.month)} ${year_text(fields.year)}"
 	}
 
+	## Display a clock label at the requested precision. Return PrecisionLoss when
+	## Minute or Second would omit nonzero fields; never round or truncate.
 	clock : ClockTime, Precision -> Try(Str, PrecisionError)
 	clock = |value, precision| {
 		fields = ClockTime.to_fields(value)

@@ -47,9 +47,9 @@ import PosixSpan
 ## }
 ## ```
 ##
-## When a batch returns `Limited`, process its partial output and resume the returned
-## cursor with sufficient budgets. Increasing only the output cap does not fix a
-## work or buffer limit.
+## When a batch returns `Limited`, resume the returned cursor with sufficient
+## budgets. The cursor retains partial work; the batch exposes only complete
+## classifications or coverage. Increase the capacity after a buffer limit.
 ZoneRules :: {
 	name : Str,
 	version : Str,
@@ -69,6 +69,9 @@ ZoneRules :: {
 		selection_cursor(rules, bounds.start, bounds.end)
 	}
 
+	## Structural input from the optional zone-data package. Boundaries and
+	## transitions are POSIX seconds; offsets are signed seconds. from_database
+	## validates schema, axis, future handling, provenance and finite table bounds.
 	Database : {
 		schema : U16,
 		axis : Str,
@@ -85,17 +88,35 @@ ZoneRules :: {
 		maximum_offset : I32,
 		transitions : List({ second : I64, offset : I32 }),
 	}
+
+	## Caller-supplied rules or database origin metadata. Database metadata records
+	## the requested alias, canonical name, source digest and extraction profile.
 	Provenance : [Supplied, DatabaseSource({ requested_name : Str, canonical_name : Str, source_digest : Str, profile : Str })]
+
+	## An exact POSIX boundary and the new offset active from that boundary onward.
 	Transition : { at : PosixBoundary, offset : FixedOffset }
+
+	## Provider-guaranteed minimum/maximum offsets in seconds, including outside
+	## the finite table. These bounds establish whether inverse queries are complete.
 	OffsetBounds : { minimum : I32, maximum : I32 }
 
-	## Semantic transport, not the opaque record representation or a codec.
+	## A complete rules definition for inspection or reconstruction with from_definition.
 	## Boundaries and transition positions retain exact POSIX microseconds;
 	## offsets/bounds retain whole seconds. Provenance is preserved in full.
 	Definition : { name : Str, version : Str, validity : PosixSpan, initial : FixedOffset, bounds : OffsetBounds, provenance : Provenance, transitions : List(Transition) }
+
+	## Complete inverse classification: no occurrence, one occurrence, or multiple
+	## occurrences in increasing POSIX order. A gap is not an adjusted occurrence.
 	Resolution : [Gap, Unique(PosixBoundary), Fold(List(PosixBoundary))]
+
+	## Require one occurrence, select the earliest/latest, or require the stated
+	## offset. These choices never silently adjust a gap.
 	OccurrencePolicy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)]
 
+	## Validate named finite rules using the full I32 offset range as global bounds.
+	## Reject empty names/versions or transitions outside validity or out of order.
+	## Prefer new_bounded when the provider supplies tighter authoritative bounds:
+	## full-range bounds require wider validity for complete inverse queries.
 	new : Str, Str, PosixSpan, FixedOffset, List(Transition) -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, ..])
 	new = |name, version, validity, initial, transitions| new_bounded(name, version, validity, initial, transitions, { minimum: I32.lowest, maximum: I32.highest })
 
@@ -144,11 +165,11 @@ ZoneRules :: {
 		transitions: rules.transitions,
 	}
 
-	## Revalidate transported semantics using the same constructor invariants.
-	## O(n) transition work without copying the table. No provider lookup occurs.
-	## DatabaseSource retains the second-alignment invariant of from_database;
-	## Supplied rules retain the full microsecond domain. Provenance is asserted
-	## transport metadata, not authentication of an external database or digest.
+	## Construct rules from a complete definition, validating names, ordering,
+	## validity, offset bounds and provenance in O(n) transition work. The table
+	## may remain shared. DatabaseSource requires second-aligned boundaries;
+	## Supplied accepts exact microseconds. No provider lookup or authentication
+	## of the declared database source or digest occurs.
 	from_definition : Definition -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment, ..])
 	from_definition = |data| {
 		rules = new_bounded(data.name, data.version, data.validity, data.initial, data.transitions, data.bounds)?
@@ -175,7 +196,9 @@ ZoneRules :: {
 		Ok({ ..rules, provenance: data.provenance })
 	}
 
-	## Versioned structural data: no nominal dependency on the supplying package.
+	## Validate structural zone-data input and retain its database provenance.
+	## Reject unsupported schema, axis or future handling rather than guessing
+	## their meaning; no provider lookup occurs.
 	from_database : Database -> Try(ZoneRules, [UnsupportedSchema(U16), UnsupportedAxis(Str), UnsupportedFutureHandling(Str), MissingProvenance, EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, EmptySpan, ReversedBounds, OutOfRange, ..])
 	from_database = |data| {
 		if data.schema != 1 {
@@ -202,13 +225,19 @@ ZoneRules :: {
 		Ok({ ..rules, provenance: DatabaseSource({ requested_name: data.requested_name, canonical_name: data.canonical_name, source_digest: data.source_digest, profile: data.profile }) })
 	}
 
+	## Return the retained supplied/database origin metadata without a provider lookup.
 	provenance : ZoneRules -> Provenance
 	provenance = |rules| rules.provenance
 
+	## Return the rules snapshot name; equal names do not imply equal transition data.
 	name : ZoneRules -> Str
 	name = |rules| rules.name
+
+	## Return the supplied version label; it does not identify the rules by itself.
 	version : ZoneRules -> Str
 	version = |rules| rules.version
+
+	## Return the half-open POSIX span over which the transition table is authoritative.
 	validity : ZoneRules -> PosixSpan
 	validity = |rules| rules.validity
 
@@ -255,13 +284,27 @@ ZoneRules :: {
 		}
 	}
 
+	## A forward transition and its offsets before/after, retained as evidence of
+	## a skipped local interval containing the classified label.
 	GapTransition : { at : PosixBoundary, before : FixedOffset, after : FixedOffset }
+
+	## A chosen POSIX coordinate and whether it was exact or used a pre-gap offset.
+	## An adjustment retains the transition that justified it.
 	BoundaryChoice : { boundary : PosixBoundary, adjustment : [Exact, BeforeGap(GapTransition)] }
+
+	## Complete inverse evidence for one civil label under retained immutable rules.
+	## Inspect resolution or choose an occurrence using explicit policies.
 	Classification :: { rules : ZoneRules, local : LocalDateTime, resolution : Resolution, gaps : List(GapTransition) }.{
+
+		## Return the complete gap/unique/fold result without rescanning transitions.
 		resolution : Classification -> Resolution
 		resolution = |value| value.resolution
+
+		## Return the exact rules used to classify the label.
 		rules : Classification -> ZoneRules
 		rules = |value| value.rules
+
+		## Return the original civil label being classified.
 		local : Classification -> LocalDateTime
 		local = |value| value.local
 
@@ -334,6 +377,8 @@ ZoneRules :: {
 				}
 			}
 		}
+
+		## Summarize the label, result kind and evidence counts without listing candidates.
 		to_inspect : Classification -> Str
 		to_inspect = |value| {
 			kind = match value.resolution {
@@ -344,12 +389,22 @@ ZoneRules :: {
 			"ZoneRules.Classification(${kind}, ${Str.inspect(value.local)}, gap_transitions=${value.gaps.len().to_str()})"
 		}
 	}
+
+	## Per-call segment-work budget and total retained candidate capacity. Capacity
+	## counts both matching occurrences and forward-gap evidence.
 	ClassificationLimits : { max_segments : U64, max_candidates : U64 }
+
+	## Segment work for this call, total buffered evidence, and a complete
+	## classification or resumable cursor. Limited is not a gap classification.
 	ClassificationBatch : {
 		segments : U64,
 		buffered : U64,
 		status : [Complete(Classification), Limited({ cursor : ClassificationCursor, reason : [WorkLimit, BufferLimit] })],
 	}
+
+	## Bind a civil label to rules after proving the full inverse range fits
+	## validity. Construction does not scan transitions; collect performs bounded work.
+	## Return OutsideValidity or OutOfRange instead of an incomplete classification.
 	classification_cursor : ZoneRules, LocalDateTime -> Try(ClassificationCursor, [OutsideValidity, OutOfRange, ..])
 	classification_cursor = |rules, local| {
 		earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), local)?
@@ -359,6 +414,9 @@ ZoneRules :: {
 		}
 		Ok({ rules, local, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, matches: [], gaps: [], done: Bool.False })
 	}
+
+	## Immutable progress toward complete classification, retaining candidates and
+	## gap evidence. Resume a Limited batch by collecting its returned cursor.
 	ClassificationCursor :: {
 		rules : ZoneRules,
 		local : LocalDateTime,
@@ -436,6 +494,8 @@ ZoneRules :: {
 			}
 			crash "Classification loop returns an outcome"
 		}
+
+		## Summarize retained progress and evidence counts without continuing classification.
 		to_inspect : ClassificationCursor -> Str
 		to_inspect = |state| "ZoneRules.ClassificationCursor(segment=${state.index.to_str()}, buffered=${(state.matches.len() + state.gaps.len()).to_str()})"
 	}
@@ -478,7 +538,12 @@ ZoneRules :: {
 		}
 	}
 
+	## Per-call segment-work budget and total capacity for canonical coverage members.
+	## A resume may need a larger member cap to pass a BufferLimit.
 	SelectionLimits : { max_segments : U64, max_members : U64 }
+
+	## Per-call segment work and retained member count, with complete coverage or
+	## a resumable cursor. Incomplete coverage is not exposed as a successful value.
 	SelectionBatch : {
 		segments : U64,
 		buffered : U64,
@@ -503,6 +568,8 @@ ZoneRules :: {
 		Ok({ rules, start, end, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, builder: Coverage.SortedBuilder.empty, done: Bool.False })
 	}
 
+	## Immutable progress through the complete preimage of a half-open civil range.
+	## Fold components remain separate and gaps can contribute no coverage.
 	SelectionCursor :: {
 		rules : ZoneRules,
 		start : LocalDateTime,
@@ -513,6 +580,8 @@ ZoneRules :: {
 		builder : Coverage.SortedBuilder,
 		done : Bool,
 	}.{
+
+		## Return the exact retained rules and original civil bounds without evaluating them.
 		context : SelectionCursor -> { rules : ZoneRules, start : LocalDateTime, end : LocalDateTime }
 		context = |cursor| { rules: cursor.rules, start: cursor.start, end: cursor.end }
 
@@ -579,6 +648,8 @@ ZoneRules :: {
 			}
 			crash "Selection loop returns a batch"
 		}
+
+		## Summarize cursor progress and buffered count without evaluating more segments.
 		to_inspect : SelectionCursor -> Str
 		to_inspect = |cursor| "ZoneRules.SelectionCursor(segment=${cursor.index.to_str()}, members=${Coverage.SortedBuilder.member_count(cursor.builder).to_str()})"
 	}

@@ -28,11 +28,18 @@ import PosixBoundary
 ##
 ## Examples assume a package dependency named `time`.
 FixedOffset :: [Seconds(I32)].{
+	## Construct an explicit local-minus-POSIX offset in whole seconds.
+	## Positive offsets place the local label ahead of the POSIX label. All I32
+	## values are accepted; a text format may impose a narrower range.
 	from_seconds : I32 -> FixedOffset
 	from_seconds = |seconds| Seconds(seconds)
+	## Read the whole-second local-minus-POSIX offset.
 	to_seconds : FixedOffset -> I32
 	to_seconds = |Seconds(seconds)| seconds
 
+	## Interpret a local date-time using this fixed offset. Return OutOfRange
+	## if the resulting position cannot fit I64 microseconds. There are no gap or
+	## fold choices because the offset is constant.
 	resolve : FixedOffset, LocalDateTime -> Try(PosixBoundary, [OutOfRange, ..])
 	resolve = |Seconds(seconds), local| {
 		day = CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(local)))
@@ -46,6 +53,9 @@ FixedOffset :: [Seconds(I32)].{
 		}
 	}
 
+	## Express a POSIX position as a local date-time in the requested calendar
+	## under this offset. Return OutOfRange if the local date is unsupported;
+	## no named-zone lookup or calendar substitution is performed.
 	project : FixedOffset, PosixBoundary, Calendar -> Try(LocalDateTime, [OutOfRange, ..])
 	project = |Seconds(seconds), boundary, calendar| {
 		number = PosixBoundary.to_microseconds(boundary).to_i128() + seconds.to_i128() * 1000000
@@ -59,10 +69,14 @@ FixedOffset :: [Seconds(I32)].{
 		Ok(LocalDateTime.new(date, clock))
 	}
 
+	## Compare offset seconds. Equal fixed offsets do not imply equal named zones.
 	is_eq : FixedOffset, FixedOffset -> Bool
 	is_eq = |Seconds(a), Seconds(b)| a == b
+	## Hash the offset seconds consistently with equality for dictionary/set keys.
 	to_hash : FixedOffset, Hasher -> Hasher
 	to_hash = |Seconds(seconds), hasher| seconds.to_hash(hasher)
+	## Describe the offset in seconds with its local-minus-POSIX convention.
+	## This diagnostic string is not an interchange timestamp.
 	to_inspect : FixedOffset -> Str
 	to_inspect = |Seconds(seconds)| "FixedOffset(${seconds.to_str()} seconds local-minus-POSIX)"
 

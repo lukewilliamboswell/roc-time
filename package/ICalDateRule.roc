@@ -11,7 +11,9 @@ import ICalRuleText
 ## DAILY/WEEKLY/MONTHLY/YEARLY, date selectors, WKST, COUNT and UNTIL are
 ## supported. Return the same DateRecurrence used by native constructors.
 ## Timed values, subdaily frequencies, extensions and implicit YEARLY defaults
-## described below are explicit unsupported scopes. No source spelling,
+## are unsupported: without BYYEARDAY, a YEARLY BYMONTHDAY rule lacking both
+## BYMONTH and BYWEEKNO is rejected; a YEARLY BYWEEKNO rule lacking both
+## BYMONTHDAY and BYDAY is rejected. No source spelling,
 ## full iCalendar or full RFC conformance claim is made. Canonical output
 ## preserves the supported definition's meaning, not original spelling.
 ##
@@ -45,9 +47,12 @@ import ICalRuleText
 ##
 ## Examples assume a package dependency named `time`.
 ICalDateRule :: [].{
+	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc5545-date-values-v1"
+	## Extracted DTSTART, RRULE, RDATE and EXDATE values. Entries are strings, not property lines; inclusion/exclusion strings may contain comma lists.
 	Parts : { start : Str, rule : Str, inclusions : List(Str), exclusions : List(Str) }
+	## Identifies the offending property or rule component, unsupported combinations and limits; InvalidRule retains native recurrence validation failures.
 	Error : [Malformed(Str), Duplicate(Str), Missing(Str), Unsupported(Str), OutOfRange(Str), Incompatible(Str), InvalidDate(Str), TooLarge, InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])]
 
 	## Export extracted values without expanding occurrences. Reject native
@@ -58,8 +63,8 @@ ICalDateRule :: [].{
 	## Exceptions are sorted unique individual YYYYMMDD entries. Total output
 	## is limited to 65536 bytes. Cost O(s log s + n + output bytes), for
 	## supplied selectors s and explicit dates n, independent of series length.
-	## Native construction already checks the RFC interval range; export also
-	## checks COUNT, whose native U64 domain is wider than RFC's signed integer.
+	## Export rejects COUNT values outside the RFC signed-integer range, even
+	## when they are valid in a native recurrence definition.
 	to_parts : DateRecurrence -> Try(Parts, Error)
 	to_parts = |rule| {
 		definition = DateRecurrence.definition(rule)

@@ -35,14 +35,20 @@ import ClockTime
 ## Canonical IXDTF text preserves the declaration; snapshots remain in-memory
 ## results with explicit context. No complete ISO or broader-calendar claim.
 Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }.{
+	## A named zone requiring matching rules at resolution, or a fixed numeric zone offset.
 	ZoneId : [Named(Str), Numeric(FixedOffset)]
+	## Zone annotation and its critical flag; a named identifier is not automatically downloaded or resolved.
 	Zone : { critical : Bool, identifier : ZoneId }
+	## An ordered key/value annotation and critical flag. Elective unknown values may be retained; unsupported critical processing fails.
 	Tag : { critical : Bool, key : Str, value : Str }
+	## The base timestamp, optional zone annotation and ordered tags. Construction validates profile limits and critical-tag compatibility.
 	Parts : { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }
+	## Reports base timestamp failures, annotation syntax/limits, invalid identifiers and unsupported or conflicting critical processing.
 	Error : [Base(OffsetTimestamp.Error), Malformed, Incomplete, TooLarge, TooManyAnnotations, InvalidZone, InvalidTag, ExperimentalKey, UnknownCritical, ConflictingCritical, UnsupportedCriticalCalendar]
+	## Reports missing/unexpected context, zone-name or numeric-offset conflicts, provider validity limits and coordinate overflow.
 	ResolveError : [NeedsContext, UnexpectedContext, ZoneMismatch, OffsetConflict, OutsideValidity, OutOfRange]
 
-	## Generic encodings carry canonical text, never the opaque backing record.
+	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
 	parser_for : encoding -> (state -> Try({ value : Ixdtf, rest : state }, [InvalidIxdtf(Error), Encoding(err), ..]))
@@ -63,6 +69,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 	}
 
+	## Encodes the canonical standard text as a string in the selected encoding; encoding failures pass through.
 	encoder_for : encoding -> (Ixdtf, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
@@ -80,9 +87,11 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		Err(error) => Err(BadQuotedBytes("Invalid Ixdtf literal: ${Str.inspect(error)}"))
 	}
 
+	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc9557-microseconds-v1"
 
+	## Validates annotations and profile limits around an already validated base timestamp. Preserves tag order and criticality without consulting zone data.
 	new : Parts -> Try(Ixdtf, Error)
 	new = |parts| {
 		if parts.tags.len() > 32 {
@@ -156,9 +165,11 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 		Ok({ timestamp: parts.timestamp, zone: parts.zone, tags: parts.tags })
 	}
+	## Returns the retained base timestamp, optional zone and ordered annotations for inspection or checked editing.
 	parts : Ixdtf -> Parts
 	parts = |value| { timestamp: value.timestamp, zone: value.zone, tags: value.tags }
 
+	## Parses a supported timestamp and ordered RFC 9557 annotations. Validates critical processing and limits without resolving named zones.
 	parse : Str -> Try(Ixdtf, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 4096 {
@@ -226,6 +237,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		new({ timestamp, zone: $zone, tags: $tags })
 	}
 
+	## Returns the first u-ca annotation value, if present. This is a presentation preference, not a reinterpretation of the Gregorian base timestamp.
 	preferred_calendar : Ixdtf -> [None, Some(Str)]
 	preferred_calendar = |value| {
 		for tag in value.tags {
@@ -236,6 +248,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		None
 	}
 
+	## Canonical base timestamp with retained annotation order and criticality. Numeric zero zone offsets normalize to +00:00.
 	to_text : Ixdtf -> Str
 	to_text = |value| {
 		var $output = OffsetTimestamp.to_text(value.timestamp)
@@ -250,8 +263,10 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 		$output
 	}
+	## Compares the entire declaration, including base precision/offset intent, optional zone and ordered tags.
 	is_eq : Ixdtf, Ixdtf -> Bool
 	is_eq = |a, b| a.timestamp == b.timestamp and a.zone == b.zone and a.tags == b.tags
+	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : Ixdtf, Hasher -> Hasher
 	to_hash = |value, hasher| {
 		var $state = value.timestamp.to_hash(hasher)
@@ -277,8 +292,10 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 	## A named zone records its context requirement without looking up rules.
 	fact_count : Ixdtf -> U64
 	fact_count = |value| source_fact_count(value, Bool.True)
+	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : Ixdtf, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| source_fact_at(value, index, Bool.True)
+	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : Ixdtf -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
@@ -291,7 +308,9 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 	resolve : Ixdtf, [None, Some(ZoneRules)] -> Try(Snapshot, ResolveError)
 	resolve = |source, context| Snapshot.resolve(source, context)
 
+	## An immutable interpretation result retaining its source, actual rules and selected POSIX boundary. Accessors do not re-resolve the timestamp.
 	Snapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary : PosixBoundary, offset : FixedOffset, local : LocalDateTime }.{
+		## Resolves under the supplied matching rules for a named zone. Fixed/no-zone declarations reject unexpected context; numeric offset conflicts are errors.
 		resolve : Ixdtf, [None, Some(ZoneRules)] -> Try(Snapshot, ResolveError)
 		resolve = |source, context| {
 			boundary = match OffsetTimestamp.boundary(source.timestamp) {
@@ -343,12 +362,16 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			}
 			Ok({ source, context, boundary, offset, local })
 		}
+		## Returns the original validated IXDTF declaration retained by this interpretation.
 		source : Snapshot -> Ixdtf
 		source = |snapshot| snapshot.source
+		## Returns the immutable zone rules retained for named-zone interpretation, or None when no rules were needed.
 		context : Snapshot -> [None, Some(ZoneRules)]
 		context = |snapshot| snapshot.context
+		## Returns the stored POSIX boundary without performing another offset lookup.
 		boundary : Snapshot -> PosixBoundary
 		boundary = |snapshot| snapshot.boundary
+		## Returns the offset selected during interpretation, which may differ from an unasserted base timestamp’s displayed UTC label.
 		offset : Snapshot -> FixedOffset
 		offset = |snapshot| snapshot.offset
 
@@ -364,8 +387,10 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			}
 			Ok(snapshot.local)
 		}
+		## Explicitly interprets the retained source again under new context; returns a new snapshot or the same structured interpretation failures as resolve.
 		reresolve : Snapshot, [None, Some(ZoneRules)] -> Try(Snapshot, ResolveError)
 		reresolve = |snapshot, new_context| resolve(snapshot.source, new_context)
+		## Compares only resolved POSIX boundaries, ignoring differences in source declarations or interpretation context.
 		same_position : Snapshot, Snapshot -> Bool
 		same_position = |a, b| a.boundary == b.boundary
 
@@ -378,6 +403,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			(Some(left), Some(right)) => ZoneRules.definition(left) == ZoneRules.definition(right)
 			_ => False
 		}
+		## Hashes the complete stored declaration and interpretation context, consistently with Snapshot.is_eq; use the boundary as a key for position-only identity.
 		to_hash : Snapshot, Hasher -> Hasher
 		to_hash = |value, hasher| {
 			base = value.local.to_hash(value.offset.to_hash(value.boundary.to_hash(value.source.to_hash(hasher))))
@@ -399,6 +425,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 				1
 			}
 		) + source_fact_count(snapshot.source, Bool.False)
+		## Returns a zero-based stored interpretation fact or End beyond fact_count. Reading evidence performs no new zone lookup.
 		fact_at : Snapshot, U64 -> [End, Item(SemanticFact)]
 		fact_at = |snapshot, index| {
 			if index >= fact_count(snapshot) {
@@ -430,6 +457,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			}
 			source_fact_at(snapshot.source, $next, Bool.False)
 		}
+		## A concise summary of stored interpretation evidence; does not re-resolve or provide a persistence representation.
 		to_inspect : Snapshot -> Str
 		to_inspect = |snapshot| match fact_at(snapshot, 0) {
 			Item(fact) => SemanticFact.summary(fact)

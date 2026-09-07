@@ -16,7 +16,11 @@
 ##
 ## Examples assume a package dependency named `time`.
 ClockTime :: [Micros(I64)].{
+	## Clock fields: hour 0..23, minute and second 0..59, microsecond 0..999999.
+	## Pass the complete record to from_fields for validation.
 	Fields : { hour : U8, minute : U8, second : U8, microsecond : U32 }
+	## Clock parsing failures distinguish incomplete or malformed text, profile
+	## limits, invalid fields and unsupported leap seconds or fractional precision.
 	Error : [Malformed, Incomplete, TooLarge, UnsupportedPrecision, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond]
 
 	## Native boundary-label profile HH:MM[:SS[.fraction]], using ASCII digits
@@ -34,6 +38,9 @@ ClockTime :: [Micros(I64)].{
 	profile : Str
 	profile = "clock-label-v1"
 
+	## Parse HH:MM, HH:MM:SS or HH:MM:SS.fraction with one to six fractional digits.
+	## Omitted seconds are zero. Reject leap seconds, 24:00, finer precision and
+	## text outside the declared profile with structured errors.
 	parse : Str -> Try(ClockTime, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 64 {
@@ -102,6 +109,8 @@ ClockTime :: [Micros(I64)].{
 		"${base}.${$digits}"
 	}
 
+	## Build a decoder for one encoded clock-label string. Return the clock and
+	## unconsumed state; distinguish InvalidClockTime from outer Encoding errors.
 	parser_for : encoding -> (state -> Try({ value : ClockTime, rest : state }, [InvalidClockTime(Error), Encoding(err), ..]))
 		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
 	parser_for = |encoding| {
@@ -118,6 +127,8 @@ ClockTime :: [Micros(I64)].{
 		}
 	}
 
+	## Build an encoder that writes the canonical clock string, including seconds,
+	## through the supplied string encoding.
 	encoder_for : encoding -> (ClockTime, state -> Try(state, err))
 		where [encoding.encode_str : Str, state -> Try(state, err)]
 	encoder_for = |_encoding| {
@@ -132,6 +143,9 @@ ClockTime :: [Micros(I64)].{
 		Err(error) => Err(BadQuotedBytes("Invalid ClockTime literal: ${Str.inspect(error)}"))
 	}
 
+	## Validate a local clock label: hours 0..23, minutes/seconds 0..59 and
+	## microseconds 0..999999. A second of 60 returns UnsupportedLeapSecond.
+	## No date or timezone is attached.
 	from_fields : Fields -> Try(ClockTime, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
 	from_fields = |fields| {
 		if fields.hour > 23 {
@@ -152,6 +166,8 @@ ClockTime :: [Micros(I64)].{
 		Ok(Micros(fields.hour.to_i64() * 3600000000 + fields.minute.to_i64() * 60000000 + fields.second.to_i64() * 1000000 + fields.microsecond.to_i64()))
 	}
 
+	## Construct a clock label from 0 through 86399999999 microseconds since
+	## nominal midnight. Other values return OutOfRange; the input does not wrap.
 	from_microseconds_since_midnight : I64 -> Try(ClockTime, [OutOfRange, ..])
 	from_microseconds_since_midnight = |number| {
 		if number < 0 or number >= 86400000000 {
@@ -161,9 +177,12 @@ ClockTime :: [Micros(I64)].{
 		}
 	}
 
+	## Read microseconds since nominal midnight, in 0..86399999999.
+	## This clock coordinate does not account for timezone transitions.
 	to_microseconds_since_midnight : ClockTime -> I64
 	to_microseconds_since_midnight = |Micros(number)| number
 
+	## Read the validated hour, minute, second and microsecond fields.
 	to_fields : ClockTime -> Fields
 	to_fields = |Micros(number)| {
 		# The opaque constructor bounds number to one nonnegative nominal day.
@@ -175,18 +194,27 @@ ClockTime :: [Micros(I64)].{
 		}
 	}
 
+	## Equality of clock labels within the same nominal day; values of other temporal domains must be converted explicitly.
 	is_eq : ClockTime, ClockTime -> Bool
 	is_eq = |Micros(a), Micros(b)| a == b
+	## Whether the first of two clock labels within the same nominal day precedes the second in their numeric order.
 	is_lt : ClockTime, ClockTime -> Bool
 	is_lt = |Micros(a), Micros(b)| a < b
+	## Whether the first of two clock labels within the same nominal day precedes or equals the second.
 	is_lte : ClockTime, ClockTime -> Bool
 	is_lte = |Micros(a), Micros(b)| a <= b
+	## Whether the first of two clock labels within the same nominal day follows the second in their numeric order.
 	is_gt : ClockTime, ClockTime -> Bool
 	is_gt = |Micros(a), Micros(b)| a > b
+	## Whether the first of two clock labels within the same nominal day follows or equals the second.
 	is_gte : ClockTime, ClockTime -> Bool
 	is_gte = |Micros(a), Micros(b)| a >= b
+	## Hash clock labels within the same nominal day consistently with equality for dictionary and set keys.
+	## Hash values are not a stable serialization format.
 	to_hash : ClockTime, Hasher -> Hasher
 	to_hash = |Micros(number), hasher| number.to_hash(hasher)
+	## Return a concise diagnostic description of these clock labels within the same nominal day.
+	## Use explicit conversions or text serialization when storing or exchanging data.
 	to_inspect : ClockTime -> Str
 	to_inspect = |Micros(number)| "ClockTime(${number.to_str()} microseconds since local midnight)"
 

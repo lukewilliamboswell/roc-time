@@ -33,9 +33,14 @@ import PosixSpan
 ##
 ## Examples assume a package dependency named `time`.
 Coverage :: [Spans(List(PosixSpan))].{
+	## Coverage containing no occupied spans. Empty coverage is a complete value,
+	## not a signal that interpretation failed.
 	empty : Coverage
 	empty = Spans([])
 
+	## Build canonical coverage from spans in any order. Overlap, duplicates and
+	## touching endpoints coalesce; an empty list produces empty coverage.
+	## Construction sorts the input and takes O(n log n) work.
 	from_spans : List(PosixSpan) -> Coverage
 	from_spans = |input| {
 		sorted = List.sort_with(
@@ -70,8 +75,11 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## This materializes coverage; it is not a lazy output iterator. Retaining a
 	## builder/snapshot can cause subsequent List appends to copy shared storage.
 	SortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary)] }.{
+		## Start an empty builder for spans supplied in nondecreasing start order.
 		empty : SortedBuilder
 		empty = { state: { done: [], pending: None }, previous: None }
+		## Count canonical members accumulated so far, including the current last span.
+		## Touching or overlapping additions can leave this count unchanged.
 		member_count : SortedBuilder -> U64
 		member_count = |builder| builder.state.done.len() + match builder.state.pending {
 			None => 0
@@ -120,10 +128,13 @@ Coverage :: [Spans(List(PosixSpan))].{
 			Ok(Added({ state: push(builder.state, span), previous: Some(PosixSpan.start(span)) }))
 		}
 
-		## No revalidation or sorting. Appending the pending member can copy a
-		## shared list; this does not detach earlier snapshots' backing storage.
+		## Finish the accumulated canonical coverage without sorting it again.
+		## The result may share storage with earlier snapshots; retaining a snapshot
+		## can cause finishing or subsequent construction to copy shared output.
 		to_coverage : SortedBuilder -> Coverage
 		to_coverage = |builder| Spans(finish(builder.state))
+		## Return a bounded diagnostic description of the accumulated coverage.
+		## It does not visit every position or consume the builder.
 		to_inspect : SortedBuilder -> Str
 		to_inspect = |builder| "Coverage.SortedBuilder(members=${member_count(builder).to_str()})"
 	}
@@ -132,6 +143,8 @@ Coverage :: [Spans(List(PosixSpan))].{
 	to_spans : Coverage -> List(PosixSpan)
 	to_spans = |Spans(items)| items
 
+	## Count canonical disjoint spans after coalescing. This does not count events,
+	## input spans or microseconds.
 	member_count : Coverage -> U64
 	member_count = |Spans(items)| List.len(items)
 
@@ -139,14 +152,19 @@ Coverage :: [Spans(List(PosixSpan))].{
 	iter : Coverage -> Iter(PosixSpan)
 	iter = |Spans(items)| List.iter(items)
 
+	## Hash canonical occupied extent consistently with equality. Different input
+	## segmentations that coalesce to the same coverage have equal hashes.
 	to_hash : Coverage, Hasher -> Hasher
 	to_hash = |Spans(items), hasher| items.to_hash(hasher)
 
-	## Indexed semantic facts visit canonical spans, never their coordinates.
-	## An allocated span list uses at least 16 bytes per member, leaving room
-	## for the fixed fact headers when its length is counted in U64.
+	# An allocated span list uses at least 16 bytes per member, leaving room
+	# for the fixed fact headers when its length is counted in U64.
+	## Count the summary fact and one fact per canonical span.
+	## Use fact_at to request individual facts without enumerating positions.
 	fact_count : Coverage -> U64
 	fact_count = |coverage| member_count(coverage) + 1
+	## Read one semantic fact by zero-based index: the summary is at zero, then
+	## canonical span facts follow in order. Return End beyond the final fact.
 	fact_at : Coverage, U64 -> [End, Item(SemanticFact)]
 	fact_at = |Spans(items), index| {
 		if index == 0 {
@@ -158,6 +176,8 @@ Coverage :: [Spans(List(PosixSpan))].{
 		}
 	}
 
+	## Return a bounded diagnostic preview of occupied spans with visible truncation.
+	## It does not enumerate positions or serialize the full coverage.
 	to_inspect : Coverage -> Str
 	to_inspect = |coverage| {
 		items = to_spans(coverage)
@@ -195,9 +215,13 @@ Coverage :: [Spans(List(PosixSpan))].{
 
 	expect Str.inspect(empty) == "Coverage(members=0) preview=[]"
 
+	## Compare canonical occupied extent. Original span boundaries, event identities
+	## and construction order do not affect equality.
 	is_eq : Coverage, Coverage -> Bool
 	is_eq = |Spans(a), Spans(b)| a == b
 
+	## Sum occupied span widths as a POSIX displacement, counting shared coverage
+	## once. Return OutOfRange if a member width or the total cannot fit I64.
 	coordinate_width : Coverage -> Try(PosixDelta, [OutOfRange, ..])
 	coordinate_width = |Spans(items)| {
 		var $total = 0.I64
@@ -211,6 +235,8 @@ Coverage :: [Spans(List(PosixSpan))].{
 		Ok(PosixDelta.from_microseconds($total))
 	}
 
+	## Whether this coverage contains the exact POSIX position. Inclusive starts
+	## and exclusive ends apply to every member.
 	contains : Coverage, PosixBoundary -> Bool
 	contains = |Spans(items), point| {
 		index = first_end_after(items, point)
@@ -238,6 +264,8 @@ Coverage :: [Spans(List(PosixSpan))].{
 		$state
 	}
 
+	## Return whole canonical members that overlap the query span, in time order.
+	## Members are not clipped to the query; use intersection for clipped coverage.
 	overlapping_spans : Coverage, PosixSpan -> List(PosixSpan)
 	overlapping_spans = |coverage, query| fold_overlaps(coverage, query, [], List.append)
 
@@ -253,6 +281,8 @@ Coverage :: [Spans(List(PosixSpan))].{
 		union_nonempty(a, b)
 	}
 
+	## Return coverage occupied by both inputs. A touching endpoint contributes
+	## no span; no common occupied positions produces empty coverage.
 	intersection : Coverage, Coverage -> Coverage
 	intersection = |Spans(a), Spans(b)| {
 		var $i = 0.U64

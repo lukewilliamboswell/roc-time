@@ -23,9 +23,9 @@ import ICalRuleText
 ## floating/zoned starts require local labels. UNTIL must be local for floating
 ## starts and UTC for UTC/zoned starts. Native UntilBoundary handles UTC cutoffs.
 ##
-## Frequencies SECONDLY through YEARLY and supported native selectors share the
-## DATE adapter's RRULE grammar. Disputed omitted YEARLY defaults remain explicit
-## unsupported cases. BYSECOND=60 remains unsupported on the POSIX profile.
+## Supports SECONDLY through YEARLY with the DATE adapter's RRULE selectors.
+## Some YEARLY combinations require explicit BYMONTH or BYDAY; see ICalDateRule.
+## BYSECOND=60 is unsupported on the POSIX profile.
 ## RDATE/EXDATE entries are extracted values and may contain comma lists. PERIOD
 ## entries use ICalPeriod. RDATE/PERIOD values must match DTSTART's form.
 ## UTC EXDATE values are accepted for zoned DTSTART. Local
@@ -41,13 +41,17 @@ import ICalRuleText
 ## without enumerating occurrences or consulting rules. Source spelling and
 ## application storage envelopes are outside this profile.
 ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : List(ICalPeriod), mode : Mode }.{
+	## Utc uses Z values; Floating uses local labels interpreted by the caller; Zoned uses local labels under one explicitly supplied zone.
 	Mode : [Utc, Floating, Zoned]
+	## Extracted DTSTART, RRULE, duration, RDATE, EXDATE and PERIOD text plus interpretation mode. Supply values rather than ICS content lines.
 	Parts : { start : Str, rule : Str, duration : Str, inclusions : List(Str), exclusions : List(Str), periods : List(Str), mode : Mode }
+	## Reports property-level syntax, unsupported combinations, precision/range/size limits and native recurrence validation failures.
 	Error : [TooLarge, OutOfRange(Str), PrecisionLoss(Str), DateTime(Str, ICalDateTime.Error), Duration(ICalDuration.Error), Period(ICalPeriod.Error), Rule(ICalRuleParts.Error), Incompatible(Str), Unsupported(Str), InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])]
+	## Editable semantic rule, default duration, ordered PERIOD additions and mode. Pass edits through new to check profile compatibility.
 	Definition : { rule : TimedRecurrence, duration : ICalDuration, periods : List(ICalPeriod), mode : Mode }
 
-	## Retains native source exceptions separately from PERIOD ending overrides.
-	## This is a semantic declaration, not a versioned persistence encoding.
+	## Returns the editable rule declaration, keeping source exceptions separate
+	## from PERIOD ending overrides. Use to_parts for standard interchange.
 	definition : ICalTimedRule -> Definition
 	definition = |value| { rule: value.rule, duration: value.duration, periods: value.periods, mode: value.mode }
 
@@ -151,6 +155,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 	profile : Str
 	profile = "rfc5545-timed-values"
 
+	## Parses extracted timed recurrence values without enumerating occurrences or resolving zones. Validates mode/UNTIL compatibility and the supported profile limits.
 	parse : Parts -> Try(ICalTimedRule, Error)
 	parse = |parts| {
 		if parts.inclusions.len() > 4096 or parts.exclusions.len() > 4096 or parts.periods.len() > 4096 {
@@ -271,10 +276,11 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 		ICalPeriod.prepare(value.rule, value.duration, value.periods, context)
 	}
 
-	## The wrapper retains RFC mode and policy, while native facts expose the
-	## effective selectors after adapter defaults. No original RRULE spelling.
+	## Counts facts describing the mode, duration, PERIOD additions and effective
+	## recurrence selectors. These facts do not retain original RRULE spelling.
 	fact_count : ICalTimedRule -> U64
 	fact_count = |rule| 2 + rule.periods.len() + TimedRecurrence.fact_count(rule.rule)
+	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ICalTimedRule, U64 -> [End, Item(SemanticFact)]
 	fact_at = |rule, index| {
 		if index >= fact_count(rule) {
@@ -312,6 +318,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 			},
 		)
 	}
+	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ICalTimedRule -> Str
 	to_inspect = |value| {
 		summary = match fact_at(value, 0) {

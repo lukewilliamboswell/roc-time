@@ -7,8 +7,17 @@ import GregorianDate
 ## Week ordinals use the date's week-numbering year, which can differ from its
 ## civil year. Negative positions count back from that numbering year's end.
 CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
+
+	## Calendar periods used to generate candidates. Monthly and yearly expansion skip invalid
+	## dates rather than repeatedly clamping an earlier result.
 	Frequency : [Daily, Weekly, Monthly, Yearly]
+
+	## Named weekdays used in week-start and weekday selectors; no locale-dependent numbering is
+	## assumed.
 	Weekday : [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+
+	## Calendar recurrence selectors, period interval and week start. Use defaults as a starting
+	## point, then construct a checked pattern before enumeration.
 	Spec : {
 		frequency : Frequency,
 		interval : I64,
@@ -23,6 +32,10 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## Read validated selector declarations without evaluating a period.
 	definition : CalendarPattern -> Spec
 	definition = |pattern| pattern.spec
+
+	## Start a pattern specification for the requested frequency with interval one, Monday week
+	## start and no explicit selectors. The anchor supplies applicable missing fields when
+	## constructing the pattern.
 	defaults : Frequency -> Spec
 	defaults = |frequency| { frequency, interval: 1, week_start: Monday, by_month: [], by_month_day: [], by_year_day: [], by_week_no: [], by_day: [] }
 
@@ -102,6 +115,9 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## periods use these same selector predicates after choosing their date.
 	Filter :: { spec : CalendarPattern.Spec }.{
 		Spec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
+
+		## Validate and normalize calendar predicates for filtering existing dates. This does not
+		## create a recurrence period or inherit missing selectors from an anchor.
 		new : Spec -> Try(Filter, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), ..])
 		new = |filters| {
 			if filters.by_month.len() > 4096 or filters.by_month_day.len() > 4096 or filters.by_year_day.len() > 4096 or filters.by_day.len() > 4096 {
@@ -112,14 +128,20 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 			Ok({ spec: spec })
 		}
 
-		## Shared predicate storage only: frequency/interval/week_start are
-		## placeholders, not a recurrence frequency or expansion defaults.
+		## Read the checked by_month, by_month_day, by_year_day and by_day predicates.
+		## The returned frequency, interval and week_start fields do not describe
+		## this independent date filter; they must not be used to expand it.
 		definition : Filter -> CalendarPattern.Spec
 		definition = |filter| filter.spec
+
+		## Test a Gregorian date against the checked predicates. Provider-range failures remain
+		## errors rather than being treated as a non-match.
 		matches : Filter, GregorianDate -> Try(Bool, [OutOfRange, ..])
 		matches = |filter, date| matches_filters(filter.spec, date)
 	}
 
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : CalendarPattern -> Str
 	to_inspect = |pattern| "CalendarPattern(${Str.inspect(pattern.spec.frequency)}, interval=${pattern.spec.interval.to_str()}, anchor=${Str.inspect(pattern.anchor)})"
 }

@@ -10,9 +10,21 @@ import LocalDateTime
 ## lower fields expand it, inheriting omitted values from the original clock.
 ## Period arithmetic uses nominal civil seconds, never resolved elapsed time.
 SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks : ClockPattern, dates : CalendarPattern.Filter }.{
+
+	## Whole local hour, minute or second periods. These are civil recurrence periods, not fixed
+	## elapsed intervals through a zone transition.
 	Frequency : [Hourly, Minutely, Secondly]
+
+	## Subdaily frequency/interval, calendar predicates and clock selectors. Higher omitted clock
+	## fields expand over their full range; lower omitted fields inherit the anchor.
 	Spec : { frequency : Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec, clocks : ClockPattern.Spec }
+
+	## One local period’s date, exclusive end and half-open indices into its effective clock
+	## pattern. An empty index range means no clock candidate in that period.
 	Period : { date : GregorianDate, start_index : U64, end_index : U64, end : LocalDateTime }
+
+	## Construct hourly, minutely or secondly periods with checked calendar filters and clock
+	## selectors. Reject nonpositive intervals and invalid selector fields before enumeration.
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(SubdailyPattern, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, ..])
 	new = |start, spec| {
 		if spec.interval < 1 or spec.interval > 2147483647 {
@@ -47,8 +59,9 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 		Ok({ anchor_second, unit, interval: spec.interval.to_i128(), clocks, dates })
 	}
 
-	## Effective declaration parameters. Construction proves interval fits I64.
-	## calendar carries filter predicates only; its period fields are placeholders.
+	## Read frequency, interval and calendar predicates for this checked pattern.
+	## Only the filter fields of calendar describe this pattern; its calendar-period
+	## defaults do not replace the returned subdaily frequency and interval.
 	definition : SubdailyPattern -> { frequency : Frequency, interval : I64, calendar : CalendarPattern.Spec }
 	definition = |pattern| {
 		frequency = match pattern.unit {
@@ -58,8 +71,14 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 		}
 		{ frequency, interval: pattern.interval.to_i64_wrap(), calendar: CalendarPattern.Filter.definition(pattern.dates) }
 	}
+
+	## Return the effective checked clock selectors used within each period, including defaults
+	## derived from frequency and anchor.
 	clocks : SubdailyPattern -> ClockPattern
 	clocks = |pattern| pattern.clocks
+
+	## Test a date against this pattern’s calendar filters; this does not test clock membership
+	## or period alignment.
 	matches_date : SubdailyPattern, GregorianDate -> Try(Bool, [OutOfRange, ..])
 	matches_date = |pattern, date| CalendarPattern.Filter.matches(pattern.dates, date)
 
@@ -96,6 +115,8 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 		start < second or (start == second and I64.rem_by(micros, 1000000) > 0)
 	}
 
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : SubdailyPattern -> Str
 	to_inspect = |pattern| "SubdailyPattern(unit_seconds=${pattern.unit.to_str()}, interval=${pattern.interval.to_str()})"
 }

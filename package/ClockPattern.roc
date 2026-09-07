@@ -4,6 +4,9 @@ import ClockTime
 ## the anchor field; explicit selectors expand it. Microseconds stay anchored.
 ## This is a candidate layer, not a recurrence rule or timezone interpretation.
 ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), microsecond : U32 }.{
+
+	## Hour, minute and second selectors. Empty fields inherit the corresponding anchor field in
+	## ClockPattern.new; subdaily recurrence supplies its own documented effective defaults.
 	Spec : { hours : List(U8), minutes : List(U8), seconds : List(U8) }
 
 	## O(s log s) construction, with at most 4096 supplied values per field.
@@ -43,6 +46,9 @@ ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), micr
 	## At most 86400 candidates. Only the distinct selector fields are stored.
 	count : ClockPattern -> U64
 	count = |pattern| pattern.hours.len() * pattern.minutes.len() * pattern.seconds.len()
+
+	## Return the clock at a zero-based position in the checked clock product. An index outside
+	## its length returns OutOfRange; the anchor microsecond field is retained.
 	at : ClockPattern, U64 -> Try(ClockTime, [OutOfRange, ..])
 	at = |pattern, index| if index >= count(pattern) {
 		Err(OutOfRange)
@@ -62,6 +68,9 @@ ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), micr
 			Ok((candidate(pattern, index), index + 1))
 		},
 	)
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : ClockPattern -> Str
 	to_inspect = |pattern| "ClockPattern(candidates=${count(pattern).to_str()}, microsecond=${pattern.microsecond.to_str()})"
 }

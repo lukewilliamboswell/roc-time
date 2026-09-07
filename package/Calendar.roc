@@ -16,8 +16,14 @@ Calendar := [Gregorian, Julian].{
 	## Reject returns InvalidDestination, and Carry moves excess days into March.
 	## Work is constant, without zone resolution. Provider limits return OutOfRange.
 	Arithmetic :: [].{
+		## Handling for nonexistent intermediate dates: Reject fails, Clamp uses the
+		## destination month's last day, and Carry advances excess days past it.
 		Policy : [Reject, Clamp, Carry]
 
+		## Apply years, then months, then civil days to a Gregorian date. Choose Reject,
+		## Clamp or Carry for nonexistent intermediate destinations. Return
+		## InvalidDestination or OutOfRange rather than silently choosing a policy.
+		## Clamping is not invertible and must not be used to step RFC recurrence rules.
 		shift_day : GregorianDate, Calendar.Delta, Policy -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields), ..])
 		shift_day = |date, delta, policy| {
 			parts = Calendar.Delta.to_components(delta)
@@ -79,14 +85,20 @@ Calendar := [Gregorian, Julian].{
 		}
 	}
 
+	## Whether two calendar profiles identify the same calendar. This does not
+	## compare dates or their extents.
 	is_eq : Calendar, Calendar -> Bool
 	is_eq = |a, b| to_name(a) == to_name(b)
 
+	## Hash calendar identity consistently with equality for dictionary/set keys.
 	to_hash : Calendar, Hasher -> Hasher
 	to_hash = |calendar, hasher| to_name(calendar).to_hash(hasher)
 
+	## Return the calendar name in a concise diagnostic description.
 	to_inspect : Calendar -> Str
 	to_inspect = |calendar| "Calendar(${to_name(calendar)})"
+	## Select a supported profile from the exact name gregorian or julian.
+	## Other names return UnsupportedCalendar with the supplied name.
 	from_name : Str -> Try(Calendar, [UnsupportedCalendar(Str), ..])
 	from_name = |name| {
 		match name {
@@ -96,6 +108,7 @@ Calendar := [Gregorian, Julian].{
 		}
 	}
 
+	## Return the profile name: gregorian or julian.
 	to_name : Calendar -> Str
 	to_name = |calendar| match calendar {
 		Gregorian => "gregorian"
@@ -104,11 +117,13 @@ Calendar := [Gregorian, Julian].{
 
 	## A validated day description retaining its calendar. Resolution is one civil day.
 	Date :: [Gregorian(GregorianDate), Julian(JulianDate)].{
+		## Astronomical year and one-based month/day fields in the chosen calendar.
 		Fields : { year : I64, month : U8, day : U8 }
 
 		## Preserve an already validated date and its calendar without revalidation.
 		from_gregorian : GregorianDate -> Date
 		from_gregorian = |date| Gregorian(date)
+		## Retain a validated Julian date with its calendar identity, without conversion.
 		from_julian : JulianDate -> Date
 		from_julian = |date| Julian(date)
 
@@ -120,6 +135,9 @@ Calendar := [Gregorian, Julian].{
 			Julian(_) => Err(UnsupportedCalendar(Julian))
 		}
 
+		## Validate { year, month, day } in the explicitly selected calendar. Year is
+		## astronomical (zero means 1 BCE); month and day are one-based. Invalid month/day
+		## combinations and unsupported provider years return structured errors.
 		from_fields : Calendar, Fields -> Try(Date, [OutOfRange, InvalidMonth, InvalidDay, ..])
 		from_fields = |calendar, fields| match calendar {
 			Gregorian => match GregorianDate.from_fields(fields) {
@@ -132,6 +150,8 @@ Calendar := [Gregorian, Julian].{
 			}
 		}
 
+		## Describe a shared civil-day coordinate in the selected calendar. Return
+		## OutOfRange when the date is outside that calendar's supported years.
 		from_civil_day : Calendar, CivilDay -> Try(Date, [OutOfRange, ..])
 		from_civil_day = |calendar, coordinate| match calendar {
 			Gregorian => match GregorianDate.from_civil_day(coordinate) {
@@ -144,24 +164,31 @@ Calendar := [Gregorian, Julian].{
 			}
 		}
 
+		## Read the shared civil-day coordinate, allowing equal-day comparison across
+		## calendars without introducing a timezone.
 		to_civil_day : Date -> CivilDay
 		to_civil_day = |date| match date {
 			Gregorian(value) => GregorianDate.to_civil_day(value)
 			Julian(value) => JulianDate.to_civil_day(value)
 		}
 
+		## Read the calendar retained by this date description.
 		calendar : Date -> Calendar
 		calendar = |date| match date {
 			Gregorian(_) => Gregorian
 			Julian(_) => Julian
 		}
 
+		## Read year, month and day in the retained calendar. Use in_calendar to
+		## convert before reading fields in a different calendar.
 		to_fields : Date -> Fields
 		to_fields = |date| match date {
 			Gregorian(value) => GregorianDate.to_fields(value)
 			Julian(value) => JulianDate.to_fields(value)
 		}
 
+		## Convert to a description of the same civil day in the requested calendar.
+		## Return OutOfRange if that day is unsupported by the destination provider.
 		in_calendar : Date, Calendar -> Try(Date, [OutOfRange, ..])
 		in_calendar = |date, target| from_civil_day(target, to_civil_day(date))
 
@@ -177,12 +204,16 @@ Calendar := [Gregorian, Julian].{
 			_ => Bool.False
 		}
 
+		## Hash date description identity, including the calendar, consistently with
+		## is_eq. Equal civil-day extent alone does not imply equal description hashes.
 		to_hash : Date, Hasher -> Hasher
 		to_hash = |date, hasher| match date {
 			Gregorian(value) => value.to_hash((0.U8).to_hash(hasher))
 			Julian(value) => value.to_hash((1.U8).to_hash(hasher))
 		}
 
+		## Describe the retained Gregorian or Julian date for diagnostics.
+		## No timezone or resolved position is inferred.
 		to_inspect : Date -> Str
 		to_inspect = |date| match date {
 			Gregorian(value) => Str.inspect(value)
@@ -208,15 +239,22 @@ Calendar := [Gregorian, Julian].{
 	## Ordered calendar components, not an elapsed or POSIX displacement.
 	## Arithmetic applies years, then months, then civil days.
 	Delta :: [Parts({ years : I64, months : I64, days : I64 })].{
+		## Signed year, month and civil-day counts, applied in that order.
 		Components : { years : I64, months : I64, days : I64 }
+		## Construct an ordered calendar displacement from signed years, months and
+		## days. Components remain as supplied: twelve months is not normalized to one year.
 		from_components : Components -> Delta
 		from_components = |components| Parts(components)
+		## Read the signed components as described, without applying them to a date
+		## or converting them to elapsed time.
 		to_components : Delta -> Components
 		to_components = |Parts(components)| components
 
 		## Compare component definitions without an anchor; one year is not twelve months.
 		is_eq : Delta, Delta -> Bool
 		is_eq = |Parts(a), Parts(b)| a == b
+		## Hash component definitions consistently with equality. One year and twelve
+		## months remain distinct descriptions even when an application gives the same result.
 		to_hash : Delta, Hasher -> Hasher
 		to_hash = |Parts(components), hasher| components.to_hash(hasher)
 
@@ -234,10 +272,13 @@ Calendar := [Gregorian, Julian].{
 			year == same and year != month and Dict.get(values, same) == Ok(1) and Dict.get(values, month) == Ok(2)
 		}
 
+		## Construct a displacement with the supplied signed year count and zero months/days.
 		years : I64 -> Delta
 		years = |n| Parts({ years: n, months: 0, days: 0 })
+		## Construct a displacement with the supplied signed month count and zero years/days.
 		months : I64 -> Delta
 		months = |n| Parts({ years: 0, months: n, days: 0 })
+		## Construct a displacement with the supplied signed civil-day count and zero years/months.
 		days : I64 -> Delta
 		days = |n| Parts({ years: 0, months: 0, days: n })
 	}
@@ -251,6 +292,8 @@ Calendar := [Gregorian, Julian].{
 	## bounded interpretation, preserving disconnected folds and empty gaps.
 	Value :: { start : { date : Calendar.Date, clock : ClockTime }, precision : Resolution }.{
 
+		## Supplied selection width: Year, Month, Day, Hour, Minute, Second or
+		## Fraction(digits), where digits is between one and six for valid values.
 		Resolution : [Year, Month, Day, Hour, Minute, Second, Fraction(U8)]
 
 		## Select the whole provider year; year zero is 1 BCE.
@@ -270,16 +313,22 @@ Calendar := [Gregorian, Julian].{
 		## Select one validated civil date; no fixed elapsed duration is implied.
 		day : Calendar.Date -> Value
 		day = |date| { start: value_midnight(date), precision: Day }
+		## Describe the entire local hour beginning at the supplied date and hour.
+		## Reject an invalid hour; zone interpretation may later yield disconnected coverage.
 		hour : Calendar.Date, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
 		hour = |date, h| {
 			clock = ClockTime.from_fields({ hour: h, minute: 0, second: 0, microsecond: 0 })?
 			Ok({ start: { date, clock }, precision: Hour })
 		}
+		## Describe the entire local minute on the supplied date. Validate hour/minute
+		## fields; omitted seconds locate its start but do not narrow its resolution.
 		minute : Calendar.Date, U8, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
 		minute = |date, h, m| {
 			clock = ClockTime.from_fields({ hour: h, minute: m, second: 0, microsecond: 0 })?
 			Ok({ start: { date, clock }, precision: Minute })
 		}
+		## Describe the entire local second on the supplied date. Invalid clock fields
+		## and unsupported leap seconds return structured errors.
 		second : Calendar.Date, U8, U8, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
 		second = |date, h, m, s| {
 			clock = ClockTime.from_fields({ hour: h, minute: m, second: s, microsecond: 0 })?
@@ -368,6 +417,8 @@ Calendar := [Gregorian, Julian].{
 		## Description equality, including precision and calendar identity.
 		is_eq : Value, Value -> Bool
 		is_eq = |a, b| a.start == b.start and a.precision == b.precision
+		## Hash calendar, canonical start and supplied resolution consistently with
+		## description equality. Equal starts at different resolutions remain distinct keys.
 		to_hash : Value, Hasher -> Hasher
 		to_hash = |value, hasher| {
 			code = match value.precision {
@@ -384,8 +435,12 @@ Calendar := [Gregorian, Julian].{
 
 		## Supplied description metadata, without lowering or interpretation.
 		Description : { calendar : Calendar, fields : Calendar.Date.Fields, clock : ClockTime.Fields, resolution : Resolution }
+		## Read calendar, date fields, clock fields and resolution for presentation or
+		## semantic explanation. This does not resolve zones or compute an exclusive end.
 		description : Value -> Description
 		description = |value| { calendar: Calendar.Date.calendar(value.start.date), fields: Calendar.Date.to_fields(value.start.date), clock: ClockTime.to_fields(value.start.clock), resolution: value.precision }
+		## Return a bounded diagnostic description preserving calendar and supplied
+		## resolution. Use a supported standards adapter for persistence.
 		to_inspect : Value -> Str
 		to_inspect = |value| {
 			data = description(value)

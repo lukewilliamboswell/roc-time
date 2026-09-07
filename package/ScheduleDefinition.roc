@@ -23,16 +23,36 @@ import FixedOffset
 ## share storage. An iCalendar origin retains its unlowered PERIOD declarations
 ## alongside prepared execution selectors. This is not a persistence format.
 ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }.{
+
+	## Native recurrence, default duration, source-specific endings and explicit immutable start
+	## context. End policies remain part of each calendar/local ending.
 	NativeSpec : { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndOverride), context : TimedRecurrence.Context }
+
+	## Checked extracted iCalendar rule plus a compatible context: UTC for UTC declarations or
+	## explicit rules for local/floating declarations.
 	ICalSpec : { rule : ICalTimedRule, context : ICalPeriod.Context }
+
+	## Original native or iCalendar declaration retained by the prepared schedule. Does not
+	## contain an application series ID, query window or cursor progress.
 	Definition : [Native(NativeSpec), ICal(ICalSpec)]
+
+	## Invalid default duration, excessive/conflicting overrides, incompatible interpretation
+	## context or out-of-range preparation. Runtime zone interpretation can still fail during
+	## cursor consumption.
 	Error : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), TooManyPeriods, IncompatibleContext, TooManySelectors, OutOfRange]
+
+	## Prepare a reusable native appointment declaration with explicit rules, duration/end
+	## overrides and start policies. Validate and normalize endings once; no window or occurrence
+	## expansion is required.
 	from_native : NativeSpec -> Try(ScheduleDefinition, Error)
 	from_native = |spec| {
 		endings = TimedSchedule.Endings.new(spec.duration, spec.overrides)?
 		normalized = TimedSchedule.Endings.definition(endings)
 		Ok({ origin: Native({ ..spec, overrides: normalized.overrides }), rule: spec.rule, endings, context: spec.context })
 	}
+
+	## Prepare a checked iCalendar rule with compatible UTC or local interpretation context.
+	## Retain its original PERIOD declarations for export while preparing native execution.
 	from_ical : ICalSpec -> Try(ScheduleDefinition, Error)
 	from_ical = |spec| {
 		prepared = ICalTimedRule.prepare(spec.rule, spec.context)?
@@ -72,6 +92,9 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 			_ => Bool.False
 		}
 	}
+
+	## Hash declaration identity including origin, ending intent and complete immutable context.
+	## It does not hash an enumerated occurrence set.
 	to_hash : ScheduleDefinition, Hasher -> Hasher
 	to_hash = |value, hasher| {
 		context = { rules: ZoneRules.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
@@ -94,6 +117,9 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 			}
 		}
 	}
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : ScheduleDefinition -> Str
 	to_inspect = |value| match value.origin {
 		Native(_) => "ScheduleDefinition(native; explicit immutable context)"

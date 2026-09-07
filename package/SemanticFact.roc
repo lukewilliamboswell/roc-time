@@ -15,41 +15,105 @@ import PosixSpan
 ## enumerating children, copying arbitrary annotations or inspecting rule data.
 ## Full renderers use kind with explicit text/work limits. No persistence format.
 SemanticFact :: { value : Kind }.{
+
+	## Finest supplied calendar component; Fraction carries the supplied decimal digit count.
 	Resolution : [Year, Month, Day, Hour, Minute, Second, Fraction(U8)]
+
+	## Whether UTC was unasserted or a particular local offset was explicitly asserted.
 	Offset : [UnassertedUtc, Asserted(FixedOffset)]
 
 	## Fields/clock carry the canonical lower label; resolution identifies which
 	## components were supplied. Lower components filled by native construction
 	## are not additional source assertions and must not be rendered as such.
 	CalendarData : { kind : [CalendarValue, QualifiedCalendarValue, EdtfDate], calendar : Calendar, fields : Calendar.Date.Fields, clock : ClockTime.Fields, resolution : Resolution, qualification_count : U64 }
+
+	## Stored timestamp label, fractional precision and offset assertion, plus
+	## zone/annotation counts. These fields alone do not bind a named zone.
 	TimestampData : { kind : [OffsetTimestamp, Ixdtf], local : LocalDateTime, fraction_digits : U8, offset : Offset, zone_present : Bool, annotation_count : U64 }
+
+	## One scoped uncertainty/approximation assertion, without a tolerance model.
 	QualificationData : { scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth], qualifier : [Uncertain, Approximate, UncertainApproximate] }
+
+	## A named or numeric zone annotation and whether its interpretation is required.
 	ZoneData : { critical : Bool, identifier : [Named(Str), Numeric(FixedOffset)] }
+
+	## An annotation key/value and critical flag. Render text with explicit bounds.
 	AnnotationData : { critical : Bool, key : Str, value : Str }
 
 	## Local is the snapshot's stored Gregorian projection, not a claim that its
 	## preferred calendar is supported. The separate Presentation fact states that.
 	PositionData : { boundary : PosixBoundary, offset : FixedOffset, local : LocalDateTime }
+
+	## Identity, finite validity and supplied/database provenance of retained rules.
+	## Metadata does not replace the actual immutable transition rules.
 	ContextData : { name : Str, version : Str, validity : PosixSpan, provenance : [Supplied, DatabaseSource({ requested_name : Str, canonical_name : Str, source_digest : Str, profile : Str })] }
+
+	## The exact half-open POSIX span of an interval.
 	ExactIntervalData : { span : PosixSpan }
+
+	## An interval endpoint label with its role, fractional precision and offset assertion.
 	OffsetEndpointData : { role : [Start, End], local : LocalDateTime, fraction_digits : U8, offset : Offset }
+
+	## An iCalendar date-time label and its UTC/local form, optionally identifying
+	## its role as a period endpoint. Local form alone supplies no zone context.
 	ICalDateTimeData : { role : [Standalone, Start, End], local : LocalDateTime, form : [Utc, Local] }
+
+	## An iCalendar duration retaining calendar days separately from coordinate
+	## seconds, with its role in the surrounding declaration.
 	ICalDurationData : { role : [Standalone, PeriodEnding, RecurrenceEnding], days : I64, seconds : I64 }
+
+	## An iCalendar period retaining UTC/local form and the declared ending form:
+	## an explicit endpoint or separate calendar-day/second duration components.
 	ICalPeriodData : { form : [Utc, Local], start : LocalDateTime, ending : [Endpoint(LocalDateTime), Duration({ days : I64, seconds : I64 })] }
+
+	## The cached number of canonical coverage members, without enumerating them.
 	CoverageData : { member_count : U64 }
+
+	## One canonical coverage span and its zero-based member index.
 	CoverageMemberData : { index : U64, span : PosixSpan }
+
+	## A retained civil label and occurrence policy with the resulting POSIX
+	## coordinate and actual offset.
 	CivilBoundaryData : { source : LocalDateTime, policy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)], boundary : PosixBoundary, offset : FixedOffset }
+
+	## The original half-open civil selection and its complete coverage member count.
 	CivilSelectionData : { start : LocalDateTime, end : LocalDateTime, member_count : U64 }
+
+	## The requested half-open civil bounds; this fact does not assert completed coverage.
 	LocalSelectionData : { start : LocalDateTime, end : LocalDateTime }
+
+	## Evaluation completeness, segment work for the batch, and retained member
+	## count. A Limited status must not be interpreted as empty coverage.
 	SelectionEvaluationData : { status : [Complete, Limited([WorkLimit, BufferLimit])], segments : U64, buffered : U64 }
+
+	## Named weekdays for recurrence selectors and week-start metadata.
 	Weekday : [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+
+	## A date-only or local date-time recurrence anchor, preserving its coordinate domain.
 	RecurrenceAnchor : [Date(GregorianDate), Local(LocalDateTime)]
+
+	## The declared recurrence period unit; it does not specify elapsed spacing.
 	RecurrenceFrequency : [Daily, Weekly, Monthly, Yearly, Hourly, Minutely, Secondly]
+
+	## Stored recurrence anchor, frequency, interval, week start and declaration
+	## counts. Reading this metadata does not generate occurrences.
 	RecurrenceData : { kind : [DateRecurrence, TimedRecurrence], anchor : RecurrenceAnchor, frequency : RecurrenceFrequency, interval : I64, week_start : [None, Some(Weekday)], selector_count : U64, inclusion_count : U64, exclusion_count : U64 }
+
+	## The rule termination and its domain. Count limits generated candidates
+	## before exclusions; it is not a promised emitted-result count.
 	RecurrenceEnd : [Forever, Count(U64), UntilDate(GregorianDate), UntilLocal(LocalDateTime), UntilBoundary(PosixBoundary)]
+
+	## One effective recurrence selector, including normalized clock defaults.
+	## These facts do not preserve whether a default appeared in source text.
 	Selector : [Month(U8), MonthDay(I8), YearDay(I16), WeekNo(I8), Weekday({ ordinal : I8, weekday : Weekday }), SetPosition(I16), Hour(U8), Minute(U8), Second(U8), Microsecond(U32)]
+
+	## One explicit inclusion or exclusion in the recurrence source-label domain.
 	RecurrenceExceptionData : { kind : [Inclusion, Exclusion], source : RecurrenceAnchor }
+
+	## The context and occurrence/gap policy required or fixed by a declaration.
 	RecurrencePolicyData : { context : [Required, FixedUtc], occurrence : [CallerSupplied, First], gap : [CallerSupplied, UseOffsetBeforeGap] }
+
+	## The iCalendar rule mode and explicit period count, before schedule evaluation.
 	ICalTimedRuleData : { mode : [Utc, Floating, Zoned], period_count : U64 }
 
 	## A civil description and its explicit zone requirement; no interpretation.
@@ -67,12 +131,22 @@ SemanticFact :: { value : Kind }.{
 		_ => End
 	}
 
+	## Typed observations of declarations, requirements, interpretation results and
+	## evaluation status. Pattern-match these data for custom bounded presentation;
+	## a fact is not a validated temporal value or an interchange envelope.
 	Kind : [RecurrenceBoundaryExclusion(PosixBoundary), RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
+
+	## Wrap a typed observation without validating its fields or resolving its meaning.
+	## Use native values and their fact visitors when validation guarantees are needed.
 	new : Kind -> SemanticFact
 	new = |kind| { value: kind }
+
+	## Return the typed observation for custom rendering or structured inspection.
 	kind : SemanticFact -> Kind
 	kind = |fact| fact.value
 
+	## Produce at most 256 UTF-8 bytes of diagnostic summary without enumerating
+	## children or copying arbitrary text fields. Use Explanation for bounded detail.
 	summary : SemanticFact -> Str
 	summary = |fact| match fact.value {
 		RecurrenceDescription(data) => {
@@ -148,8 +222,12 @@ SemanticFact :: { value : Kind }.{
 		Presentation(Gregorian) => "Presentation(Gregorian)"
 		Presentation(UnsupportedCalendar(_)) => "Presentation(unsupported calendar)"
 	}
+
+	## Compare the complete typed observation, including its tag and stored fields.
 	is_eq : SemanticFact, SemanticFact -> Bool
 	is_eq = |a, b| a.value == b.value
+
+	## Return the same bounded diagnostic text as summary.
 	to_inspect : SemanticFact -> Str
 	to_inspect = summary
 }

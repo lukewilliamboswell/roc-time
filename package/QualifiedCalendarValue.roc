@@ -17,9 +17,20 @@ import ZoneRules
 ## has no semantic meaning. Whole and component qualifications may coexist and
 ## are retained independently, without inferring redundancy or contradiction.
 QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualification) }.{
+
+	## The supplied component, year/month group, or whole value being qualified.
+	## A component scope does not qualify its neighboring components.
 	Scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth]
+
+	## Uncertainty, approximation, or both; these flags supply no numeric tolerance.
 	Qualifier : [Uncertain, Approximate, UncertainApproximate]
+
+	## One explicitly scoped uncertainty or approximation assertion.
 	Qualification : { scope : Scope, qualifier : Qualifier }
+
+	## Attach up to nine qualifications and canonicalize their order. Reject repeated
+	## scopes and scopes finer than the value supplies. Whole and component scopes
+	## may coexist; this constructor does not choose an interpretation model.
 	new : Calendar.Value, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope), ..])
 	new = |value, qualifications| {
 		if qualifications.len() > 9 {
@@ -69,6 +80,8 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 	## its qualifiers. Extracting it does not establish an admissible tolerance.
 	described_value : QualifiedCalendarValue -> Calendar.Value
 	described_value = |description| description.value
+
+	## Return the qualifications in canonical scope order.
 	qualifications : QualifiedCalendarValue -> List(Qualification)
 	qualifications = |description| description.qualifications
 
@@ -84,8 +97,11 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 		ZoneRules.calendar_selection_cursor(rules, description.value)
 	}
 
+	## Compare the described value and scoped qualifications, independently of input order.
 	is_eq : QualifiedCalendarValue, QualifiedCalendarValue -> Bool
 	is_eq = |a, b| a.value == b.value and a.qualifications == b.qualifications
+
+	## Hash the described value and canonical qualifications consistently with is_eq.
 	to_hash : QualifiedCalendarValue, Hasher -> Hasher
 	to_hash = |description, hasher| {
 		var $state = description.value.to_hash(hasher)
@@ -108,6 +124,9 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 	} else {
 		3 + description.qualifications.len()
 	}
+
+	## Read a zero-based summary, context/model requirement, or qualification fact.
+	## Return End beyond fact_count; no zone or tolerance interpretation occurs.
 	fact_at : QualifiedCalendarValue, U64 -> [End, Item(SemanticFact)]
 	fact_at = |description, index| {
 		if index == 0 {
@@ -133,6 +152,8 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 			Err(_) => End
 		}
 	}
+
+	## Return the bounded description summary without interpreting qualifications.
 	to_inspect : QualifiedCalendarValue -> Str
 	to_inspect = |description| match fact_at(description, 0) {
 		Item(fact) => SemanticFact.summary(fact)
