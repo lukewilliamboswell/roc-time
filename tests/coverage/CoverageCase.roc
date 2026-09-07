@@ -53,6 +53,16 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		if Coverage.from_spans(Coverage.to_spans(a)) != a {
 			return Ok(Bool.False)
 		}
+		# R04/R15: an empty calendar is the union identity and subtracts nothing.
+		# Exercise these paths on retained values built from shared/sliced inputs;
+		# the independent membership oracle below still validates their contents.
+		for retained in [a, from_slice] {
+			if Coverage.union(Coverage.empty, retained) != retained or
+				Coverage.union(retained, Coverage.empty) != retained or
+					Coverage.difference(retained, Coverage.empty) != retained {
+				return Ok(Bool.False)
+			}
+		}
 		union = Coverage.union(a, b)
 		intersection = Coverage.intersection(a, b)
 		difference = Coverage.difference(a, b)

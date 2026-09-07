@@ -423,6 +423,13 @@ formatting allows one allocation/reallocation call and 128 requested bytes per
 output, with dev/speed failing controls. Retained inputs are observed afterward.
 These counters measure allocation traffic, not live or retained memory.
 
+Run `python3 scripts/test_coverage_identity.py` with the pinned `ROC` to check
+that union with an empty operand and subtraction of empty coverage reuse the
+input without allocation. The default gate runs this check on both backends.
+Runtime inputs include empty and large coverage, signed endpoint extremes and
+retained aliases; semantic comparisons sit outside the allocation counters.
+An always-active allocation control verifies that the gate detects failures.
+
 Interchange resource evidence lives in `tests/interchange_resource/main.roc`.
 The normal fixture gate measures parsing, serialization, interpretation, stored
 snapshot reads and inspection separately for 1/32 annotations and 2/16,384

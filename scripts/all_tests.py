@@ -101,6 +101,8 @@ def main() -> None:
     run([sys.executable, "scripts/benchmark_chrono.py", "--smoke", "--fetch"])
     heading("Checking timestamp parser allocation regressions...")
     run([sys.executable, "scripts/test_timestamp_parser.py"])
+    heading("Checking coverage identity allocation regressions...")
+    run([sys.executable, "scripts/test_coverage_identity.py"])
 
     heading("Checking independent Gregorian query expectations...")
     run([sys.executable, "scripts/test_civil_queries.py"])
