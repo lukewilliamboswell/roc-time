@@ -15,7 +15,7 @@ AnnotationReview :: [].{
 		end = timestamp("2022-07-08T01:00:00Z")?
 		validity = PosixSpan.new(OffsetTimestamp.boundary(start)?, OffsetTimestamp.boundary(end)?)?
 		rules = ZoneRules.new_bounded("Europe/Paris", "rfc9557-example", validity, FixedOffset.from_seconds(7200), [], { minimum: 7200, maximum: 7200 })?
-		var lines = []
+		var $lines = []
 		for text in texts {
 			value = match Ixdtf.parse(text) {
 				Ok(found) => found
@@ -33,9 +33,9 @@ AnnotationReview :: [].{
 					Err(UnsupportedCalendar(_)) => "calendar preference preserved; presentation unsupported"
 				}
 			}
-			lines = lines.append("${canonical} -> ${result}")
+			$lines = $lines.append("${canonical} -> ${result}")
 		}
-		Ok(lines)
+		Ok($lines)
 	}
 }
 

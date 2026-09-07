@@ -44,13 +44,13 @@ main! = |args| {
 	}
 	fields = CalendarDate.to_fields(LocalDateTime.date(CalendarValue.start_label(observed)))
 	clock = ClockTime.to_fields(LocalDateTime.clock(CalendarValue.start_label(observed)))
-	var expected_fraction = 1.U32
-	var places = 6.U8 - digits
-	while places > 0 {
-		expected_fraction = expected_fraction * 10
-		places = places - 1
+	var $expected_fraction = 1.U32
+	var $places = 6.U8 - digits
+	while $places > 0 {
+		$expected_fraction = $expected_fraction * 10
+		$places = $places - 1
 	}
-	Host.assert!(fields == { year, month: 12, day: 31 } and CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(observed))) == Julian and CalendarValue.resolution(observed) == Fraction(digits) and clock == { hour: 23, minute: 59, second: 59, microsecond: 1000000 - expected_fraction })
+	Host.assert!(fields == { year, month: 12, day: 31 } and CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(observed))) == Julian and CalendarValue.resolution(observed) == Fraction(digits) and clock == { hour: 23, minute: 59, second: 59, microsecond: 1000000 - $expected_fraction })
 	if year == 2147483647 {
 		Host.assert!(CalendarValue.local_bounds(observed) == Err(OutOfRange))
 	}

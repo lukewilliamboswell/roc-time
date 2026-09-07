@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import stat
 import sys
@@ -96,6 +97,72 @@ def validate(kit_path: Path, role_metadata: Path, bundle_dir: Path, repo: str, v
     return kit_path
 
 
+MAX_BUMP_NOTE_BYTES = 8192
+
+
+def summarize_bump(source: Path, output: Path, run_url: str) -> Path:
+    """Keep raw comparison evidence intact and bound the release-note excerpt."""
+    if source.resolve() == output.resolve():
+        raise ValueError("bump summary must not overwrite raw comparison evidence")
+    if not re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[0-9]+(?:/attempts/[0-9]+)?", run_url):
+        raise ValueError("expected a GitHub Actions run URL")
+    original = source.read_bytes()
+    if len(original) <= MAX_BUMP_NOTE_BYTES:
+        result = original
+    else:
+        failed = b"roc bump failed" in original.lower()
+        status = ("API comparison failed; API compatibility was not established."
+                  if failed else
+                  "API comparison output exceeded the release-note budget; no API compatibility conclusion is asserted here.")
+        tail = original[-4096:].decode("utf-8", errors="replace")
+        # Drop a possibly partial first line without losing a single-line error.
+        if "\n" in tail:
+            tail = tail.split("\n", 1)[1]
+        result = (f"{status}\n"
+                  f"Diagnostic output condensed from {len(original)} bytes.\n"
+                  f"Full comparison output: release-metadata artifact (bump-output.txt) and logs at {run_url}\n"
+                  f"Raw output SHA-256: {hashlib.sha256(original).hexdigest()}\n\n"
+                  f"Final diagnostic excerpt (preceding output omitted):\n{tail}").encode()
+        if len(result) > MAX_BUMP_NOTE_BYTES:
+            raise ValueError("bump summary exceeds its release-note budget")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(result)
+    return output
+
+
+class BumpSummaryTests(unittest.TestCase):
+    def test_long_failure_preserves_raw_evidence_and_terminal_reason(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / ".roc-time-tmp") as directory:
+            root = Path(directory)
+            source, output = root / "bump-output.txt", root / "summary.txt"
+            raw = ("var-name warning\n" * 10000 + "roc bump failed.\nCannot extract the old public API.\n").encode()
+            source.write_bytes(raw)
+            run_url = "https://github.com/owner/repo/actions/runs/123"
+            summarize_bump(source, output, run_url)
+            self.assertEqual(source.read_bytes(), raw)
+            self.assertLessEqual(output.stat().st_size, MAX_BUMP_NOTE_BYTES)
+            text = output.read_text()
+            for expected in ("API comparison failed", "compatibility was not established", "Cannot extract the old public API", run_url, hashlib.sha256(raw).hexdigest()):
+                self.assertIn(expected, text)
+
+    def test_short_output_unchanged_and_unknown_output_not_blessed(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / ".roc-time-tmp") as directory:
+            root = Path(directory)
+            source, output = root / "raw", root / "summary"
+            run_url = "https://github.com/owner/repo/actions/runs/123"
+            for raw in (b"No previous release bundle found; roc bump check skipped.\n", b"Expected patch bump.\n", b""):
+                source.write_bytes(raw)
+                summarize_bump(source, output, run_url)
+                self.assertEqual(output.read_bytes(), raw)
+            source.write_bytes(("unclassified diagnostic\n" * 10000).encode())
+            summarize_bump(source, output, run_url)
+            self.assertIn("no API compatibility conclusion", output.read_text())
+            with self.assertRaisesRegex(ValueError, "overwrite"):
+                summarize_bump(source, source, run_url)
+            with self.assertRaisesRegex(ValueError, "run URL"):
+                summarize_bump(source, output, "https://example.com/not-a-run")
+
+
 class StarterReleaseTests(unittest.TestCase):
     def setUp(self):
         temporary = ROOT / ".roc-time-tmp"
@@ -178,7 +245,7 @@ class StarterReleaseTests(unittest.TestCase):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", nargs="?", choices=("prepare", "validate", "notes", "self-test"))
+    parser.add_argument("command", nargs="?", choices=("prepare", "validate", "notes", "summarize-bump", "self-test"))
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--repo")
     parser.add_argument("--version")
@@ -186,11 +253,19 @@ def main() -> None:
     parser.add_argument("--bundle-dir", type=Path)
     parser.add_argument("--kit-path", type=Path)
     parser.add_argument("--notes-path", type=Path)
+    parser.add_argument("--bump-output", type=Path)
+    parser.add_argument("--summary-output", type=Path)
+    parser.add_argument("--run-url")
     args = parser.parse_args()
     if args.self_test or args.command == "self-test":
         result = unittest.main(argv=[sys.argv[0]], exit=False).result
         if not result.wasSuccessful():
             raise SystemExit(1)
+        return
+    if args.command == "summarize-bump":
+        if not all((args.bump_output, args.summary_output, args.run_url)):
+            parser.error("summarize-bump requires --bump-output, --summary-output and --run-url")
+        print(summarize_bump(args.bump_output, args.summary_output, args.run_url))
         return
     if not args.command or any(value is None for value in (args.repo, args.version, args.role_metadata, args.bundle_dir, args.kit_path)):
         parser.error("command and --repo/--version/--role-metadata/--bundle-dir/--kit-path are required")
@@ -208,7 +283,8 @@ def main() -> None:
             link = f"https://github.com/{args.repo}/releases/download/{quote(args.version, safe='')}/roc-time-starter.zip"
             header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, archive search and staffing examples. "
                       f"Use [Roc {compiler}](https://github.com/roc-lang/nightlies/releases/tag/{compiler}); "
-                      "the kit includes complete applications and checks the compiler version before running.\n\n")
+                      "each application declares its compiler in its header. Unzip the kit, enter "
+                      "`examples/booking_exchange`, and run `roc main.roc`. Python is not required.\n\n")
             header += (
                 "## Packages\n\n"
                 f"- [roc-time — temporal types and operations]({core})\n"
@@ -216,6 +292,7 @@ def main() -> None:
                 "Copy this into `main.roc` and run `roc main.roc` with the compiler linked above:\n\n"
                 "```roc\n"
                 "app [main!] {\n"
+                f'\troc: "{compiler}",\n'
                 f'\ttime: "{core}",\n'
                 f'\tzones: "{zones}",\n'
                 "}\n"

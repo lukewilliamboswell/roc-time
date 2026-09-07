@@ -40,10 +40,10 @@ names = name_text.trim().split_on("\n").map(
 # names.txt is generated in ASCII name order; binary search takes O(log n)
 # bytewise comparisons without hashing or allocating temporary byte lists.
 find_name = |name| {
-	var low = 0.U64
-	var high = names.len()
-	while low < high {
-		middle = low + U64.div_trunc_by(high - low, 2)
+	var $low = 0.U64
+	var $high = names.len()
+	while $low < $high {
+		middle = $low + U64.div_trunc_by($high - $low, 2)
 		entry = match names.get(middle) {
 			Ok(value) => value
 			Err(_) => crash "Zone search bounds invariant"
@@ -51,10 +51,10 @@ find_name = |name| {
 		match compare_name(name, entry.name) {
 			EQ => return Found(entry.index)
 			LT => {
-				high = middle
+				$high = middle
 			}
 			GT => {
-				low = middle + 1
+				$low = middle + 1
 			}
 		}
 	}
@@ -62,9 +62,9 @@ find_name = |name| {
 }
 
 compare_name = |a, b| {
-	var right = b.iter_utf8()
+	var $right = b.iter_utf8()
 	for left in a.iter_utf8() {
-		match right.next() {
+		match $right.next() {
 			One({ item, rest }) => {
 				if left < item {
 					return LT
@@ -72,7 +72,7 @@ compare_name = |a, b| {
 				if left > item {
 					return GT
 				}
-				right = rest
+				$right = rest
 			}
 			Done => return GT
 			# Str.iter_utf8 yields every byte and never emits Skip.

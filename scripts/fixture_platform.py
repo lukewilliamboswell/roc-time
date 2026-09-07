@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build the test-only instrumented native host; outputs remain disposable."""
 from __future__ import annotations
+from roc_version import package_pin
 import argparse
 import hashlib
 import os
@@ -58,7 +59,7 @@ def build_host() -> str:
 def verify_probe(target: str) -> None:
     """Exercise counters, tracing and failure controls through real Roc code."""
     roc = os.environ.get("ROC", "roc")
-    pin = (ROOT / ".roc-version").read_text().strip()
+    pin = package_pin(ROOT)
     version = subprocess.check_output([roc, "version"], text=True).strip()
     if version != f"Roc compiler version {pin}":
         raise RuntimeError(f"Set ROC to the pinned compiler: {pin}")

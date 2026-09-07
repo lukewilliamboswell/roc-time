@@ -99,18 +99,18 @@ FixedOffset :: [Seconds(I32)].{
 	}
 
 	expect {
-		var valid = Bool.True
+		var $valid = Bool.True
 		for number in [I64.lowest, -1, 0, 1, I64.highest] {
 			for seconds in [I32.lowest, -1, 0, 1, I32.highest] {
 				offset = from_seconds(seconds)
 				for calendar in [Gregorian, Julian] {
 					boundary = PosixBoundary.from_microseconds(number)
 					local = project(offset, boundary, calendar)?
-					valid = valid and resolve(offset, local) == Ok(boundary)
+					$valid = $valid and resolve(offset, local) == Ok(boundary)
 				}
 			}
 		}
-		valid
+		$valid
 	}
 
 	expect {

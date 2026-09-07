@@ -26,11 +26,11 @@ PersistenceRules := [].{
 			Supplied => ["supplied", "", "", "", ""]
 			DatabaseSource(p) => ["database", p.requested_name, p.canonical_name, p.source_digest, p.profile]
 		}
-		var fields = [data.name, data.version, PosixBoundary.to_microseconds(PosixSpan.start(data.validity)).to_str(), PosixBoundary.to_microseconds(PosixSpan.end(data.validity)).to_str(), FixedOffset.to_seconds(data.initial).to_str(), data.bounds.minimum.to_str(), data.bounds.maximum.to_str()].concat(provenance).append(data.transitions.len().to_str())
+		var $fields = [data.name, data.version, PosixBoundary.to_microseconds(PosixSpan.start(data.validity)).to_str(), PosixBoundary.to_microseconds(PosixSpan.end(data.validity)).to_str(), FixedOffset.to_seconds(data.initial).to_str(), data.bounds.minimum.to_str(), data.bounds.maximum.to_str()].concat(provenance).append(data.transitions.len().to_str())
 		for transition in data.transitions {
-			fields = fields.append(PosixBoundary.to_microseconds(transition.at).to_str()).append(FixedOffset.to_seconds(transition.offset).to_str())
+			$fields = $fields.append(PosixBoundary.to_microseconds(transition.at).to_str()).append(FixedOffset.to_seconds(transition.offset).to_str())
 		}
-		fields
+		$fields
 	}
 	from_fields : List(Str) -> Try(ZoneRules, Error)
 	from_fields = |fields| {
@@ -72,15 +72,15 @@ PersistenceRules := [].{
 		if !metadata_fits(base) {
 			return Err(TooLarge)
 		}
-		var transitions = []
-		var index = 13.U64
-		while index < fields.len() {
-			point = PersistenceRules.integer(at(fields, index))?
-			seconds = PersistenceRules.offset_integer(at(fields, index + 1))?
-			transitions = transitions.append({ at: PosixBoundary.from_microseconds(point), offset: FixedOffset.from_seconds(seconds) })
-			index = index + 2
+		var $transitions = []
+		var $index = 13.U64
+		while $index < fields.len() {
+			point = PersistenceRules.integer(at(fields, $index))?
+			seconds = PersistenceRules.offset_integer(at(fields, $index + 1))?
+			$transitions = $transitions.append({ at: PosixBoundary.from_microseconds(point), offset: FixedOffset.from_seconds(seconds) })
+			$index = $index + 2
 		}
-		rules = match ZoneRules.from_definition({ ..base, transitions }) {
+		rules = match ZoneRules.from_definition({ ..base, transitions: $transitions }) {
 			Ok(value) => value
 			Err(error) => return Err(InvalidRules(error))
 		}

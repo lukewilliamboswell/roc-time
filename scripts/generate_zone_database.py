@@ -16,11 +16,17 @@ from zoneinfo._common import load_data
 from zoneinfo._zoneinfo import _parse_tz_str, _TZStr
 
 sys.dont_write_bytecode = True
+from roc_version import package_pin, read_pin
 from generate_zone_oracle import WHEEL_SHA256, WHEEL_URL, EPOCH, seconds
 
 START = seconds(dt.datetime(1800, 1, 1, tzinfo=dt.UTC))
 END = seconds(dt.datetime(2200, 1, 1, tzinfo=dt.UTC))
 PROFILE = "iana-2025b-wheel-2025.2-posix-1800-2200-v1"
+
+
+def package_header(compiler):
+    # Compiler requirements change independently of the pinned IANA data pack.
+    return f'package [Database] {{ roc: "{compiler}" }}\n'
 
 
 def table(raw):
@@ -122,7 +128,7 @@ def generate(wheel, output):
         (output / 'names.txt').write_text("".join(f"{name}\t{unique[target]}\n" for name, target in names.items()))
         implementation = Path(__file__).resolve().parents[1] / 'tzdb/Database.roc'
         (output / 'Database.roc').write_bytes(implementation.read_bytes())
-        (output / 'main.roc').write_text('package [Database] {}\n')
+        (output / 'main.roc').write_text(package_header(read_pin(implementation.parents[1] / 'package/main.roc')))
         for source, destination in [('LICENSE', 'LICENSE.txt'), ('licenses/LICENSE_APACHE', 'LICENSE_APACHE.txt')]:
             (output / destination).write_bytes(archive.read('tzdata-2025.2.dist-info/licenses/' + source))
     manifest = dict(profile=PROFILE, source_version="2025b", encoding="text-assets-v1", wheel_url=WHEEL_URL, wheel_sha256=WHEEL_SHA256,
@@ -131,7 +137,7 @@ def generate(wheel, output):
                     offset_comparisons=checks, start_second=START, end_second=END,
                     transition_expectations=expectations,
                     names=names,
-                    files={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(output.iterdir()) if p.is_file()},
+                    files={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(output.iterdir()) if p.is_file() and p.name != 'main.roc'},
                     limitation="Offset-only finite profile; no abbreviation/DST-status API. Python footer expansion compared with C ZoneInfo using common pinned data; not an independent tzdb authority.")
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     return names
@@ -140,7 +146,7 @@ def generate(wheel, output):
 def verify(output, names, roc):
     root = Path(__file__).resolve().parents[1]
     version = subprocess.check_output([roc, 'version'], text=True).strip()
-    if version != 'Roc compiler version ' + (root / '.roc-version').read_text().strip():
+    if version != 'Roc compiler version ' + package_pin(root):
         raise ValueError('Wrong Roc compiler')
     directory = output / 'verification'
     directory.mkdir()
@@ -150,9 +156,9 @@ def verify(output, names, roc):
     source += 'main! = |_args| {\n for name in ' + json.dumps(list(names)) + ' {\n data = Database.get(name)?\n rules = ZoneRules.from_database(data)?\n at = PosixBoundary.from_microseconds(data.start_second * 1000000)\n offset = ZoneRules.offset_at(rules, at)?\n if FixedOffset.to_seconds(offset) != data.initial_offset { return Err(WrongOffset) }\n }\n echo!("PASS generated database\\n")\n Ok({})\n}\n'
     expectations = json.loads((output / 'manifest.json').read_text())['transition_expectations']
     cases = ''.join(f' {json.dumps(name)} => {{ count: {value["count"]}.U64, checksum: {value["checksum"]}.I64 }}\n' for name, value in expectations.items())
-    verification = ' expected = match data.canonical_name {\n' + cases + ' _ => return Err(UnexpectedCanonicalName)\n }\n var checksum = 0.I64\n var index = 1.I64\n for transition in data.transitions {\n checksum = checksum + index * (transition.second + transition.offset.to_i64())\n index = index + 1\n }\n if data.transitions.len() != expected.count or checksum != expected.checksum { return Err(WrongTransitions) }\n'
+    verification = ' expected = match data.canonical_name {\n' + cases + ' _ => return Err(UnexpectedCanonicalName)\n }\n var $checksum = 0.I64\n var $index = 1.I64\n for transition in data.transitions {\n $checksum = $checksum + $index * (transition.second + transition.offset.to_i64())\n $index = $index + 1\n }\n if data.transitions.len() != expected.count or $checksum != expected.checksum { return Err(WrongTransitions) }\n'
     source = source.replace(' rules = ZoneRules.from_database(data)?', verification + ' rules = ZoneRules.from_database(data)?')
-    transition_checks = ' var previous = data.initial_offset\n for transition in data.transitions {\n at_transition = PosixBoundary.from_microseconds(transition.second * 1000000)\n before = PosixBoundary.from_microseconds(transition.second * 1000000 - 1)\n actual = ZoneRules.offset_at(rules, at_transition)?\n prior = ZoneRules.offset_at(rules, before)?\n if FixedOffset.to_seconds(actual) != transition.offset or FixedOffset.to_seconds(prior) != previous { return Err(WrongTransitionBoundary) }\n previous = transition.offset\n }\n'
+    transition_checks = ' var $previous = data.initial_offset\n for transition in data.transitions {\n at_transition = PosixBoundary.from_microseconds(transition.second * 1000000)\n before = PosixBoundary.from_microseconds(transition.second * 1000000 - 1)\n actual = ZoneRules.offset_at(rules, at_transition)?\n prior = ZoneRules.offset_at(rules, before)?\n if FixedOffset.to_seconds(actual) != transition.offset or FixedOffset.to_seconds(prior) != $previous { return Err(WrongTransitionBoundary) }\n $previous = transition.offset\n }\n'
     source = source.replace(' at = PosixBoundary', transition_checks + ' at = PosixBoundary')
 
     manifest = json.loads((output / 'manifest.json').read_text())

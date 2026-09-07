@@ -14,32 +14,32 @@ Availability :: { free : Coverage, bookings : EventCollection(Str) }.{
 	from_bookings : Booking, List({ id : Str, window : Booking }) -> Try(Availability, [EmptySpan, ReversedBounds, OutOfRange, DuplicateId(Str), ..])
 	from_bookings = |opening, bookings| {
 		work = resolve_booking(opening)?
-		var busy = []
+		var $busy = []
 		for booking in bookings {
-			busy = busy.append({ id: booking.id, span: resolve_booking(booking.window)? })
+			$busy = $busy.append({ id: booking.id, span: resolve_booking(booking.window)? })
 		}
-		events = EventCollection.from_entries(busy)?
+		events = EventCollection.from_entries($busy)?
 		Ok({ free: Coverage.complement_within(EventCollection.to_coverage(events), work), bookings: events })
 	}
 
 	report : Availability -> Try(List(Str), [OutOfRange, ..])
 	report = |available| {
-		var lines = ["Bookings retained: ${EventCollection.event_count(available.bookings).to_str()}"]
+		var $lines = ["Bookings retained: ${EventCollection.event_count(available.bookings).to_str()}"]
 		for segment in EventCollection.segments(available.bookings) {
 			if segment.contributors.len() > 1 {
 				start = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.start(segment.span), Gregorian)?
 				end = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.end(segment.span), Gregorian)?
 				names = Str.join_with(segment.contributors, ", ")
-				lines = lines.append("Booking conflict: ${names}, ${display(start)} to ${display(end)} (UTC)")
+				$lines = $lines.append("Booking conflict: ${names}, ${display(start)} to ${display(end)} (UTC)")
 			}
 		}
 		for span in available.free {
 			start = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.start(span), Gregorian)?
 			end = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.end(span), Gregorian)?
-			lines = lines.append("Free: ${display(start)} to ${display(end)} (UTC)")
+			$lines = $lines.append("Free: ${display(start)} to ${display(end)} (UTC)")
 		}
 		width = PosixDelta.to_microseconds(Coverage.coordinate_width(available.free)?)
-		Ok(lines.append("Total available: ${width.to_str()} microseconds of POSIX coordinate width"))
+		Ok($lines.append("Total available: ${width.to_str()} microseconds of POSIX coordinate width"))
 	}
 }
 

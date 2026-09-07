@@ -9,13 +9,13 @@ CalendarFixture := [].{
 			Ok(value) => value
 			Err(_) => crash "fixture calendar date"
 		}
-		var fraction = 1.U32
-		var remaining = digits
-		while remaining > 0 {
-			fraction = fraction * 10
-			remaining = remaining - 1
+		var $fraction = 1.U32
+		var $remaining = digits
+		while $remaining > 0 {
+			$fraction = $fraction * 10
+			$remaining = $remaining - 1
 		}
-		match CalendarValue.fractional_second(date, { hour: 23, minute: 59, second: 59 }, { value: fraction - 1, digits }) {
+		match CalendarValue.fractional_second(date, { hour: 23, minute: 59, second: 59 }, { value: $fraction - 1, digits }) {
 			Ok(value) => value
 			Err(_) => crash "fixture fraction"
 		}

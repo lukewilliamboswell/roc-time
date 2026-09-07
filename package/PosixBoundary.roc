@@ -109,10 +109,10 @@ PosixBoundary :: [Micros(I64)].{
 
 	## A nearest-point oracle over a finite lattice, independent of quotient rounding.
 	expect {
-		var valid = Bool.True
+		var $valid = Bool.True
 		for n in [-2501.I128, -2500, -2499, -1500, -501, -500, -499, -1, 0, 1, 499, 500, 501, 1500, 2499, 2500, 2501] {
-			var best = -4.I64
-			var distance = 10000.I128
+			var $best = -4.I64
+			var $distance = 10000.I128
 			for candidate in [-4.I64, -3, -2, -1, 0, 1, 2, 3, 4] {
 				delta = I64.to_i128(candidate) * 1000 - n
 				d = if delta < 0 {
@@ -120,14 +120,14 @@ PosixBoundary :: [Micros(I64)].{
 				} else {
 					delta
 				}
-				if d < distance or (d == distance and I64.rem_by(candidate, 2) == 0) {
-					best = candidate
-					distance = d
+				if d < $distance or (d == $distance and I64.rem_by(candidate, 2) == 0) {
+					$best = candidate
+					$distance = d
 				}
 			}
-			valid = valid and from_nanoseconds_with_rounding(n, NearestTiesEven) == Ok(from_microseconds(best))
+			$valid = $valid and from_nanoseconds_with_rounding(n, NearestTiesEven) == Ok(from_microseconds($best))
 		}
-		valid
+		$valid
 	}
 
 	expect from_seconds(-0.0000001.Dec, Floor) == Ok(from_microseconds(-1))

@@ -103,41 +103,41 @@ Explanation :: { source : Source }.{
 		if budget.max_utf8_bytes == 0 {
 			return { text: "", status: Limited(ByteLimit), visited_facts: 0, total_facts: total }
 		}
-		var index = 0.U64
-		var text = ""
-		var text_limited = Bool.False
-		while index < total and index < budget.max_facts {
-			fact = match fact_at(value, index) {
+		var $index = 0.U64
+		var $text = ""
+		var $text_limited = Bool.False
+		while $index < total and $index < budget.max_facts {
+			fact = match fact_at(value, $index) {
 				Item(v) => v
 				End => crash "Source fact count and indexed access invariant"
 			}
 			rendered = render(fact)
-			line = if text.is_empty() {
+			line = if $text.is_empty() {
 				rendered.text
 			} else {
 				"\n${rendered.text}"
 			}
-			remaining = budget.max_utf8_bytes - text.count_utf8_bytes()
-			index = index + 1
+			remaining = budget.max_utf8_bytes - $text.count_utf8_bytes()
+			$index = $index + 1
 			if line.count_utf8_bytes() > remaining {
 				part = preview(line, remaining)
-				return { text: "${text}${part.text}", status: Limited(ByteLimit), visited_facts: index, total_facts: total }
+				return { text: "${$text}${part.text}", status: Limited(ByteLimit), visited_facts: $index, total_facts: total }
 			}
-			text = "${text}${line}"
-			text_limited = text_limited or rendered.clipped
+			$text = "${$text}${line}"
+			$text_limited = $text_limited or rendered.clipped
 			# No additional source query is made once the byte budget is exhausted.
-			if text.count_utf8_bytes() == budget.max_utf8_bytes and index < total {
-				return { text, status: Limited(ByteLimit), visited_facts: index, total_facts: total }
+			if $text.count_utf8_bytes() == budget.max_utf8_bytes and $index < total {
+				return { text: $text, status: Limited(ByteLimit), visited_facts: $index, total_facts: total }
 			}
 		}
-		status = if text_limited {
+		status = if $text_limited {
 			Limited(TextLimit)
-		} else if index < total {
+		} else if $index < total {
 			Limited(FactLimit)
 		} else {
 			Complete
 		}
-		{ text, status, visited_facts: index, total_facts: total }
+		{ text: $text, status, visited_facts: $index, total_facts: total }
 	}
 	to_inspect : Explanation -> Str
 	to_inspect = |value| "Explanation(facts=${fact_count(value).to_str()})"
@@ -156,25 +156,25 @@ preview = |text, limit| {
 	} else {
 		limit
 	}
-	var end = room
-	var prefix = ""
-	var found = Bool.False
-	while !found {
-		match text.drop_last_bytes(length - end) {
+	var $end = room
+	var $prefix = ""
+	var $found = Bool.False
+	while !$found {
+		match text.drop_last_bytes(length - $end) {
 			Ok(value) => {
-				prefix = value
-				found = True
+				$prefix = value
+				$found = True
 			}
 			Err(_) => {
-				end = end - 1
+				$end = $end - 1
 			}
 		}
 	}
 	{
 		text: if limit >= 3 {
-			"${prefix}..."
+			"${$prefix}..."
 		} else {
-			prefix
+			$prefix
 		},
 		clipped: True,
 	}
@@ -431,13 +431,13 @@ local_fields = |local, digits| {
 
 fraction_text : U32, U8 -> Str
 fraction_text = |micros, digits| {
-	var divisor = 1.U32
-	var remaining = 6.U8 - digits
-	while remaining > 0 {
-		divisor = divisor * 10
-		remaining = remaining - 1
+	var $divisor = 1.U32
+	var $remaining = 6.U8 - digits
+	while $remaining > 0 {
+		$divisor = $divisor * 10
+		$remaining = $remaining - 1
 	}
-	pad(U32.div_trunc_by(micros, divisor).to_str(), digits.to_u64())
+	pad(U32.div_trunc_by(micros, $divisor).to_str(), digits.to_u64())
 }
 
 pad = |text, width| if text.count_utf8_bytes() < width {

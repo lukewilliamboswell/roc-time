@@ -271,7 +271,7 @@ expect {
 }
 
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for first in [-2.I32, 0, 2] {
 		for second in [-2.I32, 0, 2] {
 			span = PosixSpan.new(test_zonerules_point(-10000000), test_zonerules_point(10000000))?
@@ -286,44 +286,44 @@ expect {
 				],
 				{ minimum: -2, maximum: 2 },
 			)?
-			var local_second = -7.I64
-			while local_second <= 7 {
+			var $local_second = -7.I64
+			while $local_second <= 7 {
 				for fraction in [0.I64, 1, 999999] {
-					number = local_second * 1000000 + fraction
+					number = $local_second * 1000000 + fraction
 					local = test_zonerules_local_label(number)?
-					var expected = []
-					var timeline_second = -10.I64
-					while timeline_second < 10 {
+					var $expected = []
+					var $timeline_second = -10.I64
+					while $timeline_second < 10 {
 						# Direct synthetic fixture definition, independent of
 						# transition iteration and inverse offset conversion.
-						offset = if timeline_second < 0 {
+						offset = if $timeline_second < 0 {
 							0.I32
-						} else if timeline_second < 4 {
+						} else if $timeline_second < 4 {
 							first
 						} else {
 							second
 						}
-						if timeline_second + offset.to_i64() == local_second {
-							expected = expected.append(test_zonerules_point(timeline_second * 1000000 + fraction))
+						if $timeline_second + offset.to_i64() == $local_second {
+							$expected = $expected.append(test_zonerules_point($timeline_second * 1000000 + fraction))
 						}
-						timeline_second = timeline_second + 1
+						$timeline_second = $timeline_second + 1
 					}
-					classification = match expected {
+					classification = match $expected {
 						[] => Gap
 						[only] => Unique(only)
-						_ => Fold(expected)
+						_ => Fold($expected)
 					}
-					valid = valid and ZoneRules.resolve(rules, local) == Ok(classification)
+					$valid = $valid and ZoneRules.resolve(rules, local) == Ok(classification)
 				}
-				local_second = local_second + 1
+				$local_second = $local_second + 1
 			}
 			# Even if an in-table match exists, unknown outside rules can
 			# supply another candidate. Never claim uniqueness at this edge.
 			edge = test_zonerules_local_label(-9000000)?
-			valid = valid and ZoneRules.resolve(rules, edge) == Err(OutsideValidity)
+			$valid = $valid and ZoneRules.resolve(rules, edge) == Err(OutsideValidity)
 		}
 	}
-	valid
+	$valid
 }
 
 expect {
@@ -341,26 +341,26 @@ expect {
 	)?
 	local = test_zonerules_local_label(2500000)?
 	end = test_zonerules_local_label(2750000)?
-	var policies_valid = Bool.True
+	var $policies_valid = Bool.True
 	if ZoneRules.resolve_occurrence(rules, local, RequireUnique) != Err(Ambiguous) or
 		ZoneRules.resolve_occurrence(rules, local, First) != Ok(test_zonerules_point(-1500000)) or
 			ZoneRules.resolve_occurrence(rules, local, Last) != Ok(test_zonerules_point(2500000)) or
 				ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(2))) != Ok(test_zonerules_point(500000)) or
 					ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(1))) != Err(OffsetConflict) {
-		policies_valid = Bool.False
+		$policies_valid = Bool.False
 	}
 	appointment = ZoneRules.appointment(rules, local, First, end, Last)?
 	whole = PosixSpan.new(test_zonerules_point(-1500000), test_zonerules_point(2750000))?
 	if appointment != whole or
 		ZoneRules.appointment(rules, local, Last, end, First) != Err(ReversedBounds) or
 			ZoneRules.appointment(rules, local, First, local, First) != Err(EmptySpan) {
-		policies_valid = Bool.False
+		$policies_valid = Bool.False
 	}
 	selected = ZoneRules.select(rules, local, end)?
 	a = PosixSpan.new(test_zonerules_point(-1500000), test_zonerules_point(-1250000))?
 	b = PosixSpan.new(test_zonerules_point(500000), test_zonerules_point(750000))?
 	c = PosixSpan.new(test_zonerules_point(2500000), test_zonerules_point(2750000))?
-	policies_valid and ZoneRules.resolve(rules, local) == Ok(Fold([test_zonerules_point(-1500000), test_zonerules_point(500000), test_zonerules_point(2500000)])) and
+	$policies_valid and ZoneRules.resolve(rules, local) == Ok(Fold([test_zonerules_point(-1500000), test_zonerules_point(500000), test_zonerules_point(2500000)])) and
 		selected == Coverage.from_spans([a, b, c]) and
 			ZoneRules.select(rules, local, local) == Err(EmptySelection) and
 				ZoneRules.select(rules, end, local) == Err(ReversedSelection)

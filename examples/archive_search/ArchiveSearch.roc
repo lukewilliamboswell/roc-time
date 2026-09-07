@@ -17,24 +17,24 @@ ArchiveSearch :: [].{
 	import_dates = |texts, recording_times| {
 		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
 		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-		var recordings = []
+		var $recordings = []
 		for text in recording_times {
 			timestamp = match OffsetTimestamp.parse(text) {
 				Ok(value) => value
 				Err(error) => return Err(Timestamp(error))
 			}
-			recordings = recordings.append(OffsetTimestamp.boundary(timestamp)?)
+			$recordings = $recordings.append(OffsetTimestamp.boundary(timestamp)?)
 		}
-		var results = []
+		var $results = []
 		for text in texts {
 			date = match EdtfDate.parse(text) {
 				Ok(value) => value
 				Err(error) => return Err(ArchiveDate(error))
 			}
-			outcome = count_matches(EdtfDate.description(date), rules, recordings)?
-			results = results.append({ label: EdtfDate.to_text(date), outcome })
+			outcome = count_matches(EdtfDate.description(date), rules, $recordings)?
+			$results = $results.append({ label: EdtfDate.to_text(date), outcome })
 		}
-		Ok(results)
+		Ok($results)
 	}
 
 	find = |date_fields, recording_times, admissible_minutes| {
@@ -43,48 +43,48 @@ ArchiveSearch :: [].{
 		second = CalendarValue.second(date, 9, 30, 0)?
 		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
 		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-		var recordings = []
+		var $recordings = []
 		for text in recording_times {
 			timestamp = match OffsetTimestamp.parse(text) {
 				Ok(value) => value
 				Err(error) => return Err(Timestamp(error))
 			}
-			recordings = recordings.append(OffsetTimestamp.boundary(timestamp)?)
+			$recordings = $recordings.append(OffsetTimestamp.boundary(timestamp)?)
 		}
 		exact_minute = QualifiedCalendarValue.new(minute, [])?
 		exact_second = QualifiedCalendarValue.new(second, [])?
 		approximate = QualifiedCalendarValue.new(minute, [{ scope: Whole, qualifier: Approximate }])?
-		var results = []
+		var $results = []
 		for query in [{ label: "09:30 (minute)", value: exact_minute }, { label: "09:30:00 (second)", value: exact_second }, { label: "Around 09:30", value: approximate }] {
-			outcome = count_matches(query.value, rules, recordings)?
-			results = results.append({ label: query.label, outcome })
+			outcome = count_matches(query.value, rules, $recordings)?
+			$results = $results.append({ label: query.label, outcome })
 		}
 		# These are declared alternatives for the unknown actual minute, not
 		# three minutes of certain coverage and not an inferred approximation.
-		var choices = []
+		var $choices = []
 		for m in admissible_minutes {
-			choices = choices.append(CalendarValue.minute(date, 9, m)?)
+			$choices = $choices.append(CalendarValue.minute(date, 9, m)?)
 		}
-		model = CalendarEvidence.new(approximate, choices)?
-		var possible = 0.U64
-		var definite = 0.U64
-		for point in recordings {
+		model = CalendarEvidence.new(approximate, $choices)?
+		var $possible = 0.U64
+		var $definite = 0.U64
+		for point in $recordings {
 			cursor = CalendarEvidence.query(model, rules, point)?
 			batch = CalendarEvidence.Query.collect(cursor, { max_alternatives: 3 })
 			match batch.status {
 				Complete(Definite) => {
-					definite = definite + 1
+					$definite = $definite + 1
 				}
 				Complete(Possible) => {
-					possible = possible + 1
+					$possible = $possible + 1
 				}
 				Complete(Impossible) => {}
 				Limited(_) => return Err(SearchIncomplete)
 			}
 		}
-		results = results.append({ label: "Around 09:30 (declared minute alternatives)", outcome: ModelMatches({ possible, definite }) })
+		$results = $results.append({ label: "Around 09:30 (declared minute alternatives)", outcome: ModelMatches({ possible: $possible, definite: $definite }) })
 
-		Ok(results)
+		Ok($results)
 	}
 }
 

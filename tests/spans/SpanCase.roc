@@ -47,19 +47,19 @@ SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
 		small_b = PosixBoundary.to_microseconds(PosixSpan.end(small_left))
 		small_c = PosixBoundary.to_microseconds(PosixSpan.start(small_right))
 		small_d = PosixBoundary.to_microseconds(PosixSpan.end(small_right))
-		var point = -9.I64
-		var shared = Bool.False
-		while point <= 9 {
-			in_left = small_a <= point and point < small_b
-			in_right = small_c <= point and point < small_d
-			boundary = PosixBoundary.from_microseconds(point)
+		var $point = -9.I64
+		var $shared = Bool.False
+		while $point <= 9 {
+			in_left = small_a <= $point and $point < small_b
+			in_right = small_c <= $point and $point < small_d
+			boundary = PosixBoundary.from_microseconds($point)
 			if PosixSpan.contains(small_left, boundary) != in_left or PosixSpan.contains(small_right, boundary) != in_right {
 				return Ok(Bool.False)
 			}
-			shared = shared or (in_left and in_right)
-			point = point + 1
+			$shared = $shared or (in_left and in_right)
+			$point = $point + 1
 		}
-		if PosixSpan.overlaps(small_left, small_right) != shared {
+		if PosixSpan.overlaps(small_left, small_right) != $shared {
 			return Ok(Bool.False)
 		}
 		left = ordered_span(input.a, input.b)?

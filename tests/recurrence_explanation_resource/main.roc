@@ -32,8 +32,8 @@ main! = |args| {
 	constructed = Host.allocated_bytes!({})
 	total = Explanation.fact_count(explanation)
 	Host.assert!(total > count.to_u64())
-	var i = 0.U32
-	while i < 100000 {
+	var $i = 0.U32
+	while $i < 100000 {
 		match Explanation.fact_at(explanation, 0) {
 			Item(fact) => Host.assert!(
 				match SemanticFact.kind(fact) {
@@ -62,7 +62,7 @@ main! = |args| {
 			)
 			End => Host.assert!(False)
 		}
-		i = i + 1
+		$i = $i + 1
 	}
 	match Explanation.fact_at(
 		explanation,

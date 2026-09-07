@@ -83,11 +83,11 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			return Err(Malformed)
 		}
 		bytes = text.to_utf8()
-		var index = 0.U64
+		var $index = 0.U64
 		for byte in bytes {
-			valid = if index == 8 {
+			valid = if $index == 8 {
 				byte == 84 or byte == 116
-			} else if index == 15 {
+			} else if $index == 15 {
 				byte == 90 or byte == 122
 			} else {
 				byte >= 48 and byte <= 57
@@ -95,7 +95,7 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			if !valid {
 				return Err(Malformed)
 			}
-			index = index + 1
+			$index = $index + 1
 		}
 		if length < 15 {
 			return Err(Incomplete)
@@ -191,11 +191,11 @@ RfcDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 # parse has proved the full length, digit positions and maximum four digits.
 digits : List(U8), U64, U64 -> U16
 digits = |bytes, start, length| {
-	var number = 0.U16
+	var $number = 0.U16
 	for byte in bytes.sublist({ start, len: length }) {
-		number = number * 10 + (byte - 48).to_u16()
+		$number = $number * 10 + (byte - 48).to_u16()
 	}
-	number
+	$number
 }
 
 # Constructor invariants bound every decimal field to its output width.
@@ -213,14 +213,14 @@ expect RfcDateTime.parse("19000229T000000Z") == Err(InvalidDate)
 expect RfcDateTime.parse("20000229T240000Z") == Err(InvalidTime)
 expect RfcDateTime.parse("19970630T235960Z") == Err(UnsupportedLeapSecond)
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for text in ["", "1970", "19700101", "19700101T", "19700101T00000"] {
-		valid = valid and RfcDateTime.parse(text) == Err(Incomplete)
+		$valid = $valid and RfcDateTime.parse(text) == Err(Incomplete)
 	}
 	for text in ["X", "1970-", "19700101X000000", "19700101T000000+0000", "19700101T000000.0Z", "19700101T000000ZZ", "19700101T000000 "] {
-		valid = valid and RfcDateTime.parse(text) == Err(Malformed)
+		$valid = $valid and RfcDateTime.parse(text) == Err(Malformed)
 	}
-	valid
+	$valid
 }
 
 expect {

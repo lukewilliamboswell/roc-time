@@ -17,14 +17,14 @@ PersistenceEnvelope :: { data : Fields }.{
 	Error : [TooLarge, Malformed, UnknownField(Str), DuplicateField(Str), MissingField(Str)]
 	new : Fields -> Try(PersistenceEnvelope, Error)
 	new = |data| {
-		var total = 0.U64
+		var $total = 0.U64
 		for text in [data.format, data.version, data.kind, data.profile, data.axis, data.unit, data.payload] {
 			length = text.count_utf8_bytes()
 			if length > 65536 {
 				return Err(TooLarge)
 			}
-			total = total + length
-			if total > 65536 {
+			$total = $total + length
+			if $total > 65536 {
 				return Err(TooLarge)
 			}
 		}
@@ -74,35 +74,35 @@ PersistenceEnvelope :: { data : Fields }.{
 					Ok(v) => v
 					Err(e) => return Err(Encoding(e))
 				}
-				var rest = match opened {
+				var $rest = match opened {
 					Uncounted(s) => s
 					Counted(_) => return Err(UnsupportedContainer)
 				}
-				var data = { format: "", version: "", kind: "", profile: "", axis: "", unit: "", payload: "" }
-				var seen = []
-				var finished = Bool.False
-				while !finished {
-					event = match Encoding.parse_dict_next(encoding, rest) {
+				var $data = { format: "", version: "", kind: "", profile: "", axis: "", unit: "", payload: "" }
+				var $seen = []
+				var $finished = Bool.False
+				while !$finished {
+					event = match Encoding.parse_dict_next(encoding, $rest) {
 						Ok(v) => v
 						Err(e) => return Err(Encoding(e))
 					}
 					match event {
 						Done(s) => {
-							rest = s
-							finished = True
+							$rest = s
+							$finished = True
 						}
 						Entry(s) => {
 							key = match Encoding.parse_str(encoding, s) {
 								Ok(v) => v
 								Err(e) => return Err(Encoding(e))
 							}
-							if seen.contains(key.value) {
+							if $seen.contains(key.value) {
 								return Err(DuplicateField(key.value))
 							}
 							if !keys.contains(key.value) {
 								return Err(UnknownField(key.value))
 							}
-							seen = seen.append(key.value)
+							$seen = $seen.append(key.value)
 							start = match Encoding.parse_dict_after_key(encoding, key.rest) {
 								Ok(v) => v
 								Err(e) => return Err(Encoding(e))
@@ -113,39 +113,39 @@ PersistenceEnvelope :: { data : Fields }.{
 							}
 							# The allowlist is checked before reading values. The default branch
 							# returns an error even if this code is later changed inconsistently.
-							data = match key.value {
-								"format" => { ..data, format: field.value }
-								"version" => { ..data, version: field.value }
-								"kind" => { ..data, kind: field.value }
-								"profile" => { ..data, profile: field.value }
-								"axis" => { ..data, axis: field.value }
-								"unit" => { ..data, unit: field.value }
-								"payload" => { ..data, payload: field.value }
+							$data = match key.value {
+								"format" => { ..$data, format: field.value }
+								"version" => { ..$data, version: field.value }
+								"kind" => { ..$data, kind: field.value }
+								"profile" => { ..$data, profile: field.value }
+								"axis" => { ..$data, axis: field.value }
+								"unit" => { ..$data, unit: field.value }
+								"payload" => { ..$data, payload: field.value }
 								_ => return Err(UnknownField(key.value))
 							}
-							rest = field.rest
-							after = match Encoding.parse_dict_after_entry(encoding, rest) {
+							$rest = field.rest
+							after = match Encoding.parse_dict_after_entry(encoding, $rest) {
 								Ok(v) => v
 								Err(e) => return Err(Encoding(e))
 							}
 							match after {
 								Continue(s2) => {
-									rest = s2
+									$rest = s2
 								}
 								Done(s2) => {
-									rest = s2
-									finished = True
+									$rest = s2
+									$finished = True
 								}
 							}
 						}
 					}
 				}
 				for key in keys {
-					if !seen.contains(key) {
+					if !$seen.contains(key) {
 						return Err(MissingField(key))
 					}
 				}
-				Ok({ value: { format: data.format, version: data.version, kind: data.kind, profile: data.profile, axis: data.axis, unit: data.unit, payload: data.payload }, rest })
+				Ok({ value: { format: $data.format, version: $data.version, kind: $data.kind, profile: $data.profile, axis: $data.axis, unit: $data.unit, payload: $data.payload }, rest: $rest })
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Measure validated date construction and coordinate round trips, including startup."""
 from __future__ import annotations
+from roc_version import package_pin
 
 import argparse
 import json
@@ -24,7 +25,7 @@ def main() -> None:
         parser.error('iterations must be 1..100000000, runs >= 2, warmups >= 0')
     roc = os.environ.get('ROC', 'roc')
     version = subprocess.check_output([roc, 'version'], text=True).strip()
-    if version != 'Roc compiler version ' + (ROOT / '.roc-version').read_text().strip():
+    if version != 'Roc compiler version ' + package_pin(ROOT):
         raise SystemExit('Select the pinned compiler with ROC')
     output = ROOT / '.roc-time-tmp/gregorian-performance'
     output.mkdir(parents=True, exist_ok=True)

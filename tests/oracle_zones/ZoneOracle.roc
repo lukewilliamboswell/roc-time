@@ -12,12 +12,12 @@ ZoneOracle :: [].{
 		if I64.rem_by(fixture.lower, 1000000) != 0 or I64.rem_by(fixture.upper, 1000000) != 0 {
 			return Err(FixturePrecision)
 		}
-		var transitions = []
+		var $transitions = []
 		for transition in fixture.transitions {
 			if I64.rem_by(transition.at, 1000000) != 0 {
 				return Err(FixturePrecision)
 			}
-			transitions = transitions.append({ second: I64.div_trunc_by(transition.at, 1000000), offset: transition.offset })
+			$transitions = $transitions.append({ second: I64.div_trunc_by(transition.at, 1000000), offset: transition.offset })
 		}
 		ZoneRules.from_database({
 			schema: 1,
@@ -33,7 +33,7 @@ ZoneOracle :: [].{
 			initial_offset: fixture.initial,
 			minimum_offset: fixture.minimum,
 			maximum_offset: fixture.maximum,
-			transitions,
+			transitions: $transitions,
 		})
 	}
 
@@ -41,16 +41,16 @@ ZoneOracle :: [].{
 		if List.len(cases) != count {
 			return Err(CaseCount)
 		}
-		var rules = []
+		var $rules = []
 		for fixture in fixtures {
-			rules = rules.append(rules_for(fixture)?)
+			$rules = $rules.append(rules_for(fixture)?)
 		}
-		var visited = 0.U64
+		var $visited = 0.U64
 		for case in cases {
-			if case.id != visited {
+			if case.id != $visited {
 				return Err(CaseOrder(case.id))
 			}
-			zone = List.get(rules, case.zone)?
+			zone = List.get($rules, case.zone)?
 			date = CalendarDate.from_fields(Gregorian, case.date)?
 			clock = ClockTime.from_fields(case.clock)?
 			result = ZoneRules.resolve(zone, LocalDateTime.new(date, clock))?
@@ -62,9 +62,9 @@ ZoneOracle :: [].{
 			if actual != case.expected {
 				return Err(Mismatch(case.id))
 			}
-			visited = visited + 1
+			$visited = $visited + 1
 		}
-		Ok(visited)
+		Ok($visited)
 	}
 
 	## The JSONL harness sends validated scalar arguments; the public temporal
@@ -81,11 +81,11 @@ ZoneOracle :: [].{
 		result = execute(args, fixtures)
 		match result {
 			Ok(candidates) => {
-				var text = "${id}\tok"
+				var $text = "${id}\tok"
 				for candidate in candidates {
-					text = "${text}\t${candidate.to_str()}"
+					$text = "${$text}\t${candidate.to_str()}"
 				}
-				"${text}\n"
+				"${$text}\n"
 			}
 			Err(error) => "${id}\terror\t${Str.inspect(error)}\n"
 		}

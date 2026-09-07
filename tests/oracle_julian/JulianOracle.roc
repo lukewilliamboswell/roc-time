@@ -32,17 +32,17 @@ JulianOracle := [Forward(I64, U8, U8), Inverse(I64)].{
 		if List.len(cases) != count {
 			return Err(CaseCount)
 		}
-		var visited = 0.U64
+		var $visited = 0.U64
 		for case in cases {
-			if case.id != visited {
+			if case.id != $visited {
 				return Err(CaseOrder(case.id))
 			}
 			if observe(case.input) != case.expected {
 				return Err(Mismatch(case.id))
 			}
-			visited = visited + 1
+			$visited = $visited + 1
 		}
-		Ok(visited)
+		Ok($visited)
 	}
 
 	## Exercise the actual comparator with wrong epoch/leap-day expectations,

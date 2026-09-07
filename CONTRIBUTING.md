@@ -5,7 +5,7 @@ for engineering guardrails. Check any active task in `planning/` before changing
 its scope. Issues and pull requests should identify a realistic caller scenario
 and the affected design requirements.
 
-Use the compiler pinned by `.roc-version`; verify its `version` output and set
+Use the compiler pinned by the `roc` field in `package/main.roc`; verify its `version` output and set
 `ROC` to its executable when running repository scripts. Keep experiments and
 generated artifacts under ignored `.roc-time-tmp/`.
 
@@ -26,7 +26,9 @@ third-party Python dependencies.
 
 | Script | Purpose |
 | --- | --- |
-| `all_tests.py` | Full local CI run: check, test, fuzz, docs, bundle, examples |
+| `all_tests.py` | Development gate: check, test, fuzz, docs, bundles and copied examples |
+| `test_published_examples.py` | Run unchanged public applications with their declared compiler |
+| `roc_version.py` | Read compiler header pins and reject conflicting authorities |
 | `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_gregorian.py` | Measure validated date construction and coordinate round trips with checked checksums |
@@ -66,10 +68,16 @@ with `ROC=/path/to/pinned/roc python3 scripts/docs.py 0.1.0 --docs-root .roc-tim
 The gate also runs `tests/static_dispatch/main.roc` under both the interpreter
 and native execution to check public operator, dictionary-key and iterator use.
 
-Run the full CI check locally with `ROC=/path/to/pinned/roc python3 scripts/all_tests.py`.
+Run the development gate with `ROC=/path/to/development/roc python3 scripts/all_tests.py`.
+Separately run `ROC=/path/to/example/roc python3 scripts/test_published_examples.py`
+with the compiler in the example app headers. The latter uses published URLs
+unchanged; the development gate tests disposable copies with local dependencies.
 Generate local versioned docs with `python3 scripts/docs.py 0.1.0`.
 
-The Roc compiler version used by CI is pinned in `.roc-version`.
+The development compiler is pinned in the `roc` headers of `package/main.roc` and
+`tzdb/package/main.roc`; those package pins must agree. Published examples keep
+their own app-header pins. `python3 scripts/roc_version.py` reads the development
+pin for tooling; it does not maintain a separate version registry.
 
 Property-based testing with [roc-fuzz](https://github.com/lukewilliamboswell/roc-fuzz)
 is a core development method for temporal semantics, alongside fixed fixtures,
@@ -186,7 +194,7 @@ Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
-`scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in `.roc-version`:
+`scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in the `roc` field of `package/main.roc`:
 
 ```sh
 python3 scripts/fuzz.py --operation all
@@ -454,6 +462,76 @@ Run these opt-in benchmarks without concurrent builds or tests. They compare
 selected date and timestamp operations, not overall library capability; their
 in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
+## Development and compiler-support releases
+
+`main` is the development branch. The `roc` entries in `package/main.roc` and
+`tzdb/package/main.roc` select its compiler; these two packages are built and
+validated together. `.github/roc-nightly.json` lists the root files the nightly
+updater may edit, without duplicating their version values. Example app headers
+are outside that update scope, even if their pins happen to match development.
+
+Public `examples/` contain complete, multi-file applications with immutable
+published package URLs and their own compiler pins. Run them directly with
+`roc examples/booking_exchange/main.roc` using the declared compiler. Development
+CI copies the same applications to ignored temporary storage, rebinds their
+headers to the development compiler and local packages, and compares their
+outputs. Bundle checks repeat that validation against candidate archives.
+Published-example CI runs the checked-in applications unchanged with their own
+compiler. Do not format the public examples using a newer compiler: Roc's
+formatter can advance nightly header pins.
+
+A branch such as `roc-0.1.x` identifies an upstream compiler compatibility line,
+not a package version. Prefer fixing bugs on `main`, then use reviewed
+`git cherry-pick -x` backports and validate against the support branch compiler.
+Forward-port fixes originating there where applicable. Compiler patch updates
+within the line require validation; another compiler minor line gets another
+branch. Support duration, funded LTS and response-time commitments are separate
+policies.
+
+The pilot uses `nightly-2026-09-05-b195f5b` on `roc-0.1.x` as a simulated stable
+compiler, while development uses `nightly-2026-09-06-d85e877`. The release guard
+accepts that simulation only for the explicitly configured line and exact pin,
+and verifies the nightly exists upstream. Release notes disclose the simulation.
+This does not claim that upstream Roc has released version 0.1. Once actual
+stable releases are available, replace the simulation with a verified stable
+compiler and installer, and remove the simulated-compiler mapping. Publication
+from development `main` is disabled in this pilot.
+The intended policy then requires stable compiler support for every package
+release, even when upstream or our development branch moves ahead.
+
+To release:
+
+1. Prepare and validate the exact support-branch candidate, including both
+   packages, their bundles, and the multi-file examples rebound to those bundles.
+2. Dispatch `Release` on that branch with a new package SemVer. Package versions
+   are independent of compiler lines. Every published package change receives a
+   new immutable release and content-addressed archives; never replace an
+   existing version's contents.
+3. Verify release notes, both package URLs, the starter archive and direct Roc
+   execution against the actual published URLs. The app headers record the
+   compiler used for that release.
+4. Review the release follow-up PR updating versioned docs and the public example
+   applications on `main`. These updates must preserve development package pins.
+   Retain previous versioned docs before deploying the next site.
+
+Configure the `github-pages` environment to allow the explicit supported
+compiler branches that publish documentation, as well as `main`. Keep that
+allowlist narrow; adding a release workflow does not update environment policy.
+
+For a rehearsal, select `nightly_validation: true`. Supplying `release_version`
+also exercises the branch/package-version guard; omit it for ordinary compiler
+candidate validation. Neither validation mode publishes packages or deploys docs.
+A different merge commit needs its own validation; parent results do not validate it.
+
+The daily nightly updater proposes scoped compiler-header changes to `main`.
+Automatic merging is disabled in this pilot. Bot PR creation and required checks
+are repository settings; installing workflows does not enable those settings.
+No bot approval or branch-protection bypass is part of this policy.
+
+The shared [maintenance guide](https://github.com/lukewilliamboswell/roc-automation/blob/5e6663c1436f038a35cc076a1b2921983e9b954c/docs/maintenance-releases.md)
+provides reusable guidance. OpenSSF evidence and support commitments remain each
+project's responsibility.
+
 ## Packaging
 
 Bundle the package for distribution using `python3 scripts/bundle.py --output-dir dist`.
@@ -462,10 +540,30 @@ Run the release workflow from GitHub Actions with a release version such as `0.1
 or `0.1.0-rc1`. The pinned release action marks RC versions as prereleases;
 their docs remain versioned and do not replace the stable docs redirect.
 It builds and tests the exact core/zone pair, creates the GitHub release,
-generates versioned docs, opens a follow-up PR and publishes docs to GitHub Pages.
+generates versioned docs, opens a follow-up PR for docs and published examples
+against the default branch, and publishes docs to GitHub Pages. Released examples
+are validated in an isolated checkout of the tag using their release compiler
+and published URLs; the reviewed follow-up promotes that complete public example
+collection without changing development package pins.
+The follow-up uses a GitHub-signed commit and explicitly dispatches the test and
+release-validation workflows, since a PR created with `GITHUB_TOKEN` does not
+automatically trigger ordinary PR workflows. The separate controller reports
+`Release follow-up validation` only after both workflows and their required jobs
+pass for the exact generated commit. It does not approve or merge the PR. If the
+base or generated branch moves, regenerate and validate against the current base;
+the creator refuses to overwrite unrelated or unsigned branch work.
+Merge the previous docs follow-up before publishing another version: site
+assembly refuses missing earlier release documentation. The highest stable package version remains the public documentation default;
+each release tag and starter manifest records its own compiler pin.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published
 role metadata and does not recreate the release or tag.
+If publication fails after creating the tag, preserve its commit. Recover using
+the original successful run's bundle, role-metadata and starter artifacts; verify
+their digests and starter contents before creating the release with
+`gh release create --verify-tag`. Never move the tag or substitute rebuilt
+archives. Keep API-comparison diagnostics in the workflow artifact and include
+only a bounded summary in release notes; a failed comparison must remain explicit.
 The additional `roc-time-bundles.json` asset records the two roles and archive
 digests for later core-version comparisons. Published filenames use
 `roc-time-<hash>.tar.zst` and `roc-time-tzdb-<hash>.tar.zst`: Roc uses the

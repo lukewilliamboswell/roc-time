@@ -37,24 +37,24 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 				ordering(final)
 			},
 		)
-		var canonical = []
+		var $canonical = []
 		for span in sorted {
-			if canonical.last() != Ok(span) {
-				canonical = canonical.append(span)
+			if $canonical.last() != Ok(span) {
+				$canonical = $canonical.append(span)
 			}
 		}
-		first = at(canonical, 0)
-		var latest_start = PosixSpan.start(first)
-		var earliest_end = PosixSpan.end(first)
-		for span in canonical {
-			if PosixSpan.start(span) > latest_start {
-				latest_start = PosixSpan.start(span)
+		first = at($canonical, 0)
+		var $latest_start = PosixSpan.start(first)
+		var $earliest_end = PosixSpan.end(first)
+		for span in $canonical {
+			if PosixSpan.start(span) > $latest_start {
+				$latest_start = PosixSpan.start(span)
 			}
-			if PosixSpan.end(span) < earliest_end {
-				earliest_end = PosixSpan.end(span)
+			if PosixSpan.end(span) < $earliest_end {
+				$earliest_end = PosixSpan.end(span)
 			}
 		}
-		Ok({ declaration: Paired(canonical), possible: Coverage.from_spans(canonical), definite: between(latest_start, earliest_end) })
+		Ok({ declaration: Paired($canonical), possible: Coverage.from_spans($canonical), definite: between($latest_start, $earliest_end) })
 	}
 	independent : { starts : List(PosixBoundary), ends : List(PosixBoundary) } -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives, ..])
 	independent = |choices| {
@@ -75,20 +75,20 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 		# valid combination, so existential membership is this one whole span.
 		# Universal membership uses only endpoints participating in valid pairs.
 		# A start is viable iff start < last_end; an end iff end > first_start.
-		var latest_start = first_start
+		var $latest_start = first_start
 		for start in starts {
 			if start < last_end {
-				latest_start = start
+				$latest_start = start
 			}
 		}
-		var earliest_end = last_end
+		var $earliest_end = last_end
 		for end in ends {
 			if end > first_start {
-				earliest_end = end
+				$earliest_end = end
 				break
 			}
 		}
-		Ok({ declaration: Independent({ starts, ends }), possible: between(first_start, last_end), definite: between(latest_start, earliest_end) })
+		Ok({ declaration: Independent({ starts, ends }), possible: between(first_start, last_end), definite: between($latest_start, $earliest_end) })
 	}
 
 	## Definite means every admissible interval contains the point; Possible
@@ -120,22 +120,22 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 	to_hash : IntervalEvidence, Hasher -> Hasher
 	to_hash = |evidence, hasher| match evidence.declaration {
 		Paired(choices) => {
-			var state = (0.U8).to_hash(hasher)
+			var $state = (0.U8).to_hash(hasher)
 			for span in choices {
-				state = span.to_hash(state)
+				$state = span.to_hash($state)
 			}
-			choices.len().to_hash(state)
+			choices.len().to_hash($state)
 		}
 		Independent(choices) => {
-			var state = (1.U8).to_hash(hasher)
+			var $state = (1.U8).to_hash(hasher)
 			for point in choices.starts {
-				state = point.to_hash(state)
+				$state = point.to_hash($state)
 			}
-			state = choices.starts.len().to_hash(state)
+			$state = choices.starts.len().to_hash($state)
 			for point in choices.ends {
-				state = point.to_hash(state)
+				$state = point.to_hash($state)
 			}
-			choices.ends.len().to_hash(state)
+			choices.ends.len().to_hash($state)
 		}
 	}
 	to_inspect : IntervalEvidence -> Str
@@ -153,13 +153,13 @@ ordering = |value| match value {
 
 normalize = |points| {
 	sorted = points.sort_with(|a, b| ordering(PosixBoundary.compare(a, b)))
-	var canonical = []
+	var $canonical = []
 	for point in sorted {
-		if canonical.last() != Ok(point) {
-			canonical = canonical.append(point)
+		if $canonical.last() != Ok(point) {
+			$canonical = $canonical.append(point)
 		}
 	}
-	canonical
+	$canonical
 }
 
 at = |items, index| match items.get(index) {

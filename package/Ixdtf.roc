@@ -88,7 +88,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		if parts.tags.len() > 32 {
 			return Err(TooManyAnnotations)
 		}
-		var total = OffsetTimestamp.to_text(parts.timestamp).count_utf8_bytes()
+		var $total = OffsetTimestamp.to_text(parts.timestamp).count_utf8_bytes()
 		match parts.zone {
 			None => {}
 			Some(zone) => {
@@ -109,14 +109,14 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 						6
 					}
 				}
-				total = total + length + 2 + if zone.critical {
+				$total = $total + length + 2 + if zone.critical {
 					1
 				} else {
 					0
 				}
 			}
 		}
-		var seen = []
+		var $seen = []
 		for tag in parts.tags {
 			if tag.key.count_utf8_bytes() > 64 or tag.value.count_utf8_bytes() > 256 {
 				return Err(TooLarge)
@@ -127,19 +127,19 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			if tag.key.starts_with("_") {
 				return Err(ExperimentalKey)
 			}
-			for previous in seen {
+			for previous in $seen {
 				if previous.key == tag.key and previous.value != tag.value and (previous.critical or tag.critical) {
 					return Err(ConflictingCritical)
 				}
 			}
-			seen = seen.append(tag)
-			total = total + tag.key.count_utf8_bytes() + tag.value.count_utf8_bytes() + 3 + if tag.critical {
+			$seen = $seen.append(tag)
+			$total = $total + tag.key.count_utf8_bytes() + tag.value.count_utf8_bytes() + 3 + if tag.critical {
 				1
 			} else {
 				0
 			}
 		}
-		if total > 4096 {
+		if $total > 4096 {
 			return Err(TooLarge)
 		}
 		# Validate conflicts first so critical calendar duplicates are never lost
@@ -165,40 +165,40 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			return Err(TooLarge)
 		}
 		bytes = text.to_utf8()
-		var index = 0.U64
-		while index < bytes.len() and at(bytes, index) != 91 {
-			index = index + 1
+		var $index = 0.U64
+		while $index < bytes.len() and at(bytes, $index) != 91 {
+			$index = $index + 1
 		}
-		timestamp = match OffsetTimestamp.parse(piece(bytes, 0, index)) {
+		timestamp = match OffsetTimestamp.parse(piece(bytes, 0, $index)) {
 			Ok(value) => value
 			Err(error) => return Err(Base(error))
 		}
-		var zone = None
-		var tags = []
-		while index < bytes.len() {
-			if at(bytes, index) != 91 {
+		var $zone = None
+		var $tags = []
+		while $index < bytes.len() {
+			if at(bytes, $index) != 91 {
 				return Err(Malformed)
 			}
-			index = index + 1
-			critical = index < bytes.len() and at(bytes, index) == 33
+			$index = $index + 1
+			critical = $index < bytes.len() and at(bytes, $index) == 33
 			if critical {
-				index = index + 1
+				$index = $index + 1
 			}
-			start = index
-			while index < bytes.len() and at(bytes, index) != 93 {
-				if at(bytes, index) == 91 {
+			start = $index
+			while $index < bytes.len() and at(bytes, $index) != 93 {
+				if at(bytes, $index) == 91 {
 					return Err(Malformed)
 				}
-				index = index + 1
+				$index = $index + 1
 			}
-			if index == bytes.len() {
+			if $index == bytes.len() {
 				return Err(Incomplete)
 			}
-			body = piece(bytes, start, index - start)
-			index = index + 1
+			body = piece(bytes, start, $index - start)
+			$index = $index + 1
 			components = body.split_on("=")
 			if components.len() == 1 {
-				if zone != None or !tags.is_empty() {
+				if $zone != None or !$tags.is_empty() {
 					return Err(Malformed)
 				}
 				identifier = if body.starts_with("+") or body.starts_with("-") {
@@ -213,17 +213,17 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 				} else {
 					Named(body)
 				}
-				zone = Some({ critical, identifier })
+				$zone = Some({ critical, identifier })
 			} else if components.len() == 2 {
-				if tags.len() == 32 {
+				if $tags.len() == 32 {
 					return Err(TooManyAnnotations)
 				}
-				tags = tags.append({ critical, key: item(components, 0), value: item(components, 1) })
+				$tags = $tags.append({ critical, key: item(components, 0), value: item(components, 1) })
 			} else {
 				return Err(Malformed)
 			}
 		}
-		new({ timestamp, zone, tags })
+		new({ timestamp, zone: $zone, tags: $tags })
 	}
 
 	preferred_calendar : Ixdtf -> [None, Some(Str)]
@@ -238,39 +238,39 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 
 	to_text : Ixdtf -> Str
 	to_text = |value| {
-		var output = OffsetTimestamp.to_text(value.timestamp)
+		var $output = OffsetTimestamp.to_text(value.timestamp)
 		match value.zone {
 			None => {}
 			Some(zone) => {
-				output = "${output}[${flag(zone.critical)}${zone_text(zone.identifier)}]"
+				$output = "${$output}[${flag(zone.critical)}${zone_text(zone.identifier)}]"
 			}
 		}
 		for tag in value.tags {
-			output = "${output}[${flag(tag.critical)}${tag.key}=${tag.value}]"
+			$output = "${$output}[${flag(tag.critical)}${tag.key}=${tag.value}]"
 		}
-		output
+		$output
 	}
 	is_eq : Ixdtf, Ixdtf -> Bool
 	is_eq = |a, b| a.timestamp == b.timestamp and a.zone == b.zone and a.tags == b.tags
 	to_hash : Ixdtf, Hasher -> Hasher
 	to_hash = |value, hasher| {
-		var state = value.timestamp.to_hash(hasher)
+		var $state = value.timestamp.to_hash(hasher)
 		match value.zone {
 			None => {
-				state = (0.U8).to_hash(state)
+				$state = (0.U8).to_hash($state)
 			}
 			Some(zone) => {
-				state = zone.critical.to_hash((1.U8).to_hash(state))
-				state = match zone.identifier {
-					Named(name) => name.to_hash((0.U8).to_hash(state))
-					Numeric(offset) => offset.to_hash((1.U8).to_hash(state))
+				$state = zone.critical.to_hash((1.U8).to_hash($state))
+				$state = match zone.identifier {
+					Named(name) => name.to_hash((0.U8).to_hash($state))
+					Numeric(offset) => offset.to_hash((1.U8).to_hash($state))
 				}
 			}
 		}
 		for tag in value.tags {
-			state = tag.value.to_hash(tag.key.to_hash(tag.critical.to_hash(state)))
+			$state = tag.value.to_hash(tag.key.to_hash(tag.critical.to_hash($state)))
 		}
-		value.tags.len().to_hash(state)
+		value.tags.len().to_hash($state)
 	}
 
 	## Bounded declaration facts preserve ordered annotations and criticality.
@@ -418,17 +418,17 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 				}
 				return Item(SemanticFact.new(Presentation(preference)))
 			}
-			var next = index - 2
+			var $next = index - 2
 			match snapshot.context {
 				None => {}
 				Some(rules) => {
-					if next == 0 {
+					if $next == 0 {
 						return Item(SemanticFact.new(Context({ name: ZoneRules.name(rules), version: ZoneRules.version(rules), validity: ZoneRules.validity(rules), provenance: ZoneRules.provenance(rules) })))
 					}
-					next = next - 1
+					$next = $next - 1
 				}
 			}
-			source_fact_at(snapshot.source, next, Bool.False)
+			source_fact_at(snapshot.source, $next, Bool.False)
 		}
 		to_inspect : Snapshot -> Str
 		to_inspect = |snapshot| match fact_at(snapshot, 0) {
@@ -687,27 +687,27 @@ source_fact_at = |value, index, include_requirement| {
 		parts = OffsetTimestamp.parts(value.timestamp)
 		return Item(SemanticFact.new(TimestampDescription({ kind: Ixdtf, local: OffsetTimestamp.local_label(value.timestamp), fraction_digits: parts.fraction_digits, offset: parts.offset, zone_present: value.zone != None, annotation_count: value.tags.len() })))
 	}
-	var next = index - 1
+	var $next = index - 1
 	match value.zone {
 		None => {}
 		Some(zone) => {
-			if next == 0 {
+			if $next == 0 {
 				return Item(SemanticFact.new(ZoneAnnotation(zone)))
 			}
-			next = next - 1
+			$next = $next - 1
 			needs_context = include_requirement and (match zone.identifier {
 				Named(_) => Bool.True
 				Numeric(_) => Bool.False
 			})
 			if needs_context {
-				if next == 0 {
+				if $next == 0 {
 					return Item(SemanticFact.new(Requirement(ZoneContext)))
 				}
-				next = next - 1
+				$next = $next - 1
 			}
 		}
 	}
-	match value.tags.get(next) {
+	match value.tags.get($next) {
 		Ok(tag) => Item(SemanticFact.new(Annotation(tag)))
 		Err(_) => End
 	}
@@ -733,11 +733,11 @@ expect {
 		Annotation({ critical: Bool.False, key: "u-ca", value: "hebrew" }),
 		Annotation({ critical: Bool.False, key: "knort", value: "second" }),
 	]
-	var correct = described
-	var index = 1.U64
+	var $correct = described
+	var $index = 1.U64
 	for kind in expected {
-		correct = correct and Ixdtf.fact_at(source, index) == Item(SemanticFact.new(kind))
-		index = index + 1
+		$correct = $correct and Ixdtf.fact_at(source, $index) == Item(SemanticFact.new(kind))
+		$index = $index + 1
 	}
 	first = match Ixdtf.Snapshot.fact_at(snapshot, 0) {
 		Item(fact) => Ok(SemanticFact.kind(fact))
@@ -748,19 +748,19 @@ expect {
 			ClockTime.to_fields(LocalDateTime.clock(data.local)) == { hour: 1, minute: 0, second: 0, microsecond: 120000 }
 		_ => Bool.False
 	}
-	index = 0
-	while index < Ixdtf.Snapshot.fact_count(snapshot) {
-		match Ixdtf.Snapshot.fact_at(snapshot, index) {
+	$index = 0
+	while $index < Ixdtf.Snapshot.fact_count(snapshot) {
+		match Ixdtf.Snapshot.fact_at(snapshot, $index) {
 			Item(fact) => if SemanticFact.kind(fact) == Requirement(ZoneContext) {
-				correct = Bool.False
+				$correct = Bool.False
 			}
 			End => {
-				correct = Bool.False
+				$correct = Bool.False
 			}
 		}
-		index = index + 1
+		$index = $index + 1
 	}
-	correct and position_valid and Ixdtf.fact_count(source) == 5 and Ixdtf.Snapshot.fact_count(snapshot) == 7 and
+	$correct and position_valid and Ixdtf.fact_count(source) == 5 and Ixdtf.Snapshot.fact_count(snapshot) == 7 and
 		Ixdtf.Snapshot.fact_at(snapshot, 1) == Item(SemanticFact.new(Presentation(UnsupportedCalendar("hebrew")))) and
 			Ixdtf.Snapshot.fact_at(snapshot, 2) == Item(SemanticFact.new(Context({ name: "Synthetic/Facts", version: "rfc9557-fixture-v1", validity: ZoneRules.validity(rules), provenance: Supplied }))) and
 				Ixdtf.Snapshot.presentation(snapshot) == Err(UnsupportedCalendar("hebrew")) and

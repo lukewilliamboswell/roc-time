@@ -29,8 +29,8 @@ main! = |args| {
 	# Fact reads remain independent of retained provider size. Presentation
 	# preference may inspect at most 32 source annotations, never zone rules.
 	facts_before = Host.allocated_bytes!({})
-	var reads = 0.U32
-	while reads < 100000 {
+	var $reads = 0.U32
+	while $reads < 100000 {
 		match Ixdtf.Snapshot.fact_at(snapshot, 0) {
 			Item(fact) => match SemanticFact.kind(fact) {
 				ResolvedPosition(position) => Host.assert!(position.boundary == PosixBoundary.from_microseconds(1000000))
@@ -45,7 +45,7 @@ main! = |args| {
 			}
 			End => Host.assert!(False)
 		}
-		reads = reads + 1
+		$reads = $reads + 1
 	}
 	facts_after = Host.allocated_bytes!({})
 	Host.assert!(facts_after == facts_before)

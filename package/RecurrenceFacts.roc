@@ -27,48 +27,48 @@ RecurrenceFacts := [].{
 	}
 	at : CalendarPattern.Spec, [None, Some(ClockPattern)], List(I16), U64 -> [End, Item(SemanticFact)]
 	at = |calendar, clocks, positions, index| {
-		var remaining = index
-		if remaining < calendar.by_month.len() {
-			return item(Month(get(calendar.by_month, remaining)))
+		var $remaining = index
+		if $remaining < calendar.by_month.len() {
+			return item(Month(get(calendar.by_month, $remaining)))
 		}
-		remaining = remaining - calendar.by_month.len()
-		if remaining < calendar.by_month_day.len() {
-			return item(MonthDay(get(calendar.by_month_day, remaining)))
+		$remaining = $remaining - calendar.by_month.len()
+		if $remaining < calendar.by_month_day.len() {
+			return item(MonthDay(get(calendar.by_month_day, $remaining)))
 		}
-		remaining = remaining - calendar.by_month_day.len()
-		if remaining < calendar.by_year_day.len() {
-			return item(YearDay(get(calendar.by_year_day, remaining)))
+		$remaining = $remaining - calendar.by_month_day.len()
+		if $remaining < calendar.by_year_day.len() {
+			return item(YearDay(get(calendar.by_year_day, $remaining)))
 		}
-		remaining = remaining - calendar.by_year_day.len()
-		if remaining < calendar.by_week_no.len() {
-			return item(WeekNo(get(calendar.by_week_no, remaining)))
+		$remaining = $remaining - calendar.by_year_day.len()
+		if $remaining < calendar.by_week_no.len() {
+			return item(WeekNo(get(calendar.by_week_no, $remaining)))
 		}
-		remaining = remaining - calendar.by_week_no.len()
-		if remaining < calendar.by_day.len() {
-			return item(Weekday(get(calendar.by_day, remaining)))
+		$remaining = $remaining - calendar.by_week_no.len()
+		if $remaining < calendar.by_day.len() {
+			return item(Weekday(get(calendar.by_day, $remaining)))
 		}
-		remaining = remaining - calendar.by_day.len()
-		if remaining < positions.len() {
-			return item(SetPosition(get(positions, remaining)))
+		$remaining = $remaining - calendar.by_day.len()
+		if $remaining < positions.len() {
+			return item(SetPosition(get(positions, $remaining)))
 		}
-		remaining = remaining - positions.len()
+		$remaining = $remaining - positions.len()
 		match clocks {
 			None => End
 			Some(clock) => {
 				fields = ClockPattern.definition(clock)
-				if remaining < fields.hours.len() {
-					return item(Hour(get(fields.hours, remaining)))
+				if $remaining < fields.hours.len() {
+					return item(Hour(get(fields.hours, $remaining)))
 				}
-				remaining = remaining - fields.hours.len()
-				if remaining < fields.minutes.len() {
-					return item(Minute(get(fields.minutes, remaining)))
+				$remaining = $remaining - fields.hours.len()
+				if $remaining < fields.minutes.len() {
+					return item(Minute(get(fields.minutes, $remaining)))
 				}
-				remaining = remaining - fields.minutes.len()
-				if remaining < fields.seconds.len() {
-					return item(Second(get(fields.seconds, remaining)))
+				$remaining = $remaining - fields.minutes.len()
+				if $remaining < fields.seconds.len() {
+					return item(Second(get(fields.seconds, $remaining)))
 				}
-				remaining = remaining - fields.seconds.len()
-				if remaining == 0 {
+				$remaining = $remaining - fields.seconds.len()
+				if $remaining == 0 {
 					item(Microsecond(fields.microsecond))
 				} else {
 					End

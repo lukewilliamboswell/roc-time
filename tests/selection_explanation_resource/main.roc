@@ -58,8 +58,8 @@ main! = |args| {
 	before = Host.allocated_bytes!({})
 	explanation = Explanation.new(source)
 	constructed = Host.allocated_bytes!({})
-	var i = 0.U32
-	while i < 100000 {
+	var $i = 0.U32
+	while $i < 100000 {
 		match Explanation.fact_at(explanation, 0) {
 			Item(fact) => Host.assert!(
 				match SemanticFact.kind(fact) {
@@ -95,7 +95,7 @@ main! = |args| {
 			)
 			End => Host.assert!(False)
 		}
-		i = i + 1
+		$i = $i + 1
 	}
 	read = Host.allocated_bytes!({})
 	zero = Explanation.plain(explanation, { max_facts: 0, max_utf8_bytes: 4096 })

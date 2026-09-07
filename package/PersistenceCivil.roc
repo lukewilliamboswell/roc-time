@@ -54,11 +54,11 @@ PersistenceCivil :: { stored : Value, text : Str }.{
 		if Coverage.member_count(coverage) > 1024 or !PersistenceRules.fits(rules) {
 			return Err(TooLarge)
 		}
-		var fields = ["strict-v1", local_text(ResolvedSelection.start(snapshot)), local_text(ResolvedSelection.end(snapshot)), Coverage.member_count(coverage).to_str()]
+		var $fields = ["strict-v1", local_text(ResolvedSelection.start(snapshot)), local_text(ResolvedSelection.end(snapshot)), Coverage.member_count(coverage).to_str()]
 		for span in Coverage.to_spans(coverage) {
-			fields = fields.append(PosixBoundary.to_microseconds(PosixSpan.start(span)).to_str()).append(PosixBoundary.to_microseconds(PosixSpan.end(span)).to_str())
+			$fields = $fields.append(PosixBoundary.to_microseconds(PosixSpan.start(span)).to_str()).append(PosixBoundary.to_microseconds(PosixSpan.end(span)).to_str())
 		}
-		finish(Selection(snapshot), fields.concat(PersistenceRules.to_fields(rules)), "resolved-selection", "civil-selection-snapshot-v1")
+		finish(Selection(snapshot), $fields.concat(PersistenceRules.to_fields(rules)), "resolved-selection", "civil-selection-snapshot-v1")
 	}
 	value : PersistenceCivil -> Value
 	value = |wrapped| wrapped.stored
@@ -119,27 +119,27 @@ PersistenceCivil :: { stored : Value, text : Str }.{
 		}
 		start = parse_local(at(fields, 1))?
 		end = parse_local(at(fields, 2))?
-		var members = []
-		var previous = None
-		var index = 0.U64
-		while index < count_u64 {
-			low = PosixBoundary.from_microseconds(integer(at(fields, 4 + index * 2))?)
-			high = PosixBoundary.from_microseconds(integer(at(fields, 5 + index * 2))?)
+		var $members = []
+		var $previous = None
+		var $index = 0.U64
+		while $index < count_u64 {
+			low = PosixBoundary.from_microseconds(integer(at(fields, 4 + $index * 2))?)
+			high = PosixBoundary.from_microseconds(integer(at(fields, 5 + $index * 2))?)
 			span = match PosixSpan.new(low, high) {
 				Ok(result) => result
 				Err(error) => return Err(InvalidSpan(error))
 			}
-			match previous {
+			match $previous {
 				Some(last) => if low <= last {
 					return Err(NonCanonicalCoverage)
 				}
 				None => {}
 			}
-			previous = Some(high)
-			members = members.append(span)
-			index = index + 1
+			$previous = Some(high)
+			$members = $members.append(span)
+			$index = $index + 1
 		}
-		expected = match Coverage.from_sorted_spans(members) {
+		expected = match Coverage.from_sorted_spans($members) {
 			Ok(result) => result
 			Err(_) => return Err(NonCanonicalCoverage)
 		}

@@ -86,7 +86,7 @@ test_alldayoccurrence_day = |number| CalendarDate.from_fields(Gregorian, { year:
 # Independent constant-offset segment arithmetic: changing at epoch+2h makes
 # the first civil date 23h, 25h, or unchanged. A +24h jump at epoch skips it.
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for (at, offset, hours) in [(7200000000.I64, 3600.I32, 23.I64), (7200000000, -3600, 25), (7200000000, 0, 24), (0, 86400, 0)] {
 		validity = PosixSpan.new(test_alldayoccurrence_point(-259200000000), test_alldayoccurrence_point(259200000000))?
 		rules = ZoneRules.new_bounded("Synthetic/Day", "v1", validity, FixedOffset.from_seconds(0), [{ at: test_alldayoccurrence_point(at), offset: FixedOffset.from_seconds(offset) }], { minimum: I32.min(0, offset), maximum: I32.max(0, offset) })?
@@ -95,16 +95,16 @@ expect {
 		first = AllDayOccurrence.Cursor.collect(initial, { max_segments: 1, max_members: 1 })?
 		match first.status {
 			Complete(_) => {
-				valid = Bool.False
+				$valid = Bool.False
 			}
 			Limited(progress) => {
 				last = AllDayOccurrence.Cursor.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
 				match last.status {
 					Limited(_) => {
-						valid = Bool.False
+						$valid = Bool.False
 					}
 					Complete(value) => {
-						valid = valid and AllDayOccurrence.id(value) == { series: "visits", date } and
+						$valid = $valid and AllDayOccurrence.id(value) == { series: "visits", date } and
 							AllDayOccurrence.date(value) == date and AllDayOccurrence.days(value) == 1 and
 								Coverage.coordinate_width(AllDayOccurrence.coverage(value)) == Ok(PosixDelta.from_microseconds(hours * 3600000000)) and
 									ZoneRules.version(ResolvedSelection.rules(AllDayOccurrence.selection(value))) == "v1"
@@ -113,7 +113,7 @@ expect {
 			}
 		}
 	}
-	valid
+	$valid
 }
 
 expect {

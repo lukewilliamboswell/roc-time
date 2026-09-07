@@ -45,36 +45,36 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		# piecewise fixture definition, not the production inverse algorithm.
 		second = I64.div_floor_by(input.number, 1000000)
 		fraction = input.number - second * 1000000
-		var expected = []
-		var tick = -10.I64
-		while tick < 10 {
-			offset = if tick < 0 {
+		var $expected = []
+		var $tick = -10.I64
+		while $tick < 10 {
+			offset = if $tick < 0 {
 				0.I32
-			} else if tick < 4 {
+			} else if $tick < 4 {
 				input.first
 			} else {
 				input.second
 			}
-			if tick + offset.to_i64() == second {
-				expected = expected.append(point(tick * 1000000 + fraction))
+			if $tick + offset.to_i64() == second {
+				$expected = $expected.append(point($tick * 1000000 + fraction))
 			}
-			tick = tick + 1
+			$tick = $tick + 1
 		}
-		classification = match expected {
+		classification = match $expected {
 			[] => Gap
 			[only] => Unique(only)
-			_ => Fold(expected)
+			_ => Fold($expected)
 		}
 		if ZoneRules.resolve(rules, local) != Ok(classification) {
 			crash "zone resolution differs from independent timeline enumeration"
 		}
-		var classification_cursor = match ZoneRules.classification_cursor(rules, local) {
+		var $classification_cursor = match ZoneRules.classification_cursor(rules, local) {
 			Ok(value) => value
 			Err(_) => crash "classification cursor"
 		}
-		var classified = Bool.False
+		var $classified = Bool.False
 		for _ in [0, 1, 2] {
-			batch = match ZoneRules.ClassificationCursor.collect(classification_cursor, { max_segments: 1, max_candidates: 3 }) {
+			batch = match ZoneRules.ClassificationCursor.collect($classification_cursor, { max_segments: 1, max_candidates: 3 }) {
 				Ok(value) => value
 				Err(_) => crash "classification advance"
 			}
@@ -86,16 +86,16 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					if ZoneRules.Classification.resolution(value) != classification {
 						crash "resumed classification differs from timeline oracle"
 					}
-					if expected == [] {
-						var pre_gap_offsets = []
+					if $expected == [] {
+						var $pre_gap_offsets = []
 						if input.number >= 0 and input.number < input.first.to_i64() * 1000000 {
-							pre_gap_offsets = pre_gap_offsets.append(0.I32)
+							$pre_gap_offsets = $pre_gap_offsets.append(0.I32)
 						}
 						if input.number >= 4000000 + input.first.to_i64() * 1000000 and input.number < 4000000 + input.second.to_i64() * 1000000 {
-							pre_gap_offsets = pre_gap_offsets.append(input.first)
+							$pre_gap_offsets = $pre_gap_offsets.append(input.first)
 						}
 						chosen = ZoneRules.Classification.choose(value, { occurrence: First, gap: UseOffsetBeforeGap })
-						match pre_gap_offsets {
+						match $pre_gap_offsets {
 							[before] => {
 								match chosen {
 									Ok(choice) => if choice.boundary != point(input.number - before.to_i64() * 1000000) {
@@ -110,17 +110,17 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 							}
 						}
 					}
-					classified = Bool.True
+					$classified = Bool.True
 				}
 				Limited(progress) => {
-					classification_cursor = progress.cursor
+					$classification_cursor = progress.cursor
 				}
 			}
 		}
-		if !classified {
+		if !$classified {
 			crash "classification did not finish"
 		}
-		match expected {
+		match $expected {
 			[] => {
 				if ZoneRules.resolve_occurrence(rules, local, First) != Err(Gap) {
 					crash "gap silently shifted"
@@ -137,7 +137,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 				}
 			}
 		}
-		for occurrence in expected {
+		for occurrence in $expected {
 			seconds = I64.div_trunc_by(input.number - PosixBoundary.to_microseconds(occurrence), 1000000).to_i32_wrap()
 			snapshot = match ResolvedBoundary.resolve(rules, local, MatchingOffset(FixedOffset.from_seconds(seconds))) {
 				Ok(value) => value
@@ -188,13 +188,13 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Ok(value) => value
 			Err(_) => crash "complete local selection rejected"
 		}
-		var cursor = match ZoneRules.selection_cursor(rules, local, LocalDateTime.new(end_date, end_clock)) {
+		var $cursor = match ZoneRules.selection_cursor(rules, local, LocalDateTime.new(end_date, end_clock)) {
 			Ok(value) => value
 			Err(_) => crash "selection cursor rejected fixture"
 		}
-		var completed = Bool.False
+		var $completed = Bool.False
 		for _ in [0, 1, 2] {
-			batch = match ResolvedSelection.collect(cursor, { max_segments: 1, max_members: 3 }) {
+			batch = match ResolvedSelection.collect($cursor, { max_segments: 1, max_members: 3 }) {
 				Ok(value) => value
 				Err(_) => crash "selection cursor failed"
 			}
@@ -206,14 +206,14 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					if ResolvedSelection.coverage(value) != selected or ResolvedSelection.start(value) != local or ResolvedSelection.end(value) != LocalDateTime.new(end_date, end_clock) {
 						crash "chunk boundaries changed selection"
 					}
-					completed = Bool.True
+					$completed = Bool.True
 				}
 				Limited(progress) => {
-					cursor = progress.cursor
+					$cursor = progress.cursor
 				}
 			}
 		}
-		if !completed {
+		if !$completed {
 			crash "three segments did not complete"
 		}
 		snapshot = match ResolvedSelection.resolve(rules, local, LocalDateTime.new(end_date, end_clock)) {
@@ -223,13 +223,13 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		if ResolvedSelection.coverage(snapshot) != selected {
 			crash "selection snapshot changed coverage"
 		}
-		var probe_second = -10.I64
-		while probe_second < 10 {
+		var $probe_second = -10.I64
+		while $probe_second < 10 {
 			for probe_fraction in [0.I64, fraction, 999999] {
-				probe = probe_second * 1000000 + probe_fraction
-				offset = if probe_second < 0 {
+				probe = $probe_second * 1000000 + probe_fraction
+				offset = if $probe_second < 0 {
 					0.I32
-				} else if probe_second < 4 {
+				} else if $probe_second < 4 {
 					input.first
 				} else {
 					input.second
@@ -240,7 +240,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					crash "local selection differs from direct timeline membership"
 				}
 			}
-			probe_second = probe_second + 1
+			$probe_second = $probe_second + 1
 		}
 		day_rules = make_rules(input.first, input.second, -86400, 172800)
 		# Use epoch day for probes around both boundaries.

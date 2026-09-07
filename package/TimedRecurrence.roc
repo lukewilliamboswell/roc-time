@@ -235,25 +235,25 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 			if initial.rule.inclusions.is_empty() {
 				return next_rule(initial, limits)
 			}
-			var state = initial
-			var steps = 0.U64
-			var zone_segments = 0.U64
+			var $state = initial
+			var $steps = 0.U64
+			var $zone_segments = 0.U64
 			while True {
-				if buffered_count(state) > limits.max_buffered {
-					return Ok(limited(state, steps, zone_segments, BufferLimit))
+				if buffered_count($state) > limits.max_buffered {
+					return Ok(limited($state, $steps, $zone_segments, BufferLimit))
 				}
-				match state.inclusion_pending {
+				match $state.inclusion_pending {
 					Some(boxed) => {
 						pending = Box.unbox(boxed)
-						batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - zone_segments, max_candidates: limits.max_zone_candidates })?
-						zone_segments = zone_segments + batch.segments
-						state = { ..state, zone_buffered: batch.buffered }
+						batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - $zone_segments, max_candidates: limits.max_zone_candidates })?
+						$zone_segments = $zone_segments + batch.segments
+						$state = { ..$state, zone_buffered: batch.buffered }
 						match batch.status {
 							Limited(progress) => return Ok(
 								limited(
-									{ ..state, inclusion_pending: Some(Box.box({ ..pending, cursor: progress.cursor })) },
-									steps,
-									zone_segments,
+									{ ..$state, inclusion_pending: Some(Box.box({ ..pending, cursor: progress.cursor })) },
+									$steps,
+									$zone_segments,
 									match progress.reason {
 										WorkLimit => ZoneWorkLimit
 										BufferLimit => ZoneBufferLimit
@@ -261,48 +261,48 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 								),
 							)
 							Complete(classification) => {
-								choice = ZoneRules.Classification.choose(classification, { occurrence: state.context.occurrence, gap: state.context.gap })?
+								choice = ZoneRules.Classification.choose(classification, { occurrence: $state.context.occurrence, gap: $state.context.gap })?
 								occurrence : Occurrence
-								occurrence = { source: pending.source, choice, rules: state.context.rules }
-								state = { ..state, inclusion_pending: None, inclusion_index: state.inclusion_index + 1, zone_buffered: 0 }
-								if !excluded(state.rule.exclusions, pending.source) {
-									return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: 0, status: Item({ occurrence, cursor: state }) })
+								occurrence = { source: pending.source, choice, rules: $state.context.rules }
+								$state = { ..$state, inclusion_pending: None, inclusion_index: $state.inclusion_index + 1, zone_buffered: 0 }
+								if !excluded($state.rule.exclusions, pending.source) {
+									return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: 0, status: Item({ occurrence, cursor: $state }) })
 								}
 							}
 						}
 					}
 					None => {}
 				}
-				match state.held {
-					None => if !state.rule_ended {
-						batch = next_rule(state, { ..limits, max_steps: limits.max_steps - steps, max_zone_segments: limits.max_zone_segments - zone_segments })?
-						steps = steps + batch.steps
-						zone_segments = zone_segments + batch.zone_segments
+				match $state.held {
+					None => if !$state.rule_ended {
+						batch = next_rule($state, { ..limits, max_steps: limits.max_steps - $steps, max_zone_segments: limits.max_zone_segments - $zone_segments })?
+						$steps = $steps + batch.steps
+						$zone_segments = $zone_segments + batch.zone_segments
 						match batch.status {
-							Limited(progress) => return Ok(limited(progress.cursor, steps, zone_segments, progress.reason))
+							Limited(progress) => return Ok(limited(progress.cursor, $steps, $zone_segments, progress.reason))
 							End => {
-								state = { ..state, rule_ended: Bool.True, buffer: [], pending: None, zone_buffered: 0 }
+								$state = { ..$state, rule_ended: Bool.True, buffer: [], pending: None, zone_buffered: 0 }
 							}
 							Item(item) => {
-								state = { ..item.cursor, held: Some(Box.box(item.occurrence)) }
+								$state = { ..item.cursor, held: Some(Box.box(item.occurrence)) }
 							}
 						}
 					}
 					Some(_) => {}
 				}
-				explicit = state.rule.inclusions.get(state.inclusion_index)
-				match (state.held, explicit) {
-					(None, Err(_)) => return Ok(ended(state, steps, zone_segments))
-					(None, Ok(source)) => if !before(source, state.window.end) {
-						return Ok(ended(state, steps, zone_segments))
+				explicit = $state.rule.inclusions.get($state.inclusion_index)
+				match ($state.held, explicit) {
+					(None, Err(_)) => return Ok(ended($state, $steps, $zone_segments))
+					(None, Ok(source)) => if !before(source, $state.window.end) {
+						return Ok(ended($state, $steps, $zone_segments))
 					}
 					_ => {}
 				}
-				if steps == limits.max_steps {
-					return Ok(limited(state, steps, zone_segments, WorkLimit))
+				if $steps == limits.max_steps {
+					return Ok(limited($state, $steps, $zone_segments, WorkLimit))
 				}
-				steps = steps + 1
-				match state.held {
+				$steps = $steps + 1
+				match $state.held {
 					Some(boxed) => {
 						occurrence = Box.unbox(boxed)
 						use_rule = match explicit {
@@ -312,14 +312,14 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 						if use_rule {
 							index = match explicit {
 								Ok(source) => if LocalDateTime.same_position(source, occurrence.source) {
-									state.inclusion_index + 1
+									$state.inclusion_index + 1
 								} else {
-									state.inclusion_index
+									$state.inclusion_index
 								}
-								Err(_) => state.inclusion_index
+								Err(_) => $state.inclusion_index
 							}
-							state = { ..state, held: None, inclusion_index: index }
-							return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
+							$state = { ..$state, held: None, inclusion_index: index }
+							return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
 						}
 					}
 					None => {}
@@ -328,14 +328,14 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 					Ok(value) => value
 					Err(_) => crash "merge has an inclusion"
 				}
-				if before(source, state.window.start) {
-					state = { ..state, inclusion_index: state.inclusion_index + 1 }
+				if before(source, $state.window.start) {
+					$state = { ..$state, inclusion_index: $state.inclusion_index + 1 }
 				} else {
-					if buffered_count(state) == limits.max_buffered {
-						return Ok(limited(state, steps, zone_segments, BufferLimit))
+					if buffered_count($state) == limits.max_buffered {
+						return Ok(limited($state, $steps, $zone_segments, BufferLimit))
 					}
-					pending = ZoneRules.classification_cursor(state.context.rules, source)?
-					state = { ..state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
+					pending = ZoneRules.classification_cursor($state.context.rules, source)?
+					$state = { ..$state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
 				}
 			}
 			crash "merge loop returns an outcome"
@@ -347,24 +347,24 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		## an exactly full final batch needs resumption to prove completion.
 		collect : Cursor, CollectLimits -> Try(Batch, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
 		collect = |initial, limits| {
-			var current = initial
-			var occurrences = []
-			var steps = 0.U64
-			var zone_segments = 0.U64
-			while occurrences.len() < limits.max_occurrences {
-				result = next(current, { ..limits.work, max_steps: limits.work.max_steps - steps, max_zone_segments: limits.work.max_zone_segments - zone_segments })?
-				steps = steps + result.steps
-				zone_segments = zone_segments + result.zone_segments
+			var $current = initial
+			var $occurrences = []
+			var $steps = 0.U64
+			var $zone_segments = 0.U64
+			while $occurrences.len() < limits.max_occurrences {
+				result = next($current, { ..limits.work, max_steps: limits.work.max_steps - $steps, max_zone_segments: limits.work.max_zone_segments - $zone_segments })?
+				$steps = $steps + result.steps
+				$zone_segments = $zone_segments + result.zone_segments
 				match result.status {
-					End => return Ok({ occurrences, steps, zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Complete })
-					Limited(progress) => return Ok({ occurrences, steps, zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Limited(progress) })
+					End => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Complete })
+					Limited(progress) => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Limited(progress) })
 					Item(item) => {
-						occurrences = occurrences.append(item.occurrence)
-						current = item.cursor
+						$occurrences = $occurrences.append(item.occurrence)
+						$current = item.cursor
 					}
 				}
 			}
-			Ok({ occurrences, steps, zone_segments, buffered: buffered_count(current), zone_buffered: current.zone_buffered, status: Limited({ cursor: current, reason: OutputLimit }) })
+			Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($current), zone_buffered: $current.zone_buffered, status: Limited({ cursor: $current, reason: OutputLimit }) })
 		}
 
 		## A lazy stream of next outcomes. Budgets apply per advancement.
@@ -416,17 +416,17 @@ clock_at = |pattern, index| match ClockPattern.at(pattern, index) {
 }
 
 clock_matches = |pattern, clock| {
-	var lower = 0.U64
-	var upper = ClockPattern.count(pattern)
-	while lower < upper {
-		middle = lower + U64.div_trunc_by(upper - lower, 2)
+	var $lower = 0.U64
+	var $upper = ClockPattern.count(pattern)
+	while $lower < $upper {
+		middle = $lower + U64.div_trunc_by($upper - $lower, 2)
 		if clock_at(pattern, middle) < clock {
-			lower = middle + 1
+			$lower = middle + 1
 		} else {
-			upper = middle
+			$upper = middle
 		}
 	}
-	lower < ClockPattern.count(pattern) and clock_at(pattern, lower) == clock
+	$lower < ClockPattern.count(pattern) and clock_at(pattern, $lower) == clock
 }
 
 selected : List(I16), U64, U64 -> Bool
@@ -434,15 +434,15 @@ selected = |positions, index, count| {
 	if positions.is_empty() {
 		return Bool.True
 	}
-	var matches = Bool.False
+	var $matches = Bool.False
 	for position in positions {
-		matches = matches or if position > 0 {
+		$matches = $matches or if position > 0 {
 			index + 1 == position.to_u64_wrap()
 		} else {
 			count - index == (-position).to_u64_wrap()
 		}
 	}
-	matches
+	$matches
 }
 
 buffer_at = |buffer, index| match List.get(buffer, index) {
@@ -492,29 +492,29 @@ test_stopping_boundary = |termination, end_microseconds| {
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(3600000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 	initial = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
-	var cursor = initial
-	var values = []
-	var complete = Bool.False
-	var valid = Bool.True
-	var calls = 0.U64
-	while calls < 40 and !complete {
-		batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 1, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 })?
-		valid = valid and batch.steps <= 1 and batch.zone_segments <= 1
+	var $cursor = initial
+	var $values = []
+	var $complete = Bool.False
+	var $valid = Bool.True
+	var $calls = 0.U64
+	while $calls < 40 and !$complete {
+		batch = TimedRecurrence.Cursor.next($cursor, { max_steps: 1, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 })?
+		$valid = $valid and batch.steps <= 1 and batch.zone_segments <= 1
 		match batch.status {
 			End => {
-				complete = Bool.True
+				$complete = Bool.True
 			}
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 			Item(item) => {
-				values = values.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
-				cursor = item.cursor
+				$values = $values.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				$cursor = item.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
-	Ok(valid and complete and values == [PosixBoundary.from_microseconds(0)])
+	Ok($valid and $complete and $values == [PosixBoundary.from_microseconds(0)])
 }
 
 expect test_stopping_boundary(Forever, 3600000000) == Ok(True)
@@ -566,39 +566,39 @@ test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions
 			},
 		},
 	)?
-	var cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: policy, gap: UseOffsetBeforeGap })?
-	var boundaries = []
-	var sources = []
-	var adjusted = []
-	var complete = Bool.False
-	var valid = Bool.True
-	var calls = 0.U64
-	while calls < 100 and !complete {
-		effective = List.get(pauses, calls) ?? budget
-		batch = TimedRecurrence.Cursor.next(cursor, effective)?
-		valid = valid and batch.steps <= effective.max_steps and batch.zone_segments <= effective.max_zone_segments
+	var $cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: policy, gap: UseOffsetBeforeGap })?
+	var $boundaries = []
+	var $sources = []
+	var $adjusted = []
+	var $complete = Bool.False
+	var $valid = Bool.True
+	var $calls = 0.U64
+	while $calls < 100 and !$complete {
+		effective = List.get(pauses, $calls) ?? budget
+		batch = TimedRecurrence.Cursor.next($cursor, effective)?
+		$valid = $valid and batch.steps <= effective.max_steps and batch.zone_segments <= effective.max_zone_segments
 		match batch.status {
 			End => {
-				complete = Bool.True
+				$complete = Bool.True
 			}
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 			Item(item) => {
-				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
-				sources = sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
-				adjusted = adjusted.append(
+				$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				$sources = $sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
+				$adjusted = $adjusted.append(
 					match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
 						Exact => Bool.False
 						BeforeGap(_) => Bool.True
 					},
 				)
-				cursor = item.cursor
+				$cursor = item.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
-	Ok({ valid: valid and complete, boundaries, sources, adjusted })
+	Ok({ valid: $valid and $complete, boundaries: $boundaries, sources: $sources, adjusted: $adjusted })
 }
 
 expect {
@@ -683,10 +683,10 @@ expect {
 	initial = test_stream_cursor(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
 	zero = TimedRecurrence.Cursor.collect(initial, { work, max_occurrences: 0 })?
-	var valid = zero.steps == 0 and zero.zone_segments == 0 and zero.occurrences.is_empty()
+	var $valid = zero.steps == 0 and zero.zone_segments == 0 and zero.occurrences.is_empty()
 	resume = match zero.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == OutputLimit
+			$valid = $valid and progress.reason == OutputLimit
 			progress.cursor
 		}
 		Complete => crash "zero-output collection must not infer completion"
@@ -695,13 +695,13 @@ expect {
 	boundaries = full.occurrences.map(TimedRecurrence.Occurrence.boundary)
 	rest = match full.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == OutputLimit
+			$valid = $valid and progress.reason == OutputLimit
 			progress.cursor
 		}
 		Complete => crash "exact capacity must not look ahead"
 	}
 	final = TimedRecurrence.Cursor.collect(rest, { work, max_occurrences: 2 })?
-	valid and boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)] and final.occurrences.is_empty() and match final.status {
+	$valid and boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)] and final.occurrences.is_empty() and match final.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
 	}
@@ -711,16 +711,16 @@ expect {
 	initial = test_stream_cursor(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
 	first = TimedRecurrence.Cursor.collect(initial, { work, max_occurrences: 10 })?
-	var valid = first.zone_segments == 1 and first.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(0)]
+	var $valid = first.zone_segments == 1 and first.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(0)]
 	rest = match first.status {
 		Limited(progress) => {
-			valid = valid and progress.reason == ZoneWorkLimit
+			$valid = $valid and progress.reason == ZoneWorkLimit
 			progress.cursor
 		}
 		Complete => crash "zone work is shared by the entire batch"
 	}
 	second = TimedRecurrence.Cursor.collect(rest, { work, max_occurrences: 10 })?
-	valid and second.zone_segments == 1 and second.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(3600000000)] and match second.status {
+	$valid and second.zone_segments == 1 and second.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(3600000000)] and match second.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
 	}
@@ -729,47 +729,47 @@ expect {
 expect {
 	initial = test_stream_cursor(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
-	var zero_count = 0.U64
-	var valid = Bool.True
+	var $zero_count = 0.U64
+	var $valid = Bool.True
 	for result in TimedRecurrence.Cursor.outcomes(initial, { ..work, max_steps: 0 }) {
 		batch = result?
-		zero_count = zero_count + 1
-		valid = valid and batch.steps == 0 and match batch.status {
+		$zero_count = $zero_count + 1
+		$valid = $valid and batch.steps == 0 and match batch.status {
 			Limited(progress) => progress.reason == WorkLimit
 			_ => Bool.False
 		}
 	}
-	var boundaries = []
-	var end_count = 0.U64
+	var $boundaries = []
+	var $end_count = 0.U64
 	for result in TimedRecurrence.Cursor.outcomes(initial, work) {
 		batch = result?
 		match batch.status {
 			End => {
-				end_count = end_count + 1
+				$end_count = $end_count + 1
 			}
 			Item(item) => {
-				boundaries = boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
 			}
 			Limited(_) => {
-				valid = Bool.False
+				$valid = Bool.False
 			}
 		}
 	}
-	valid and zero_count == 1 and end_count == 1 and boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)]
+	$valid and $zero_count == 1 and $end_count == 1 and $boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)]
 }
 
 expect {
 	initial = test_stream_cursor_with_validity(2, 0)?
-	var errors = 0.U64
-	var valid = Bool.True
+	var $errors = 0.U64
+	var $valid = Bool.True
 	for result in TimedRecurrence.Cursor.outcomes(initial, { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
-		errors = errors + 1
-		valid = valid and match result {
+		$errors = $errors + 1
+		$valid = $valid and match result {
 			Err(OutsideValidity) => Bool.True
 			_ => Bool.False
 		}
 	}
-	valid and errors == 1
+	$valid and $errors == 1
 }
 
 validate_options = |anchor, termination, positions| {
@@ -821,24 +821,24 @@ test_subdaily = |clock_fields, pattern, positions, count| {
 	rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern, termination: Count(count), by_set_pos: positions })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(432000000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	var current = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
-	var boundaries = []
-	var calls = 0.U64
-	while calls < 2000 {
-		batch = TimedRecurrence.Cursor.collect(current, { work: { max_steps: 1, max_buffered: 60, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
+	var $current = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
+	var $boundaries = []
+	var $calls = 0.U64
+	while $calls < 2000 {
+		batch = TimedRecurrence.Cursor.collect($current, { work: { max_steps: 1, max_buffered: 60, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
 		if batch.steps > 1 or batch.zone_segments > 1 {
 			crash "subdaily work limit"
 		}
 		for occurrence in batch.occurrences {
-			boundaries = boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
+			$boundaries = $boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
 		}
 		match batch.status {
-			Complete => return Ok(boundaries)
+			Complete => return Ok($boundaries)
 			Limited(progress) => {
-				current = progress.cursor
+				$current = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "subdaily finite grid did not terminate"
 }
@@ -967,18 +967,18 @@ test_subdaily_status = |start, pattern| match TimedRecurrence.new_subdaily(start
 
 excluded : List(LocalDateTime), LocalDateTime -> Bool
 excluded = |labels, source| {
-	var lower = 0.U64
-	var upper = labels.len()
-	while lower < upper {
-		middle = lower + U64.div_trunc_by(upper - lower, 2)
+	var $lower = 0.U64
+	var $upper = labels.len()
+	while $lower < $upper {
+		middle = $lower + U64.div_trunc_by($upper - $lower, 2)
 		label = label_at(labels, middle)
 		if before(label, source) {
-			lower = middle + 1
+			$lower = middle + 1
 		} else {
-			upper = middle
+			$upper = middle
 		}
 	}
-	lower < labels.len() and LocalDateTime.same_position(label_at(labels, lower), source)
+	$lower < labels.len() and LocalDateTime.same_position(label_at(labels, $lower), source)
 }
 
 label_at = |labels, index| match List.get(labels, index) {
@@ -1040,61 +1040,61 @@ expect {
 
 next_rule : TimedRecurrence.Cursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
 next_rule = |initial, limits| {
-	var state = initial
-	var steps = 0.U64
-	var zone_segments = 0.U64
+	var $state = initial
+	var $steps = 0.U64
+	var $zone_segments = 0.U64
 	while True {
-		if buffered_count(state) > limits.max_buffered {
-			return Ok(limited(state, steps, zone_segments, BufferLimit))
+		if buffered_count($state) > limits.max_buffered {
+			return Ok(limited($state, $steps, $zone_segments, BufferLimit))
 		}
-		match state.rule.termination {
-			Count(maximum) => if state.count == maximum {
-				return Ok(ended(state, steps, zone_segments))
+		match $state.rule.termination {
+			Count(maximum) => if $state.count == maximum {
+				return Ok(ended($state, $steps, $zone_segments))
 			}
 			_ => {}
 		}
-		match state.pending {
+		match $state.pending {
 			Some(pending) => {
-				batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - zone_segments, max_candidates: limits.max_zone_candidates })?
-				zone_segments = zone_segments + batch.segments
-				state = { ..state, zone_buffered: batch.buffered }
+				batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - $zone_segments, max_candidates: limits.max_zone_candidates })?
+				$zone_segments = $zone_segments + batch.segments
+				$state = { ..$state, zone_buffered: batch.buffered }
 				match batch.status {
 					Limited(progress) => {
 						reason = match progress.reason {
 							WorkLimit => ZoneWorkLimit
 							BufferLimit => ZoneBufferLimit
 						}
-						return Ok(limited({ ..state, pending: Some({ ..pending, cursor: progress.cursor }) }, steps, zone_segments, reason))
+						return Ok(limited({ ..$state, pending: Some({ ..pending, cursor: progress.cursor }) }, $steps, $zone_segments, reason))
 					}
 					Complete(classification) => {
-						choice = ZoneRules.Classification.choose(classification, { occurrence: state.context.occurrence, gap: state.context.gap })?
+						choice = ZoneRules.Classification.choose(classification, { occurrence: $state.context.occurrence, gap: $state.context.gap })?
 						occurrence : TimedRecurrence.Occurrence
-						occurrence = { source: pending.source, choice, rules: state.context.rules }
-						anchor_index = if pending.source == state.rule.anchor {
-							Some(state.buffer.len())
+						occurrence = { source: pending.source, choice, rules: $state.context.rules }
+						anchor_index = if pending.source == $state.rule.anchor {
+							Some($state.buffer.len())
 						} else {
-							state.anchor_index
+							$state.anchor_index
 						}
-						phase = if state.rule.positions.is_empty() {
+						phase = if $state.rule.positions.is_empty() {
 							Emit({ index: 0, advance: Bool.False })
 						} else {
 							Build
 						}
-						state = { ..state, buffer: state.buffer.append(occurrence), anchor_index, pending: None, zone_buffered: 0, phase }
+						$state = { ..$state, buffer: $state.buffer.append(occurrence), anchor_index, pending: None, zone_buffered: 0, phase }
 					}
 				}
 			}
 			None => {}
 		}
-		if steps == limits.max_steps {
-			return Ok(limited(state, steps, zone_segments, WorkLimit))
+		if $steps == limits.max_steps {
+			return Ok(limited($state, $steps, $zone_segments, WorkLimit))
 		}
-		steps = steps + 1
-		match state.phase {
+		$steps = $steps + 1
+		match $state.phase {
 			Emit(emission) => {
-				if emission.index == state.buffer.len() {
-					state = {
-						..state,
+				if emission.index == $state.buffer.len() {
+					$state = {
+						..$state,
 						buffer: [],
 						phase: if emission.advance {
 							Advance
@@ -1103,69 +1103,69 @@ next_rule = |initial, limits| {
 						},
 					}
 				} else {
-					occurrence = buffer_at(state.buffer, emission.index)
-					state = { ..state, phase: Emit({ ..emission, index: emission.index + 1 }) }
-					if selected(state.rule.positions, emission.index, state.buffer.len()) and !before(occurrence.source, state.rule.anchor) {
-						match state.rule.termination {
+					occurrence = buffer_at($state.buffer, emission.index)
+					$state = { ..$state, phase: Emit({ ..emission, index: emission.index + 1 }) }
+					if selected($state.rule.positions, emission.index, $state.buffer.len()) and !before(occurrence.source, $state.rule.anchor) {
+						match $state.rule.termination {
 							Until(end) => if before(end, occurrence.source) {
-								return Ok(ended(state, steps, zone_segments))
+								return Ok(ended($state, $steps, $zone_segments))
 							}
 							_ => {}
 						}
-						if !before(occurrence.source, state.window.end) {
-							return Ok(ended(state, steps, zone_segments))
+						if !before(occurrence.source, $state.window.end) {
+							return Ok(ended($state, $steps, $zone_segments))
 						}
-						within_cutoff = match state.boundary_cutoff {
+						within_cutoff = match $state.boundary_cutoff {
 							None => Bool.True
 							Some(boundary) => occurrence.choice.boundary <= boundary
 						}
 						if within_cutoff {
-							state = { ..state, count: state.count + 1 }
-							if !before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) {
-								return Ok({ steps, zone_segments, buffered: buffered_count(state), zone_buffered: state.zone_buffered, status: Item({ occurrence, cursor: state }) })
+							$state = { ..$state, count: $state.count + 1 }
+							if !before(occurrence.source, $state.window.start) and !excluded($state.rule.exclusions, occurrence.source) {
+								return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
 							}
 						}
 					}
 				}
 			}
 			Advance => {
-				boundary = state.period_end
-				if !before(boundary, state.window.end) {
-					return Ok(ended(state, steps, zone_segments))
+				boundary = $state.period_end
+				if !before(boundary, $state.window.end) {
+					return Ok(ended($state, $steps, $zone_segments))
 				}
-				match state.rule.termination {
+				match $state.rule.termination {
 					Until(end) => if before(end, boundary) {
-						return Ok(ended(state, steps, zone_segments))
+						return Ok(ended($state, $steps, $zone_segments))
 					}
 					_ => {}
 				}
-				match state.rule.schedule {
-					Subdaily(pattern) => if !SubdailyPattern.starts_before(pattern, state.period + 1, state.window.end) {
-						return Ok(ended(state, steps, zone_segments))
+				match $state.rule.schedule {
+					Subdaily(pattern) => if !SubdailyPattern.starts_before(pattern, $state.period + 1, $state.window.end) {
+						return Ok(ended($state, $steps, $zone_segments))
 					}
 					Calendar(_) => {}
 				}
-				frame = timed_frame(state.rule, state.period + 1)?
-				state = { ..state, period: state.period + 1, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, phase: Build, anchor_index: None }
+				frame = timed_frame($state.rule, $state.period + 1)?
+				$state = { ..$state, period: $state.period + 1, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, phase: Build, anchor_index: None }
 			}
 			Build => {
-				if state.day == state.end_day {
-					if !state.rule.positions.is_empty() and state.period == 0 {
-						match state.anchor_index {
-							Some(index) => if !selected(state.rule.positions, index, state.buffer.len()) {
+				if $state.day == $state.end_day {
+					if !$state.rule.positions.is_empty() and $state.period == 0 {
+						match $state.anchor_index {
+							Some(index) => if !selected($state.rule.positions, index, $state.buffer.len()) {
 								return Err(UnsynchronizedStart)
 							}
 							None => return Err(UnsynchronizedStart)
 						}
 					}
-					state = { ..state, phase: Emit({ index: 0, advance: Bool.True }) }
+					$state = { ..$state, phase: Emit({ index: 0, advance: Bool.True }) }
 				} else {
-					match state.day_selected {
+					match $state.day_selected {
 						Unknown => {
-							date = GregorianDate.from_civil_day(CivilDay.from_day_number(state.day))?
-							matches = matches_day(state.rule, state.period, date)?
-							state = {
-								..state,
+							date = GregorianDate.from_civil_day(CivilDay.from_day_number($state.day))?
+							matches = matches_day($state.rule, $state.period, date)?
+							$state = {
+								..$state,
 								day_selected: if matches {
 									Yes
 								} else {
@@ -1174,34 +1174,34 @@ next_rule = |initial, limits| {
 							}
 						}
 						No => {
-							state = next_day(state)
+							$state = next_day($state)
 						}
 						Yes => {
-							if state.clock_index == state.clock_end {
-								state = next_day(state)
+							if $state.clock_index == $state.clock_end {
+								$state = next_day($state)
 							}
 								else {
-									source = local_at(state.day, clock_at(state.rule.clocks, state.clock_index))?
-									if state.rule.positions.is_empty() {
-										if !before(source, state.window.end) {
-											return Ok(ended(state, steps, zone_segments))
+									source = local_at($state.day, clock_at($state.rule.clocks, $state.clock_index))?
+									if $state.rule.positions.is_empty() {
+										if !before(source, $state.window.end) {
+											return Ok(ended($state, $steps, $zone_segments))
 										}
-										match state.rule.termination {
+										match $state.rule.termination {
 											Until(end) => if before(end, source) {
-												return Ok(ended(state, steps, zone_segments))
+												return Ok(ended($state, $steps, $zone_segments))
 											}
 											_ => {}
 										}
 									}
-									if state.rule.positions.is_empty() and before(source, state.rule.anchor) {
-										state = { ..state, clock_index: state.clock_index + 1 }
+									if $state.rule.positions.is_empty() and before(source, $state.rule.anchor) {
+										$state = { ..$state, clock_index: $state.clock_index + 1 }
 									}
 										else {
-											if state.buffer.len() == limits.max_buffered {
-												return Ok(limited(state, steps, zone_segments, BufferLimit))
+											if $state.buffer.len() == limits.max_buffered {
+												return Ok(limited($state, $steps, $zone_segments, BufferLimit))
 											}
-											pending = ZoneRules.classification_cursor(state.context.rules, source)?
-											state = { ..state, clock_index: state.clock_index + 1, pending: Some({ source, cursor: pending }) }
+											pending = ZoneRules.classification_cursor($state.context.rules, source)?
+											$state = { ..$state, clock_index: $state.clock_index + 1, pending: Some({ source, cursor: pending }) }
 										}
 								}
 						}
@@ -1222,19 +1222,19 @@ sorted_positions = |labels| {
 			GT => After
 		},
 	)
-	var exclusions = []
-	var previous = None
+	var $exclusions = []
+	var $previous = None
 	for label in sorted {
-		distinct = match previous {
+		distinct = match $previous {
 			None => Bool.True
 			Some(value) => !LocalDateTime.same_position(value, label)
 		}
 		if distinct {
-			exclusions = exclusions.append(label)
+			$exclusions = $exclusions.append(label)
 		}
-		previous = Some(label)
+		$previous = Some(label)
 	}
-	exclusions
+	$exclusions
 }
 
 # R11/R12: explicit starts precede DTSTART and outlive COUNT; duplicates and
@@ -1252,25 +1252,25 @@ test_inclusion_cursor = |_| {
 }
 
 test_inclusions = |budget| {
-	var cursor = test_inclusion_cursor({})?
-	var observed = []
-	var calls = 0.U64
-	while calls < 1000 {
-		batch = TimedRecurrence.Cursor.next(cursor, budget)?
+	var $cursor = test_inclusion_cursor({})?
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 1000 {
+		batch = TimedRecurrence.Cursor.next($cursor, budget)?
 		if batch.steps > budget.max_steps or batch.zone_segments > budget.max_zone_segments {
 			return Ok(Bool.False)
 		}
 		match batch.status {
-			End => return Ok(observed == [0.I64, 172800000000, 259200000000])
+			End => return Ok($observed == [0.I64, 172800000000, 259200000000])
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 			Item(item) => {
-				observed = observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(item.occurrence)))
-				cursor = item.cursor
+				$observed = $observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(item.occurrence)))
+				$cursor = item.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	Ok(Bool.False)
 }
@@ -1281,7 +1281,7 @@ expect test_inclusions({ max_steps: 100, max_buffered: 2, max_zone_segments: 100
 expect {
 	initial = test_inclusion_cursor({})?
 	full = { max_steps: 100.U64, max_buffered: 2.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
-	var valid = Bool.True
+	var $valid = Bool.True
 	for work in [{ ..full, max_steps: 0 }, { ..full, max_buffered: 0 }, { ..full, max_buffered: 1 }, { ..full, max_zone_segments: 0 }, { ..full, max_zone_candidates: 0 }] {
 		paused = TimedRecurrence.Cursor.next(initial, work)?
 		rest = match paused.status {
@@ -1290,12 +1290,12 @@ expect {
 		}
 		completed = TimedRecurrence.Cursor.collect(rest, { work: full, max_occurrences: 10 })?
 		observed = completed.occurrences.map(|value| PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
-		valid = valid and observed == [0.I64, 172800000000, 259200000000] and match completed.status {
+		$valid = $valid and observed == [0.I64, 172800000000, 259200000000] and match completed.status {
 			Complete => Bool.True
 			_ => Bool.False
 		}
 	}
-	valid
+	$valid
 }
 
 # R07/R11/R12: a source after a rejected gap label can map back below UNTIL.
@@ -1312,28 +1312,28 @@ expect {
 	rules = ZoneRules.new_bounded("Synthetic/UTC-cutoff", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
 	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
 	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
-	var cursor = TimedRecurrence.cursor(with_extra, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
-	var boundaries = []
-	var hours = []
-	var calls = 0.U64
-	var complete = Bool.False
-	while calls < 100 and !complete {
-		batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 })?
+	var $cursor = TimedRecurrence.cursor(with_extra, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+	var $boundaries = []
+	var $hours = []
+	var $calls = 0.U64
+	var $complete = Bool.False
+	while $calls < 100 and !$complete {
+		batch = TimedRecurrence.Cursor.collect($cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 })?
 		for value in batch.occurrences {
-			boundaries = boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
-			hours = hours.append(ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour)
+			$boundaries = $boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
+			$hours = $hours.append(ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour)
 		}
 		match batch.status {
 			Complete => {
-				complete = Bool.True
+				$complete = Bool.True
 			}
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
-	complete and boundaries == [7200000000.I64, 10800000000] and hours == [3.U8, 4]
+	$complete and $boundaries == [7200000000.I64, 10800000000] and $hours == [3.U8, 4]
 }
 
 # BYSETPOS observes the whole day before boundary termination. Cutting the
@@ -1368,17 +1368,17 @@ expect {
 	base = PosixBoundary.to_microseconds(FixedOffset.resolve(FixedOffset.from_seconds(0), midnight_label)?)
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(base - 86400000000), PosixBoundary.from_microseconds(base + 172800000000))?
 	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
-	var valid = Bool.True
+	var $valid = Bool.True
 	for case in [{ cutoff_hour: 21.I64, expected: [9.U8, 12, 15] }, { cutoff_hour: 17, expected: [9, 12] }, { cutoff_hour: 19, expected: [9, 12, 15] }] {
 		rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern: { frequency: Hourly, interval: 3, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } }, termination: UntilBoundary(PosixBoundary.from_microseconds(base + case.cutoff_hour * 3600000000)), by_set_pos: [] })?
 		cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
 		batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 1 }, max_occurrences: 10 })?
-		valid = valid and batch.occurrences.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour) == case.expected and match batch.status {
+		$valid = $valid and batch.occurrences.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour) == case.expected and match batch.status {
 			Complete => Bool.True
 			Limited(_) => Bool.False
 		}
 	}
-	valid
+	$valid
 }
 
 fact_pattern = |schedule| match schedule {

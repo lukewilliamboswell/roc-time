@@ -72,27 +72,27 @@ ClockTime :: [Micros(I64)].{
 	# fields, rather than using the production multiplication/division formulas.
 	# Fractional endpoints exercise both sides of every second boundary.
 	expect {
-		var number = 0.I64
-		var hour = 0.U8
-		var valid = Bool.True
-		while hour < 24 {
-			var minute = 0.U8
-			while minute < 60 {
-				var second = 0.U8
-				while second < 60 {
+		var $number = 0.I64
+		var $hour = 0.U8
+		var $valid = Bool.True
+		while $hour < 24 {
+			var $minute = 0.U8
+			while $minute < 60 {
+				var $second = 0.U8
+				while $second < 60 {
 					for microsecond in [0.U32, 1, 999999] {
-						fields = { hour, minute, second, microsecond }
+						fields = { hour: $hour, minute: $minute, second: $second, microsecond }
 						value = from_fields(fields)?
-						valid = valid and to_fields(value) == fields and
-							from_microseconds_since_midnight(number + microsecond.to_i64()) == Ok(value)
+						$valid = $valid and to_fields(value) == fields and
+							from_microseconds_since_midnight($number + microsecond.to_i64()) == Ok(value)
 					}
-					number = number + 1000000
-					second = second + 1
+					$number = $number + 1000000
+					$second = $second + 1
 				}
-				minute = minute + 1
+				$minute = $minute + 1
 			}
-			hour = hour + 1
+			$hour = $hour + 1
 		}
-		valid and number == 86400000000
+		$valid and $number == 86400000000
 	}
 }

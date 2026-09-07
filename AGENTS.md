@@ -7,7 +7,7 @@
 - `design.md` is the enduring ideal architecture, not an implementation tracker. Edit it only for a new or changed requirement, an invalidated assumption, or a necessary clarification of an architectural contract. State that reason when changing it. Landing a feature, choosing an internal algorithm, passing tests or collecting measurements does not by itself justify a design edit. Keep API details in module documentation, workflows in CONTRIBUTING.md, and reproducible evidence in tests/tooling.
 - Completed-work history belongs in Git commits. Do not duplicate commit narratives, test-run logs, milestone inventories or benchmark transcripts in the design or plans. Active plans retain only unfinished deliverables, dependencies, unresolved decisions and information needed to finish them; delete obsolete entries rather than moving them to another document.
 - This file contains methodology and guardrails. CONTRIBUTING.md provides contributor setup and workflows. README introduces package capabilities and usage. Keep each document focused on that role.
-- Use the compiler pinned by `.roc-version`; `ROC` can select its executable for repository scripts. Verify `roc version` rather than assuming the executable on PATH matches.
+- Use the compiler pinned by the `roc` field in `package/main.roc`; `ROC` can select its executable for repository scripts. Verify `roc version` rather than assuming the executable on PATH matches.
 - Keep disposable binaries, downloaded sources, generated probes, and raw exploratory outputs under ignored `.roc-time-tmp/`. Preserve architectural contracts in the design and reproducible checks in tests or tooling; do not require ignored files to understand a decision.
 
 ## Method

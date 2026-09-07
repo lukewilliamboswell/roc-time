@@ -175,19 +175,19 @@ clock_text = |clock, digits| {
 	if digits > 6 {
 		return "${base}[microsecond=${clock.microsecond.to_str()}, digits=${digits.to_str()}]"
 	}
-	var divisor = 1.U32
-	var remaining = 6.U8 - digits
-	while remaining > 0 {
-		divisor = divisor * 10
-		remaining = remaining - 1
+	var $divisor = 1.U32
+	var $remaining = 6.U8 - digits
+	while $remaining > 0 {
+		$divisor = $divisor * 10
+		$remaining = $remaining - 1
 	}
-	if U32.rem_by(clock.microsecond, divisor) != 0 or clock.microsecond > 999999 {
+	if U32.rem_by(clock.microsecond, $divisor) != 0 or clock.microsecond > 999999 {
 		return "${base}[microsecond=${clock.microsecond.to_str()}, digits=${digits.to_str()}]"
 	}
 	if digits == 0 {
 		return base
 	}
-	fraction = U32.div_trunc_by(clock.microsecond, divisor).to_str()
+	fraction = U32.div_trunc_by(clock.microsecond, $divisor).to_str()
 	"${base}.${"0".repeat(digits.to_u64() - fraction.count_utf8_bytes())}${fraction}"
 }
 

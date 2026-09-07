@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate versioned package documentation.
 
-Writes the docs to `<docs-root>/<version>`. Stable releases refresh the root
-redirect; prereleases preserve it.
+Writes the docs to `<docs-root>/<version>`. Stable releases point the root
+redirect at the highest stable version present; prereleases preserve it.
 """
 from __future__ import annotations
 
@@ -54,6 +54,27 @@ def roc_command() -> str:
     return roc
 
 
+def update_stable_index(docs_root: Path) -> str:
+    """Select numeric SemVer precedence from generated stable documentation only."""
+    candidates = []
+    for entry in docs_root.iterdir():
+        parsed = VERSION_RE.fullmatch(entry.name)
+        if (parsed is None or parsed.group("prerelease") is not None
+                or not entry.is_dir() or not (entry / "index.html").is_file()):
+            continue
+        # Build metadata does not affect precedence. The spelling is a stable
+        # tie-breaker if history contains two names for the same numeric release.
+        numbers = tuple(int(part) for part in entry.name.split("+", 1)[0].split("."))
+        candidates.append((numbers, entry.name))
+    if not candidates:
+        raise ValueError("No generated stable documentation available for the root redirect")
+    version = max(candidates)[1]
+    (docs_root / "index.html").write_text(
+        INDEX_TEMPLATE.format(repo=REPO_NAME, version=version), encoding="utf-8"
+    )
+    return version
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version", help="Release version, e.g. 0.1.0 or 0.1.0-rc1")
@@ -90,7 +111,7 @@ def main() -> None:
     marker = '<div class="main-content">'
     if page.count(marker) != 1:
         raise SystemExit("Compiler docs layout changed; review landing-page insertion")
-    guide = (source_root / "docs/overview.html").read_text()
+    guide = (source_root / "docs/overview.html").read_text().replace("{{release_version}}", version)
     page = page.replace(marker, marker + "\n" + guide, 1)
     page = page.replace('<div class="index-decoration">', '<div class="index-decoration" style="display: none">', 1)
     index.write_text(page)
@@ -101,9 +122,7 @@ def main() -> None:
         generated_page.write_text(html)
 
     if parsed_version.group("prerelease") is None:
-        (docs_root / "index.html").write_text(
-            INDEX_TEMPLATE.format(repo=REPO_NAME, version=version), encoding="utf-8"
-        )
+        update_stable_index(docs_root)
 
     print(f"Generated docs for {version} in {version_dir}")
 

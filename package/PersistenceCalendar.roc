@@ -112,36 +112,36 @@ PersistenceCalendar :: [].{
 			Second => ("second", 8)
 			Fraction(_) => ("fraction", 10)
 		}
-		var pieces = [Calendar.to_name(CalendarDate.calendar(date)), resolution, fields.year.to_str()]
+		var $pieces = [Calendar.to_name(CalendarDate.calendar(date)), resolution, fields.year.to_str()]
 		if count >= 4 {
-			pieces = pieces.append(fields.month.to_str())
+			$pieces = $pieces.append(fields.month.to_str())
 		}
 		if count >= 5 {
-			pieces = pieces.append(fields.day.to_str())
+			$pieces = $pieces.append(fields.day.to_str())
 		}
 		if count >= 6 {
-			pieces = pieces.append(clock.hour.to_str())
+			$pieces = $pieces.append(clock.hour.to_str())
 		}
 		if count >= 7 {
-			pieces = pieces.append(clock.minute.to_str())
+			$pieces = $pieces.append(clock.minute.to_str())
 		}
 		if count >= 8 {
-			pieces = pieces.append(clock.second.to_str())
+			$pieces = $pieces.append(clock.second.to_str())
 		}
 		match CalendarValue.resolution(value) {
 			Fraction(digits) => {
 				# Native constructor proves exact divisibility at retained width.
-				var divisor = 1.U32
-				var remaining = 6 - digits
-				while remaining > 0 {
-					divisor = divisor * 10
-					remaining = remaining - 1
+				var $divisor = 1.U32
+				var $remaining = 6 - digits
+				while $remaining > 0 {
+					$divisor = $divisor * 10
+					$remaining = $remaining - 1
 				}
-				pieces = pieces.append(digits.to_str()).append(U32.div_trunc_by(clock.microsecond, divisor).to_str())
+				$pieces = $pieces.append(digits.to_str()).append(U32.div_trunc_by(clock.microsecond, $divisor).to_str())
 			}
 			_ => {}
 		}
-		Str.join_with(pieces, ";")
+		Str.join_with($pieces, ";")
 	}
 
 	parse_qualified : Str -> Try(QualifiedCalendarValue, Error)
@@ -154,21 +154,21 @@ PersistenceCalendar :: [].{
 			[_] => return Err(Incomplete)
 			_ => return Err(Malformed)
 		}
-		var count = if qualifiers.is_empty() {
+		var $count = if qualifiers.is_empty() {
 			0.U8
 		} else {
 			1
 		}
 		for b in qualifiers.to_utf8() {
 			if b == 59 {
-				count = count + 1
-				if count > 8 {
+				$count = $count + 1
+				if $count > 8 {
 					return Err(TooManyQualifications)
 				}
 			}
 		}
 		value = parse_value(base)?
-		var qualifications = []
+		var $qualifications = []
 		if !qualifiers.is_empty() {
 			for entry in qualifiers.split_on(";") {
 				(scope_text, qualifier_text) = match entry.split_on("=") {
@@ -195,10 +195,10 @@ PersistenceCalendar :: [].{
 					"" => return Err(Incomplete)
 					_ => return Err(UnsupportedQualifier(qualifier_text))
 				}
-				qualifications = qualifications.append({ scope, qualifier })
+				$qualifications = $qualifications.append({ scope, qualifier })
 			}
 		}
-		match QualifiedCalendarValue.new(value, qualifications) {
+		match QualifiedCalendarValue.new(value, $qualifications) {
 			Ok(result) => Ok(result)
 			Err(error) => Err(error)
 		}
@@ -207,7 +207,7 @@ PersistenceCalendar :: [].{
 	to_qualified_text : QualifiedCalendarValue -> Str
 	to_qualified_text = |qualified| {
 		base = to_value_text(QualifiedCalendarValue.described_value(qualified))
-		var entries = []
+		var $entries = []
 		for q in QualifiedCalendarValue.qualifications(qualified) {
 			scope = match q.scope {
 				Whole => "whole"
@@ -224,9 +224,9 @@ PersistenceCalendar :: [].{
 				Approximate => "approximate"
 				UncertainApproximate => "uncertain-approximate"
 			}
-			entries = entries.append("${scope}=${qualifier}")
+			$entries = $entries.append("${scope}=${qualifier}")
 		}
-		"${base}|${Str.join_with(entries, ";")}"
+		"${base}|${Str.join_with($entries, ";")}"
 	}
 }
 

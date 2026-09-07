@@ -29,60 +29,60 @@ EventCase := { spans : List(Spec) }.{
 		if EventCollection.event_count(events) != entries.len() {
 			crash "Event count lost identity"
 		}
-		var iterated = []
+		var $iterated = []
 		for event in events {
-			iterated = iterated.append(event)
+			$iterated = $iterated.append(event)
 		}
-		if iterated != entries {
+		if $iterated != entries {
 			crash "Event iteration changed source order"
 		}
 		partition = EventCollection.segments(events)
 		projected = EventCollection.to_coverage(events)
 		windows = Coverage.from_spans([make_span(-4, 0), make_span(2, 6)])
 		clipped = EventCollection.clip(events, windows)
-		var tick = -9.I64
-		while tick <= 17 {
-			var expected = []
-			var index = 0.U64
+		var $tick = -9.I64
+		while $tick <= 17 {
+			var $expected = []
+			var $index = 0.U64
 			for value in input.spans {
 				start = value.start.to_i64() - 8
-				if start <= tick and tick < start + value.width.to_i64() {
-					expected = expected.append(index)
+				if start <= $tick and $tick < start + value.width.to_i64() {
+					$expected = $expected.append($index)
 				}
-				index = index + 1
+				$index = $index + 1
 			}
-			var actual = []
-			var hits = 0.U64
+			var $actual = []
+			var $hits = 0.U64
 			for segment in partition {
 				low = PosixBoundary.to_microseconds(PosixSpan.start(segment.span))
 				high = PosixBoundary.to_microseconds(PosixSpan.end(segment.span))
-				if low <= tick and tick < high {
-					actual = segment.contributors
-					hits = hits + 1
+				if low <= $tick and $tick < high {
+					$actual = segment.contributors
+					$hits = $hits + 1
 				}
 			}
-			if actual != expected or hits > 1 {
+			if $actual != $expected or $hits > 1 {
 				crash "Contributor partition differs from membership oracle"
 			}
-			if Coverage.contains(projected, point(tick)) != !expected.is_empty() {
+			if Coverage.contains(projected, point($tick)) != !$expected.is_empty() {
 				crash "Coverage projection differs from event union"
 			}
-			var clipped_ids = []
+			var $clipped_ids = []
 			for piece in clipped {
-				if Coverage.contains(piece.coverage, point(tick)) {
-					clipped_ids = clipped_ids.append(piece.id)
+				if Coverage.contains(piece.coverage, point($tick)) {
+					$clipped_ids = $clipped_ids.append(piece.id)
 				}
 			}
-			inside = (-4 <= tick and tick < 0) or (2 <= tick and tick < 6)
+			inside = (-4 <= $tick and $tick < 0) or (2 <= $tick and $tick < 6)
 			clipped_expected = if inside {
-				expected
+				$expected
 			} else {
 				[]
 			}
-			if clipped_ids != clipped_expected {
+			if $clipped_ids != clipped_expected {
 				crash "Clipping lost or invented event contributors"
 			}
-			tick = tick + 1
+			$tick = $tick + 1
 		}
 		# Retain the source list after operations to exercise shared ownership.
 		if EventCollection.to_entries(events) != entries {

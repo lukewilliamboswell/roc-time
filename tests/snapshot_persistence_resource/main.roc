@@ -44,10 +44,10 @@ main! = |args| {
 		IxdtfSnapshot(v) => v
 		_ => crash "snapshot kind"
 	}
-	var i = 0.U32
-	while i < 100000 {
+	var $i = 0.U32
+	while $i < 100000 {
 		Host.assert!(Ixdtf.Snapshot.boundary(value) == PosixBoundary.from_microseconds(0) and Ixdtf.Snapshot.presentation(value) == Err(UnsupportedCalendar("hebrew")))
-		i = i + 1
+		$i = $i + 1
 	}
 	queried = Host.allocated_bytes!({})
 	Host.assert!(queried == decoded)

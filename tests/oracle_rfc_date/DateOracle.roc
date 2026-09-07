@@ -21,14 +21,14 @@ DateOracle :: [].{
 		"${at(args, 1)}\t${observe(args.drop_first(3))}\n"
 	}
 	verify = |cases| {
-		var count = 0.U64
+		var $count = 0.U64
 		for case in cases {
 			if observe(case.input) != case.expected {
-				return Err(Mismatch(count))
+				return Err(Mismatch($count))
 			}
-			count = count + 1
+			$count = $count + 1
 		}
-		Ok(count)
+		Ok($count)
 	}
 }
 
@@ -43,9 +43,9 @@ observe = |input| {
 		Ok(value) => value
 		Err(_) => crash "Invalid oracle query"
 	}
-	var result = ["ok"]
-	var batches = 0.U64
-	var complete = False
+	var $result = ["ok"]
+	var $batches = 0.U64
+	var $complete = False
 	for outcome in DateRecurrence.Cursor.chunks(initial, { max_steps: 17, max_buffered: 366, max_occurrences: 1 }) {
 		# Also exercise process-independent immutable resumptions, with one output
 		# slot and a limit that regularly splits calendar periods.
@@ -53,24 +53,24 @@ observe = |input| {
 			Ok(value) => value
 			Err(_) => crash "Oracle query outside provider range"
 		}
-		if complete == True or batches >= 10000 {
+		if $complete == True or $batches >= 10000 {
 			crash "Oracle chunk termination failure"
 		}
 		for value in batch.dates {
-			result = result.append(display(value))
+			$result = $result.append(display(value))
 		}
 		match batch.status {
 			Complete => {
-				complete = True
+				$complete = True
 			}
 			Limited(_) => {}
 		}
-		batches = batches + 1
+		$batches = $batches + 1
 	}
-	if complete == False {
+	if $complete == False {
 		crash "Oracle cursor did not finish"
 	}
-	observed = Str.join_with(result, "\t")
+	observed = Str.join_with($result, "\t")
 	if observe_timed(input) != observed {
 		crash "Timed UTC lifting differs from date oracle"
 	}
@@ -120,9 +120,9 @@ expect DateOracle.verify([{ input: ["20240101", "FREQ=DAILY;COUNT=1", "-", "-", 
 # preserves dates, COUNT/UNTIL, BY positions and exclusions without zone changes.
 # Expectations still come from the checked-in dateutil corpus, never roc-time.
 observe_timed = |input| {
-	var parts = []
+	var $parts = []
 	for part in at(input, 1).split_on(";") {
-		parts = parts.append(
+		$parts = $parts.append(
 			if part.starts_with("UNTIL=") or part.starts_with("until=") {
 				"${part}T000000Z"
 			} else {
@@ -130,19 +130,19 @@ observe_timed = |input| {
 			},
 		)
 	}
-	parsed = match RfcTimedRule.parse({ start: "${at(input, 0)}T000000Z", rule: Str.join_with(parts, ";"), mode: Utc, duration: "P1D", inclusions: timed_values(at(input, 2)), exclusions: timed_values(at(input, 3)), periods: [] }) {
+	parsed = match RfcTimedRule.parse({ start: "${at(input, 0)}T000000Z", rule: Str.join_with($parts, ";"), mode: Utc, duration: "P1D", inclusions: timed_values(at(input, 2)), exclusions: timed_values(at(input, 3)), periods: [] }) {
 		Ok(value) => value
 		Err(error) => crash "Timed oracle rule rejected: ${Str.inspect(error)}"
 	}
 	window = { start: midnight_label(at(input, 4)), end: midnight_label(at(input, 5)) }
-	var cursor = match RfcTimedRule.schedule({}, parsed, window, Utc) {
+	var $cursor = match RfcTimedRule.schedule({}, parsed, window, Utc) {
 		Ok(value) => value
 		Err(_) => crash "Timed oracle window rejected"
 	}
-	var output = ["ok"]
-	var calls = 0.U64
-	while calls < 10000 {
-		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+	var $output = ["ok"]
+	var $calls = 0.U64
+	while $calls < 10000 {
+		batch = match TimedSchedule.collect($cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "Timed oracle execution failed"
 		}
@@ -152,15 +152,15 @@ observe_timed = |input| {
 			if ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(source)) != 0 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(86400000000)) {
 				crash "Timed midnight lifting changed clock or width"
 			}
-			output = output.append("${fields.year.to_str()}${pad(fields.month)}${pad(fields.day)}")
+			$output = $output.append("${fields.year.to_str()}${pad(fields.month)}${pad(fields.day)}")
 		}
 		match batch.status {
-			Complete => return Str.join_with(output, "\t")
+			Complete => return Str.join_with($output, "\t")
 			Limited(progress) => {
-				cursor = progress.cursor
+				$cursor = progress.cursor
 			}
 		}
-		calls = calls + 1
+		$calls = $calls + 1
 	}
 	crash "Timed oracle failed to terminate"
 }

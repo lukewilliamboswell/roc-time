@@ -43,16 +43,16 @@ PersistenceSnapshot :: { bound : Ixdtf.Snapshot, text : Str }.{
 				}
 			}
 		}
-		var fields = ["strict-v1", Ixdtf.to_text(Ixdtf.Snapshot.source(bound)), PosixBoundary.to_microseconds(Ixdtf.Snapshot.boundary(bound)).to_str(), FixedOffset.to_seconds(Ixdtf.Snapshot.offset(bound)).to_str()]
+		var $fields = ["strict-v1", Ixdtf.to_text(Ixdtf.Snapshot.source(bound)), PosixBoundary.to_microseconds(Ixdtf.Snapshot.boundary(bound)).to_str(), FixedOffset.to_seconds(Ixdtf.Snapshot.offset(bound)).to_str()]
 		match context {
 			None => {
-				fields = fields.append("none")
+				$fields = $fields.append("none")
 			}
 			Some(rules) => {
-				fields = fields.append("rules").concat(PersistenceRules.to_fields(rules))
+				$fields = $fields.append("rules").concat(PersistenceRules.to_fields(rules))
 			}
 		}
-		text = Json.to_str(fields)
+		text = Json.to_str($fields)
 		if text.count_utf8_bytes() > 49152 {
 			return Err(TooLarge)
 		}

@@ -48,21 +48,21 @@ Coverage :: [Spans(List(PosixSpan))].{
 				}
 			},
 		)
-		var builder = { done: [], pending: None }
+		var $builder = { done: [], pending: None }
 		for span in sorted {
-			builder = push(builder, span)
+			$builder = push($builder, span)
 		}
-		Spans(finish(builder))
+		Spans(finish($builder))
 	}
 
 	## Validate start ordering in O(n); merge overlap and touch.
 	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput, ..])
 	from_sorted_spans = |input| {
-		var builder = SortedBuilder.empty
+		var $builder = SortedBuilder.empty
 		for span in input {
-			builder = SortedBuilder.append(builder, span)?
+			$builder = SortedBuilder.append($builder, span)?
 		}
-		Ok(SortedBuilder.to_coverage(builder))
+		Ok(SortedBuilder.to_coverage($builder))
 	}
 
 	## Incremental construction from start-ordered spans, including across input
@@ -163,31 +163,31 @@ Coverage :: [Spans(List(PosixSpan))].{
 			End => crash "Coverage always supplies its summary fact"
 		}
 		count = List.len(items)
-		var index = 0.U64
-		var preview = ""
+		var $index = 0.U64
+		var $preview = ""
 		# A fixed four-member budget; no full-list traversal or width calculation.
-		while index < count and index < 4 {
-			separator = if index == 0 {
+		while $index < count and $index < 4 {
+			separator = if $index == 0 {
 				""
 			} else {
 				", "
 			}
-			member = match fact_at(coverage, index + 1) {
+			member = match fact_at(coverage, $index + 1) {
 				Item(fact) => match SemanticFact.kind(fact) {
 					CoverageMember(data) => data.span
 					_ => crash "Coverage member index supplies a member fact"
 				}
 				End => crash "Preview index is within member count"
 			}
-			preview = "${preview}${separator}${Str.inspect(member)}"
-			index = index + 1
+			$preview = "${$preview}${separator}${Str.inspect(member)}"
+			$index = $index + 1
 		}
-		omitted = if count > index {
-			", omitted=${(count - index).to_str()}"
+		omitted = if count > $index {
+			", omitted=${(count - $index).to_str()}"
 		} else {
 			""
 		}
-		"${summary} preview=[${preview}]${omitted}"
+		"${summary} preview=[${$preview}]${omitted}"
 	}
 
 	expect Str.inspect(empty) == "Coverage(members=0) preview=[]"
@@ -197,15 +197,15 @@ Coverage :: [Spans(List(PosixSpan))].{
 
 	coordinate_width : Coverage -> Try(PosixDelta, [OutOfRange, ..])
 	coordinate_width = |Spans(items)| {
-		var total = 0.I64
+		var $total = 0.I64
 		for span in items {
 			width = PosixDelta.to_microseconds(PosixSpan.coordinate_width(span)?)
-			total = match I64.plus_try(total, width) {
+			$total = match I64.plus_try($total, width) {
 				Ok(value) => value
 				Err(Overflow) => return Err(OutOfRange)
 			}
 		}
-		Ok(PosixDelta.from_microseconds(total))
+		Ok(PosixDelta.from_microseconds($total))
 	}
 
 	contains : Coverage, PosixBoundary -> Bool
@@ -222,17 +222,17 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Fold whole overlapping members, not clipped intersections. O(log n + k).
 	fold_overlaps : Coverage, PosixSpan, state, (state, PosixSpan -> state) -> state
 	fold_overlaps = |Spans(items), query, initial, step| {
-		var index = first_end_after(items, PosixSpan.start(query))
-		var state = initial
-		while index < List.len(items) {
-			span = at(items, index)
+		var $index = first_end_after(items, PosixSpan.start(query))
+		var $state = initial
+		while $index < List.len(items) {
+			span = at(items, $index)
 			if PosixBoundary.compare(PosixSpan.start(span), PosixSpan.end(query)) != LT {
 				break
 			}
-			state = step(state, span)
-			index = index + 1
+			$state = step($state, span)
+			$index = $index + 1
 		}
-		state
+		$state
 	}
 
 	overlapping_spans : Coverage, PosixSpan -> List(PosixSpan)
@@ -240,115 +240,115 @@ Coverage :: [Spans(List(PosixSpan))].{
 
 	union : Coverage, Coverage -> Coverage
 	union = |Spans(a), Spans(b)| {
-		var i = 0.U64
-		var j = 0.U64
-		var builder = { done: [], pending: None }
-		while i < List.len(a) or j < List.len(b) {
-			take_a = if i == List.len(a) {
+		var $i = 0.U64
+		var $j = 0.U64
+		var $builder = { done: [], pending: None }
+		while $i < List.len(a) or $j < List.len(b) {
+			take_a = if $i == List.len(a) {
 				Bool.False
 			}
-				else if j == List.len(b) {
+				else if $j == List.len(b) {
 					Bool.True
 				}
 					else {
-						PosixBoundary.compare(PosixSpan.start(at(a, i)), PosixSpan.start(at(b, j))) != GT
+						PosixBoundary.compare(PosixSpan.start(at(a, $i)), PosixSpan.start(at(b, $j))) != GT
 					}
 			if take_a {
-				builder = push(builder, at(a, i))
-				i = i + 1
+				$builder = push($builder, at(a, $i))
+				$i = $i + 1
 			} else {
-				builder = push(builder, at(b, j))
-				j = j + 1
+				$builder = push($builder, at(b, $j))
+				$j = $j + 1
 			}
 		}
-		Spans(finish(builder))
+		Spans(finish($builder))
 	}
 
 	intersection : Coverage, Coverage -> Coverage
 	intersection = |Spans(a), Spans(b)| {
-		var i = 0.U64
-		var j = 0.U64
-		var output = []
-		while i < List.len(a) and j < List.len(b) {
-			left = at(a, i)
-			right = at(b, j)
+		var $i = 0.U64
+		var $j = 0.U64
+		var $output = []
+		while $i < List.len(a) and $j < List.len(b) {
+			left = at(a, $i)
+			right = at(b, $j)
 			match PosixSpan.intersection(left, right) {
 				Empty => {}
 				Span(span) => {
-					output = List.append(output, span)
+					$output = List.append($output, span)
 				}
 			}
 			order = PosixBoundary.compare(PosixSpan.end(left), PosixSpan.end(right))
 			if order != GT {
-				i = i + 1
+				$i = $i + 1
 			}
 			if order != LT {
-				j = j + 1
+				$j = $j + 1
 			}
 		}
 		# Intersections of canonical inputs cannot touch each other.
-		Spans(output)
+		Spans($output)
 	}
 
 	difference : Coverage, Coverage -> Coverage
 	difference = |Spans(a), Spans(b)| {
-		var j = 0.U64
-		var output = []
+		var $j = 0.U64
+		var $output = []
 		for left in a {
-			var cursor = PosixSpan.start(left)
+			var $cursor = PosixSpan.start(left)
 			upper = PosixSpan.end(left)
-			while j < List.len(b) and PosixBoundary.compare(cursor, upper) == LT {
-				right = at(b, j)
-				if PosixBoundary.compare(PosixSpan.end(right), cursor) != GT {
-					j = j + 1
+			while $j < List.len(b) and PosixBoundary.compare($cursor, upper) == LT {
+				right = at(b, $j)
+				if PosixBoundary.compare(PosixSpan.end(right), $cursor) != GT {
+					$j = $j + 1
 				} else if PosixBoundary.compare(PosixSpan.start(right), upper) != LT {
 					break
 				} else {
-					if PosixBoundary.compare(cursor, PosixSpan.start(right)) == LT {
-						output = List.append(output, fragment(cursor, PosixSpan.start(right)))
+					if PosixBoundary.compare($cursor, PosixSpan.start(right)) == LT {
+						$output = List.append($output, fragment($cursor, PosixSpan.start(right)))
 					}
 					if PosixBoundary.compare(PosixSpan.end(right), upper) != LT {
-						cursor = upper
+						$cursor = upper
 						# Retain this subtrahend; it may cover the next left member.
 					} else {
-						cursor = PosixSpan.end(right)
-						j = j + 1
+						$cursor = PosixSpan.end(right)
+						$j = $j + 1
 					}
 				}
 			}
-			if PosixBoundary.compare(cursor, upper) == LT {
-				output = List.append(output, fragment(cursor, upper))
+			if PosixBoundary.compare($cursor, upper) == LT {
+				$output = List.append($output, fragment($cursor, upper))
 			}
 		}
-		Spans(output)
+		Spans($output)
 	}
 
 	## Complement relative to one finite window; seek before emitting gaps.
 	complement_within : Coverage, PosixSpan -> Coverage
 	complement_within = |Spans(items), window| {
-		var index = first_end_after(items, PosixSpan.start(window))
-		var cursor = PosixSpan.start(window)
+		var $index = first_end_after(items, PosixSpan.start(window))
+		var $cursor = PosixSpan.start(window)
 		upper = PosixSpan.end(window)
-		var output = []
-		while index < List.len(items) and PosixBoundary.compare(cursor, upper) == LT {
-			span = at(items, index)
+		var $output = []
+		while $index < List.len(items) and PosixBoundary.compare($cursor, upper) == LT {
+			span = at(items, $index)
 			if PosixBoundary.compare(PosixSpan.start(span), upper) != LT {
 				break
 			}
-			if PosixBoundary.compare(cursor, PosixSpan.start(span)) == LT {
-				output = List.append(output, fragment(cursor, PosixSpan.start(span)))
+			if PosixBoundary.compare($cursor, PosixSpan.start(span)) == LT {
+				$output = List.append($output, fragment($cursor, PosixSpan.start(span)))
 			}
-			cursor = if PosixBoundary.compare(PosixSpan.end(span), upper) == LT {
+			$cursor = if PosixBoundary.compare(PosixSpan.end(span), upper) == LT {
 				PosixSpan.end(span)
 			} else {
 				upper
 			}
-			index = index + 1
+			$index = $index + 1
 		}
-		if PosixBoundary.compare(cursor, upper) == LT {
-			output = List.append(output, fragment(cursor, upper))
+		if PosixBoundary.compare($cursor, upper) == LT {
+			$output = List.append($output, fragment($cursor, upper))
 		}
-		Spans(output)
+		Spans($output)
 	}
 }
 
@@ -397,17 +397,17 @@ finish = |builder| {
 
 first_end_after : List(PosixSpan), PosixBoundary -> U64
 first_end_after = |items, point| {
-	var lo = 0.U64
-	var hi = List.len(items)
-	while lo < hi {
-		mid = lo + U64.div_trunc_by(hi - lo, 2)
+	var $lo = 0.U64
+	var $hi = List.len(items)
+	while $lo < $hi {
+		mid = $lo + U64.div_trunc_by($hi - $lo, 2)
 		if PosixBoundary.compare(PosixSpan.end(at(items, mid)), point) == GT {
-			hi = mid
+			$hi = mid
 		} else {
-			lo = mid + 1
+			$lo = mid + 1
 		}
 	}
-	lo
+	$lo
 }
 
 # Capacity counts canonical members, so touching chunks can merge at capacity.
@@ -438,79 +438,79 @@ expect {
 
 # All 16 subsets of [-2, 2), independently represented by four integer bits.
 test_coverage_from_mask = |mask| {
-	var spans = []
+	var $spans = []
 	for (point, bit) in [(-2.I64, 1.U64), (-1, 2), (0, 4), (1, 8)] {
 		if U64.rem_by(U64.div_trunc_by(mask, bit), 2) == 1 {
-			spans = List.append(spans, PosixSpan.microsecond_at(PosixBoundary.from_microseconds(point))?)
+			$spans = List.append($spans, PosixSpan.microsecond_at(PosixBoundary.from_microseconds(point))?)
 		}
 	}
-	Ok(Coverage.from_spans(spans))
+	Ok(Coverage.from_spans($spans))
 }
 
 expect {
 	window = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(2))?
 	universe = Coverage.from_spans([window])
-	var valid = Bool.True
-	var x = 0.U64
-	while x < 16 {
-		a = test_coverage_from_mask(x)?
-		valid = valid and Coverage.from_spans(Coverage.to_spans(a)) == a
-		valid = valid and Coverage.union(a, a) == a and Coverage.intersection(a, a) == a
+	var $valid = Bool.True
+	var $x = 0.U64
+	while $x < 16 {
+		a = test_coverage_from_mask($x)?
+		$valid = $valid and Coverage.from_spans(Coverage.to_spans(a)) == a
+		$valid = $valid and Coverage.union(a, a) == a and Coverage.intersection(a, a) == a
 		complement = Coverage.complement_within(a, window)
-		valid = valid and Coverage.union(a, complement) == universe
-		valid = valid and Coverage.intersection(a, complement) == Coverage.empty
-		var expected_width = 0.I64
-		var expected_members = 0.U64
-		var previous = Bool.False
+		$valid = $valid and Coverage.union(a, complement) == universe
+		$valid = $valid and Coverage.intersection(a, complement) == Coverage.empty
+		var $expected_width = 0.I64
+		var $expected_members = 0.U64
+		var $previous = Bool.False
 		for bit in [1.U64, 2, 4, 8] {
-			occupied = U64.rem_by(U64.div_trunc_by(x, bit), 2) == 1
+			occupied = U64.rem_by(U64.div_trunc_by($x, bit), 2) == 1
 			if occupied {
-				expected_width = expected_width + 1
+				$expected_width = $expected_width + 1
 			}
-			if occupied and !previous {
-				expected_members = expected_members + 1
+			if occupied and !$previous {
+				$expected_members = $expected_members + 1
 			}
-			previous = occupied
+			$previous = occupied
 		}
-		valid = valid and Coverage.coordinate_width(a) == Ok(PosixDelta.from_microseconds(expected_width))
-		valid = valid and Coverage.member_count(a) == expected_members
-		var y = 0.U64
-		while y < 16 {
-			b = test_coverage_from_mask(y)?
+		$valid = $valid and Coverage.coordinate_width(a) == Ok(PosixDelta.from_microseconds($expected_width))
+		$valid = $valid and Coverage.member_count(a) == $expected_members
+		var $y = 0.U64
+		while $y < 16 {
+			b = test_coverage_from_mask($y)?
 			union = Coverage.union(a, b)
 			intersection = Coverage.intersection(a, b)
 			difference = Coverage.difference(a, b)
-			valid = valid and union == Coverage.union(b, a)
-			valid = valid and intersection == Coverage.intersection(b, a)
-			valid = valid and Coverage.intersection(difference, b) == Coverage.empty
-			valid = valid and Coverage.union(difference, intersection) == a
+			$valid = $valid and union == Coverage.union(b, a)
+			$valid = $valid and intersection == Coverage.intersection(b, a)
+			$valid = $valid and Coverage.intersection(difference, b) == Coverage.empty
+			$valid = $valid and Coverage.union(difference, intersection) == a
 			for (point, bit) in [(-2.I64, 1.U64), (-1, 2), (0, 4), (1, 8)] {
-				in_a = U64.rem_by(U64.div_trunc_by(x, bit), 2) == 1
-				in_b = U64.rem_by(U64.div_trunc_by(y, bit), 2) == 1
+				in_a = U64.rem_by(U64.div_trunc_by($x, bit), 2) == 1
+				in_b = U64.rem_by(U64.div_trunc_by($y, bit), 2) == 1
 				boundary = PosixBoundary.from_microseconds(point)
-				valid = valid and Coverage.contains(a, boundary) == in_a
-				valid = valid and Coverage.contains(union, boundary) == (in_a or in_b)
-				valid = valid and Coverage.contains(intersection, boundary) == (in_a and in_b)
-				valid = valid and Coverage.contains(difference, boundary) == (in_a and !in_b)
-				valid = valid and Coverage.contains(complement, boundary) == !in_a
+				$valid = $valid and Coverage.contains(a, boundary) == in_a
+				$valid = $valid and Coverage.contains(union, boundary) == (in_a or in_b)
+				$valid = $valid and Coverage.contains(intersection, boundary) == (in_a and in_b)
+				$valid = $valid and Coverage.contains(difference, boundary) == (in_a and !in_b)
+				$valid = $valid and Coverage.contains(complement, boundary) == !in_a
 			}
 			for outside in [-3.I64, 2] {
 				point = PosixBoundary.from_microseconds(outside)
-				valid = valid and !Coverage.contains(union, point)
-				valid = valid and !Coverage.contains(difference, point)
-				valid = valid and !Coverage.contains(complement, point)
+				$valid = $valid and !Coverage.contains(union, point)
+				$valid = $valid and !Coverage.contains(difference, point)
+				$valid = $valid and !Coverage.contains(complement, point)
 			}
-			y = y + 1
+			$y = $y + 1
 		}
-		x = x + 1
+		$x = $x + 1
 	}
-	valid
+	$valid
 }
 
 # Arbitrarily overlapping inputs, duplicate spans, reverse order, and queries
 # clipping each possible endpoint. Compare directly to integer membership.
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for a in [-2.I64, -1, 0, 1] {
 		for b in [-1.I64, 0, 1, 2] {
 			for c in [-2.I64, -1, 0, 1] {
@@ -519,34 +519,34 @@ expect {
 						left = PosixSpan.new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b))?
 						right = PosixSpan.new(PosixBoundary.from_microseconds(c), PosixBoundary.from_microseconds(d))?
 						coverage = Coverage.from_spans([left, right, left])
-						valid = valid and coverage == Coverage.from_spans([right, left])
+						$valid = $valid and coverage == Coverage.from_spans([right, left])
 						clipped = Coverage.intersection(coverage, Coverage.from_spans([left]))
 						complement = Coverage.complement_within(Coverage.from_spans([right]), left)
-						valid = valid and Coverage.union(complement, Coverage.intersection(Coverage.from_spans([right]), Coverage.from_spans([left]))) == Coverage.from_spans([left])
+						$valid = $valid and Coverage.union(complement, Coverage.intersection(Coverage.from_spans([right]), Coverage.from_spans([left]))) == Coverage.from_spans([left])
 						matches = Coverage.overlapping_spans(coverage, left)
 						count = Coverage.fold_overlaps(coverage, left, 0.U64, |n, _| n + 1)
-						valid = valid and count == List.len(matches)
+						$valid = $valid and count == List.len(matches)
 						# Linear query oracle includes only whole overlapping members.
-						var expected_matches = []
+						var $expected_matches = []
 						for member in Coverage.to_spans(coverage) {
 							if PosixSpan.overlaps(member, left) {
-								expected_matches = List.append(expected_matches, member)
+								$expected_matches = List.append($expected_matches, member)
 							}
 						}
-						valid = valid and matches == expected_matches
+						$valid = $valid and matches == $expected_matches
 						for p in [-3.I64, -2, -1, 0, 1, 2, 3] {
 							point = PosixBoundary.from_microseconds(p)
 							occupied = (a <= p and p < b) or (c <= p and p < d)
-							valid = valid and Coverage.contains(coverage, point) == occupied
-							valid = valid and Coverage.contains(clipped, point) == (a <= p and p < b)
-							valid = valid and Coverage.contains(complement, point) == (a <= p and p < b and !(c <= p and p < d))
+							$valid = $valid and Coverage.contains(coverage, point) == occupied
+							$valid = $valid and Coverage.contains(clipped, point) == (a <= p and p < b)
+							$valid = $valid and Coverage.contains(complement, point) == (a <= p and p < b and !(c <= p and p < d))
 						}
 					}
 				}
 			}
 		}
 	}
-	valid
+	$valid
 }
 
 expect {

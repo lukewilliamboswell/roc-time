@@ -40,14 +40,14 @@ main! = |args| {
 	resolved = Host.allocated_bytes!({})
 	Host.assert!(resolved - serialized <= ceiling)
 	Host.mark!(1)
-	var i = 0.U32
-	while i < 100000 {
+	var $i = 0.U32
+	while $i < 100000 {
 		local = match Ixdtf.Snapshot.presentation(snapshot) {
 			Ok(v) => v
 			Err(_) => crash "stored presentation"
 		}
 		Host.assert!(ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local)) == 1000000 and Ixdtf.Snapshot.boundary(snapshot) == PosixBoundary.from_microseconds(1000000) and Ixdtf.Snapshot.offset(snapshot) == FixedOffset.from_seconds(0))
-		i = i + 1
+		$i = $i + 1
 	}
 	queried = Host.allocated_bytes!({})
 	Host.assert!(queried == resolved)

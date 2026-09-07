@@ -183,19 +183,19 @@ week_start = |year, weekday| {
 
 week_position = |date, weekday| {
 	day = number(date)
-	var year = GregorianDate.to_fields(date).year.to_i128()
-	var start = week_start(year, weekday)?
-	var end = week_start(year + 1, weekday)?
-	if day < start {
-		year = year - 1
-		end = start
-		start = week_start(year, weekday)?
-	} else if day >= end {
-		year = year + 1
-		start = end
-		end = week_start(year + 1, weekday)?
+	var $year = GregorianDate.to_fields(date).year.to_i128()
+	var $start = week_start($year, weekday)?
+	var $end = week_start($year + 1, weekday)?
+	if day < $start {
+		$year = $year - 1
+		$end = $start
+		$start = week_start($year, weekday)?
+	} else if day >= $end {
+		$year = $year + 1
+		$start = $end
+		$end = week_start($year + 1, weekday)?
 	}
-	Ok({ position: I64.div_trunc_by(day - start, 7) + 1, total: I64.div_trunc_by(end - start, 7) })
+	Ok({ position: I64.div_trunc_by(day - $start, 7) + 1, total: I64.div_trunc_by($end - $start, 7) })
 }
 
 test_calendarpattern_date = |year, month, day| match GregorianDate.from_fields({ year, month, day }) {
@@ -205,17 +205,17 @@ test_calendarpattern_date = |year, month, day| match GregorianDate.from_fields({
 
 test_calendarpattern_days = |pattern, index| {
 	frame = CalendarPattern.period(pattern, index)?
-	var current = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.start))
+	var $current = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.start))
 	end = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.end))
-	var result = []
-	while current < end {
-		value = GregorianDate.from_civil_day(CivilDay.from_day_number(current))?
+	var $result = []
+	while $current < end {
+		value = GregorianDate.from_civil_day(CivilDay.from_day_number($current))?
 		if CalendarPattern.matches(pattern, index, value)? {
-			result = result.append(GregorianDate.to_fields(value))
+			$result = $result.append(GregorianDate.to_fields(value))
 		}
-		current = current + 1
+		$current = $current + 1
 	}
-	Ok(result)
+	Ok($result)
 }
 
 # RFC 5545 §3.3.10: invalid generated dates do not become clamped dates.
@@ -378,59 +378,59 @@ matches_filters = |spec, date| {
 		return Ok(False)
 	}
 	if !spec.by_month_day.is_empty() {
-		var found = False
+		var $found = False
 		for selected in spec.by_month_day {
-			found = found or ordinal_matches(selected.to_i64(), fields.day.to_i64(), length)
+			$found = $found or ordinal_matches(selected.to_i64(), fields.day.to_i64(), length)
 		}
-		if !found {
+		if !$found {
 			return Ok(False)
 		}
 	}
 	if !spec.by_year_day.is_empty() {
 		first = number(january(fields.year.to_i128())?)
 		last = first + year_length(fields.year)
-		var found = False
+		var $found = False
 		for selected in spec.by_year_day {
-			found = found or ordinal_matches(selected.to_i64(), day - first + 1, last - first)
+			$found = $found or ordinal_matches(selected.to_i64(), day - first + 1, last - first)
 		}
-		if !found {
+		if !$found {
 			return Ok(False)
 		}
 	}
 	if !spec.by_week_no.is_empty() {
 		week = week_position(date, spec.week_start)?
-		var found = False
+		var $found = False
 		for selected in spec.by_week_no {
-			found = found or ordinal_matches(selected.to_i64(), week.position, week.total)
+			$found = $found or ordinal_matches(selected.to_i64(), week.position, week.total)
 		}
-		if !found {
+		if !$found {
 			return Ok(False)
 		}
 	}
 	if !spec.by_day.is_empty() {
-		var found = False
+		var $found = False
 		for selected in spec.by_day {
 			if weekday_index(selected.weekday) == weekday {
 				if selected.ordinal == 0 {
-					found = True
+					$found = True
 				} else {
-					var position = fields.day.to_i64()
-					var total = length
+					var $position = fields.day.to_i64()
+					var $total = length
 					# RFC 5545 verified erratum 3779: ordinal YEARLY BYDAY
 					# is relative to the year only when BYMONTH is absent.
 					if spec.frequency == Yearly and spec.by_month.is_empty() {
 						first = number(january(fields.year.to_i128())?)
 						last = first + year_length(fields.year)
-						position = day - first + 1
-						total = last - first
+						$position = day - first + 1
+						$total = last - first
 					}
-					positive = I64.div_trunc_by(position - 1, 7) + 1
-					negative = -(I64.div_trunc_by(total - position, 7) + 1)
-					found = found or selected.ordinal.to_i64() == positive or selected.ordinal.to_i64() == negative
+					positive = I64.div_trunc_by($position - 1, 7) + 1
+					negative = -(I64.div_trunc_by($total - $position, 7) + 1)
+					$found = $found or selected.ordinal.to_i64() == positive or selected.ordinal.to_i64() == negative
 				}
 			}
 		}
-		if !found {
+		if !$found {
 			return Ok(False)
 		}
 	}

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Run the full local CI check: check, test, docs, bundle, and examples.
+"""Run the development package gate: tests, docs, bundles and copied examples.
 
-This is what `.github/workflows` runs, so a green run here should mean a green
-run in CI.
+Published examples have a separate compiler and CI job; run
+scripts/test_published_examples.py with their declared compiler to validate them.
 """
 from __future__ import annotations
+from roc_version import package_pin
 
 import os
 import re
@@ -64,9 +65,11 @@ def main() -> None:
 
     version = run([ROC, "version"], capture=True).stdout.strip()
     print(version, flush=True)
-    pinned = (ROOT / ".roc-version").read_text().strip()
+    pinned = package_pin(ROOT)
     if version != f"Roc compiler version {pinned}":
         raise SystemExit(f"Expected compiler {pinned}; set ROC to the pinned executable")
+
+    run([sys.executable, "scripts/test_roc_version.py"])
 
     heading("Checking package...")
     run([ROC, "check", "package/main.roc"])
@@ -110,10 +113,15 @@ def main() -> None:
     run([sys.executable, "scripts/test_zone_database.py"])
 
     heading("Checking scripts and examples...")
+    run([sys.executable, "scripts/update_example_urls.py", "--self-test"])
+    run([sys.executable, "scripts/test_published_examples.py", "--self-test"])
     run([sys.executable, "scripts/release_bundles.py", "self-test"])
     run([sys.executable, "scripts/release_starter.py", "self-test"])
-    for example in sorted((ROOT / "examples").rglob("main.roc")):
-        run([ROC, "check", str(example.relative_to(ROOT))])
+    run([sys.executable, "scripts/test_create_release_followup.py"])
+    run([sys.executable, "scripts/test_validate_followup.py"])
+    run([sys.executable, "scripts/check_docs_history.py", "--self-test"])
+    run([sys.executable, "scripts/test_docs.py"])
+    run([sys.executable, "scripts/test_local_examples.py"])
 
     heading("Generating package docs...")
     run([sys.executable, "scripts/docs.py", "0.0.0", "--docs-root", str(docs_dir)])

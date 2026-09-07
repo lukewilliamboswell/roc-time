@@ -125,31 +125,31 @@ DispatchChecks :: [].{
 			Dict.get(Dict.insert(Dict.empty(), whole, 13.U64), PosixSpan.hull(a, b)) != Ok(13) {
 			return Err(Failed)
 		}
-		var members = []
+		var $members = []
 		for span in coverage {
-			members = members.append(span)
+			$members = $members.append(span)
 		}
-		if members != [whole] {
+		if $members != [whole] {
 			return Err(Failed)
 		}
-		var empty_count = 0.U64
+		var $empty_count = 0.U64
 		for _span in Coverage.empty {
-			empty_count = empty_count + 1
+			$empty_count = $empty_count + 1
 		}
-		if empty_count != 0 {
+		if $empty_count != 0 {
 			return Err(Failed)
 		}
 		if Str.inspect(CivilDay.from_day_number(0)) != "CivilDay(0)" or
 			Str.inspect(next) != "GregorianDate(0, 1, 1)" {
 			return Err(Failed)
 		}
-		var many = []
-		var index = 0.I64
-		while index < 10000 {
-			many = many.append(PosixSpan.new(PosixBoundary.from_microseconds(index * 2), PosixBoundary.from_microseconds(index * 2 + 1))?)
-			index = index + 1
+		var $many = []
+		var $index = 0.I64
+		while $index < 10000 {
+			$many = $many.append(PosixSpan.new(PosixBoundary.from_microseconds($index * 2), PosixBoundary.from_microseconds($index * 2 + 1))?)
+			$index = $index + 1
 		}
-		large = Coverage.from_spans(many)
+		large = Coverage.from_spans($many)
 		text = Str.inspect(large)
 		if !text.contains("members=10000") or !text.contains("omitted=9996") or
 			text.contains("[8, 9)") or !text.contains("[6, 7)") or text.count_utf8_bytes() > 600 {

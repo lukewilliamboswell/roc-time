@@ -5,26 +5,26 @@ import time.IntervalEvidence
 ## Keep report correlation while reviewing uncertain outage membership.
 EvidenceReview :: [].{
 	compare = |reports, notes, probes| {
-		var spans = []
+		var $spans = []
 		for report in reports {
-			spans = spans.append(PosixSpan.new(boundary(report.start)?, boundary(report.end)?)?)
+			$spans = $spans.append(PosixSpan.new(boundary(report.start)?, boundary(report.end)?)?)
 		}
-		paired = IntervalEvidence.paired(spans)?
-		var starts = []
-		var ends = []
+		paired = IntervalEvidence.paired($spans)?
+		var $starts = []
+		var $ends = []
 		for text in notes.starts {
-			starts = starts.append(boundary(text)?)
+			$starts = $starts.append(boundary(text)?)
 		}
 		for text in notes.ends {
-			ends = ends.append(boundary(text)?)
+			$ends = $ends.append(boundary(text)?)
 		}
-		independent = IntervalEvidence.independent({ starts, ends })?
-		var results = []
+		independent = IntervalEvidence.independent({ starts: $starts, ends: $ends })?
+		var $results = []
 		for probe in probes {
 			point = boundary(probe.time)?
-			results = results.append({ label: probe.label, paired: report_truth(IntervalEvidence.contains(paired, point)), independent: report_truth(IntervalEvidence.contains(independent, point)) })
+			$results = $results.append({ label: probe.label, paired: report_truth(IntervalEvidence.contains(paired, point)), independent: report_truth(IntervalEvidence.contains(independent, point)) })
 		}
-		Ok(results)
+		Ok($results)
 	}
 }
 

@@ -140,16 +140,16 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		bytes = text.to_utf8()
 		length = bytes.len()
 		# Validate every available fixed-field byte before classifying a prefix.
-		var index = 0.U64
-		while index < length and index < 19 {
-			byte = at(bytes, index)
-			valid = if index == 4 or index == 7 {
+		var $index = 0.U64
+		while $index < length and $index < 19 {
+			byte = at(bytes, $index)
+			valid = if $index == 4 or $index == 7 {
 				byte == 45
 			}
-				else if index == 10 {
+				else if $index == 10 {
 					byte == 84 or byte == 116
 				}
-					else if index == 13 or index == 16 {
+					else if $index == 13 or $index == 16 {
 						byte == 58
 					}
 						else {
@@ -158,7 +158,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			if !valid {
 				return Err(Malformed)
 			}
-			index = index + 1
+			$index = $index + 1
 		}
 		if length >= 7 {
 			month = digits(bytes, 5, 2)
@@ -185,23 +185,23 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			Ok(value) => value
 			Err(_) => return Err(InvalidDate)
 		}
-		var fractional = 0.U32
-		var count = 0.U8
-		index = 19
-		if index < length and at(bytes, index) == 46 {
-			index = index + 1
-			start = index
-			while index < length and digit(at(bytes, index)) {
-				if count < 6 {
-					fractional = fractional * 10 + (at(bytes, index) - 48).to_u32()
+		var $fractional = 0.U32
+		var $count = 0.U8
+		$index = 19
+		if $index < length and at(bytes, $index) == 46 {
+			$index = $index + 1
+			start = $index
+			while $index < length and digit(at(bytes, $index)) {
+				if $count < 6 {
+					$fractional = $fractional * 10 + (at(bytes, $index) - 48).to_u32()
 				}
-				if count < 7 {
-					count = count + 1
+				if $count < 7 {
+					$count = $count + 1
 				}
-				index = index + 1
+				$index = $index + 1
 			}
-			if index == start {
-				if index == length {
+			if $index == start {
+				if $index == length {
 					return Err(Incomplete)
 				}
 				return Err(Malformed)
@@ -209,29 +209,29 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		}
 		# Preserve only a safe placeholder while validating the remaining grammar.
 		# Inputs over six digits cannot reach construction.
-		clock_count = if count > 6 {
+		clock_count = if $count > 6 {
 			6.U8
 		} else {
-			count
+			$count
 		}
-		clock = match ClockTime.from_fields({ hour: digits(bytes, 11, 2).to_u8_wrap(), minute: digits(bytes, 14, 2).to_u8_wrap(), second: digits(bytes, 17, 2).to_u8_wrap(), microsecond: fractional * fraction_unit(clock_count) }) {
+		clock = match ClockTime.from_fields({ hour: digits(bytes, 11, 2).to_u8_wrap(), minute: digits(bytes, 14, 2).to_u8_wrap(), second: digits(bytes, 17, 2).to_u8_wrap(), microsecond: $fractional * fraction_unit(clock_count) }) {
 			Ok(value) => value
 			Err(UnsupportedLeapSecond) => return Err(UnsupportedLeapSecond)
 			Err(_) => return Err(InvalidTime)
 		}
-		if index == length {
+		if $index == length {
 			return Err(Incomplete)
 		}
-		var offset = UnassertedUtc
-		marker = at(bytes, index)
+		var $offset = UnassertedUtc
+		marker = at(bytes, $index)
 		if marker == 90 or marker == 122 {
-			index = index + 1
+			$index = $index + 1
 		} else if marker == 43 or marker == 45 {
-			start = index
-			index = index + 1
-			while index < length and index < start + 6 {
-				byte = at(bytes, index)
-				valid = if index == start + 3 {
+			start = $index
+			$index = $index + 1
+			while $index < length and $index < start + 6 {
+				byte = at(bytes, $index)
+				valid = if $index == start + 3 {
 					byte == 58
 				} else {
 					digit(byte)
@@ -239,12 +239,12 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 				if !valid {
 					return Err(Malformed)
 				}
-				index = index + 1
+				$index = $index + 1
 			}
-			if index >= start + 3 and digits(bytes, start + 1, 2) > 23 {
+			if $index >= start + 3 and digits(bytes, start + 1, 2) > 23 {
 				return Err(InvalidOffset)
 			}
-			if index < start + 6 {
+			if $index < start + 6 {
 				return Err(Incomplete)
 			}
 			hours = digits(bytes, start + 1, 2)
@@ -254,7 +254,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			}
 			seconds = (hours * 3600 + minutes * 60).to_i32_wrap()
 			if marker == 43 or seconds != 0 {
-				offset = Asserted(
+				$offset = Asserted(
 					FixedOffset.from_seconds(
 						if marker == 45 {
 							-seconds
@@ -267,16 +267,16 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		} else {
 			return Err(Malformed)
 		}
-		if index < length {
-			if at(bytes, index) == 91 {
+		if $index < length {
+			if at(bytes, $index) == 91 {
 				return Err(UnsupportedAnnotations)
 			}
 			return Err(Malformed)
 		}
-		if count > 6 {
+		if $count > 6 {
 			return Err(UnsupportedPrecision)
 		}
-		new({ date, clock, fraction_digits: count, offset })
+		new({ date, clock, fraction_digits: $count, offset: $offset })
 	}
 
 	## Validated fields need at most 32 ASCII bytes: 19 fixed, 7 fractional,
@@ -286,37 +286,37 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	to_text = |value| {
 		date = GregorianDate.to_fields(value.date)
 		clock = ClockTime.to_fields(value.clock)
-		var bytes = List.with_capacity(32)
+		var $bytes = List.with_capacity(32)
 		# new/parse prove the year is 0..9999; all other fields are validated
 		# by their nominal constructors. These narrowings cannot lose precision.
-		bytes = append_decimal(bytes, date.year.to_u32_wrap(), 1000, 4)
-		bytes = append_decimal(bytes.append(45), date.month.to_u32(), 10, 2)
-		bytes = append_decimal(bytes.append(45), date.day.to_u32(), 10, 2)
-		bytes = append_decimal(bytes.append(84), clock.hour.to_u32(), 10, 2)
-		bytes = append_decimal(bytes.append(58), clock.minute.to_u32(), 10, 2)
-		bytes = append_decimal(bytes.append(58), clock.second.to_u32(), 10, 2)
+		$bytes = append_decimal($bytes, date.year.to_u32_wrap(), 1000, 4)
+		$bytes = append_decimal($bytes.append(45), date.month.to_u32(), 10, 2)
+		$bytes = append_decimal($bytes.append(45), date.day.to_u32(), 10, 2)
+		$bytes = append_decimal($bytes.append(84), clock.hour.to_u32(), 10, 2)
+		$bytes = append_decimal($bytes.append(58), clock.minute.to_u32(), 10, 2)
+		$bytes = append_decimal($bytes.append(58), clock.second.to_u32(), 10, 2)
 		if value.fraction_digits > 0 {
-			bytes = append_decimal(bytes.append(46), clock.microsecond, 100000, value.fraction_digits)
+			$bytes = append_decimal($bytes.append(46), clock.microsecond, 100000, value.fraction_digits)
 		}
 		match value.offset {
 			UnassertedUtc => {
-				bytes = bytes.append(90)
+				$bytes = $bytes.append(90)
 			}
 			Asserted(fixed) => {
 				seconds = FixedOffset.to_seconds(fixed)
 				# The profile restricts offsets to +/-86340 whole seconds.
 				absolute = if seconds < 0 {
-					bytes = bytes.append(45)
+					$bytes = $bytes.append(45)
 					(-seconds).to_u32_wrap()
 				} else {
-					bytes = bytes.append(43)
+					$bytes = $bytes.append(43)
 					seconds.to_u32_wrap()
 				}
-				bytes = append_decimal(bytes, U32.div_trunc_by(absolute, 3600), 10, 2)
-				bytes = append_decimal(bytes.append(58), U32.rem_by(U32.div_trunc_by(absolute, 60), 60), 10, 2)
+				$bytes = append_decimal($bytes, U32.div_trunc_by(absolute, 3600), 10, 2)
+				$bytes = append_decimal($bytes.append(58), U32.rem_by(U32.div_trunc_by(absolute, 60), 60), 10, 2)
 			}
 		}
-		match Str.from_utf8(bytes) {
+		match Str.from_utf8($bytes) {
 			Ok(text) => text
 			Err(_) => crash "Timestamp formatter emits only ASCII digits and punctuation"
 		}
@@ -351,13 +351,13 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 }
 
 fraction_unit = |count| {
-	var unit = 1.U32
-	var remaining = 6.U8 - count
-	while remaining > 0 {
-		unit = unit * 10
-		remaining = remaining - 1
+	var $unit = 1.U32
+	var $remaining = 6.U8 - count
+	while $remaining > 0 {
+		$unit = $unit * 10
+		$remaining = $remaining - 1
 	}
-	unit
+	$unit
 }
 
 effective_offset = |offset| match offset {
@@ -373,13 +373,13 @@ at = |bytes, index| match bytes.get(index) {
 }
 
 digits = |bytes, start, count| {
-	var value = 0.U32
-	var index = start
-	while index < start + count {
-		value = value * 10 + (at(bytes, index) - 48).to_u32()
-		index = index + 1
+	var $value = 0.U32
+	var $index = start
+	while $index < start + count {
+		$value = $value * 10 + (at(bytes, $index) - 48).to_u32()
+		$index = $index + 1
 	}
-	value
+	$value
 }
 
 # All calls use a positive power-of-ten divisor and at most its decimal width.
@@ -387,16 +387,16 @@ digits = |bytes, start, count| {
 # emitted digit is in 0..9; the buffer is consumed without retaining an alias.
 append_decimal : List(U8), U32, U32, U8 -> List(U8)
 append_decimal = |initial, number, first_divisor, count| {
-	var bytes = initial
-	var divisor = first_divisor
-	var remaining = count
-	while remaining > 0 {
-		digit_value = U32.rem_by(U32.div_trunc_by(number, divisor), 10)
-		bytes = bytes.append(digit_value.to_u8_wrap() + 48)
-		divisor = U32.div_trunc_by(divisor, 10)
-		remaining = remaining - 1
+	var $bytes = initial
+	var $divisor = first_divisor
+	var $remaining = count
+	while $remaining > 0 {
+		digit_value = U32.rem_by(U32.div_trunc_by(number, $divisor), 10)
+		$bytes = $bytes.append(digit_value.to_u8_wrap() + 48)
+		$divisor = U32.div_trunc_by($divisor, 10)
+		$remaining = $remaining - 1
 	}
-	bytes
+	$bytes
 }
 
 # RFC 3339 §5.8's independently stated equal-instant example.
@@ -426,12 +426,12 @@ expect {
 			OffsetTimestamp.to_text(c) == "2000-02-29T12:00:00.120+23:59"
 }
 expect {
-	var valid = Bool.True
+	var $valid = Bool.True
 	for text in ["0000-01-01T00:00:00-23:59", "9999-12-31T23:59:59.999999+23:59", "1985-04-12T23:20:50.52Z"] {
 		value = OffsetTimestamp.parse(text)?
-		valid = valid and OffsetTimestamp.to_text(value) == text and OffsetTimestamp.parse(OffsetTimestamp.to_text(value)) == Ok(value)
+		$valid = $valid and OffsetTimestamp.to_text(value) == text and OffsetTimestamp.parse(OffsetTimestamp.to_text(value)) == Ok(value)
 	}
-	valid
+	$valid
 }
 expect {
 	OffsetTimestamp.parse("2001-02-29T00:00:00Z") == Err(InvalidDate) and
