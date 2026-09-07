@@ -5,13 +5,12 @@ import time.ICalDuration
 import time.TimedRecurrence
 import time.TimedOccurrence
 import time.LocalDateTime
-import time.CalendarDate
+import time.Calendar
 import time.GregorianDate
 import time.ClockTime
 import time.PosixBoundary
 import time.PosixSpan
 import time.PosixDelta
-import time.CalendarDelta
 import time.FixedOffset
 import time.ZoneRules
 import time.CalendarPattern
@@ -62,7 +61,7 @@ ScheduleDefinitionChecks :: [].{
 		for (year, micros) in [(1970, 32400000001), (10000, 32400000000)] {
 			date = GregorianDate.from_fields({ year, month: 1, day: 1 })?
 			clock = ClockTime.from_microseconds_since_midnight(micros)?
-			anchor = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+			anchor = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 			rule = TimedRecurrence.from_definition({ ..TimedRecurrence.definition(base_data.rule), anchor })?
 			native = native_definition({ rule, duration: ICalDuration.to_duration(base_data.duration), overrides: [], context: { rules: ScheduleFixture.rules(0)?, occurrence: RequireUnique, gap: RejectGap } })?
 			rebuilt = { definition: rebuild_native(native)? }
@@ -92,7 +91,7 @@ ScheduleDefinitionChecks :: [].{
 # has no exact 00:30; explicit before-gap interpretation gives +1800s.
 check_transitions = |suffix| {
 	anchor = LocalDateTime.parse_gregorian("1970-01-01T00:30") ?? crash "Transition source"
-	date = CalendarDate.as_gregorian(LocalDateTime.date(anchor))?
+	date = Calendar.Date.as_gregorian(LocalDateTime.date(anchor))?
 	rule = TimedRecurrence.new(
 		{ date, clock: LocalDateTime.clock(anchor) },
 		{
@@ -187,7 +186,7 @@ check_native_ending_hashes = |rule, suffix| {
 		} else {
 			UseOffsetBeforeGap
 		}
-		duration = Calendar({ delta: CalendarDelta.from_components({ years: 1, months: 2, days: 3 }), invalid_date, tail: PosixDelta.from_microseconds(17), occurrence, gap })
+		duration = Calendar({ delta: Calendar.Delta.from_components({ years: 1, months: 2, days: 3 }), invalid_date, tail: PosixDelta.from_microseconds(17), occurrence, gap })
 		overrides = [
 			{ source: ending_label(1, 1)?, ending: After(Coordinate(PosixDelta.from_microseconds(7))) },
 			{ source: ending_label(2, 2)?, ending: AtBoundary(PosixBoundary.from_microseconds(I64.lowest)) },
@@ -212,7 +211,7 @@ check_native_ending_hashes = |rule, suffix| {
 ending_label = |day, microsecond| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
 	clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond })?
-	Ok(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
+	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
 }
 
 parse_rule = |parts| match ICalTimedRule.parse(parts) {

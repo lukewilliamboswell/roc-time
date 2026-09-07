@@ -5,7 +5,7 @@ import time.TimedRecurrence
 import time.TimedSchedule
 import time.TimedOccurrence
 import time.CalendarPattern
-import time.CalendarDate
+import time.Calendar
 import time.GregorianDate
 import time.ClockTime
 import time.LocalDateTime
@@ -24,9 +24,9 @@ main! = |args| {
 	ceiling = U64.from_str(args.get(4) ?? "1000000") ?? 1000000
 	Host.assert!(count <= 4096 and horizon > 2000 and horizon <= 200000)
 	anchor = DefinitionFixture.label(0)
-	date = CalendarDate.as_gregorian(LocalDateTime.date(anchor)) ?? crash "Gregorian anchor"
+	date = Calendar.Date.as_gregorian(LocalDateTime.date(anchor)) ?? crash "Gregorian anchor"
 	end_date = GregorianDate.from_fields({ year: horizon, month: 1, day: 1 }) ?? crash "bounded horizon"
-	end = LocalDateTime.new(CalendarDate.from_gregorian(end_date), LocalDateTime.clock(anchor))
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), LocalDateTime.clock(anchor))
 	rules = DefinitionFixture.rules({})
 	rule = TimedRecurrence.new({ date, clock: LocalDateTime.clock(anchor) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Forever, by_set_pos: [] }) ?? crash "valid native rule"
 	before_input = Host.allocated_bytes!({})

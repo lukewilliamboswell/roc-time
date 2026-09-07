@@ -1,4 +1,4 @@
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.LocalDateTime
 import time.PosixBoundary
@@ -6,7 +6,7 @@ import time.ZoneRules
 
 ZoneOracle :: [].{
 	Fixture : { name : Str, source_digest : Str, lower : I64, upper : I64, initial : I32, minimum : I32, maximum : I32, transitions : List({ at : I64, offset : I32 }) }
-	Case : { id : U64, zone : U64, date : CalendarDate.Fields, clock : ClockTime.Fields, expected : List(I64) }
+	Case : { id : U64, zone : U64, date : Calendar.Date.Fields, clock : ClockTime.Fields, expected : List(I64) }
 
 	rules_for = |fixture| {
 		if I64.rem_by(fixture.lower, 1000000) != 0 or I64.rem_by(fixture.upper, 1000000) != 0 {
@@ -51,7 +51,7 @@ ZoneOracle :: [].{
 				return Err(CaseOrder(case.id))
 			}
 			zone = List.get($rules, case.zone)?
-			date = CalendarDate.from_fields(Gregorian, case.date)?
+			date = Calendar.Date.from_fields(Gregorian, case.date)?
 			clock = ClockTime.from_fields(case.clock)?
 			result = ZoneRules.resolve(zone, LocalDateTime.new(date, clock))?
 			actual = match result {
@@ -105,7 +105,7 @@ ZoneOracle :: [].{
 		microsecond = U32.from_str(argument(args, 10))?
 		fixture = fixtures.get(index)?
 		rules = rules_for(fixture)?
-		date = CalendarDate.from_fields(Gregorian, { year, month, day })?
+		date = Calendar.Date.from_fields(Gregorian, { year, month, day })?
 		clock = ClockTime.from_fields({ hour, minute, second, microsecond })?
 		resolution = ZoneRules.resolve(rules, LocalDateTime.new(date, clock))?
 		Ok(

@@ -1,6 +1,6 @@
 import SemanticFact
 import GregorianDate
-import CalendarDate
+import Calendar
 import ClockTime
 import LocalDateTime
 import FixedOffset
@@ -99,7 +99,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	parts : OffsetTimestamp -> Parts
 	parts = |value| { date: value.date, clock: value.clock, fraction_digits: value.fraction_digits, offset: value.offset }
 	local_label : OffsetTimestamp -> LocalDateTime
-	local_label = |value| LocalDateTime.new(CalendarDate.from_gregorian(value.date), value.clock)
+	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
 
 	## This source label is UTC for UnassertedUtc and offset-local otherwise.
 	boundary : OffsetTimestamp -> Try(PosixBoundary, [OutOfRange, ..])
@@ -125,7 +125,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			Ok(value) => value
 			Err(_) => return Err(OutOfRange)
 		}
-		fields = CalendarDate.to_fields(LocalDateTime.date(local))
+		fields = Calendar.Date.to_fields(LocalDateTime.date(local))
 		date = match GregorianDate.from_fields(fields) {
 			Ok(value) => value
 			Err(_) => return Err(OutOfRange)

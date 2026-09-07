@@ -1,5 +1,4 @@
 import Calendar
-import CalendarDate
 import CivilDay
 import ClockTime
 import LocalDateTime
@@ -36,7 +35,7 @@ FixedOffset :: [Seconds(I32)].{
 
 	resolve : FixedOffset, LocalDateTime -> Try(PosixBoundary, [OutOfRange, ..])
 	resolve = |Seconds(seconds), local| {
-		day = CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(local)))
+		day = CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(local)))
 		clock = ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local))
 		# Provider days fit I64; multiplication and subtraction fit I128.
 		# Narrow only after subtracting the offset, preserving endpoint cases.
@@ -55,7 +54,7 @@ FixedOffset :: [Seconds(I32)].{
 		clock_number = number - day * 86400000000
 		day_number = I128.to_i64_try(day)?
 		micros = I128.to_i64_try(clock_number)?
-		date = CalendarDate.from_civil_day(calendar, CivilDay.from_day_number(day_number))?
+		date = Calendar.Date.from_civil_day(calendar, CivilDay.from_day_number(day_number))?
 		clock = ClockTime.from_microseconds_since_midnight(micros)?
 		Ok(LocalDateTime.new(date, clock))
 	}
@@ -70,7 +69,7 @@ FixedOffset :: [Seconds(I32)].{
 	expect {
 		# RFC 3339 section 4.2: 18:50 at -04:00 equals 22:50 at zero.
 		# https://www.rfc-editor.org/rfc/rfc3339#section-4.2 (July 2002).
-		date = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
+		date = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
 		clock = ClockTime.from_fields({ hour: 18, minute: 50, second: 0, microsecond: 0 })?
 		resolve(from_seconds(-14400), LocalDateTime.new(date, clock)) ==
 			Ok(PosixBoundary.from_microseconds(82200000000))
@@ -82,7 +81,7 @@ FixedOffset :: [Seconds(I32)].{
 		# (03:30 under -04:00). This validates conversion primitives, not an
 		# implemented automatic gap policy or timed recurrence adapter.
 		# https://www.rfc-editor.org/errata/eid4271
-		date = CalendarDate.from_fields(Gregorian, { year: 2007, month: 3, day: 11 })?
+		date = Calendar.Date.from_fields(Gregorian, { year: 2007, month: 3, day: 11 })?
 		clock = ClockTime.from_fields({ hour: 2, minute: 30, second: 0, microsecond: 0 })?
 		utc_clock = ClockTime.from_fields({ hour: 7, minute: 30, second: 0, microsecond: 0 })?
 		adjusted_clock = ClockTime.from_fields({ hour: 3, minute: 30, second: 0, microsecond: 0 })?
@@ -94,7 +93,7 @@ FixedOffset :: [Seconds(I32)].{
 
 	expect {
 		local = project(from_seconds(0), PosixBoundary.from_microseconds(-1), Gregorian)?
-		CalendarDate.to_fields(LocalDateTime.date(local)) == { year: 1969, month: 12, day: 31 } and
+		Calendar.Date.to_fields(LocalDateTime.date(local)) == { year: 1969, month: 12, day: 31 } and
 			ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local)) == 86399999999
 	}
 

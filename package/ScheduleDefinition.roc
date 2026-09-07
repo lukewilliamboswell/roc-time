@@ -5,11 +5,9 @@ import TimedSchedule
 import ICalTimedRule
 import ICalPeriod
 import LocalDateTime
-import ScheduleEndings
 import CalendarPattern
 import GregorianDate
-import CalendarDate
-import CalendarDelta
+import Calendar
 import ClockTime
 import PosixDelta
 import PosixBoundary
@@ -24,15 +22,15 @@ import FixedOffset
 ## O(n log n); it never enumerates starts or resolves zones. Native lists may
 ## share storage. An iCalendar origin retains its unlowered PERIOD declarations
 ## alongside prepared execution selectors. This is not a persistence format.
-ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : ScheduleEndings, context : TimedRecurrence.Context }.{
+ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }.{
 	NativeSpec : { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndOverride), context : TimedRecurrence.Context }
 	ICalSpec : { rule : ICalTimedRule, context : ICalPeriod.Context }
 	Definition : [Native(NativeSpec), ICal(ICalSpec)]
 	Error : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), TooManyPeriods, IncompatibleContext, TooManySelectors, OutOfRange]
 	from_native : NativeSpec -> Try(ScheduleDefinition, Error)
 	from_native = |spec| {
-		endings = ScheduleEndings.new(spec.duration, spec.overrides)?
-		normalized = ScheduleEndings.definition(endings)
+		endings = TimedSchedule.Endings.new(spec.duration, spec.overrides)?
+		normalized = TimedSchedule.Endings.definition(endings)
 		Ok({ origin: Native({ ..spec, overrides: normalized.overrides }), rule: spec.rule, endings, context: spec.context })
 	}
 	from_ical : ICalSpec -> Try(ScheduleDefinition, Error)
@@ -106,7 +104,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : S
 test_local = |day| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	Ok(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
+	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
 }
 
 test_native = || {
@@ -129,10 +127,10 @@ expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(123)?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(3), by_set_pos: [] })?
-	second = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
-	third = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
+	second = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	third = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
 	local_end = LocalDateTime.new(LocalDateTime.date(third), ClockTime.from_microseconds_since_midnight(456)?)
-	duration = Calendar({ delta: CalendarDelta.days(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(500), occurrence: Last, gap: UseOffsetBeforeGap })
+	duration = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(500), occurrence: Last, gap: UseOffsetBeforeGap })
 	overrides = [{ source: second, ending: AtLocal({ source: local_end, occurrence: First, gap: RejectGap }) }, { source: third, ending: AtBoundary(PosixBoundary.from_microseconds(176400000789)) }]
 	definition = ScheduleDefinition.from_native({ ..spec, rule, duration, overrides })?
 	declaration_valid = match ScheduleDefinition.definition(definition) {
@@ -145,7 +143,7 @@ expect {
 					}
 					_ => Bool.False
 				}
-				CalendarDelta.to_components(value.delta) == { years: 0, months: 0, days: 1 } and value.invalid_date == Clamp and value.tail == PosixDelta.from_microseconds(500) and value.occurrence == Last and value.gap == UseOffsetBeforeGap and endings_valid
+				Calendar.Delta.to_components(value.delta) == { years: 0, months: 0, days: 1 } and value.invalid_date == Clamp and value.tail == PosixDelta.from_microseconds(500) and value.occurrence == Last and value.gap == UseOffsetBeforeGap and endings_valid
 			}
 			_ => Bool.False
 		}

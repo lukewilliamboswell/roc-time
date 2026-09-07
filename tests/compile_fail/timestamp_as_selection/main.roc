@@ -1,9 +1,10 @@
 app [main!] { time: "../../../package/main.roc" }
+import time.LocalDateTime
 import time.OffsetTimestamp
-import time.CalendarValue
+import time.Calendar
 main! = |_| {
 	value = parse("2026-06-15T12:30:00Z")?
-	_ = CalendarValue.local_bounds(value)
+	_ = LocalDateTime.calendar_value_bounds(value)
 	Ok({})
 }
 

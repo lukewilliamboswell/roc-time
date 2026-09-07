@@ -1,5 +1,5 @@
 import SemanticFact
-import CalendarDate
+import Calendar
 import ClockTime
 import FixedOffset
 import PosixBoundary
@@ -225,9 +225,9 @@ expect {
 		{ minimum: 0, maximum: 86400 },
 	)?
 	midnight = ClockTime.from_microseconds_since_midnight(0)?
-	first = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
-	second = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?
-	third = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 3 })?
+	first = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
+	second = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?
+	third = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 3 })?
 	expected = PosixSpan.new(test_zonerules_point(0), test_zonerules_point(86400000000))?
 	cursor = ZoneRules.selection_cursor(rules, LocalDateTime.new(first, midnight), LocalDateTime.new(second, midnight))?
 	batch = ResolvedSelection.collect(cursor, { max_segments: 2, max_members: 0 })?
@@ -376,7 +376,7 @@ test_zonerules_local_label = |number| {
 	} else {
 		{ year: 1970.I64, month: 1.U8, day: 1.U8 }
 	}
-	date = CalendarDate.from_fields(Gregorian, fields)?
+	date = Calendar.Date.from_fields(Gregorian, fields)?
 	clock = ClockTime.from_microseconds_since_midnight(
 		if number < 0 {
 			number + 86400000000

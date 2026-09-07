@@ -1,4 +1,4 @@
-import time.CalendarDate
+import time.Calendar
 import time.EnglishGregorian
 import time.LocalDateTime
 
@@ -8,7 +8,7 @@ AppointmentDisplay :: [].{
 	describe = |appointment_text, recorded_text| {
 		appointment = parse(appointment_text)?
 		recorded = parse(recorded_text)?
-		day = CalendarDate.as_gregorian(LocalDateTime.date(appointment))?
+		day = Calendar.Date.as_gregorian(LocalDateTime.date(appointment))?
 		heading = match EnglishGregorian.local_datetime(appointment, Minute) {
 			Ok(value) => value
 			Err(error) => return Err(Display(error))

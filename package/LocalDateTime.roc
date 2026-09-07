@@ -1,5 +1,4 @@
 import Calendar
-import CalendarDate
 import CivilDay
 import ClockTime
 import GregorianDate
@@ -13,7 +12,7 @@ import GregorianDate
 ##
 ## ```roc
 ## import time.GregorianDate
-## import time.CalendarDate
+## import time.Calendar.Date
 ## import time.ClockTime
 ## import time.LocalDateTime
 ##
@@ -25,7 +24,7 @@ import GregorianDate
 ##         second: 0,
 ##         microsecond: 0,
 ##     })?
-##     local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+##     local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 ##     ClockTime.to_fields(LocalDateTime.clock(local)).hour == 9
 ## }
 ## ```
@@ -45,7 +44,21 @@ import GregorianDate
 ## ```
 ##
 ## Examples assume a package dependency named `time`.
-LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
+LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
+
+	## Canonical start of a civil selection, without changing its supplied precision.
+	## This label alone does not describe the selection's extent or choose a zone.
+	from_calendar_value : Calendar.Value -> LocalDateTime
+	from_calendar_value = |value| new(Calendar.Value.date(value), Calendar.Value.clock(value))
+
+	## Compose checked half-open civil bounds from selection components in O(1).
+	## An exclusive upper bound beyond the provider range returns OutOfRange.
+	calendar_value_bounds : Calendar.Value -> Try({ start : LocalDateTime, end : LocalDateTime }, [OutOfRange, ..])
+	calendar_value_bounds = |value| {
+		bounds = Calendar.Value.bounds(value)?
+		Ok({ start: new(bounds.start.date, bounds.start.clock), end: new(bounds.end.date, bounds.end.clock) })
+	}
+
 	TextError : [TooLarge, Incomplete, Malformed, InvalidDate(GregorianDate.Error), InvalidTime(ClockTime.Error)]
 
 	## Parse an explicitly Gregorian local label: date, uppercase T, then clock.
@@ -81,7 +94,7 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 			Err(Incomplete) => return Err(Incomplete)
 			Err(error) => return Err(InvalidTime(error))
 		}
-		Ok(new(CalendarDate.from_gregorian(day), time))
+		Ok(new(Calendar.Date.from_gregorian(day), time))
 	}
 
 	## Canonical Gregorian date/clock text preserves the local position. It is
@@ -89,28 +102,28 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 	## Reject other calendars; callers can explicitly convert with in_calendar.
 	to_gregorian_text : LocalDateTime -> Try(Str, [UnsupportedCalendar(Calendar), ..])
 	to_gregorian_text = |value| {
-		day = CalendarDate.as_gregorian(value.date)?
+		day = Calendar.Date.as_gregorian(value.date)?
 		Ok("${GregorianDate.to_text(day)}T${ClockTime.to_text(value.clock)}")
 	}
 
-	new : CalendarDate, ClockTime -> LocalDateTime
+	new : Calendar.Date, ClockTime -> LocalDateTime
 	new = |date, clock| { date, clock }
 
-	date : LocalDateTime -> CalendarDate
+	date : LocalDateTime -> Calendar.Date
 	date = |value| value.date
 	clock : LocalDateTime -> ClockTime
 	clock = |value| value.clock
 
 	in_calendar : LocalDateTime, Calendar -> Try(LocalDateTime, [OutOfRange, ..])
 	in_calendar = |value, target| {
-		converted = CalendarDate.in_calendar(value.date, target)?
+		converted = Calendar.Date.in_calendar(value.date, target)?
 		Ok(new(converted, value.clock))
 	}
 
 	## Compare local positions, not timeline occurrences or descriptions.
 	compare_position : LocalDateTime, LocalDateTime -> [LT, EQ, GT]
 	compare_position = |a, b| {
-		days = CivilDay.compare(CalendarDate.to_civil_day(a.date), CalendarDate.to_civil_day(b.date))
+		days = CivilDay.compare(Calendar.Date.to_civil_day(a.date), Calendar.Date.to_civil_day(b.date))
 		match days {
 			EQ => if a.clock < b.clock {
 				LT
@@ -137,7 +150,7 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 	expect {
 		# Ordinary form input is a local position, not a resolved instant.
 		value = parse_gregorian("2026-09-07T09:30")?
-		CalendarDate.to_fields(date(value)) == { year: 2026, month: 9, day: 7 } and
+		Calendar.Date.to_fields(date(value)) == { year: 2026, month: 9, day: 7 } and
 			ClockTime.to_microseconds_since_midnight(clock(value)) == 34200000000 and
 				to_gregorian_text(value) == Ok("2026-09-07T09:30:00") and
 					parse_gregorian("2026-09-07T09:30:00.120") == parse_gregorian("2026-09-07T09:30:00.12")
@@ -145,7 +158,7 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 
 	expect {
 		# Explicit profiles cannot silently relabel the Julian leap date.
-		julian = CalendarDate.from_fields(Julian, { year: 1900, month: 2, day: 29 })?
+		julian = Calendar.Date.from_fields(Julian, { year: 1900, month: 2, day: 29 })?
 		local = new(julian, ClockTime.from_microseconds_since_midnight(0)?)
 		to_gregorian_text(local) == Err(UnsupportedCalendar(Julian)) and
 			parse_gregorian("1900-02-29T00:00") == Err(InvalidDate(InvalidDay))
@@ -175,9 +188,9 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 
 	expect {
 		# Hinnant's independently sourced equal-day anchor, also exercised by
-		# CalendarDate and the generated Julian reference formula fixtures.
-		julian = CalendarDate.from_fields(Julian, { year: 1582, month: 10, day: 5 })?
-		gregorian = CalendarDate.from_fields(Gregorian, { year: 1582, month: 10, day: 15 })?
+		# Calendar.Date and the generated Julian reference formula fixtures.
+		julian = Calendar.Date.from_fields(Julian, { year: 1582, month: 10, day: 5 })?
+		gregorian = Calendar.Date.from_fields(Gregorian, { year: 1582, month: 10, day: 15 })?
 		time = ClockTime.from_fields({ hour: 12, minute: 30, second: 0, microsecond: 1 })?
 		a = new(julian, time)
 		b = new(gregorian, time)
@@ -185,8 +198,8 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 	}
 
 	expect {
-		before = CalendarDate.from_fields(Gregorian, { year: 1969, month: 12, day: 31 })?
-		after = CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
+		before = Calendar.Date.from_fields(Gregorian, { year: 1969, month: 12, day: 31 })?
+		after = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
 		last = ClockTime.from_microseconds_since_midnight(86399999999)?
 		first = ClockTime.from_microseconds_since_midnight(0)?
 		compare_position(new(before, last), new(after, first)) == LT and

@@ -10,9 +10,8 @@ import time.ICalPeriod
 import time.PosixDelta
 import time.EdtfDate
 import time.OffsetTimestamp
-import time.CalendarValue
+import time.Calendar
 import time.QualifiedCalendarValue
-import time.CalendarDate
 import time.LocalDateTime
 import time.ClockTime
 import time.FixedOffset
@@ -26,7 +25,7 @@ import time.PosixBoundary
 # R02/R13/R14: generated valid Gregorian dates in 1900..2100, supplied EDTF
 # year/month/day resolution and whole qualifiers; complete offset timestamps
 # with 0..6 fractional digits. The date oracle counts whole years/months using
-# the Gregorian divisibility law, independently of CalendarDate conversions.
+# the Gregorian divisibility law, independently of Calendar.Date conversions.
 InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier : U8, seconds : U32, fraction : U32, digits : U8, offset : I16 }.{
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(InterchangeCase)
 	generator_for = |_| { year: Fuzz.map(Fuzz.u64_in(1900, 2100), |n| n.to_u16_wrap()), month: Fuzz.u8_in(1, 12), day: Fuzz.u8_in(0, 30), precision: Fuzz.u8_in(0, 2), qualifier: Fuzz.u8_in(0, 3), seconds: Fuzz.map(Fuzz.u64_in(0, 86399), |n| n.to_u32_wrap()), fraction: Fuzz.map(Fuzz.u64_in(0, 999999), |n| n.to_u32_wrap()), digits: Fuzz.u8_in(0, 6), offset: Fuzz.map(Fuzz.u64_in(0, 2878), |n| (n.to_i64_wrap() - 1439).to_i16_wrap()) }.Fuzz
@@ -92,8 +91,8 @@ check_edtf = |input, day, date_text| {
 		1 => Month
 		_ => Day
 	}
-	fields = CalendarDate.to_fields(LocalDateTime.date(CalendarValue.start_label(value)))
-	if CalendarValue.resolution(value) != expected_resolution or fields.year != input.year.to_i64() or
+	fields = Calendar.Date.to_fields(LocalDateTime.date(LocalDateTime.from_calendar_value(value)))
+	if Calendar.Value.resolution(value) != expected_resolution or fields.year != input.year.to_i64() or
 		fields.month != (
 			if input.precision == 0 {
 				1
@@ -148,8 +147,8 @@ check_scoped_edtf = |input, day| {
 		}
 		description = EdtfDate.description(parsed)
 		native = QualifiedCalendarValue.described_value(description)
-		fields = CalendarDate.to_fields(LocalDateTime.date(CalendarValue.start_label(native)))
-		if fields != { year: input.year.to_i64(), month: input.month, day } or CalendarValue.resolution(native) != Day or
+		fields = Calendar.Date.to_fields(LocalDateTime.date(LocalDateTime.from_calendar_value(native)))
+		if fields != { year: input.year.to_i64(), month: input.month, day } or Calendar.Value.resolution(native) != Day or
 			QualifiedCalendarValue.qualifications(description) != [{ scope: choice.scope, qualifier: flag.value }] or
 				EdtfDate.to_text(parsed) != choice.text or EdtfDate.from_description(description) != Ok(parsed) {
 			crash "Scoped date changed supplied fields, resolution or scope"
@@ -608,7 +607,7 @@ check_rfc_explanation = |input, day, h, m, s, utc_source, date, duration, period
 		match explanation_fact(source, 0) {
 			ICalDateTimeDescription(data) => {
 				if data.role != Standalone or data.form != entry.form or
-					CalendarDate.to_fields(LocalDateTime.date(data.local)) != { year: input.year.to_i64(), month: input.month, day } or
+					Calendar.Date.to_fields(LocalDateTime.date(data.local)) != { year: input.year.to_i64(), month: input.month, day } or
 						ClockTime.to_fields(LocalDateTime.clock(data.local)) != { hour: h.to_u8_wrap(), minute: m.to_u8_wrap(), second: s.to_u8_wrap(), microsecond: 0 } {
 					crash "RFC explanation changed supplied fields or local/UTC form"
 				}

@@ -4,7 +4,7 @@ import FixedOffset
 import PosixBoundary
 import PosixSpan
 import AllDayOccurrence
-import CalendarDate
+import Calendar
 import DateRecurrence
 import GregorianDate
 import ZoneRules
@@ -96,7 +96,7 @@ AllDayRecurrence(id) :: {
 						return Ok({ date_steps: $date_steps, date_buffered: batch.buffered, zone_segments: 0, zone_buffered: 0, status: Limited({ cursor: { ..$state, dates: progress.cursor }, reason }) })
 					}
 					Item(item) => {
-						date = CalendarDate.from_gregorian(item.date)
+						date = Calendar.Date.from_gregorian(item.date)
 						pending = match AllDayOccurrence.cursor({ series: $state.series, date: item.date }, date, $state.days, $state.rules) {
 							Ok(value) => value
 							Err(InvalidDuration) => crash "validated positive duration"

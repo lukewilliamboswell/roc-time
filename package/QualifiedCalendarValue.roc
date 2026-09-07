@@ -1,6 +1,5 @@
 import SemanticFact
-import CalendarValue
-import CalendarDate
+import Calendar
 import FixedOffset
 import PosixBoundary
 import PosixSpan
@@ -17,16 +16,16 @@ import ZoneRules
 ## Construction validates and canonicalizes at most nine entries; input order
 ## has no semantic meaning. Whole and component qualifications may coexist and
 ## are retained independently, without inferring redundancy or contradiction.
-QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualification) }.{
+QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualification) }.{
 	Scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth]
 	Qualifier : [Uncertain, Approximate, UncertainApproximate]
 	Qualification : { scope : Scope, qualifier : Qualifier }
-	new : CalendarValue, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope), ..])
+	new : Calendar.Value, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope), ..])
 	new = |value, qualifications| {
 		if qualifications.len() > 9 {
 			return Err(TooManyQualifications)
 		}
-		supplied = match CalendarValue.resolution(value) {
+		supplied = match Calendar.Value.resolution(value) {
 			Year => 1.U8
 			Month => 2
 			Day => 3
@@ -68,7 +67,7 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 
 	## The named value alone is descriptive evidence, not an interpretation of
 	## its qualifiers. Extracting it does not establish an admissible tolerance.
-	described_value : QualifiedCalendarValue -> CalendarValue
+	described_value : QualifiedCalendarValue -> Calendar.Value
 	described_value = |description| description.value
 	qualifications : QualifiedCalendarValue -> List(Qualification)
 	qualifications = |description| description.qualifications
@@ -82,7 +81,7 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 		if !description.qualifications.is_empty() {
 			return Err(NeedsModel)
 		}
-		CalendarValue.selection_cursor(description.value, rules)
+		ZoneRules.calendar_selection_cursor(rules, description.value)
 	}
 
 	is_eq : QualifiedCalendarValue, QualifiedCalendarValue -> Bool
@@ -112,12 +111,12 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 	fact_at : QualifiedCalendarValue, U64 -> [End, Item(SemanticFact)]
 	fact_at = |description, index| {
 		if index == 0 {
-			match CalendarValue.fact_at(description.value, 0) {
+			match SemanticFact.calendar_value_fact_at(description.value, 0) {
 				Item(fact) => match SemanticFact.kind(fact) {
 					CalendarDescription(data) => return Item(SemanticFact.new(CalendarDescription({ ..data, kind: QualifiedCalendarValue, qualification_count: description.qualifications.len() })))
-					_ => crash "CalendarValue index zero is its calendar summary"
+					_ => crash "Calendar.Value index zero is its calendar summary"
 				}
-				End => crash "CalendarValue index zero exists"
+				End => crash "Calendar.Value index zero exists"
 			}
 		}
 		if index == 1 {
@@ -155,8 +154,8 @@ scope_rank = |scope| match scope {
 }
 
 expect {
-	year = CalendarValue.year(Gregorian, 2004)?
-	month = CalendarValue.month(Gregorian, 2004, 6)?
+	year = Calendar.Value.year(Gregorian, 2004)?
+	month = Calendar.Value.month(Gregorian, 2004, 6)?
 	group = QualifiedCalendarValue.new(month, [{ scope: YearMonth, qualifier: Approximate }])?
 	whole = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: Approximate }])?
 	individual = QualifiedCalendarValue.new(month, [{ scope: Month, qualifier: Approximate }])?
@@ -167,13 +166,13 @@ expect {
 }
 
 expect {
-	year = CalendarValue.year(Gregorian, 2004)?
+	year = Calendar.Value.year(Gregorian, 2004)?
 	QualifiedCalendarValue.new(year, [{ scope: Month, qualifier: Approximate }]) == Err(UnsuppliedComponent(Month)) and
 		QualifiedCalendarValue.new(year, [{ scope: Year, qualifier: Uncertain }, { scope: Year, qualifier: Approximate }]) == Err(DuplicateScope(Year)) and
 			QualifiedCalendarValue.new(year, List.repeat({ scope: Year, qualifier: Uncertain }, 10)) == Err(TooManyQualifications)
 }
 expect {
-	month = CalendarValue.month(Gregorian, 2004, 6)?
+	month = Calendar.Value.month(Gregorian, 2004, 6)?
 	a = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: Uncertain }, { scope: Month, qualifier: Approximate }])?
 	b = QualifiedCalendarValue.new(month, [{ scope: Month, qualifier: Approximate }, { scope: Whole, qualifier: Uncertain }])?
 	c = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: UncertainApproximate }])?
@@ -183,8 +182,8 @@ expect {
 expect {
 	# EDTF's individual-component form, 2004-~06-11, constructed natively.
 	# The day remains supplied and unqualified; this does not assert a tolerance.
-	date = CalendarDate.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
-	value = CalendarValue.day(date)
+	date = Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
+	value = Calendar.Value.day(date)
 	month_only = QualifiedCalendarValue.new(value, [{ scope: Month, qualifier: Approximate }])?
 	whole = QualifiedCalendarValue.new(value, [{ scope: Whole, qualifier: Approximate }])?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
@@ -199,7 +198,7 @@ expect {
 }
 
 expect {
-	value = CalendarValue.year(Gregorian, 1984)?
+	value = Calendar.Value.year(Gregorian, 1984)?
 	plain = QualifiedCalendarValue.new(value, [])?
 	qualified = QualifiedCalendarValue.new(value, [{ scope: Whole, qualifier: Uncertain }])?
 	QualifiedCalendarValue.fact_count(plain) == 2 and QualifiedCalendarValue.fact_at(plain, 2) == End and

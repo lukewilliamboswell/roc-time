@@ -4,9 +4,8 @@ import time.SemanticFact
 import time.TimedSchedule
 import time.ScheduleDefinition
 import time.TimedOccurrence
-import time.CalendarDelta
+import time.Calendar
 import time.TimedRecurrence
-import time.CalendarDate
 import time.ClockTime
 import time.LocalDateTime
 import time.AllDayRecurrence
@@ -517,7 +516,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		Ok(value) => value
 		Err(_) => crash "timed construction"
 	}
-	excluded_label = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
+	excluded_label = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), anchor_clock)
 	rule = match TimedRecurrence.with_exclusions(
 		base_rule,
 		if input.exclude_anchor {
@@ -622,7 +621,7 @@ clock = |hour| match ClockTime.from_fields({ hour, minute: 0, second: 0, microse
 	Err(_) => crash "model clock"
 }
 
-local = |date_value, hour| LocalDateTime.new(CalendarDate.from_gregorian(date_value), clock(hour))
+local = |date_value, hour| LocalDateTime.new(Calendar.Date.from_gregorian(date_value), clock(hour))
 
 check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
 	var $current = initial
@@ -689,7 +688,7 @@ check_subdaily = |input| {
 		Err(_) => crash "subdaily anchor clock"
 	}
 	anchor = date(1970, 1, 1)
-	start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), anchor_clock)
 	query = match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds((anchor_second + 30) * 1000000), Gregorian) {
 		Ok(value) => value
 		Err(_) => crash "subdaily query"
@@ -738,7 +737,7 @@ check_subdaily = |input| {
 		Ok(value) => value
 		Err(_) => crash "whole second anchor"
 	}
-	whole_start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), whole_anchor)
+	whole_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), whole_anchor)
 	whole = match TimedRecurrence.from_definition({ ..declaration, anchor: whole_start, exclusions: [whole_start] }) {
 		Ok(value) => export_native(value, Utc)
 		Err(_) => crash "whole second edited declaration"
@@ -915,7 +914,7 @@ check_duration = |start, amount| {
 	}
 
 	base = PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(start))
-	for duration in [Coordinate(PosixDelta.from_microseconds(3600000000)), Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })] {
+	for duration in [Coordinate(PosixDelta.from_microseconds(3600000000)), Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })] {
 		cursor = match TimedOccurrence.cursor(42.U64, start, duration) {
 			Ok(value) => value
 			Err(_) => crash "duration construction"
@@ -957,7 +956,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		$position = $position + 1
 	}
 	for inclusion in inclusions {
-		source = LocalDateTime.new(CalendarDate.from_gregorian(inclusion.date), inclusion.clock)
+		source = LocalDateTime.new(Calendar.Date.from_gregorian(inclusion.date), inclusion.clock)
 		var $duplicate = Bool.False
 		for item in $expected {
 			$duplicate = $duplicate or LocalDateTime.same_position(item.source, source)
@@ -985,13 +984,13 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	)
 	expected_sources = $expected.map(|item| item.source)
 	expected_boundaries = $expected.map(|item| item.boundary)
-	anchor_source = LocalDateTime.new(CalendarDate.from_gregorian(anchor), anchor_clock)
+	anchor_source = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), anchor_clock)
 	extra_source = local(date(2024, 2, 4), 9)
 	# The generator constrains work to 1..128.
 	short : TimedOccurrence.Duration
 	short = Coordinate(PosixDelta.from_microseconds(work.to_i64_wrap() * 3600000000))
 	extra : TimedOccurrence.Duration
-	extra = Calendar({ delta: CalendarDelta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
+	extra = Calendar({ delta: Calendar.Delta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 	anchor_boundary = match FixedOffset.resolve(FixedOffset.from_seconds(0), anchor_source) {
 		Ok(value) => value
 		Err(_) => crash "fixture anchor"
@@ -1014,7 +1013,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	}
 	overrides = [{ source: anchor_source, ending: short_ending }, { source: extra_source, ending: extra_ending }, { source: anchor_source, ending: short_ending }]
 	(direct, prepared) = if exclude_anchor {
-		default_duration = Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
+		default_duration = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
 		context = { rules, occurrence: RequireUnique, gap: RejectGap }
 		declaration = checked_definition(ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition")
 		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "native definition cursor"

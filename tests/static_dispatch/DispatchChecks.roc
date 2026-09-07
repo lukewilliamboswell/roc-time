@@ -1,8 +1,7 @@
-import time.CalendarValue
+import time.Calendar
 import time.CalendarEvidence
 import time.IntervalEvidence
 import time.QualifiedCalendarValue
-import time.CalendarDate
 import time.ICalPeriod
 import time.ICalDateTime
 import time.EdtfDate
@@ -15,11 +14,27 @@ import time.GregorianDate
 import time.PosixBoundary
 import time.PosixDelta
 import time.PosixSpan
+import time.TimedSchedule
+import time.ICalTimedRule
 import time.Coverage
 
 DispatchChecks :: [].{
 	run : {} -> Try({}, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed, ..])
 	run = |_| {
+		check_endings({})?
+		nested_date : Calendar.Date
+		nested_date = Calendar.Date.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?
+		nested_delta : Calendar.Delta
+		nested_delta = Calendar.Delta.months(1)
+		same_delta : Calendar.Delta
+		same_delta = Calendar.Delta.from_components(nested_delta.to_components())
+		nested_value : Calendar.Value
+		nested_value = Calendar.Value.day(nested_date)
+		if nested_delta != same_delta or Dict.get(Dict.insert(Dict.empty(), nested_delta, 13.U8), same_delta) != Ok(13) or
+			Dict.get(Dict.insert(Dict.empty(), nested_date, 11.U8), Calendar.Date.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?) != Ok(11) or
+				nested_value != Calendar.Value.day(nested_date) or Dict.get(Dict.insert(Dict.empty(), nested_value, 17.U8), Calendar.Value.day(nested_date)) != Ok(17) {
+			return Err(Failed)
+		}
 		annotated = parse_ixdtf("1970-01-01T00:00:00Z[+00:00][knort=value]")?
 		same_annotated = parse_ixdtf("1970-01-01t00:00:00-00:00[-00:00][knort=value]")?
 		critical = parse_ixdtf("1970-01-01T00:00:00Z[!+00:00][knort=value]")?
@@ -66,9 +81,9 @@ DispatchChecks :: [].{
 				return Err(Failed)
 			}
 		}
-		description_date = CalendarDate.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?
-		minute_value = CalendarValue.minute(description_date, 12, 30)?
-		second_value = CalendarValue.second(description_date, 12, 30, 0)?
+		description_date = Calendar.Date.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?
+		minute_value = Calendar.Value.minute(description_date, 12, 30)?
+		second_value = Calendar.Value.second(description_date, 12, 30, 0)?
 		descriptions = Dict.insert(Dict.insert(Dict.empty(), minute_value, 1.U64), second_value, 2.U64)
 		if minute_value == second_value or Dict.get(descriptions, minute_value) != Ok(1) or Dict.get(descriptions, second_value) != Ok(2) or !Str.inspect(minute_value).contains("resolution=Minute") {
 			return Err(Failed)
@@ -215,4 +230,28 @@ evidence_for = |description, values| match CalendarEvidence.new(description, val
 interval_model = |starts, ends| match IntervalEvidence.independent({ starts, ends }) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
+}
+
+check_endings = |_| {
+	duration = Coordinate(PosixDelta.from_microseconds(3600000000))
+	endings : TimedSchedule.Endings
+	endings = TimedSchedule.Endings.new(duration, []) ?? crash "valid ending fixture"
+	same : TimedSchedule.Endings
+	same = TimedSchedule.Endings.new(endings.definition().duration, []) ?? crash "valid ending fixture"
+	if endings != same or Dict.get(Dict.insert(Dict.empty(), endings, 7.U8), same) != Ok(7) {
+		return Err(Failed)
+	}
+	input = ICalTimedRule.parse({ start: "19700101T090000Z", rule: "FREQ=DAILY;COUNT=2", duration: "PT1H", mode: Utc, inclusions: [], exclusions: [], periods: [] }) ?? crash "valid rule fixture"
+	prepared = ICalTimedRule.prepare(input, Utc) ?? crash "valid preparation fixture"
+	checked : TimedSchedule.Endings
+	checked = prepared.endings
+	if checked != endings or TimedSchedule.Endings.new(Coordinate(PosixDelta.from_microseconds(0)), []) != Err(InvalidDuration) {
+		return Err(Failed)
+	}
+	local = ICalTimedRule.parse({ start: "19700101T090000", rule: "FREQ=DAILY;COUNT=2", duration: "PT1H", mode: Floating, inclusions: [], exclusions: [], periods: [] }) ?? crash "valid local fixture"
+	match ICalTimedRule.prepare(local, Utc) {
+		Err(IncompatibleContext) => {}
+		_ => return Err(Failed)
+	}
+	Ok({})
 }

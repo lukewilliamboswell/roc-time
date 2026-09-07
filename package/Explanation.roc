@@ -5,13 +5,12 @@ import ICalTimedRule
 import Coverage
 import ResolvedBoundary
 import ResolvedSelection
-import CalendarValue
+import Calendar
 import QualifiedCalendarValue
 import EdtfDate
 import OffsetTimestamp
 import Ixdtf
 import SemanticFact
-import CalendarDate
 import LocalDateTime
 import ClockTime
 import FixedOffset
@@ -46,7 +45,7 @@ import ICalPeriod
 ## reports ByteLimit. ByteLimit takes precedence over field-preview truncation;
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
-	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(CalendarValue), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
+	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(Calendar.Value), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
 	Budget : { max_facts : U64, max_utf8_bytes : U64 }
 	Report : { text : Str, status : [Complete, Limited([FactLimit, ByteLimit, TextLimit])], visited_facts : U64, total_facts : U64 }
 	new : Source -> Explanation
@@ -60,7 +59,7 @@ Explanation :: { source : Source }.{
 		ResolvedBoundary(v) => ResolvedBoundary.fact_count(v)
 		ResolvedSelection(v) => ResolvedSelection.fact_count(v)
 		SelectionBatch(v) => ResolvedSelection.batch_fact_count(v)
-		CalendarValue(v) => CalendarValue.fact_count(v)
+		CalendarValue(v) => SemanticFact.calendar_value_fact_count(v)
 		QualifiedCalendarValue(v) => QualifiedCalendarValue.fact_count(v)
 		EdtfDate(v) => EdtfDate.fact_count(v)
 		OffsetTimestamp(v) => OffsetTimestamp.fact_count(v)
@@ -80,7 +79,7 @@ Explanation :: { source : Source }.{
 		ResolvedBoundary(v) => ResolvedBoundary.fact_at(v, index)
 		ResolvedSelection(v) => ResolvedSelection.fact_at(v, index)
 		SelectionBatch(v) => ResolvedSelection.batch_fact_at(v, index)
-		CalendarValue(v) => CalendarValue.fact_at(v, index)
+		CalendarValue(v) => SemanticFact.calendar_value_fact_at(v, index)
 		QualifiedCalendarValue(v) => QualifiedCalendarValue.fact_at(v, index)
 		EdtfDate(v) => EdtfDate.fact_at(v, index)
 		OffsetTimestamp(v) => OffsetTimestamp.fact_at(v, index)
@@ -380,7 +379,7 @@ expect preview("ééé", 5) == { text: "é...", clipped: True }
 expect preview("é", 1) == { text: "", clipped: True }
 expect preview("abc", 3) == { text: "abc", clipped: False }
 expect {
-	value = Explanation.new(CalendarValue(CalendarValue.year(Gregorian, 2004)?))
+	value = Explanation.new(CalendarValue(Calendar.Value.year(Gregorian, 2004)?))
 	zero = Explanation.plain(value, { max_facts: 0, max_utf8_bytes: 4096 })
 	empty = Explanation.plain(value, { max_facts: 10, max_utf8_bytes: 0 })
 	tiny = Explanation.plain(value, { max_facts: 10, max_utf8_bytes: 3 })
@@ -419,7 +418,7 @@ calendar_fields = |date, clock, resolution| {
 
 local_fields : LocalDateTime, U8 -> Str
 local_fields = |local, digits| {
-	date = CalendarDate.to_fields(LocalDateTime.date(local))
+	date = Calendar.Date.to_fields(LocalDateTime.date(local))
 	clock = ClockTime.to_fields(LocalDateTime.clock(local))
 	"year ${date.year.to_str()}, month ${date.month.to_str()}, day ${date.day.to_str()}, ${clock.hour.to_str()}:${pad(clock.minute.to_str(), 2)}:${pad(clock.second.to_str(), 2)}${
 		if digits == 0 {
@@ -453,12 +452,12 @@ offset_assertion = |offset| match offset {
 }
 
 expect {
-	report = Explanation.plain(Explanation.new(CalendarValue(CalendarValue.year(Gregorian, 2004)?)), { max_facts: 10, max_utf8_bytes: 4096 })
+	report = Explanation.plain(Explanation.new(CalendarValue(Calendar.Value.year(Gregorian, 2004)?)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.status == Complete and report.text.contains("supplied year 2004") and !report.text.contains("month") and !report.text.contains("hour")
 }
 expect {
-	date = CalendarDate.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
-	value = CalendarValue.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 120, digits: 3 })?
+	date = Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
+	value = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 120, digits: 3 })?
 	report = Explanation.plain(Explanation.new(CalendarValue(value)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.status == Complete and report.text.contains("fraction .120 (3 supplied digits)")
 }
@@ -497,7 +496,7 @@ expect {
 }
 
 civil_label = |local| {
-	calendar = match CalendarDate.calendar(LocalDateTime.date(local)) {
+	calendar = match Calendar.Date.calendar(LocalDateTime.date(local)) {
 		Gregorian => "Gregorian"
 		Julian => "Julian"
 	}

@@ -1,7 +1,6 @@
 import SemanticFact
-import CalendarValue
+import Calendar
 import QualifiedCalendarValue
-import CalendarDate
 import LocalDateTime
 
 ## Gregorian EDTF dates with scoped qualifiers.
@@ -173,24 +172,24 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 	from_description : QualifiedCalendarValue -> Try(EdtfDate, Error)
 	from_description = |raw| {
 		value = QualifiedCalendarValue.described_value(raw)
-		date = LocalDateTime.date(CalendarValue.start_label(value))
-		if CalendarDate.calendar(date) != Gregorian {
+		date = LocalDateTime.date(LocalDateTime.from_calendar_value(value))
+		if Calendar.Date.calendar(date) != Gregorian {
 			return Err(UnsupportedCalendar)
 		}
-		match CalendarValue.resolution(value) {
+		match Calendar.Value.resolution(value) {
 			Year => {}
 			Month => {}
 			Day => {}
 			_ => return Err(UnsupportedResolution)
 		}
-		year = CalendarDate.to_fields(date).year
+		year = Calendar.Date.to_fields(date).year
 		if year < 0 or year > 9999 {
 			return Err(OutOfRange)
 		}
 		for q in QualifiedCalendarValue.qualifications(raw) {
 			match q.scope {
 				Whole | Year | Month | Day => {}
-				YearMonth => if CalendarValue.resolution(value) != Day {
+				YearMonth => if Calendar.Value.resolution(value) != Day {
 					return Err(UnsupportedQualification)
 				}
 				_ => return Err(UnsupportedQualification)
@@ -204,12 +203,12 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 	to_text = |wrapped| {
 		raw = wrapped.raw
 		value = QualifiedCalendarValue.described_value(raw)
-		fields = CalendarDate.to_fields(LocalDateTime.date(CalendarValue.start_label(value)))
+		fields = Calendar.Date.to_fields(LocalDateTime.date(LocalDateTime.from_calendar_value(value)))
 		qualifications = QualifiedCalendarValue.qualifications(raw)
 		year = "${scope_marker(qualifications, Year)}${pad(fields.year.to_str(), 4)}"
 		month = "${scope_marker(qualifications, Month)}${pad(fields.month.to_str(), 2)}${scope_marker(qualifications, YearMonth)}"
 		day = "${scope_marker(qualifications, Day)}${pad(fields.day.to_str(), 2)}"
-		date = match CalendarValue.resolution(value) {
+		date = match Calendar.Value.resolution(value) {
 			Year => year
 			Month => "${year}-${month}"
 			Day => "${year}-${month}-${day}"
@@ -288,7 +287,7 @@ parse_calendar_fields = |text| {
 	if size >= 7 {
 		prefix_year = digits(core, 0, 4).to_i64()
 		prefix_month = digits(core, 5, 2).to_u8_wrap()
-		match CalendarValue.month(Gregorian, prefix_year, prefix_month) {
+		match Calendar.Value.month(Gregorian, prefix_year, prefix_month) {
 			Ok(_) => {}
 			Err(_) => return Err(Malformed)
 		}
@@ -297,7 +296,7 @@ parse_calendar_fields = |text| {
 			var $possible = Bool.False
 			var $digit_value = 0.U8
 			while $digit_value < 10 {
-				match CalendarDate.from_fields(Gregorian, { year: prefix_year, month: prefix_month, day: tens + $digit_value }) {
+				match Calendar.Date.from_fields(Gregorian, { year: prefix_year, month: prefix_month, day: tens + $digit_value }) {
 					Ok(_) => {
 						$possible = True
 					}
@@ -319,23 +318,23 @@ parse_calendar_fields = |text| {
 	}
 	year = digits(core, 0, 4).to_i64()
 	value = if size == 4 {
-		match CalendarValue.year(Gregorian, year) {
+		match Calendar.Value.year(Gregorian, year) {
 			Ok(v) => v
 			Err(_) => return Err(OutOfRange)
 		}
 	} else {
 		month = digits(core, 5, 2).to_u8_wrap()
 		if size == 7 {
-			match CalendarValue.month(Gregorian, year, month) {
+			match Calendar.Value.month(Gregorian, year, month) {
 				Ok(v) => v
 				Err(_) => return Err(Malformed)
 			}
 		} else {
-			date = match CalendarDate.from_fields(Gregorian, { year, month, day: digits(core, 8, 2).to_u8_wrap() }) {
+			date = match Calendar.Date.from_fields(Gregorian, { year, month, day: digits(core, 8, 2).to_u8_wrap() }) {
 				Ok(v) => v
 				Err(_) => return Err(Malformed)
 			}
-			CalendarValue.day(date)
+			Calendar.Value.day(date)
 		}
 	}
 	raw = match QualifiedCalendarValue.new(value, qualifier) {
@@ -405,11 +404,11 @@ pad = |text, width| "${"0".repeat(width - text.count_utf8_bytes())}${text}"
 # LOC Level 0 Date examples; fields/resolution are sourced expectations.
 expect {
 	value = QualifiedCalendarValue.described_value(EdtfDate.description(EdtfDate.parse("1985-04-12")?))
-	CalendarValue.resolution(value) == Day and CalendarDate.to_fields(LocalDateTime.date(CalendarValue.start_label(value))) == { year: 1985, month: 4, day: 12 }
+	Calendar.Value.resolution(value) == Day and Calendar.Date.to_fields(LocalDateTime.date(LocalDateTime.from_calendar_value(value))) == { year: 1985, month: 4, day: 12 }
 }
 expect {
-	year = CalendarValue.year(Gregorian, 1985)?
-	month = CalendarValue.month(Gregorian, 1985, 4)?
+	year = Calendar.Value.year(Gregorian, 1985)?
+	month = Calendar.Value.month(Gregorian, 1985, 4)?
 	QualifiedCalendarValue.described_value(EdtfDate.description(EdtfDate.parse("1985")?)) == year and QualifiedCalendarValue.described_value(EdtfDate.description(EdtfDate.parse("1985-04")?)) == month
 }
 expect {
@@ -429,10 +428,10 @@ expect {
 	EdtfDate.parse("156X") == Err(UnsupportedForm) and EdtfDate.parse("Y170000002") == Err(UnsupportedForm) and EdtfDate.parse("-1985") == Err(UnsupportedForm) and EdtfDate.parse("Yhello") == Err(Malformed) and EdtfDate.parse("x".repeat(65)) == Err(TooLarge)
 }
 expect {
-	value = CalendarValue.month(Gregorian, 2004, 6)?
+	value = Calendar.Value.month(Gregorian, 2004, 6)?
 	scoped = QualifiedCalendarValue.new(value, [{ scope: Month, qualifier: Approximate }])?
-	negative = QualifiedCalendarValue.new(CalendarValue.year(Gregorian, -1)?, [])?
-	julian = QualifiedCalendarValue.new(CalendarValue.year(Julian, 2004)?, [])?
+	negative = QualifiedCalendarValue.new(Calendar.Value.year(Gregorian, -1)?, [])?
+	julian = QualifiedCalendarValue.new(Calendar.Value.year(Julian, 2004)?, [])?
 	EdtfDate.to_text(EdtfDate.from_description(scoped)?) == "2004-~06" and EdtfDate.from_description(negative) == Err(OutOfRange) and EdtfDate.from_description(julian) == Err(UnsupportedCalendar)
 }
 
@@ -466,7 +465,7 @@ expect {
 										parse_calendar_fields("2004-06~-11") == Err(Malformed)
 }
 expect {
-	value = CalendarValue.month(Gregorian, 2004, 6)?
+	value = Calendar.Value.month(Gregorian, 2004, 6)?
 	group = QualifiedCalendarValue.new(value, [{ scope: YearMonth, qualifier: Approximate }])?
 	EdtfDate.from_description(group) == Err(UnsupportedQualification)
 }

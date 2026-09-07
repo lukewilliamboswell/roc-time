@@ -2,14 +2,13 @@ import SemanticFact
 import TimedRecurrence
 import CalendarPattern
 import GregorianDate
-import CalendarDate
+import Calendar
 import ClockTime
 import LocalDateTime
 import ZoneRules
 import FixedOffset
 import PosixSpan
 import PosixBoundary
-import CalendarDelta
 import PosixDelta
 import TimedOccurrence
 
@@ -201,7 +200,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 		if value.days == 0 {
 			Coordinate(tail)
 		} else {
-			Calendar({ delta: CalendarDelta.days(value.days), invalid_date: Reject, tail, occurrence: First, gap: UseOffsetBeforeGap })
+			Calendar({ delta: Calendar.Delta.days(value.days), invalid_date: Reject, tail, occurrence: First, gap: UseOffsetBeforeGap })
 		}
 	}
 
@@ -274,9 +273,9 @@ expect ICalDuration.parse("P${"0".repeat(256)}D") == Err(TooLarge)
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	source = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	source = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	end_date = GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?
-	end = LocalDateTime.new(CalendarDate.from_gregorian(end_date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), clock)
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(259200000000))?
 	rules = ZoneRules.new_bounded("Synthetic/Duration", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(43200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?

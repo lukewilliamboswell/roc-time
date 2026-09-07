@@ -1,8 +1,6 @@
 import SemanticFact
 import GregorianDate
-import CalendarDate
-import CalendarArithmetic
-import CalendarDelta
+import Calendar
 import CalendarPattern
 import ClockTime
 import PosixDelta
@@ -201,9 +199,12 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 		prepared = prepare(rule, duration, periods, context)?
 		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
 	}
-	# Internal lowering shared with window-free schedule definitions. It retains
-	# the original PERIOD declaration separately at the calling wrapper layer.
-	prepare : TimedRecurrence, ICalDuration, List(ICalPeriod), Context -> Try({ rule : TimedRecurrence, endings : ScheduleEndings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+
+	## Advanced preparation without a query window or occurrence enumeration.
+	## Returns checked TimedSchedule.Endings for reuse with from_prepared.
+	## The calling wrapper retains original PERIOD declarations for export;
+	## this execution record alone is not a standard storage representation.
+	prepare : TimedRecurrence, ICalDuration, List(ICalPeriod), Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	prepare = |rule, duration, periods, context| {
 		if periods.len() > 4096 {
 			return Err(TooManyPeriods)
@@ -240,7 +241,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 			Local(value) => value
 			Utc => utc_rules(I64.lowest, I64.highest)
 		}
-		endings = ScheduleEndings.new(ICalDuration.to_duration(duration), $overrides)?
+		endings = TimedSchedule.Endings.new(ICalDuration.to_duration(duration), $overrides)?
 		Ok({ rule: combined, endings, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })
 	}
 }
@@ -277,8 +278,8 @@ test_period_span = |text, context, steps| {
 		Err(error) => return Err(Parse(error))
 	}
 	source = ICalDateTime.source(ICalPeriod.start(period))
-	end_date = CalendarArithmetic.shift_day(source.date, CalendarDelta.days(1), Reject)?
-	window = { start: ICalDateTime.local_label(ICalPeriod.start(period)), end: LocalDateTime.new(CalendarDate.from_gregorian(end_date), source.clock) }
+	end_date = Calendar.Arithmetic.shift_day(source.date, Calendar.Delta.days(1), Reject)?
+	window = { start: ICalDateTime.local_label(ICalPeriod.start(period)), end: LocalDateTime.new(Calendar.Date.from_gregorian(end_date), source.clock) }
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	var $cursor = ICalPeriod.schedule(42.U64, rule, window, test_duration("PT1H"), [period, period], context)?
 	var $spans = []
@@ -465,4 +466,3 @@ expect {
 								ICalPeriod.fact_at(huge, 3) == End and ICalPeriod.fact_at(local, 4) == End and
 									ICalPeriod.fact_at(huge, U64.highest) == End and ICalPeriod.to_inspect(huge).count_utf8_bytes() <= 256
 }
-import ScheduleEndings

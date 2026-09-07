@@ -1,4 +1,4 @@
-import time.CalendarDate
+import time.Calendar
 import time.LocalDateTime
 import time.ZoneRules
 import time.PosixSpan
@@ -7,8 +7,8 @@ import time.PosixDelta
 ## An overnight team works 22:00 to 06:00 under explicit local zone rules.
 Staffing :: { zone : Str, hours : I64 }.{
 	overnight = |rules, evening, morning| {
-		start_date = CalendarDate.from_gregorian(evening)
-		end_date = CalendarDate.from_gregorian(morning)
+		start_date = Calendar.Date.from_gregorian(evening)
+		end_date = Calendar.Date.from_gregorian(morning)
 		start_clock = "22:00"
 		end_clock = "06:00"
 		shift = ZoneRules.appointment(rules, LocalDateTime.new(start_date, start_clock), RequireUnique, LocalDateTime.new(end_date, end_clock), RequireUnique)?

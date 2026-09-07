@@ -1,6 +1,6 @@
+import CalendarDescriptionText
 import GregorianDate
 import Calendar
-import CalendarDate
 import ClockTime
 import LocalDateTime
 import FixedOffset
@@ -21,7 +21,7 @@ SemanticFact :: { value : Kind }.{
 	## Fields/clock carry the canonical lower label; resolution identifies which
 	## components were supplied. Lower components filled by native construction
 	## are not additional source assertions and must not be rendered as such.
-	CalendarData : { kind : [CalendarValue, QualifiedCalendarValue, EdtfDate], calendar : Calendar, fields : CalendarDate.Fields, clock : ClockTime.Fields, resolution : Resolution, qualification_count : U64 }
+	CalendarData : { kind : [CalendarValue, QualifiedCalendarValue, EdtfDate], calendar : Calendar, fields : Calendar.Date.Fields, clock : ClockTime.Fields, resolution : Resolution, qualification_count : U64 }
 	TimestampData : { kind : [OffsetTimestamp, Ixdtf], local : LocalDateTime, fraction_digits : U8, offset : Offset, zone_present : Bool, annotation_count : U64 }
 	QualificationData : { scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth], qualifier : [Uncertain, Approximate, UncertainApproximate] }
 	ZoneData : { critical : Bool, identifier : [Named(Str), Numeric(FixedOffset)] }
@@ -51,6 +51,22 @@ SemanticFact :: { value : Kind }.{
 	RecurrenceExceptionData : { kind : [Inclusion, Exclusion], source : RecurrenceAnchor }
 	RecurrencePolicyData : { context : [Required, FixedUtc], occurrence : [CallerSupplied, First], gap : [CallerSupplied, UseOffsetBeforeGap] }
 	ICalTimedRuleData : { mode : [Utc, Floating, Zoned], period_count : U64 }
+
+	## A civil description and its explicit zone requirement; no interpretation.
+	calendar_value_fact_count : Calendar.Value -> U64
+	calendar_value_fact_count = |_| 2
+
+	## Constant-cost access through Calendar.Value.description; out-of-range is End.
+	calendar_value_fact_at : Calendar.Value, U64 -> [End, Item(SemanticFact)]
+	calendar_value_fact_at = |value, index| match index {
+		0 => {
+			data = Calendar.Value.description(value)
+			Item(SemanticFact.new(CalendarDescription({ kind: CalendarValue, calendar: data.calendar, fields: data.fields, clock: data.clock, resolution: data.resolution, qualification_count: 0 })))
+		}
+		1 => Item(SemanticFact.new(Requirement(ZoneContext)))
+		_ => End
+	}
+
 	Kind : [RecurrenceBoundaryExclusion(PosixBoundary), RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
 	new : Kind -> SemanticFact
 	new = |kind| { value: kind }
@@ -101,37 +117,20 @@ SemanticFact :: { value : Kind }.{
 			}
 			"ICalPeriod(form=${Str.inspect(data.form)}, start=${local_text(data.start, 0)}, ${ending})"
 		}
-		CalendarDescription(data) => {
-			name = match data.kind {
-				CalendarValue => "CalendarValue"
-				QualifiedCalendarValue => "QualifiedCalendarValue"
-				EdtfDate => "EdtfDate"
-			}
-			date = date_text(data.fields, data.resolution)
-			time = match data.resolution {
-				Year => ""
-				Month => ""
-				Day => ""
-				Hour => "T${two(data.clock.hour)}"
-				Minute => "T${two(data.clock.hour)}:${two(data.clock.minute)}"
-				Second => "T${clock_text(data.clock, 0)}"
-				Fraction(digits) => "T${clock_text(data.clock, digits)}"
-			}
-			"${name}(calendar=${Calendar.to_name(data.calendar)}, value=${date}${time}, resolution=${Str.inspect(data.resolution)}, qualifications=${data.qualification_count.to_str()})"
-		}
+		CalendarDescription(data) => CalendarDescriptionText.summary({ kind: data.kind, calendar: Calendar.to_name(data.calendar), fields: data.fields, clock: data.clock, resolution: data.resolution, qualification_count: data.qualification_count })
 		TimestampDescription(data) => {
 			name = match data.kind {
 				OffsetTimestamp => "OffsetTimestamp"
 				Ixdtf => "Ixdtf"
 			}
 			date = LocalDateTime.date(data.local)
-			fields = CalendarDate.to_fields(date)
+			fields = Calendar.Date.to_fields(date)
 			clock = ClockTime.to_fields(LocalDateTime.clock(data.local))
 			offset = match data.offset {
 				UnassertedUtc => "Z"
 				Asserted(fixed) => "[asserted_offset_seconds=${FixedOffset.to_seconds(fixed).to_str()}]"
 			}
-			"${name}(calendar=${Calendar.to_name(CalendarDate.calendar(date))}, value=${date_text(fields, Day)}T${clock_text(clock, data.fraction_digits)}${offset}, zone=${
+			"${name}(calendar=${Calendar.to_name(Calendar.Date.calendar(date))}, value=${date_text(fields, Day)}T${clock_text(clock, data.fraction_digits)}${offset}, zone=${
 				if data.zone_present {
 					"present"
 				} else {
@@ -211,7 +210,7 @@ expect {
 
 local_text = |local, digits| {
 	date = LocalDateTime.date(local)
-	"${Calendar.to_name(CalendarDate.calendar(date))}:${date_text(CalendarDate.to_fields(date), Day)}T${clock_text(ClockTime.to_fields(LocalDateTime.clock(local)), digits)}"
+	"${Calendar.to_name(Calendar.Date.calendar(date))}:${date_text(Calendar.Date.to_fields(date), Day)}T${clock_text(ClockTime.to_fields(LocalDateTime.clock(local)), digits)}"
 }
 
 expect {
@@ -229,7 +228,7 @@ expect {
 }
 
 expect {
-	date = CalendarDate.from_fields(Julian, { year: -2147483648, month: 12, day: 31 })?
+	date = Calendar.Date.from_fields(Julian, { year: -2147483648, month: 12, day: 31 })?
 	clock = ClockTime.from_fields({ hour: 23, minute: 59, second: 59, microsecond: 999999 })?
 	local = LocalDateTime.new(date, clock)
 	boundary = SemanticFact.new(CivilBoundaryDescription({ source: local, policy: MatchingOffset(FixedOffset.from_seconds(I32.lowest)), boundary: PosixBoundary.from_microseconds(I64.lowest), offset: FixedOffset.from_seconds(I32.lowest) }))

@@ -1,14 +1,12 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
-import time.CalendarValue
+import time.Calendar
 import time.QualifiedCalendarValue
 import time.CalendarEvidence
 import time.CalendarPattern
 import time.TimedSchedule
 import time.TimedOccurrence
-import time.CalendarDelta
 import time.TimedRecurrence
-import time.CalendarDate
 import time.LocalDateTime
 import time.DateRecurrence
 import time.GregorianDate
@@ -232,8 +230,8 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "timed resource rule"
 	}
-	timed_start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_anchor)
-	timed_end = LocalDateTime.new(CalendarDate.from_gregorian(end), clock_anchor)
+	timed_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_anchor)
+	timed_end = LocalDateTime.new(Calendar.Date.from_gregorian(end), clock_anchor)
 	timed_before = Host.allocated_bytes!({})
 	timed_cursor = match TimedRecurrence.cursor(timed_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
@@ -347,7 +345,7 @@ main! = |args| {
 		16.I64
 	}
 	while $exclusion_index <= exclusion_count {
-		$exclusions = $exclusions.append(LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture($exclusion_index * 1000000)))
+		$exclusions = $exclusions.append(LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture($exclusion_index * 1000000)))
 		$exclusion_index = $exclusion_index + 1
 	}
 	exclusion_rule = match TimedRecurrence.with_exclusions(timed_rule, $exclusions) {
@@ -395,7 +393,7 @@ main! = |args| {
 	duration_rules = classification_rules(duration_transitions, 200000000000)
 	duration_source = duration_start(duration_rules, local)
 	duration_before = Host.allocated_bytes!({})
-	duration_cursor = match TimedOccurrence.cursor(2.U64, duration_source, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap })) {
+	duration_cursor = match TimedOccurrence.cursor(2.U64, duration_source, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap })) {
 		Ok(value) => value
 		Err(_) => crash "calendar duration cursor"
 	}
@@ -445,7 +443,7 @@ main! = |args| {
 	# Consume only one composed appointment from the full clock/day product.
 	# One zone segment resolves its start; a second resolves the calendar end.
 	schedule_before = Host.allocated_bytes!({})
-	schedule = match TimedSchedule.new(42.U64, timed_rule, { start: timed_start, end: timed_end }, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	schedule = match TimedSchedule.new(42.U64, timed_rule, { start: timed_start, end: timed_end }, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "resource schedule"
 	}
@@ -528,7 +526,7 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "inclusion normalization"
 	}
-	inclusion_start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture(0))
+	inclusion_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture(0))
 	inclusion_before = Host.allocated_bytes!({})
 	inclusion_cursor = match TimedRecurrence.cursor(inclusion_rule, { start: inclusion_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
@@ -550,7 +548,7 @@ main! = |args| {
 	var $overrides = [{ source: timed_start, duration: Coordinate(time_delta(7200000000)) }]
 	var $override_index = 1.I64
 	while $override_index < exclusion_count {
-		$overrides = $overrides.append({ source: LocalDateTime.new(CalendarDate.from_gregorian(anchor), clock_fixture($override_index * 1000000)), duration: Coordinate(time_delta(7200000000)) })
+		$overrides = $overrides.append({ source: LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture($override_index * 1000000)), duration: Coordinate(time_delta(7200000000)) })
 		$override_index = $override_index + 1
 	}
 	overridden = match TimedSchedule.new_with_overrides(42.U64, timed_rule, { start: timed_start, end: timed_end }, Coordinate(time_delta(3600000000)), $overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
@@ -571,11 +569,11 @@ main! = |args| {
 
 	# A year contains trillions of local microseconds. Constructing its selection
 	# must not enumerate them or scan the caller-owned transition table.
-	description = match CalendarValue.year(Gregorian, start_year) {
+	description = match Calendar.Value.year(Gregorian, start_year) {
 		Ok(value) => value
 		Err(_) => crash "Description resource year"
 	}
-	description_bounds = match CalendarValue.local_bounds(description) {
+	description_bounds = match LocalDateTime.calendar_value_bounds(description) {
 		Ok(value) => value
 		Err(_) => crash "Description resource bounds"
 	}
@@ -603,7 +601,7 @@ main! = |args| {
 		Err(_) => crash "Description fixture rules"
 	}
 	description_before = Host.allocated_bytes!({})
-	description_cursor = match CalendarValue.selection_cursor(description, description_rules) {
+	description_cursor = match ZoneRules.calendar_selection_cursor(description_rules, description) {
 		Ok(value) => value
 		Err(_) => crash "Description cursor"
 	}
@@ -630,7 +628,7 @@ main! = |args| {
 	var $evidence_values = []
 	var $evidence_index = 0.I64
 	while $evidence_index < description_size {
-		alternative = match CalendarValue.year(Gregorian, start_year + $evidence_index) {
+		alternative = match Calendar.Value.year(Gregorian, start_year + $evidence_index) {
 			Ok(value) => value
 			Err(_) => crash "Evidence alternative"
 		}

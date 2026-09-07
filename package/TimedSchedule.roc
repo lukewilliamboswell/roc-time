@@ -1,11 +1,9 @@
-import ScheduleEndings
 import TimedRecurrence
 import TimedOccurrence
 import LocalDateTime
 import GregorianDate
 import CalendarPattern
-import CalendarDate
-import CalendarDelta
+import Calendar
 import ClockTime
 import FixedOffset
 import PosixBoundary
@@ -36,7 +34,7 @@ import ZoneRules
 ## import time.TimedOccurrence
 ## import time.CalendarPattern
 ## import time.GregorianDate
-## import time.CalendarDate
+## import time.Calendar.Date
 ## import time.ClockTime
 ## import time.LocalDateTime
 ## import time.ZoneRules
@@ -49,8 +47,8 @@ import ZoneRules
 ##     date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 ##     end_date = GregorianDate.from_fields({ year: 1970, month: 1, day: 4 })?
 ##     clock = ClockTime.from_microseconds_since_midnight(0)?
-##     start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-##     end = LocalDateTime.new(CalendarDate.from_gregorian(end_date), clock)
+##     start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+##     end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), clock)
 ##     validity = PosixSpan.from_seconds(-1, 345600, RejectSubmicrosecond)?
 ##     rules = ZoneRules.new_bounded(
 ##         "UTC", "fixed", validity,
@@ -89,6 +87,49 @@ import ZoneRules
 ## cursor with sufficient budgets. Increasing only the output cap does not fix a
 ## work or buffer limit.
 TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrides : List(EndOverride), starts : TimedRecurrence.Cursor, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, pending : [None, Some(TimedOccurrence.Cursor({ series : id, source : LocalDateTime }))] }.{
+
+	## Checked normalized ending definitions for advanced prepared scheduling.
+	## Construction validates duration and normalizes at most 4096 overrides once;
+	## no zone resolution or recurrence expansion. This is not a storage format.
+	Endings :: { duration : TimedOccurrence.Duration, overrides : List(Entry) }.{
+		Entry : { source : LocalDateTime, ending : TimedOccurrence.Ending }
+		ConstructionError : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)]
+		normalize : List(Entry) -> Try(List(Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+		normalize = schedule_endings_normalize_endings
+		new : TimedOccurrence.Duration, List(Entry) -> Try(Endings, [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+		new = |duration, inputs| {
+			overrides = schedule_endings_normalize_endings(inputs)?
+			TimedOccurrence.validate_duration(duration)?
+			Ok({ duration, overrides })
+		}
+		is_eq : Endings, Endings -> Bool
+		is_eq = |a, b| {
+			if !schedule_endings_same_duration_definition(a.duration, b.duration) or a.overrides.len() != b.overrides.len() {
+				return Bool.False
+			}
+			var $index = 0.U64
+			while $index < a.overrides.len() {
+				left = a.overrides.get($index) ?? crash "validated equal list lengths"
+				right = b.overrides.get($index) ?? crash "validated equal list lengths"
+				if left.source != right.source or !schedule_endings_same_ending_definition(left.ending, right.ending) {
+					return Bool.False
+				}
+				$index = $index + 1
+			}
+			Bool.True
+		}
+		to_hash : Endings, Hasher -> Hasher
+		to_hash = |value, hasher| {
+			var $hash = value.overrides.len().to_hash(schedule_endings_hash_duration(value.duration, hasher))
+			for entry in value.overrides {
+				$hash = schedule_endings_hash_ending(entry.ending, entry.source.to_hash($hash))
+			}
+			$hash
+		}
+		definition : Endings -> { duration : TimedOccurrence.Duration, overrides : List(Entry) }
+		definition = |value| { duration: value.duration, overrides: value.overrides }
+	}
+
 	EndOverride : { source : LocalDateTime, ending : TimedOccurrence.Ending }
 	Override : { source : LocalDateTime, duration : TimedOccurrence.Duration }
 	Limits : TimedRecurrence.Limits
@@ -123,14 +164,17 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Endpoint order is checked after the start and end are interpreted.
 	new_with_endings : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(EndOverride), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	new_with_endings = |series, rule, window, duration, inputs, context| {
-		endings = ScheduleEndings.new(duration, inputs)?
+		endings = TimedSchedule.Endings.new(duration, inputs)?
 		from_prepared(series, rule, window, endings, context)
 	}
-	# Internal bridge: ScheduleEndings is not exported by the package. Its
-	# constructor has already checked duration and normalized all overrides.
-	from_prepared : id, TimedRecurrence, TimedRecurrence.Window, ScheduleEndings, TimedRecurrence.Context -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange, ..])
+
+	## Advanced construction from checked ending definitions. Duration validation
+	## and override normalization are not repeated; query state is fresh.
+	## This carries no persistence semantics. Use ScheduleDefinition for ordinary
+	## reusable declarations that also retain their explicit context and origin.
+	from_prepared : id, TimedRecurrence, TimedRecurrence.Window, TimedSchedule.Endings, TimedRecurrence.Context -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange, ..])
 	from_prepared = |series, rule, window, endings, context| {
-		{ duration, overrides } = ScheduleEndings.definition(endings)
+		{ duration, overrides } = TimedSchedule.Endings.definition(endings)
 		starts = TimedRecurrence.cursor(rule, window, context)?
 		Ok({ series, duration, overrides, starts, start_buffered: 0, start_zone_buffered: 0, end_buffered: 0, pending: None })
 	}
@@ -256,12 +300,12 @@ test_schedule = |count| test_schedule_until(count, 345600000000)
 test_schedule_until = |count, validity_end| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 4 })?), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 4 })?), clock)
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(count), by_set_pos: [] })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(validity_end))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	TimedSchedule.new("service", rule, { start, end }, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap })
+	TimedSchedule.new("service", rule, { start, end }, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap })
 }
 
 expect {
@@ -374,7 +418,7 @@ normalize_overrides = |inputs| {
 	if inputs.len() > 4096 {
 		return Err(TooManyOverrides)
 	}
-	match ScheduleEndings.normalize(inputs.map(|input| { source: input.source, ending: After(input.duration) })) {
+	match TimedSchedule.Endings.normalize(inputs.map(|input| { source: input.source, ending: After(input.duration) })) {
 		Ok(value) => Ok(value)
 		Err(InvalidDuration) => Err(InvalidDuration)
 		Err(TooManyOverrides) => Err(TooManyOverrides)
@@ -410,7 +454,7 @@ test_override_sources = |_| {
 	var $sources = []
 	for day in [1.U8, 2, 3, 4] {
 		date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
-		$sources = $sources.append(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
+		$sources = $sources.append(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
 	}
 	Ok($sources)
 }
@@ -434,7 +478,7 @@ test_overrides = |exclude, window_day, work| {
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(518400000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 	calendar : TimedOccurrence.Duration
-	calendar = Calendar({ delta: CalendarDelta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
+	calendar = Calendar({ delta: Calendar.Delta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 	short : TimedOccurrence.Duration
 	short = Coordinate(PosixDelta.from_microseconds(7200000000))
 	var $cursor = TimedSchedule.new_with_overrides(42.U64, rule, { start: sources.get(window_day - 1)?, end: sources.get(3)? }, Coordinate(PosixDelta.from_microseconds(86400000000)), [{ source: sources.get(2)?, duration: calendar }, { source: sources.get(1)?, duration: short }, { source: sources.get(1)?, duration: short }], { rules, occurrence: RequireUnique, gap: RejectGap })?
@@ -485,7 +529,7 @@ expect {
 	one : TimedOccurrence.Duration
 	one = Coordinate(PosixDelta.from_microseconds(86400000000))
 	calendar : TimedOccurrence.Duration
-	calendar = Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
+	calendar = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 	match normalize_overrides([{ source, duration: one }, { source, duration: calendar }]) {
 		Err(ConflictingDuration(value)) => value == source
 		_ => Bool.False
@@ -515,8 +559,8 @@ expect {
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_fields({ hour: 2, minute: 30, second: 0, microsecond: 0 })?
-	source = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(date), ClockTime.from_fields({ hour: 4, minute: 0, second: 0, microsecond: 0 })?)
+	source = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(date), ClockTime.from_fields({ hour: 4, minute: 0, second: 0, microsecond: 0 })?)
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [2, 3], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
 	rules = ZoneRules.new_bounded("Synthetic/Gap", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
@@ -535,18 +579,119 @@ expect {
 	boundary = PosixBoundary.from_microseconds(86400000000)
 	# Definitions stay distinct even if a particular interpretation could
 	# give them equal extents; conflicting inputs do not silently pick one.
-	conflict = match ScheduleEndings.normalize([{ source, ending: AtBoundary(boundary) }, { source, ending: After(Coordinate(PosixDelta.from_microseconds(86400000000))) }]) {
+	conflict = match TimedSchedule.Endings.normalize([{ source, ending: AtBoundary(boundary) }, { source, ending: After(Coordinate(PosixDelta.from_microseconds(86400000000))) }]) {
 		Err(ConflictingEnding(position)) => position == source
 		_ => Bool.False
 	}
-	invalid = match ScheduleEndings.normalize([{ source, ending: After(Coordinate(PosixDelta.from_microseconds(0))) }]) {
+	invalid = match TimedSchedule.Endings.normalize([{ source, ending: After(Coordinate(PosixDelta.from_microseconds(0))) }]) {
 		Err(InvalidDuration) => Bool.True
 		_ => Bool.False
 	}
 	entry = { source, ending: AtBoundary(boundary) }
-	too_many = match ScheduleEndings.normalize(List.repeat(entry, 4097)) {
+	too_many = match TimedSchedule.Endings.normalize(List.repeat(entry, 4097)) {
 		Err(TooManyOverrides) => Bool.True
 		_ => Bool.False
 	}
-	conflict and invalid and too_many and ScheduleEndings.normalize([entry, entry])?.len() == 1
+	conflict and invalid and too_many and TimedSchedule.Endings.normalize([entry, entry])?.len() == 1
+}
+
+schedule_endings_normalize_endings : List(TimedSchedule.Endings.Entry) -> Try(List(TimedSchedule.Endings.Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+schedule_endings_normalize_endings = |inputs| {
+	if inputs.len() > 4096 {
+		return Err(TooManyOverrides)
+	}
+	for input in inputs {
+		match input.ending {
+			After(duration) => {
+				TimedOccurrence.validate_duration(duration)?
+			}
+			_ => {}
+		}
+	}
+	sorted = inputs.sort_with(
+		|a, b| match LocalDateTime.compare_position(a.source, b.source) {
+			LT => Before
+			EQ => Same
+			GT => After
+		},
+	)
+	var $result = []
+	var $previous = None
+	for input in sorted {
+		distinct = match $previous {
+			None => Bool.True
+			Some(value) => if LocalDateTime.same_position(value.source, input.source) {
+				if !schedule_endings_same_ending_definition(value.ending, input.ending) {
+					return Err(ConflictingEnding(input.source))
+				}
+				Bool.False
+			} else {
+				Bool.True
+			}
+		}
+		if distinct {
+			$result = $result.append(input)
+		}
+		$previous = Some(input)
+	}
+	Ok($result)
+}
+
+schedule_endings_same_ending_definition : TimedOccurrence.Ending, TimedOccurrence.Ending -> Bool
+schedule_endings_same_ending_definition = |a, b| match (a, b) {
+	(After(left), After(right)) => schedule_endings_same_duration_definition(left, right)
+	(AtBoundary(left), AtBoundary(right)) => left == right
+	(AtLocal(left), AtLocal(right)) => left.source == right.source and left.occurrence == right.occurrence and left.gap == right.gap
+	_ => Bool.False
+}
+
+# Compare input meaning, not the extent of a particular resolved occurrence.
+schedule_endings_same_duration_definition : TimedOccurrence.Duration, TimedOccurrence.Duration -> Bool
+schedule_endings_same_duration_definition = |left, right| match (left, right) {
+	(Coordinate(a), Coordinate(b)) => PosixDelta.to_microseconds(a) == PosixDelta.to_microseconds(b)
+	(Calendar(a), Calendar(b)) => {
+		x = Calendar.Delta.to_components(a.delta)
+		y = Calendar.Delta.to_components(b.delta)
+		x.years == y.years and x.months == y.months and x.days == y.days and a.invalid_date == b.invalid_date and a.tail == b.tail and a.occurrence == b.occurrence and a.gap == b.gap
+	}
+	_ => Bool.False
+}
+
+# Tagged field hashing mirrors declaration equality without materializing keys.
+schedule_endings_hash_duration : TimedOccurrence.Duration, Hasher -> Hasher
+schedule_endings_hash_duration = |duration, hasher| match duration {
+	Coordinate(value) => PosixDelta.to_microseconds(value).to_hash((0.U8).to_hash(hasher))
+	Calendar(value) => {
+		parts = Calendar.Delta.to_components(value.delta)
+		base = parts.days.to_hash(parts.months.to_hash(parts.years.to_hash((1.U8).to_hash(hasher))))
+		policy : U8
+		policy = match value.invalid_date {
+			Reject => 0
+			Clamp => 1
+			Carry => 2
+		}
+		tail = PosixDelta.to_microseconds(value.tail).to_hash(policy.to_hash(base))
+		schedule_endings_hash_gap(value.gap, schedule_endings_hash_occurrence(value.occurrence, tail))
+	}
+}
+
+schedule_endings_hash_ending : TimedOccurrence.Ending, Hasher -> Hasher
+schedule_endings_hash_ending = |ending, hasher| match ending {
+	After(duration) => schedule_endings_hash_duration(duration, (0.U8).to_hash(hasher))
+	AtBoundary(point) => point.to_hash((1.U8).to_hash(hasher))
+	AtLocal(value) => schedule_endings_hash_gap(value.gap, schedule_endings_hash_occurrence(value.occurrence, value.source.to_hash((2.U8).to_hash(hasher))))
+}
+
+schedule_endings_hash_occurrence : ZoneRules.OccurrencePolicy, Hasher -> Hasher
+schedule_endings_hash_occurrence = |policy, hasher| match policy {
+	RequireUnique => (0.U8).to_hash(hasher)
+	First => (1.U8).to_hash(hasher)
+	Last => (2.U8).to_hash(hasher)
+	MatchingOffset(offset) => FixedOffset.to_seconds(offset).to_hash((3.U8).to_hash(hasher))
+}
+
+schedule_endings_hash_gap : [RejectGap, UseOffsetBeforeGap], Hasher -> Hasher
+schedule_endings_hash_gap = |policy, hasher| match policy {
+	RejectGap => (0.U8).to_hash(hasher)
+	UseOffsetBeforeGap => (1.U8).to_hash(hasher)
 }

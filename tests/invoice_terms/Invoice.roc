@@ -1,5 +1,4 @@
-import time.CalendarArithmetic
-import time.CalendarDelta
+import time.Calendar
 import time.GregorianDate
 
 ## This merchant's payment terms clamp a missing due-day to month end.
@@ -9,7 +8,7 @@ Invoice :: { issued : GregorianDate, due : GregorianDate }.{
 		if months < 0 {
 			return Err(NegativeTerm)
 		}
-		due = CalendarArithmetic.shift_day(issued, CalendarDelta.months(months), Clamp)?
+		due = Calendar.Arithmetic.shift_day(issued, Calendar.Delta.months(months), Clamp)?
 		Ok({ issued, due })
 	}
 

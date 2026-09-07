@@ -1,7 +1,5 @@
 import fuzz.Fuzz
 import time.Calendar
-import time.CalendarValue
-import time.CalendarDate
 import time.CivilDay
 import time.JulianDate
 import time.ClockTime
@@ -32,22 +30,22 @@ CalendarCase := { number : I64 }.{
 			Ok(value) => value
 			Err(_) => crash "Julian fixture range"
 		}
-		preserved = CalendarDate.from_julian(validated)
-		if CalendarDate.to_civil_day(preserved) != coordinate or CalendarDate.calendar(preserved) != Julian {
+		preserved = Calendar.Date.from_julian(validated)
+		if Calendar.Date.to_civil_day(preserved) != coordinate or Calendar.Date.calendar(preserved) != Julian {
 			crash "Validated date conversion changed coordinate or calendar"
 		}
-		julian = match CalendarDate.from_civil_day(Julian, coordinate) {
+		julian = match Calendar.Date.from_civil_day(Julian, coordinate) {
 			Ok(date) => date
 			Err(_) => crash "R06 supported Julian coordinate rejected"
 		}
-		if CalendarDate.to_civil_day(julian) != coordinate or CalendarDate.calendar(julian) != Julian {
+		if Calendar.Date.to_civil_day(julian) != coordinate or Calendar.Date.calendar(julian) != Julian {
 			crash "R06 Julian round trip or calendar identity"
 		}
-		if CalendarDate.from_fields(Julian, CalendarDate.to_fields(julian)) != Ok(julian) {
+		if Calendar.Date.from_fields(Julian, Calendar.Date.to_fields(julian)) != Ok(julian) {
 			crash "R06 Julian field reconstruction"
 		}
 		check_description(julian)
-		converted = CalendarDate.in_calendar(julian, Gregorian)
+		converted = Calendar.Date.in_calendar(julian, Gregorian)
 		if input.number < -784353015833 or input.number > 784351576776 {
 			if converted != Err(OutOfRange) {
 				crash "R06 Gregorian provider range ignored"
@@ -80,7 +78,7 @@ CalendarCase := { number : I64 }.{
 					crash "English display silently relabelled a Julian local date"
 				}
 			}
-			day = match CalendarDate.as_gregorian(gregorian) {
+			day = match Calendar.Date.as_gregorian(gregorian) {
 				Ok(value) => value
 				Err(_) => crash "Gregorian calendar accessor"
 			}
@@ -112,13 +110,13 @@ CalendarCase := { number : I64 }.{
 					LocalDateTime.clock(other) != clock {
 				crash "local calendar conversion changed position or description"
 			}
-			if !CalendarDate.same_day(julian, gregorian) or julian == gregorian or
-				CalendarDate.in_calendar(gregorian, Julian) != Ok(julian) {
+			if !Calendar.Date.same_day(julian, gregorian) or julian == gregorian or
+				Calendar.Date.in_calendar(gregorian, Julian) != Ok(julian) {
 				crash "R06 extent and description equality confused"
 			}
 		}
 		# The four-year rule is independent of Gregorian century exceptions.
-		fields = CalendarDate.to_fields(julian)
+		fields = Calendar.Date.to_fields(julian)
 		if fields.year <= 2147483643 {
 			shifted = match JulianDate.from_fields({ year: fields.year + 4, month: fields.month, day: fields.day }) {
 				Ok(date) => date
@@ -140,13 +138,13 @@ CalendarCase := { number : I64 }.{
 # This model asks the calendar constructor about every possible day, rather
 # than computing the next month/year boundary like CalendarValue does.
 check_description = |date| {
-	fields = CalendarDate.to_fields(date)
-	calendar = CalendarDate.calendar(date)
-	year = match CalendarValue.year(calendar, fields.year) {
+	fields = Calendar.Date.to_fields(date)
+	calendar = Calendar.Date.calendar(date)
+	year = match Calendar.Value.year(calendar, fields.year) {
 		Ok(value) => value
 		Err(_) => crash "Valid description year"
 	}
-	month = match CalendarValue.month(calendar, fields.year, fields.month) {
+	month = match Calendar.Value.month(calendar, fields.year, fields.month) {
 		Ok(value) => value
 		Err(_) => crash "Valid description month"
 	}
@@ -156,7 +154,7 @@ check_description = |date| {
 	while $m <= 12 {
 		var $d = 1.U8
 		while $d <= 31 {
-			match CalendarDate.from_fields(calendar, { year: fields.year, month: $m, day: $d }) {
+			match Calendar.Date.from_fields(calendar, { year: fields.year, month: $m, day: $d }) {
 				Ok(_) => {
 					$total = $total + 1
 					if $m == fields.month {
@@ -171,12 +169,12 @@ check_description = |date| {
 		$m = $m + 1
 	}
 	for query in [{ value: year, width: $total, last: fields.year == 2147483647 }, { value: month, width: $selected, last: fields.year == 2147483647 and fields.month == 12 }] {
-		match CalendarValue.local_bounds(query.value) {
+		match LocalDateTime.calendar_value_bounds(query.value) {
 			Err(OutOfRange) => if !query.last {
 				crash "Description lost valid upper boundary"
 			}
 			Ok(bounds) => {
-				width = CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(bounds.end))) - CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(bounds.start)))
+				width = CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(bounds.end))) - CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(bounds.start)))
 				if query.last or width != query.width {
 					crash "Description differs from bounded field enumeration"
 				}

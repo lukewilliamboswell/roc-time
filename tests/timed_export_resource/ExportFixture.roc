@@ -1,5 +1,5 @@
 import time.GregorianDate
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.LocalDateTime
 
@@ -13,7 +13,7 @@ ExportFixture := [].{
 			Ok(value) => value
 			Err(_) => crash "valid midnight"
 		}
-		LocalDateTime.new(CalendarDate.from_gregorian(date(year, day)), clock)
+		LocalDateTime.new(Calendar.Date.from_gregorian(date(year, day)), clock)
 	}
 	months = |count| {
 		var $values = []

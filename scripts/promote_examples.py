@@ -12,13 +12,26 @@ import shutil
 from roc_version import package_pin, read_pin
 from update_example_urls import update_examples
 
-PROMOTED = ("zoned_appointment", "appointment_display", "invoice_report", "schedule_exchange", "meeting_exchange")
-ZONE_STARTERS = frozenset(("staffing", "zoned_appointment", "meeting_exchange"))
+# Public destination -> development application. Replacements use their existing
+# public names; copying occurs only in an explicit release checkout promotion.
+PROMOTION_SOURCES = {
+    "invoice": "invoice_terms",
+    "staffing": "overnight_staffing",
+    "zoned_appointment": "zoned_appointment",
+    "appointment_display": "appointment_display",
+    "invoice_report": "invoice_report",
+    "schedule_exchange": "schedule_exchange",
+    "meeting_exchange": "meeting_exchange",
+    "upcoming_meetings": "upcoming_meetings",
+}
+PROMOTED = tuple(PROMOTION_SOURCES)
+ZONE_STARTERS = frozenset(("staffing", "zoned_appointment", "meeting_exchange", "upcoming_meetings"))
 
 
 def application_source(root: Path, name: str) -> Path:
     public = root / "examples" / name
-    return public if public.is_dir() else root / "tests" / name
+    staged = root / "tests" / PROMOTION_SOURCES.get(name, name)
+    return staged if name in PROMOTION_SOURCES and staged.is_dir() else public
 
 
 def sources(directory: Path) -> list[Path]:
@@ -47,16 +60,27 @@ def promote(root: Path, compiler: str, core: str, zones: str) -> list[Path]:
             # The selected release compiler is authoritative; backported app
             # headers may still name development. Validate, then rebind below.
             read_pin(directory / "main.roc")
+        destination = root / "examples" / name
+        if destination.is_symlink() or any(p.is_symlink() for p in destination.rglob("*")):
+            raise ValueError(f"symlink application destination: {destination}")
         pending.append((name, directory, paths))
     result = []
     for name, directory, paths in pending:
         destination = root / "examples" / name
         if destination != directory:
+            # Prevent old companion modules surviving replacement or retries.
+            if destination.is_symlink():
+                raise ValueError(f"symlink application destination: {destination}")
+            expected = {path.relative_to(directory) for path in paths}
+            # Promotion owns Roc sources; preserve accompanying assets and notes.
+            for old in destination.rglob("*.roc"):
+                if old.relative_to(destination) not in expected:
+                    old.unlink()
             for path in paths:
                 target = destination / path.relative_to(directory)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(path, target)
-        update_examples(destination, core, zones, compiler=compiler, migrate_ical=True)
+        update_examples(destination, core, zones, compiler=compiler, migrate_api=True)
         result.append(destination / "main.roc")
     return result
 

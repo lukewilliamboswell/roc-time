@@ -36,4 +36,4 @@ The working [invoice report](https://github.com/lukewilliamboswell/roc-time/tree
 
 ## API reference
 
-`CalendarArithmetic` · `CalendarDate` · `LocalDateTime` · `ZoneRules`
+`Calendar.Arithmetic` · `Calendar.Date` · `LocalDateTime` · `ZoneRules`

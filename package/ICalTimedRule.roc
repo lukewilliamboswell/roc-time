@@ -5,7 +5,7 @@ import PosixBoundary
 import PosixDelta
 import ZoneRules
 import FixedOffset
-import CalendarDate
+import Calendar
 import ClockTime
 import ICalRuleParts
 import ICalDateTime
@@ -17,7 +17,6 @@ import LocalDateTime
 import GregorianDate
 import CalendarPattern
 import ICalRuleText
-import ScheduleEndings
 
 ## Extracted RFC 5545 timed recurrence values, profile timed-values.
 ## UTC, floating and zoned DTSTART modes are explicit. UTC starts require Z;
@@ -255,9 +254,11 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 		prepared = prepare(value, context)?
 		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
 	}
-	# Internal shared context validation and PERIOD preparation. No window or
-	# occurrence enumeration is needed to establish a checked declaration.
-	prepare : ICalTimedRule, ICalPeriod.Context -> Try({ rule : TimedRecurrence, endings : ScheduleEndings, context : TimedRecurrence.Context }, [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+
+	## Advanced context validation and checked ending preparation, without
+	## occurrence enumeration. Reuse with TimedSchedule.from_prepared; ordinary
+	## callers can use ScheduleDefinition to retain the original declaration too.
+	prepare : ICalTimedRule, ICalPeriod.Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 	prepare = |value, context| {
 		compatible = match (value.mode, context) {
 			(Utc, Utc) => Bool.True
@@ -327,7 +328,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 
 local_text : LocalDateTime, ICalDateTime.Form, Str -> Try(Str, ICalTimedRule.Error)
 local_text = |local, form, part| {
-	date = match CalendarDate.as_gregorian(LocalDateTime.date(local)) {
+	date = match Calendar.Date.as_gregorian(LocalDateTime.date(local)) {
 		Ok(gregorian) => GregorianDate.to_fields(gregorian)
 		Err(_) => return Err(Unsupported("non-Gregorian ${part}"))
 	}
@@ -466,7 +467,7 @@ test_observe = |parts, context, lower, upper| {
 expect {
 	parts = { ..test_parts("20250131T090000Z", "FREQ=MONTHLY;COUNT=3", Utc), exclusions: ["20250331T090000Z"], inclusions: ["20250415T090000Z,20250415T090000Z"], periods: ["20250531T090000Z/PT2H"] }
 	values = test_observe(parts, Utc, "20250301T000000Z", "20250801T000000Z")?
-	months = values.map(|value| CalendarDate.to_fields(LocalDateTime.date(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)))).month)
+	months = values.map(|value| Calendar.Date.to_fields(LocalDateTime.date(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)))).month)
 	widths = values.map(|value| PosixSpan.coordinate_width(TimedOccurrence.span(value)))
 	months == [4.U8, 5] and widths == [Ok(PosixDelta.from_microseconds(86400000000)), Ok(PosixDelta.from_microseconds(7200000000))]
 }
