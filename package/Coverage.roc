@@ -238,30 +238,16 @@ Coverage :: [Spans(List(PosixSpan))].{
 	overlapping_spans : Coverage, PosixSpan -> List(PosixSpan)
 	overlapping_spans = |coverage, query| fold_overlaps(coverage, query, [], List.append)
 
+	## An empty operand reuses the other coverage in constant work, without allocation.
 	union : Coverage, Coverage -> Coverage
 	union = |Spans(a), Spans(b)| {
-		var $i = 0.U64
-		var $j = 0.U64
-		var $builder = { done: [], pending: None }
-		while $i < List.len(a) or $j < List.len(b) {
-			take_a = if $i == List.len(a) {
-				Bool.False
-			}
-				else if $j == List.len(b) {
-					Bool.True
-				}
-					else {
-						PosixBoundary.compare(PosixSpan.start(at(a, $i)), PosixSpan.start(at(b, $j))) != GT
-					}
-			if take_a {
-				$builder = push($builder, at(a, $i))
-				$i = $i + 1
-			} else {
-				$builder = push($builder, at(b, $j))
-				$j = $j + 1
-			}
+		if List.is_empty(a) {
+			return Spans(b)
 		}
-		Spans(finish($builder))
+		if List.is_empty(b) {
+			return Spans(a)
+		}
+		union_nonempty(a, b)
 	}
 
 	intersection : Coverage, Coverage -> Coverage
@@ -290,8 +276,12 @@ Coverage :: [Spans(List(PosixSpan))].{
 		Spans($output)
 	}
 
+	## Subtracting empty coverage reuses the input in constant work, without allocation.
 	difference : Coverage, Coverage -> Coverage
 	difference = |Spans(a), Spans(b)| {
+		if List.is_empty(b) {
+			return Spans(a)
+		}
 		var $j = 0.U64
 		var $output = []
 		for left in a {
@@ -350,6 +340,33 @@ Coverage :: [Spans(List(PosixSpan))].{
 		}
 		Spans($output)
 	}
+}
+
+# Inputs are canonical and nonempty; union handles empty identities before this merge.
+union_nonempty : List(PosixSpan), List(PosixSpan) -> Coverage
+union_nonempty = |a, b| {
+	var $i = 0.U64
+	var $j = 0.U64
+	var $builder = { done: [], pending: None }
+	while $i < List.len(a) or $j < List.len(b) {
+		take_a = if $i == List.len(a) {
+			Bool.False
+		}
+			else if $j == List.len(b) {
+				Bool.True
+			}
+				else {
+					PosixBoundary.compare(PosixSpan.start(at(a, $i)), PosixSpan.start(at(b, $j))) != GT
+				}
+		if take_a {
+			$builder = push($builder, at(a, $i))
+			$i = $i + 1
+		} else {
+			$builder = push($builder, at(b, $j))
+			$j = $j + 1
+		}
+	}
+	Spans(finish($builder))
 }
 
 # Private, invariant-backed helpers. Every index is guarded by the relevant
