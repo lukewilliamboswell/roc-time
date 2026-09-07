@@ -361,6 +361,10 @@ zero allocation traffic under a five-second subprocess limit, plus dev/speed
 failing allocation controls. Rules and runtime input are built outside those
 scopes. Counts are cumulative requested bytes, not live or retained memory;
 initial interpretation remains linear in the supplied transition table.
+The same gate measures scoped EDTF parsing, serialization and bounded plain
+explanation separately with a runtime five-scope input and a 16 KiB ceiling per
+scope. It checks the year/month group fact and canonical text, allocation-free
+rejection above 64 input bytes, and a dedicated zero-ceiling failing control.
 
 Native persistence resource checks in `tests/persistence_resource/main.roc`
 separate checked construction, encoding and decoding for 1/32/1,024 canonical

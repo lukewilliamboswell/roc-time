@@ -13,10 +13,9 @@ to already usable diagnostic APIs. Recurrence export/persistence is tracked in
 
 ## Remaining caller slices
 
-1. **Richer archive descriptions:** support individually/group-qualified
-   components, independently resolved interval endpoints, unknown versus open
-   bounds, then selected masks and finite one-of/all-of sets. Specify group
-   qualification representation before promising lossless native round trips.
+1. **Richer archive descriptions:** support independently resolved interval
+   endpoints, unknown versus open bounds, then selected masks and finite
+   one-of/all-of sets.
    Preserve metadata without needing a complete uncertainty solver. Interpretation
    uses shared native machinery or returns an explicit unsupported result.
 2. **Explain and save:** extend shared facts and bounded explanation to remaining

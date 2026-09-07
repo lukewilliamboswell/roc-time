@@ -5,9 +5,10 @@ import QualifiedCalendarValue
 import LocalDateTime
 import ClockTime
 
-## Internal version-1 native calendar payload grammar. This is not an EDTF or
+## Internal native calendar payload grammar. This is not an EDTF or
 ## ISO adapter. Calendar and supplied resolution remain independent metadata.
-## At most 1024 input bytes, ten base fields and eight qualification entries.
+## At most 1024 input bytes and ten base fields. Version 1 permits eight
+## qualification entries; version 2 also permits the YearMonth group (nine).
 ## Missing fields are Incomplete; malformed tokens and unsupported names differ.
 ## Conversion only invokes validated native constructors, never bound lowering.
 PersistenceCalendar :: [].{
@@ -145,7 +146,11 @@ PersistenceCalendar :: [].{
 	}
 
 	parse_qualified : Str -> Try(QualifiedCalendarValue, Error)
-	parse_qualified = |text| {
+	parse_qualified = |text| parse_qualified_profile(text, True)
+	parse_qualified_v1 : Str -> Try(QualifiedCalendarValue, Error)
+	parse_qualified_v1 = |text| parse_qualified_profile(text, False)
+	parse_qualified_profile : Str, Bool -> Try(QualifiedCalendarValue, Error)
+	parse_qualified_profile = |text, groups| {
 		if text.count_utf8_bytes() > 1024 {
 			return Err(TooLarge)
 		}
@@ -162,7 +167,13 @@ PersistenceCalendar :: [].{
 		for b in qualifiers.to_utf8() {
 			if b == 59 {
 				$count = $count + 1
-				if $count > 8 {
+				if $count > (
+					if groups {
+						9
+					} else {
+						8
+					}
+				) {
 					return Err(TooManyQualifications)
 				}
 			}
@@ -185,6 +196,11 @@ PersistenceCalendar :: [].{
 					"minute" => Minute
 					"second" => Second
 					"fraction" => Fraction
+					"year-month" => if groups {
+						YearMonth
+					} else {
+						return Err(UnsupportedScope(scope_text))
+					}
 					"" => return Err(Incomplete)
 					_ => return Err(UnsupportedScope(scope_text))
 				}
@@ -218,6 +234,7 @@ PersistenceCalendar :: [].{
 				Minute => "minute"
 				Second => "second"
 				Fraction => "fraction"
+				YearMonth => "year-month"
 			}
 			qualifier = match q.qualifier {
 				Uncertain => "uncertain"
@@ -310,6 +327,8 @@ expect {
 										PersistenceCalendar.parse_qualified("gregorian;year;2000|whole=maybe") == Err(UnsupportedQualifier("maybe")) and
 											PersistenceCalendar.parse_qualified("gregorian;year;2000") == Err(Incomplete) and
 												PersistenceCalendar.parse_qualified("gregorian;year;2000||") == Err(Malformed) and
-													PersistenceCalendar.parse_qualified("gregorian;year;2000|${Str.join_with(List.repeat("whole=uncertain", 9), ";")}") == Err(TooManyQualifications) and
+													PersistenceCalendar.parse_qualified("gregorian;year;2000|${Str.join_with(List.repeat("whole=uncertain", 10), ";")}") == Err(TooManyQualifications) and
 														PersistenceCalendar.parse_value("x".repeat(1025)) == Err(TooLarge)
 }
+
+expect PersistenceCalendar.parse_qualified_v1("gregorian;year;2000|${Str.join_with(List.repeat("whole=uncertain", 9), ";")}") == Err(TooManyQualifications)

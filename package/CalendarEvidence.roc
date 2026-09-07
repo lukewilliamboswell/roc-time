@@ -57,7 +57,8 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 					{ scope: Second, changed: base_fields.clock.second != fields.clock.second },
 					{ scope: Fraction, changed: base_fields.clock.microsecond != fields.clock.microsecond },
 				] {
-					if pair.changed and !allowed.contains(pair.scope) {
+					group_allows = allowed.contains(YearMonth) and (pair.scope == Year or pair.scope == Month)
+					if pair.changed and !allowed.contains(pair.scope) and !group_allows {
 						return Err(UnqualifiedComponent({ index: $index, scope: pair.scope }))
 					}
 				}
@@ -158,6 +159,19 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 components = |value| {
 	start = CalendarValue.start_label(value)
 	{ date: CalendarDate.to_fields(LocalDateTime.date(start)), clock: ClockTime.to_fields(LocalDateTime.clock(start)) }
+}
+
+expect {
+	# LOC EDTF Level 2 group qualification: 2004-06~-11 qualifies year/month.
+	# https://www.loc.gov/standards/datetime/ (published February 4, 2019).
+	# Candidate dates below are an explicit caller model, not a sourced tolerance.
+	base = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?)
+	alternative = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 2005, month: 7, day: 11 })?)
+	changed_day = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 2005, month: 7, day: 12 })?)
+	description = QualifiedCalendarValue.new(base, [{ scope: YearMonth, qualifier: Approximate }])?
+	evidence = CalendarEvidence.new(description, [alternative, base, alternative])?
+	CalendarEvidence.alternatives(evidence) == [base, alternative] and
+		CalendarEvidence.new(description, [changed_day]) == Err(UnqualifiedComponent({ index: 0, scope: Day }))
 }
 
 expect {

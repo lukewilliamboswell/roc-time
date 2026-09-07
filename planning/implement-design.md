@@ -13,7 +13,7 @@ foundations when a caller needs them or evidence demonstrates a correctness or
 resource problem; retain the required correctness and resource gates for each slice.
 
 1. Extend [calendar descriptions and uncertainty](calendar-descriptions.md) for
-   selected EDTF endpoint, qualification, mask and set forms (R13–R14). Deliver
+   selected EDTF endpoint, mask and set forms (R13–R14). Deliver
    parsing, canonical serialization, explanation and persistence for each form.
    Never substitute year starts for uncertain endpoints or treat unsupported
    reasoning as success.

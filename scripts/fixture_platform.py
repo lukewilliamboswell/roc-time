@@ -172,6 +172,8 @@ def verify_interchange(target: str) -> None:
     """
     roc = os.environ.get("ROC", "roc")
     source = "tests/interchange_resource/main.roc"
+    exact_text = "1970-01-01T01:00:00+01:00/1970-01-01T00:00:02Z"
+    edtf_text = "?2004-%06~-~11?"
     subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
     for mode in ("dev", "speed"):
         binary = BUILD / f"interchange-{mode}"
@@ -180,24 +182,34 @@ def verify_interchange(target: str) -> None:
         for tags in (1, 32):
             observations = []
             for transitions in (2, 16384):
-                result = subprocess.run([binary, str(transitions), str(tags), "4194304"],
+                result = subprocess.run([binary, str(transitions), str(tags), "4194304", exact_text, edtf_text, "16384"],
                                         capture_output=True, timeout=5)
-                if result.returncode or result.stdout != b"instant=1000000,presentation=1000000,exact=0..2000000\n":
+                if result.returncode or result.stdout != b"instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n":
                     raise RuntimeError(f"{mode}/{tags}/{transitions}: interchange probe failed: {result.stderr!r}")
-                match = re.search(rb" work=((?:\d+,){10}\d+)\n$", result.stderr)
+                match = re.search(rb" work=((?:\d+,){14}\d+)\n$", result.stderr)
                 if match is None:
                     raise RuntimeError(f"{mode}: missing interchange resource observations")
                 counts = tuple(int(value) for value in match[1].split(b","))
-                if counts[3] != 0 or counts[9] != 0:
+                if counts[3] != 0 or counts[9] != 0 or counts[14] != 0:
                     raise RuntimeError(f"{mode}: stored snapshot reads or oversized rejection allocated: {counts}")
                 observations.append(counts)
             if observations[0] != observations[1]:
                 raise RuntimeError(f"{mode}: interchange traffic varies with retained rule size: {observations}")
             print(f"PASS interchange {mode}/{tags} tags: 2/16384 transitions requested bytes {observations[0]}; 100000 stored reads")
+            print(f"PASS EDTF {mode}: cumulative requested bytes parse/serialize/bounded explanation/oversized rejection {observations[0][11:]}; 16384-byte ceiling per operation")
         failed = subprocess.run([binary, "16384", "32", "0"], capture_output=True, timeout=5)
         if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
             raise RuntimeError(f"{mode}: interchange negative control failed")
         print(f"PASS interchange {mode}: allocation negative control")
+        failed_edtf = subprocess.run([binary, "2", "1", "4194304", exact_text, edtf_text, "0"], capture_output=True, timeout=5)
+        start = failed_edtf.stderr.find(b"mark=3 ")
+        end = failed_edtf.stderr.find(b"mark=4 ")
+        assertion = failed_edtf.stderr.find(b"ROC_ASSERT_FAILED")
+        # Hosted assertions accumulate failure and return a nonzero process
+        # status; they deliberately do not abort the remaining observations.
+        if failed_edtf.returncode == 0 or not (0 <= start < assertion < end):
+            raise RuntimeError(f"{mode}: EDTF-specific allocation negative control failed")
+        print(f"PASS EDTF {mode}: zero-ceiling control reaches EDTF scope and fails hosted assertion")
 
 
 def verify_persistence(target: str) -> None:

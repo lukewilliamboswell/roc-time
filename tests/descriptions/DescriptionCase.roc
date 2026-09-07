@@ -75,6 +75,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			Err(_) => crash "Valid synthetic rules"
 		}
 		check_qualifications(value, minute, rules, input.number)
+		check_group_evidence(input.number)
 		check_evidence(date, value, rules, input, start, $width, after)
 		check_intervals(input)
 		plain = qualified(value, [])
@@ -146,7 +147,7 @@ epoch_date = |_digits| CalendarDate.from_fields(Gregorian, { year: 1970, month: 
 # supplied in the minute value. No numeric tolerance follows from any flag.
 check_qualifications = |value, minute, rules, number| {
 	scopes : List(QualifiedCalendarValue.Scope)
-	scopes = [Whole, Year, Month, Day, Hour, Minute, Second, Fraction]
+	scopes = [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth]
 	var $forward = []
 	var $backward = []
 	var $bits = number
@@ -198,6 +199,71 @@ check_qualifications = |value, minute, rules, number| {
 			crash "Duplicate qualification scope accepted"
 		}
 	}
+}
+
+# Independent three-bit field-change model: a year-month group permits exactly
+# the year and month coordinates to vary; the supplied day remains fixed.
+# Days 11/12 are valid in every generated Gregorian month, including February.
+check_group_evidence = |number| {
+	year = 2000 + (number % 100).to_i64_wrap()
+	month = (1.U64 + number % 11).to_u8_wrap()
+	base = group_day(year, month, 11)
+	group = qualified(base, [{ scope: YearMonth, qualifier: Approximate }])
+	whole = qualified(base, [{ scope: Whole, qualifier: Approximate }])
+	individual = qualified(base, [{ scope: Month, qualifier: Approximate }])
+	var $mask = 0.U8
+	while $mask < 8 {
+		year_changed = $mask % 2 == 1
+		month_changed = ($mask // 2) % 2 == 1
+		day_changed = $mask >= 4
+		candidate = group_day(
+			year + (
+				if year_changed {
+					1
+				} else {
+					0
+				}
+			),
+			month + (
+				if month_changed {
+					1
+				} else {
+					0
+				}
+			),
+			if day_changed {
+				12
+			} else {
+				11
+			},
+		)
+		result = CalendarEvidence.new(group, [candidate])
+		if day_changed {
+			if result != Err(UnqualifiedComponent({ index: 0, scope: Day })) {
+				crash "Group changed unqualified day"
+			}
+		} else {
+			match result {
+				Ok(_) => {}
+				Err(_) => crash "Group rejected supplied year/month alternative"
+			}
+		}
+		match CalendarEvidence.new(whole, [candidate]) {
+			Ok(_) => {}
+			Err(_) => crash "Whole rejected supplied alternative"
+		}
+		if year_changed {
+			if CalendarEvidence.new(individual, [candidate]) != Err(UnqualifiedComponent({ index: 0, scope: Year })) {
+				crash "Individual month changed year"
+			}
+		}
+		$mask = $mask + 1
+	}
+}
+
+group_day = |year, month, day| match CalendarDate.from_fields(Gregorian, { year, month, day }) {
+	Ok(date) => CalendarValue.day(date)
+	Err(_) => crash "Generated interior day is valid"
 }
 
 qualified = |value, items| match QualifiedCalendarValue.new(value, items) {
