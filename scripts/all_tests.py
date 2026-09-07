@@ -97,6 +97,8 @@ def main() -> None:
         run([ROC, "build", codecs, f"--opt={mode}", f"--output={codec_binary}"])
         run([str(codec_binary)])
 
+    heading("Checking independent Gregorian query expectations...")
+    run([sys.executable, "scripts/test_civil_queries.py"])
     heading("Checking named-zone appointment scenarios...")
     appointments = "tests/zoned_appointment_checks/main.roc"
     run([ROC, "check", appointments])

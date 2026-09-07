@@ -1,0 +1,8 @@
+Invoice report (USD; supplied accounting dates)
+INV-100: 31 Dec 2020 (Thursday, day 366) | 2020-W53 | USD 125.00
+INV-101: 1 Jan 2021 (Friday, day 1) | 2020-W53 | USD 75.00
+INV-102: 1 Jan 2021 (Friday, day 1) | 2020-W53 | USD 25.00
+INV-103: 4 Jan 2021 (Monday, day 4) | 2021-W01 | USD 90.00
+Totals by ISO week (week year, not calendar year)
+2020-W53: USD 225.00
+2021-W01: USD 90.00

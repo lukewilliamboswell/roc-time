@@ -15,18 +15,10 @@ APIs where a realistic caller otherwise has to reproduce temporal logic.
 
 1. **Publish the everyday workflows already implemented (R16).** Follow
    [user time workflows](user-time-workflows.md) to deliver the staged civil
-   text/display and named-zone applications with compatible compiler and immutable
+   text/display, civil reporting and named-zone applications with compatible compiler and immutable
    package URLs. Publication is separate from implementation acceptance; users
    of the current release cannot yet use these development APIs.
-2. **Expose common civil queries (R05/R07/R16).** Follow
-   [civil ergonomics](civil-ergonomics.md). An invoice/reporting caller can
-   obtain a weekday, ordinal day and ISO week date,
-   without constructing a recurrence or copying private calendar calculations.
-   Define week-year boundaries, then verify independently. Add further helpers
-   such as next-weekday or day/month selections when a concrete application needs
-   them; selections must preserve exclusive ends, skipped dates and disconnected
-   zoned coverage.
-3. **Finish schedule interchange (R11–R12/R14).** Follow
+2. **Finish schedule interchange (R11–R12/R14).** Follow
    [recurrence execution](recurrence.md) to carry the existing profile through
    parse/construct, canonical export, save/load and bounded evaluation. Preserve
    series state across windows and resumptions. Widen import from sourced calendar

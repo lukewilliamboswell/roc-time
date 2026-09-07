@@ -35,6 +35,39 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 			crash "R05 civil coordinate round trip"
 		}
 		fields = GregorianDate.to_fields(date)
+		# R05/R16: full-range queries agree with a bounded cycle/month walk.
+		# 2000-01-01 was Saturday. A Gregorian 400-year cycle has 146097
+		# days (a multiple of seven); no production day-number formula is used.
+		cycle_year = 2000 + I64.mod_by(fields.year, 400)
+		var $january_weekday = 6.I64
+		var $model_year = 2000.I64
+		while $model_year < cycle_year {
+			$january_weekday = I64.mod_by($january_weekday - 1 + year_length($model_year), 7) + 1
+			$model_year = $model_year + 1
+		}
+		var $ordinal = fields.day.to_i64()
+		var $month = 1.U8
+		while $month < fields.month {
+			$ordinal = $ordinal + days_in_month(fields.year, $month).to_i64()
+			$month = $month + 1
+		}
+		expected_weekday = I64.mod_by($january_weekday + $ordinal - 2, 7) + 1
+		var $thursday = $ordinal + 4 - expected_weekday
+		var $week_year = fields.year
+		if $thursday < 1 {
+			$week_year = $week_year - 1
+			$thursday = $thursday + year_length($week_year)
+		} else if $thursday > year_length(fields.year) {
+			$thursday = $thursday - year_length(fields.year)
+			$week_year = $week_year + 1
+		}
+		week = GregorianDate.iso_week_date(date)
+		if GregorianDate.ordinal_day(date).to_i64() != $ordinal or
+			weekday_number(GregorianDate.weekday(date)) != expected_weekday or
+				weekday_number(week.weekday) != expected_weekday or
+					week.week_year != $week_year or week.week.to_i64() != I64.div_trunc_by($thursday - 1, 7) + 1 {
+			crash "R05 civil queries differ from cycle/month walk"
+		}
 		# R14: independently assemble the declared native grammar from fields.
 		# This does not use production formatting as the parser's oracle.
 		magnitude = if fields.year < 0 {
@@ -123,9 +156,22 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 			if GregorianDate.from_fields(next) != GregorianDate.from_civil_day(CivilDay.from_day_number(input.number + 1)) {
 				crash "R05 conversion disagrees with next-day model"
 			}
+			next_date = match GregorianDate.from_fields(next) {
+				Ok(value) => value
+				Err(_) => crash "valid successor"
+			}
+			if weekday_number(GregorianDate.weekday(next_date)) != I64.mod_by(expected_weekday, 7) + 1 {
+				crash "R05 weekday successor"
+			}
 		}
 		# No constructor preconditions are discarded: assert exact rejection class.
-		year = U64.to_i64_wrap(input.raw)
+		# Deliberately exercise malformed month/day paths within a valid year;
+		# uniform I64 years almost always stop at OutOfRange first.
+		year = if U64.rem_by(input.raw, 2) == 0 {
+			fields.year
+		} else {
+			U64.to_i64_wrap(input.raw)
+		}
 		constructed = GregorianDate.from_fields({ year, month: input.month, day: input.day })
 		if year < -2147483648 or year > 2147483647 {
 			if constructed != Err(OutOfRange) {
@@ -153,6 +199,23 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 		}
 		Fuzz.keep
 	}
+}
+
+weekday_number : GregorianDate.Weekday -> I64
+weekday_number = |day| match day {
+	Monday => 1
+	Tuesday => 2
+	Wednesday => 3
+	Thursday => 4
+	Friday => 5
+	Saturday => 6
+	Sunday => 7
+}
+
+year_length = |year| if days_in_month(year, 2) == 29 {
+	366.I64
+} else {
+	365.I64
 }
 
 days_in_month = |year, month| {

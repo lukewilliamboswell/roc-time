@@ -73,6 +73,7 @@ These features work, but check that your input fits their scope.
 | Timestamp and booking text | Complete RFC offset timestamps, up to six fractional digits; exact start/end windows; canonical serialization | No leap-second or sub-microsecond input; this is not every ISO 8601 form |
 | Native civil text (development source) | Gregorian date, clock and explicitly Gregorian local-datetime parsing and canonical output; date/clock literals and generic string codecs | Not in rc3; local labels have no zone or supplied-field resolution; at most six fractional digits |
 | Everyday display (development source) | English Gregorian dates such as `7 Sep 2026` and local appointments such as `7 Sep 2026, 09:30` | Not in rc3; explicit minute/second/exact precision; hiding nonzero fields returns an error; no locale dataset |
+| Civil reporting (development source) | Gregorian weekday, ordinal day and ISO week-date queries across the signed provider year range | Not in rc3; ISO week-year can differ from the calendar year; queries do not select a zone |
 | EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%`; development source also supports individual and year/month group qualifications | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
 | IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
 | RFC recurrence import | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed profiles | No complete ICS files, mixed UTC/local exceptions, or recurrence export/persistence yet |
@@ -89,12 +90,10 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 The next release should first make the development civil text/display APIs and
 their appointment examples available with compatible compiler and package pins.
 
-1. **Add civil reporting queries.** Weekday, ordinal-day and ISO-week accessors
-   with independently verified year-boundary behavior.
-2. **Complete schedule interchange.** Recurrence export and persistence, followed
+1. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
    is not available today.
-3. **Expand specialist support as callers need it.** Faithful archive interval
+2. **Expand specialist support as callers need it.** Faithful archive interval
    endpoints, masks and sets; additional calendars; broader uncertainty reasoning
    and styled explanations. Each slice needs complete input/output and verified
    interpretation within its declared scope.
@@ -169,6 +168,12 @@ explicit precision: `local_datetime(appointment, Minute)` produces
 `Minute` and `Second` return `PrecisionLoss` if they would hide nonzero fields.
 The [appointment-display application](tests/appointment_display/main.roc) uses
 the development source and is checked against both local sources and the bundle.
+
+The development [invoice report](tests/invoice_report/main.roc) groups accounting
+dates by ISO week while retaining separate invoices on the same date.
+`GregorianDate.weekday`, `ordinal_day` and `iso_week_date` provide the fields;
+for example, 1 January 2021 belongs to week 53 of **2020**. These civil queries
+need no clock or timezone.
 
 The development [named-zone appointment application](tests/zoned_appointment/main.roc)
 keeps a Paris appointment at the same local hour on the next civil day, displays

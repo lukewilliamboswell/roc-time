@@ -37,9 +37,14 @@ import CivilDay
 ## ```
 ##
 ## Examples assume a package dependency named `time`.
+## Week queries use the accounting date as supplied: for example, 2021-01-01
+## is Friday, ordinal day 1, in ISO week 53 of 2020. Group by both `week_year`
+## and `week`; the Gregorian year alone does not identify an ISO week.
 GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	Fields : { year : I64, month : U8, day : U8 }
 	Error : [Malformed, Incomplete, OutOfRange, InvalidMonth, InvalidDay, TooLarge]
+	Weekday : [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+	IsoWeekDate : { week_year : I64, week : U8, weekday : Weekday }
 
 	## Native Gregorian full-date text, with no timezone or reduced resolution.
 	## Years 0..9999 have four digits; negative years have a minus and at least
@@ -239,6 +244,48 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	to_fields : GregorianDate -> Fields
 	to_fields = |Date(fields)| fields
 
+	## Gregorian weekday, with the same seven tags as CalendarPattern.Weekday.
+	## This queries the supplied civil date without selecting a timezone.
+	weekday : GregorianDate -> Weekday
+	weekday = |date| weekday_tag(weekday_index(CivilDay.to_day_number(to_civil_day(date))))
+
+	## One-based day within the Gregorian year: 1..365, or 1..366 in leap years.
+	## Total across the full supported year range, with constant bounded work.
+	ordinal_day : GregorianDate -> U16
+	ordinal_day = |date| {
+		Date(fields) = date
+		match I64.to_u16_try(CivilDay.to_day_number(to_civil_day(date)) - year_start(fields.year) + 1) {
+			Ok(value) => value
+			Err(_) => crash "Gregorian ordinal day invariant"
+		}
+	}
+
+	## ISO weeks start Monday; week 1 contains January 4. The week-numbering
+	## year can differ from the calendar year. Its I64 result can extend beyond
+	## this date provider: 2147483647-12-30 belongs to 2147483648-W01.
+	## Total, constant bounded scalar work; no adjacent date is constructed.
+	iso_week_date : GregorianDate -> IsoWeekDate
+	iso_week_date = |date| {
+		Date(fields) = date
+		number = CivilDay.to_day_number(to_civil_day(date))
+		index = weekday_index(number)
+		# Each ISO week belongs to the Gregorian year of its Thursday.
+		# Moving at most three days stays far inside I64 at provider limits.
+		thursday = number + 3 - index
+		week_year = if thursday < year_start(fields.year) {
+			fields.year - 1
+		} else if thursday >= year_start(fields.year + 1) {
+			fields.year + 1
+		} else {
+			fields.year
+		}
+		week = match I64.to_u8_try((thursday - year_start(week_year)) // 7 + 1) {
+			Ok(value) => value # Thursday's zero-based year day is 0..365: weeks 1..53.
+			Err(_) => crash "Gregorian ISO week invariant"
+		}
+		{ week_year, week, weekday: weekday_tag(index) }
+	}
+
 	to_civil_day : GregorianDate -> CivilDay
 	to_civil_day = |Date(date)| {
 		# Common-year days preceding each month. Nominal construction establishes
@@ -335,6 +382,30 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	is_eq = |Date(a), Date(b)| a.year == b.year and a.month == b.month and a.day == b.day
 
 	expect from_civil_day(CivilDay.from_day_number(I64.lowest)) == Err(OutOfRange)
+	# R05: calendar-year and ISO-year transitions, including signed provider
+	# endpoints. Extended-year expectations use Gregorian 400-year periodicity;
+	# these are not a claim that Python datetime supports signed years.
+	expect {
+		var $valid = Bool.True
+		for fixture in [
+			{ text: "1970-01-01", ordinal: 1.U16, iso: { week_year: 1970.I64, week: 1.U8, weekday: Thursday } },
+			{ text: "2020-12-31", ordinal: 366, iso: { week_year: 2020, week: 53, weekday: Thursday } },
+			{ text: "2021-01-01", ordinal: 1, iso: { week_year: 2020, week: 53, weekday: Friday } },
+			{ text: "2021-01-04", ordinal: 4, iso: { week_year: 2021, week: 1, weekday: Monday } },
+			{ text: "1900-03-01", ordinal: 60, iso: { week_year: 1900, week: 9, weekday: Thursday } },
+			{ text: "2000-03-01", ordinal: 61, iso: { week_year: 2000, week: 9, weekday: Wednesday } },
+			{ text: "0000-01-01", ordinal: 1, iso: { week_year: -1, week: 52, weekday: Saturday } },
+			{ text: "-2147483648-01-01", ordinal: 1, iso: { week_year: -2147483648, week: 1, weekday: Tuesday } },
+			{ text: "+2147483647-12-30", ordinal: 364, iso: { week_year: 2147483648, week: 1, weekday: Monday } },
+			{ text: "+2147483647-12-31", ordinal: 365, iso: { week_year: 2147483648, week: 1, weekday: Tuesday } },
+		] {
+			$valid = $valid and match parse(fixture.text) {
+				Ok(date) => ordinal_day(date) == fixture.ordinal and weekday(date) == fixture.iso.weekday and iso_week_date(date) == fixture.iso
+				Err(_) => Bool.False
+			}
+		}
+		$valid
+	}
 	# RFC 3339 (July 2002), sections 5.6-5.8: full-date grammar and
 	# Gregorian month/leap-day restrictions. Signed fixtures are explicitly
 	# native-profile extensions, not RFC examples.
@@ -396,6 +467,22 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		}
 		$valid
 	}
+}
+
+# Civil dates restrict day numbers to the provider range, so adding 3 fits I64.
+weekday_index : I64 -> I64
+weekday_index = |day| I64.mod_by(day + 3, 7)
+
+# The civil weekday remainder is 0..6, Monday through Sunday.
+weekday_tag : I64 -> GregorianDate.Weekday
+weekday_tag = |index| match index {
+	0 => Monday
+	1 => Tuesday
+	2 => Wednesday
+	3 => Thursday
+	4 => Friday
+	5 => Saturday
+	_ => Sunday
 }
 
 # Every caller checks the bounded input index before access.
