@@ -132,9 +132,11 @@ date_sum = |date| {
 	fields.year.to_u64_wrap() * 10000 + fields.month.to_u64() * 100 + fields.day.to_u64()
 }
 
+# Observe bytes directly: converting inline strings to a List would allocate
+# in the checksum, outside the formatter operation being compared.
 text_sum = |text| {
 	var $sum = 0.U64
-	for byte in text.to_utf8() {
+	for byte in text.iter_utf8() {
 		$sum = $sum + byte.to_u64()
 	}
 	$sum
