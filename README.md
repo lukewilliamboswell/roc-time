@@ -42,16 +42,16 @@ Find the free time around a booking supplied with a different UTC offset:
 import time.ExactInterval
 import time.Coverage
 
-free_windows = || {
-    opening = ExactInterval.parse("2026-06-15T09:00:00Z/2026-06-15T17:00:00Z")?
-    booking = ExactInterval.parse("2026-06-15T12:00:00+02:00/2026-06-15T14:00:00+02:00")?
-    busy = Coverage.from_spans([ExactInterval.span(booking)])
-    Ok(Coverage.complement_within(busy, ExactInterval.span(opening)))
-}
+opening = "2026-06-15T09:00:00Z/2026-06-15T17:00:00Z"
+booking = "2026-06-15T12:00:00+02:00/2026-06-15T14:00:00+02:00"
+busy = Coverage.from_spans([ExactInterval.span(booking)])
+free_windows = Coverage.complement_within(busy, ExactInterval.span(opening))
 ```
 
-The result covers **09:00–10:00 and 12:00–17:00 UTC** on June 15. Parsing returns
-structured errors for invalid or unsupported input. The complete
+The result covers **09:00–10:00 and 12:00–17:00 UTC** on June 15. Roc infers the
+interval types from usage and evaluates these top-level definitions at compile
+time, rejecting invalid literals. For runtime input, `ExactInterval.parse` returns
+structured errors. The complete
 [booking exchange application](examples/booking_exchange/main.roc) handles
 multiple bookings, saves/restores availability and writes canonical timestamps.
 
