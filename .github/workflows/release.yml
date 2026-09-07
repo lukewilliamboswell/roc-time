@@ -240,11 +240,15 @@ jobs:
           RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
         run: python3 scripts/release_starter.py validate --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
 
+      - name: Bound API comparison diagnostics for release notes
+        run: python3 scripts/release_starter.py summarize-bump --bump-output .release/bump-output.txt --summary-output .release/bump-summary.txt --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
       - name: Make release notes
         uses: roc-lang/release-package/actions/make-release-notes@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
           release_version: ${{ needs.build.outputs.release_version }}
           docs_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ needs.build.outputs.docs_version }}/
+          bump_output_file: .release/bump-summary.txt
           github_token: ${{ github.token }}
 
       - name: Add starter download and compiler instructions
