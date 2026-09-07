@@ -52,10 +52,23 @@ compares it with the supplied reading and serializes a record containing a typed
 expiry, expired at and after it. State that wall-clock expiry is not a monotonic
 timer or a physical elapsed-time measurement.
 
-First verify a supported platform's actual clock API, units, epoch, precision and
-failure contract. The current example collection does not establish this effect
-interface. Do not invent a `now!` snippet, silently convert a monotonic reading
-to POSIX, or add a core platform dependency to fill this documentation gap.
+Use the actual published basic-cli `0.22.2` platform for the CLI application:
+[immutable bundle](https://github.com/roc-lang/basic-cli/releases/download/0.22.2/9zUBxb1LtXYVc4eR4hAtd1WQDwBYDhM6HQdZz1UFCm2m.tar.zst),
+source revision `23622ee334755e18118bfc885a20f53fa4a16d66`.
+Its [Utc.now!](https://github.com/roc-lang/basic-cli/blob/23622ee334755e18118bfc885a20f53fa4a16d66/platform/Utc.roc#L8)
+returns U128 POSIX epoch nanoseconds. The wrapper replaces `ClockBeforeEpoch`
+with zero; the [host implementation](https://github.com/roc-lang/basic-cli/blob/23622ee334755e18118bfc885a20f53fa4a16d66/src/lib.rs#L1933)
+identifies that failure path. A caller must not treat the fallback as a genuine
+clock reading.
+
+Restrict this CLI acquisition adapter explicitly to positive current-epoch
+readings: reject zero as `UnavailableOrEpochClock`, checked-convert with
+`U128.to_i128_try`, then apply the explicit precision policy through the core.
+The adapter cannot distinguish a genuine epoch reading from the platform's
+fallback. Keep signed readings supported in the pure deadline function and its
+deterministic tests. Test the zero rejection separately from valid negative
+inputs to that pure function; never claim the platform exposes a recoverable
+clock error. No monotonic conversion or core platform dependency is needed.
 
 Reuse `PosixBoundary.from_microseconds`, checked `from_nanoseconds` or
 `from_nanoseconds_with_rounding`, and `OffsetTimestamp.from_boundary` plus its
@@ -80,8 +93,8 @@ Executable acceptance:
 
 ## Scope and completion
 
-Implement the named-zone example first: its required effects and data already
-exist in the repository. Resolve the platform clock dependency independently.
+Implement the named-zone example first, then the platform-clock application with
+the explicit acquisition boundary above.
 Localized presentation, human relative phrases, timer/sleep services, a general
 zoned wrapper and speculative unit helpers are deferred until a concrete caller
 needs them. The broader design's outstanding obligations remain in
