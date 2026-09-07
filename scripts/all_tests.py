@@ -103,6 +103,7 @@ def main() -> None:
     run([sys.executable, "scripts/test_date_export.py"])
     heading("Checking timed recurrence export against independent expectations...")
     run([sys.executable, "scripts/test_timed_export.py"])
+    run([sys.executable, "tests/utc_cancellations_checks/reference.py"])
     heading("Checking named-zone appointment scenarios...")
     appointments = "tests/zoned_appointment_checks/main.roc"
     run([ROC, "check", appointments])
@@ -136,6 +137,7 @@ def main() -> None:
     run([sys.executable, "scripts/test_validate_followup.py"])
     run([sys.executable, "scripts/check_docs_history.py", "--self-test"])
     run([sys.executable, "scripts/test_docs.py"])
+    run([sys.executable, "scripts/test_release_docs.py"])
     run([sys.executable, "scripts/test_clock_output.py"])
     run([sys.executable, "scripts/test_local_examples.py"])
 

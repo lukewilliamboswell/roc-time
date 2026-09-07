@@ -205,7 +205,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 		}
 	}
 
-	## Canonical semantic value text, not a versioned persistence envelope.
+	## Canonical RFC 5545 duration value text.
 	## Weeks become days; accurate time components become seconds.
 	to_text : ICalDuration -> Str
 	to_text = |value| {

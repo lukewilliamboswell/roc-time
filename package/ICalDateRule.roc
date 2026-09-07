@@ -51,7 +51,7 @@ ICalDateRule :: [].{
 	Error : [Malformed(Str), Duplicate(Str), Missing(Str), Unsupported(Str), OutOfRange(Str), Incompatible(Str), InvalidDate(Str), TooLarge, InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])]
 
 	## Export extracted values without expanding occurrences. Reject native
-	## definitions outside this profile; this is not versioned persistence.
+	## definitions outside this profile.
 	## Order: FREQ, INTERVAL, termination, BYMONTH, BYWEEKNO, BYYEARDAY,
 	## BYMONTHDAY, BYDAY, BYSETPOS, WKST. INTERVAL and WKST are explicit.
 	## Numeric sets sort ascending; BYDAY sorts Monday–Sunday, then ordinal.

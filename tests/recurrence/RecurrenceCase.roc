@@ -3,7 +3,6 @@ import time.Explanation
 import time.SemanticFact
 import time.TimedSchedule
 import time.ScheduleDefinition
-import time.Persistence
 import time.TimedOccurrence
 import time.CalendarDelta
 import time.TimedRecurrence
@@ -205,6 +204,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			}
 		}
 		check_boundary_cutoff(input)
+		check_boundary_exclusions(input)
 		check_subdaily(input)
 		check_timed(input, anchor, pattern, window, $expected)
 		# Direct ordered set model; deliberately not the cursor's two-stream merge.
@@ -803,7 +803,7 @@ check_subdaily = |input| {
 	fractional_context = { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }
 	fractional_window = { start: window_start, end }
 	fractional_duration = Coordinate(PosixDelta.from_microseconds(1))
-	fractional_definition = archive_definition(ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation")
+	fractional_definition = checked_definition(ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation")
 	fractional_cursor = ScheduleDefinition.cursor(73.U64, fractional_definition, fractional_window) ?? crash "fractional prepared cursor"
 	check_fractional_schedule(fractional_cursor, input.work.to_u64(), $expected)
 	fractional_direct = TimedSchedule.new(73.U64, rebuilt, fractional_window, fractional_duration, fractional_context) ?? crash "fractional direct cursor"
@@ -837,30 +837,13 @@ check_subdaily = |input| {
 	crash "subdaily grid resumption did not terminate"
 }
 
-# R09/R14/R16: archive the complete immutable declaration before evaluating
-# against the independent grids. Equal canonical archives must share hash-key
-# behavior, while the returned schedule still creates fresh query cursors.
-archive_definition = |definition| {
-	stored = Persistence.new(ScheduleDefinition(definition)) ?? crash "generated schedule archive rejected"
-	text = Persistence.to_text(stored)
-	restored = Persistence.parse(text) ?? crash "generated schedule archive cannot load"
-	if stored != restored or Persistence.to_text(restored) != text {
-		crash "schedule archive canonical equality"
+# Prepared definitions remain usable as keys independently of query cursors.
+checked_definition = |definition| {
+	keyed = Dict.insert(Dict.empty(), definition, 71.U8)
+	if Dict.get(keyed, definition) != Ok(71) {
+		crash "schedule definition hash equality"
 	}
-	# Preserve generic public Value key behavior when adding the new variant.
-	source_value = Persistence.value(stored)
-	restored_value = Persistence.value(restored)
-	if source_value != restored_value or Dict.get(Dict.insert(Dict.empty(), source_value, 73.U8), restored_value) != Ok(73) {
-		crash "native schedule declaration equality/hash changed on load"
-	}
-	keyed = Dict.insert(Dict.empty(), stored, 71.U8)
-	if Dict.get(keyed, restored) != Ok(71) {
-		crash "schedule archive hash equality"
-	}
-	match Persistence.value(restored) {
-		ScheduleDefinition(value) => value
-		_ => crash "schedule archive changed kind"
-	}
+	definition
 }
 
 check_fractional_schedule = |initial, work, expected| {
@@ -1033,7 +1016,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	(direct, prepared) = if exclude_anchor {
 		default_duration = Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
 		context = { rules, occurrence: RequireUnique, gap: RejectGap }
-		declaration = archive_definition(ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition")
+		declaration = checked_definition(ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition")
 		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "native definition cursor"
 		direct_cursor = match TimedSchedule.new_with_endings(42.U64, rule, window, default_duration, overrides, context) {
 			Ok(value) => value
@@ -1069,7 +1052,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		# Preserve PERIOD ending intent and duplicate definitions across exchange;
 		# the existing independent grid below checks restored identities/widths.
 		restored = export_wrapper(parsed)
-		declaration = archive_definition(ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition")
+		declaration = checked_definition(ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition")
 		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "iCalendar definition cursor"
 		direct_cursor = match ICalTimedRule.schedule(42.U64, restored, window, Local(rules)) {
 			Ok(value) => value
@@ -1456,4 +1439,105 @@ check_subdaily_explanation = |rule, input, anchor, mode| {
 		crash "Subdaily explanation lost exact anchor fraction or source exclusion"
 	}
 	check_recurrence_rendering(source)
+}
+
+# R01/R02/R07/R11/R12: independent piecewise offset model at epoch day.
+# A +1h jump at 02:00Z makes 02:00/03:00 and 02:30/03:30 collide.
+# A -1h jump tests first-fold selection and a nonselected boundary exclusion.
+# COUNT applies to the source grid before either exclusion domain, and explicit
+# inclusions survive COUNT but remain subject to both exclusion domains.
+check_boundary_exclusions = |input| {
+	d = date(1970, 1, 1)
+	offset = if input.exclude_anchor {
+		-3600.I32
+	} else {
+		3600.I32
+	}
+	rules = ZoneRules.new_bounded(
+		"Synthetic/ExclusionGrid",
+		"v1",
+		cutoff_span(-86400000000, 172800000000),
+		FixedOffset.from_seconds(0),
+		[{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(offset) }],
+		{
+			minimum: if offset < 0 {
+				offset
+			} else {
+				0
+			},
+			maximum: if offset > 0 {
+				offset
+			} else {
+				0
+			},
+		},
+	) ?? crash "exclusion grid rules"
+	count = input.count.to_u64() + 3
+	base = TimedRecurrence.new({ date: d, clock: clock(0) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2, 3, 4, 5], minutes: [0, 30], seconds: [] }, termination: Count(count), by_set_pos: [] }) ?? crash "exclusion grid base"
+	included = TimedRecurrence.with_inclusions(base, [{ date: d, clock: clock(3) }, { date: d, clock: clock(5) }]) ?? crash "exclusion grid inclusions"
+	source_excluded = if input.last_monday {
+		[local(d, 2)]
+	} else {
+		[]
+	}
+	sourced = TimedRecurrence.with_exclusions(included, source_excluded) ?? crash "exclusion source set"
+	excluded = if input.last_monday {
+		9000000000.I64
+	} else {
+		7200000000.I64
+	}
+	boundaries = [PosixBoundary.from_microseconds(excluded), PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(excluded), PosixBoundary.from_microseconds(I64.highest)]
+	rule = TimedRecurrence.with_boundary_exclusions(sourced, boundaries) ?? crash "exclusion boundary set"
+	if TimedRecurrence.definition(rule).boundary_exclusions != [PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(excluded), PosixBoundary.from_microseconds(I64.highest)] {
+		crash "boundary normalization changed exact values"
+	}
+	var $expected = []
+	for half_hour in [0.U64, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] {
+		source = half_hour.to_i64_wrap() * 1800000000
+		boundary = if offset > 0 and source >= 10800000000 {
+			source - 3600000000
+		} else if offset < 0 and source >= 7200000000 {
+			source + 3600000000
+		} else {
+			source
+		}
+		if (half_hour < count or half_hour == 6 or half_hour == 10) and boundary != excluded and !(input.last_monday and half_hour == 4) {
+			$expected = $expected.append({ source, boundary })
+		}
+	}
+	var $cursor = TimedRecurrence.cursor(rule, { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, { rules, occurrence: First, gap: UseOffsetBeforeGap }) ?? crash "exclusion cursor"
+	# One slot may expose a non-progressing merge BufferLimit when an explicit
+	# inclusion precedes a held rule item. Resume that exact state with the two
+	# slots required by the merge; work and zone budgets remain unchanged.
+	var $buffer_limit = 1.U64
+	var $observed = []
+	var $calls = 0.U64
+	while $calls < 500 {
+		batch = TimedRecurrence.Cursor.collect($cursor, { work: { max_steps: input.work.to_u64(), max_buffered: $buffer_limit, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "exclusion collection"
+		if batch.steps > input.work.to_u64() or batch.zone_segments > 1 or batch.occurrences.len() > 1 {
+			crash "exclusion execution exceeded budget"
+		}
+		for value in batch.occurrences {
+			$observed = $observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))), boundary: PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)) })
+		}
+		match batch.status {
+			Complete => {
+				if $observed != $expected {
+					crash "boundary exclusions differ from independent piecewise grid"
+				}
+				return {}
+			}
+			Limited(progress) => {
+				if progress.reason == BufferLimit {
+					if $buffer_limit != 1 {
+						crash "two-slot inclusion merge cannot progress"
+					}
+					$buffer_limit = 2
+				}
+				$cursor = progress.cursor
+			}
+		}
+		$calls = $calls + 1
+	}
+	crash "boundary exclusions failed finite resumption"
 }

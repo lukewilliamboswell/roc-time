@@ -29,7 +29,6 @@ def main() -> None:
         "cursor_as_date_definition": ["first argument", "Cursor", "DateRecurrence"],
         "julian_as_gregorian_query": ["first argument", "JulianDate", "GregorianDate"],
         "description_as_display": ["first argument", "CalendarValue", "GregorianDate"],
-        "persistence_backing_codec": ["missing method", "encoder_for", "Persistence"],
         "invalid_date_literal": ["from_quote", "rejected it", "Invalid EdtfDate literal: Malformed"],
         "invalid_gregorian_literal": ["from_quote", "rejected it", "Invalid GregorianDate literal: InvalidDay"],
         "invalid_clock_literal": ["from_quote", "rejected it", "Invalid ClockTime literal: UnsupportedLeapSecond"],

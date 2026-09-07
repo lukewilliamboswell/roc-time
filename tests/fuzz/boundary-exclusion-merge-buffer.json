@@ -1,0 +1,21 @@
+{
+  "target": "recurrence",
+  "generator": "RecurrenceCase.generator_for",
+  "input": "tests/fuzz/corpus/recurrence/boundary-exclusion-merge-buffer",
+  "hex": "0a060a",
+  "sha256": "076213a0003d69c5baca21c3ac5ad6d87c4e3b1ebeb7a2e7f2f4fffc3f23753e",
+  "decoded": {
+    "count": 5,
+    "exclude_anchor": false,
+    "interval": 1,
+    "last_monday": false,
+    "query_month": 1,
+    "work": 1
+  },
+  "compiler": "nightly-2026-09-06-d85e877",
+  "backend": "LLVM speed --fuzz",
+  "target_architecture": "x64musl",
+  "roc_fuzz_revision": "ec137edcf0fa2530e3dbb175fec4ddff5281cc6d",
+  "origin": "Seed 1 full gate crash-6344cae76b3020f1cbd79e361c20d5d62a1790c0; minimized from 62 to 3 bytes. Minimization stopped after reduction stabilized; global minimality is not claimed.",
+  "regression": "The harness retried a legitimate BufferLimit forever. A held generated source 03:30 and explicit inclusion 03:00 need two merge slots. Start with max_buffered=1, preserve the Limited cursor, then resume with 2; compare all output against the independent piecewise-offset model. max_steps=1 and max_zone_segments=1 remain fixed."
+}

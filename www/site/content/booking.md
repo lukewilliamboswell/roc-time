@@ -8,9 +8,9 @@ Use this workflow when an application receives timestamped bookings and needs th
 2. Obtain checked half-open spans from those values.
 3. Build `Coverage` from the occupied spans.
 4. Subtract occupied coverage within the opening span.
-5. Format or persist the resulting pieces for your caller.
+5. Format the resulting endpoints as canonical timestamps for your caller.
 
-Read and run the [released booking exchange application](https://github.com/lukewilliamboswell/roc-time/tree/0.1.0-rc3/examples/booking_exchange). The input/output root is `main.roc`; `BookingExchange.roc` contains the pure pipeline.
+Read and run the [booking exchange application using released packages](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange). The input/output root is `main.roc`; `BookingExchange.roc` contains the pure pipeline.
 
 ```sh
 roc examples/booking_exchange/main.roc
@@ -30,12 +30,14 @@ An interval must have ordered, nonempty endpoints. Invalid timestamp spelling, a
 
 The supported timestamp profile uses microsecond precision. Finer input is rejected rather than truncated. Arithmetic near the signed coordinate limits is checked too.
 
-## Save meaning, not debug output
+## Store standard values
 
-The booking example uses versioned `Persistence` for coverage. That archive records its kind, axis and unit; it is distinct from human-readable inspection. A JSON record containing a formatted local time is not automatically a reproducible interpretation snapshot.
+Use the format's checked parser and serializer for values you store. The [catalogue storage application](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/catalogue_storage) stores EDTF date descriptions and RFC 3339 timestamps in application-owned fields, then parses them again. No library-specific archive wrapper is needed.
+
+For availability, keep each separate span and serialize its endpoints. Your application owns the collection schema; standard timestamp strings alone do not define a standardized coverage document. Debug inspection is not a storage format.
 
 For expiry checks, the [clock deadline application in the repository](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/clock_deadline) also uses the published rc3 package. Its platform root reads the clock, while a pure module compares the supplied reading with an expiry. The saved status describes its recorded check time, not the time the JSON is loaded. This application was added after the rc3 starter kit and is not in that immutable ZIP.
 
 ## API reference
 
-[ExactInterval](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/ExactInterval/) · [OffsetTimestamp](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/OffsetTimestamp/) · [Coverage](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Coverage/) · [Persistence](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Persistence/)
+[ExactInterval](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/ExactInterval/) · [OffsetTimestamp](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/OffsetTimestamp/) · [Coverage](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Coverage/)

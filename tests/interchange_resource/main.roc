@@ -1,7 +1,6 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Ixdtf
-import time.Persistence
 import time.ExactInterval
 import time.PosixBoundary
 import time.PosixSpan
@@ -78,31 +77,6 @@ main! = |args| {
 	exact_output = ExactInterval.to_text(exact)
 	exact_serialized = Host.allocated_bytes!({})
 	Host.assert!(exact_output == exact_text and exact_serialized - exact_parsed <= ceiling)
-	# Persist the declaration; the rule snapshot must be rebound explicitly.
-	saved = match Persistence.new(Ixdtf(declaration)) {
-		Ok(value) => value
-		Err(_) => crash "bounded declaration persistence"
-	}
-	persistence_before = Host.allocated_bytes!({})
-	encoded = Persistence.to_text(saved)
-	persistence_encoded = Host.allocated_bytes!({})
-	Host.assert!(persistence_encoded - persistence_before <= ceiling)
-	decoded = match Persistence.parse(encoded) {
-		Ok(v) => v
-		Err(_) => crash "persistence fixture"
-	}
-	persistence_decoded = Host.allocated_bytes!({})
-	Host.assert!(Persistence.value(decoded) == Ixdtf(declaration) and persistence_decoded - persistence_encoded <= ceiling)
-	oversized = " ".repeat(65537)
-	deep_unknown = "{\"unknown\":${"[".repeat(10000)}"
-	invalid_before = Host.allocated_bytes!({})
-	large_result = Persistence.parse(oversized)
-	invalid_large = Host.allocated_bytes!({})
-	Host.assert!(large_result == Err(Envelope(TooLarge)) and invalid_large == invalid_before)
-	deep_result = Persistence.parse(deep_unknown)
-	invalid_deep = Host.allocated_bytes!({})
-	Host.assert!(deep_result == Err(Envelope(UnknownField("unknown"))) and invalid_deep - invalid_large <= ceiling)
-
 	# Five distinct scopes exercise the profile's full qualification capacity.
 	# Runtime input and oversized-input construction precede the measured scopes.
 	edtf_text = args.get(5) ?? "?2004-%06~-~11?"
@@ -235,7 +209,7 @@ main! = |args| {
 	Host.assert!(second_rejected == Err(PrecisionLoss(Second)))
 	Host.assert!(calendar_rejected == Err(UnsupportedCalendar(Julian)))
 	Host.assert!(e4 - e3 <= civil_ceiling and e5 - e4 <= civil_ceiling and e6 - e5 <= civil_ceiling)
-	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, persistence_encoded - persistence_before, persistence_decoded - persistence_encoded, invalid_large - invalid_before, invalid_deep - invalid_large, edtf_parsed - edtf_before, edtf_serialized - edtf_parsed, edtf_explained - edtf_serialized, edtf_rejected - edtf_invalid_before, d1 - d0, d2 - d1, d3 - d2, d4 - d3, d5 - d4, d6 - d5, d7 - d6, d8 - d7, d9 - d8, e1 - e0, e2 - e1, e3 - e2, e4 - e3, e5 - e4, e6 - e5] }
+	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, edtf_parsed - edtf_before, edtf_serialized - edtf_parsed, edtf_explained - edtf_serialized, edtf_rejected - edtf_invalid_before, d1 - d0, d2 - d1, d3 - d2, d4 - d3, d5 - d4, d6 - d5, d7 - d6, d8 - d7, d9 - d8, e1 - e0, e2 - e1, e3 - e2, e4 - e3, e5 - e4, e6 - e5] }
 }
 
 # Deliberately inject excessive allocation in one named scope to prove its

@@ -94,18 +94,20 @@ clock or fetch data on your behalf.
 - **Schedules:** declared RFC 5545 DATE and DATE-TIME property import profiles.
   Complete ICS files, timed-rule export and durable schedule definitions are
   still future work.
-- **Explanation and storage:** bounded explanations and versioned persistence
-  for supported descriptions, exact values, coverage and interpretation snapshots.
+- **Explanation:** bounded descriptions of temporal meaning and interpretation
+  requirements. Standard text formats support storing representable values.
 
 The development branch is ahead of rc3, including everyday civil text/display,
-reporting queries and date-only schedule export. Use the released documentation
+reporting queries and date/time schedule export. Use the released documentation
 for rc3; development APIs may require a newer compiler.
 
 ## What comes next?
 
 First, make the everyday date and appointment improvements available in a
-compatible release. Then complete schedule export and durable definitions.
-Broader archive formats, calendars and reasoning follow concrete caller needs.
+compatible release with standard serialization and reusable schedule definitions.
+The next release removes the private archive API; storage uses supported external
+formats, with explicit limits on what they preserve. Broader standards, calendars
+and reasoning follow concrete caller needs.
 
 ## Prior art
 

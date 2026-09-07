@@ -28,11 +28,11 @@ In rc3 these modules are named `RfcDateRule`, `RfcTimedRule`, `RfcDateTime`, `Rf
 
 COUNT belongs to the anchored rule; excluding one source does not replenish it. Adding a PERIOD can provide an occurrence with its own ending. Source labels matter even when a gap policy changes the resolved boundary.
 
-## Development-only exchange and storage
+## Development-only schedule exchange
 
 The development branch renames the adapters with an `ICal` prefix and adds checked definition access and canonical extracted-property export. The [meeting exchange scenario](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/meeting_exchange) demonstrates editing, exporting and reimporting a weekly meeting across a fixed zone transition.
 
-`ScheduleDefinition` separates a reusable definition from its query cursor. These APIs are unreleased. Versioned schedule archive work is also being validated on the development branch; the released `Persistence` profile does not store schedule definitions. The [development archive application](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/schedule_archive) demonstrates the intended application envelope and overlapping-window workflow; it requires the development checkout.
+`ScheduleDefinition` separates a reusable in-memory definition from its query cursor. These APIs are unreleased. Store supported schedule declarations using their standard property formats; supply interpretation context explicitly when loading them. Export does not promise to preserve every native calendar policy or embed a zone table. A standard adapter must reject unrepresentable meaning rather than silently discard it.
 
 ## API reference
 

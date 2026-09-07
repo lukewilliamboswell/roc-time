@@ -161,7 +161,7 @@ The representation is private and must satisfy these rules:
 
 The numerical boundary domain is signed I64 microseconds. Constructible spans also need a representable exclusive end, so the greatest boundary cannot start a one-microsecond span. Calendar and provider operations publish their narrower supported ranges. Numerical capacity alone is not a claim that a calendar or zone provider supports every representable coordinate.
 
-Serialization describes semantic values, units, and interpretation. It does not expose native record layout, compiler tags, or the private endpoint encoding. Changing storage must not reinterpret persisted data.
+Persistence uses the same externally standardized representations as interchange, within explicitly supported profiles. Serialization preserves semantic values, units and interpretation; it does not expose native record layout, compiler tags or private endpoint encoding. roc-time does not define a universal archive envelope or its own persistence schema versions. Changing internal storage must not reinterpret standardized data.
 
 ## Coverage and events
 
@@ -317,6 +317,16 @@ gap adjustment must not silently rewrite source occurrence identity.
 [RFC 5545 DATE-TIME interpretation](https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.5),
 [verified erratum 4271](https://www.rfc-editor.org/errata/eid4271).
 
+Exclusion domains remain explicit. A local exclusion matches the original
+source position; a resolved exclusion matches the selected boundary, including
+every source occurrence mapped to that boundary. Do not project a resolved
+exclusion into a local label: gaps can change the projected label, and folds
+can give one label distinct boundaries. Both exclusion forms apply after series
+COUNT and positional selection and take precedence over explicit inclusions.
+They preserve surviving source identities and do not replenish the series.
+An adapter must declare which combinations of source and resolved exclusions
+it accepts; supported serialization and explanations retain that distinction.
+
 Source occurrence identity survives until a caller requests coverage. Enumeration contracts state ordering and duplicate behavior, especially when zone transitions map local candidates unexpectedly. Coverage construction performs any required sorting and coalescing; it never trusts recurrence order without a guarantee.
 
 Streaming traversal is distinct from materialization. Use Roc's `Iter` for lazy
@@ -343,7 +353,19 @@ For a supported evidence model, “definite” means true for every admissible i
 Broad standards coverage is an intended capability, not a current conformance
 claim. Each adapter declares its edition and supported profile; syntax acceptance,
 semantic preservation, interpretation, formatting and persistence need separate
-evidence. Native lossless persistence is distinct from standards interchange.
+evidence. A supported standard representation can be stored directly; storage
+alone does not require a separate library format. Checked export rejects values
+whose range, precision, qualifiers or interpretation policies cannot be preserved
+by the selected profile. Standard JSON syntax alone does not make a private
+object schema an external temporal standard.
+
+Not every native object has a persistence representation. Arbitrary execution
+policies, query cursors and complete interpretation snapshots have no automatic
+serialization promise. A zone name or data-version label is not a stored rule
+snapshot. Applications own surrounding records, identifiers and any additional
+configuration needed to reconstruct their workflows; roc-time must not silently
+claim those records preserve native semantics. Additional standardized adapters
+require a concrete caller and independent evidence of their supported mapping.
 
 | Target | Required scope distinction |
 |---|---|
@@ -569,7 +591,7 @@ parseable literal.
 Provide a separate explicit explanation facility for callers asking what a
 description means and what further interpretation it needs. This is semantic
 help suitable for an interactive tool or application, distinct from localized
-date/time formatting and versioned serialization. Explanation and inspection share semantic facts but have distinct cost and output contracts.
+date/time formatting and standardized serialization. Explanation and inspection share semantic facts but have distinct cost and output contracts.
 
 Use one source of typed semantic facts for concise inspection and detailed
 explanation. Facts distinguish the original description and resolution,
@@ -671,7 +693,7 @@ These stable identifiers define observable acceptance contracts. Semantic claims
 | R11 — recurrence semantics | Calendar stepping does not drift through elapsed arithmetic. RFC adapters test DTSTART, COUNT, UNTIL, invalid dates, BYSETPOS, duplicate/exclusion ordering, and overlapping-window queries. Query restriction does not reset series state. |
 | R12 — bounded evaluation | Limits account for candidates, buffered work, and output. `Limited` cannot masquerade as `Complete`; resumption equals uninterrupted output without skipped or duplicated occurrences. Invalid/stale cursor contexts fail explicitly. |
 | R13 — uncertainty and reasoning | Alternatives differ from all-of coverage. Definite/possible/impossible results agree with enumeration of small admissible models. Inconsistent evidence and unsupported reasoning error. No inferred tolerance for approximate qualifiers. |
-| R14 — parsing and persistence | Distinguish malformed, unsupported, incomplete, and out-of-range input. Preserve resolution and meaningful qualifiers in semantic round trips. Unknown critical extensions fail. Source-text fidelity is separately advertised. Persistence records axis/units/version and does not depend on native layout. |
+| R14 — parsing and persistence | Distinguish malformed, unsupported, incomplete, and out-of-range input. Preserve resolution and meaningful qualifiers in semantic round trips. Unknown critical extensions fail. Source-text fidelity is separately advertised. Persistence uses declared external standard profiles without a roc-time archive schema. Preserve axis, units and meaningful interpretation; reject unrepresentable values rather than silently narrow them. |
 | R15 — resource behavior | Verify core operations against the stated complexity/allocation targets using varying sizes and ownership patterns. Measure retained slices, not just allocation throughput. No per-microsecond loops, repeated parsing, or hidden provider lookups in set operations. |
 | R16 — API evidence | Each advertised usage compiles and runs against the real package on the pinned compiler. Wrong-domain examples fail for the intended reason. Native and supported Wasm paths agree on semantic fixtures. Proposed sketches remain labeled until this evidence exists. |
 

@@ -27,14 +27,14 @@ An event is still an identified event, even when it occupies the same time as an
 
 An opening window is 09:00–17:00 UTC. A booking arrives as 12:00–14:00 at UTC+02:00. After interpretation, that booking occupies 10:00–12:00 UTC; the remaining coverage is **09:00–10:00 and 12:00–17:00 UTC**.
 
-The [complete booking application](https://github.com/lukewilliamboswell/roc-time/tree/0.1.0-rc3/examples/booking_exchange) parses inputs, subtracts bookings, saves availability and prints canonical timestamps. It is a multi-file Roc application you can run directly.
+The [complete booking application](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange) parses inputs, subtracts bookings and prints canonical timestamps. It is a multi-file Roc application you can run directly.
 
 ## Explicit choices, useful guarantees
 
 - Exact coordinates use signed 64-bit microseconds and checked arithmetic.
 - Local labels need an explicit offset or immutable zone rules.
 - Recurrence work has finite budgets; an incomplete result says so and can be resumed.
-- Parsing, display, explanation and persistence have separate purposes.
+- Parsing, display, explanation and storage have separate purposes.
 
 See [supported scope](profiles.html) before depending on a standards profile. This is an actively developing package, not a claim to every date/time format or calendar.
 

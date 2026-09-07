@@ -13,7 +13,8 @@ import time.ZoneRules
 ## Exchange extracted iCalendar timed property values with explicit zone rules.
 ## The bundled database supplies a fixed, versioned Paris snapshot; no host zone
 ## or current clock is consulted. Export preserves the definition, not its source
-## spelling, a full ICS document, or a native persistence archive.
+## spelling, a full ICS document, or a native persistence archive. The feed's
+## UTC cancellation matches the selected start while the meeting stays local.
 MeetingExchange :: [].{
 	render = || {
 		imported = exchange(
@@ -22,16 +23,14 @@ MeetingExchange :: [].{
 				rule: "FREQ=WEEKLY;COUNT=4",
 				duration: "PT1H",
 				inclusions: [],
-				exclusions: [],
+				exclusions: ["20260405T070000Z"],
 				periods: [],
 				mode: Zoned,
 			}),
 		)?
 		definition = ICalTimedRule.definition(imported)
-		removed = local_text("2026-04-05T09:00")?
-		rule = TimedRecurrence.with_exclusions(definition.rule, [removed])?
 		extra = "20260330T090000/PT2H"
-		edited = exchange(ICalTimedRule.new({ ..definition, rule, periods: definition.periods.append(extra) }))?
+		edited = exchange(ICalTimedRule.new({ ..definition, periods: definition.periods.append(extra) }))?
 		parts = exchange(ICalTimedRule.to_parts(edited))?
 		restored = exchange(ICalTimedRule.parse(parts))?
 		rules = ZoneRules.from_database(Database.get("Europe/Paris")?)?
@@ -56,7 +55,7 @@ MeetingExchange :: [].{
 		}
 		var $lines = [
 			"Weekly Paris meeting exchange (extracted iCalendar property values)",
-			"Edited: exclude 5 April; add a two-hour meeting on 30 March",
+			"Imported UTC cancellation for 5 April; added a two-hour meeting on 30 March",
 			"Canonical DTSTART value: ${parts.start}",
 			"Canonical RRULE value: ${parts.rule}",
 			"Canonical DURATION value: ${parts.duration}",

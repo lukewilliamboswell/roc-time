@@ -1,6 +1,6 @@
 # Nested record equality compiler crash
 
-On `nightly-2026-09-04-c125b82`, Apple Silicon macOS, this dependency-free
+On `nightly-2026-09-06-d85e877`, Linux x86_64, this dependency-free
 reproduction crashes compilation with SIGSEGV (exit 139):
 
 ```sh
@@ -21,10 +21,16 @@ The control changes only whole-record equality to equality of each field:
 .roc-time-tmp/fieldwise-equality
 ```
 
-The control builds and prints `True`. TimedRecurrence's BYSETPOS resumption test
-compares each result field, including the original source-label list, to retain
+The control builds and prints `True`. TimedRecurrence's BYSETPOS and boundary-exclusion resumption tests
+compare each result field, including the original source-label list, to retain
 its full assertion without triggering this compiler defect. The independent
 native recurrence probe also printed both expected source labels intact.
+
+The boundary-exclusion unit isolation additionally established that each of its
+four fields (`valid`, `boundaries`, `sources`, `adjusted`) compares successfully,
+while whole-record equality crashes. The fieldwise assertion preserves all four
+comparisons. This source reduction does not establish the compiler-internal
+cause of the crash.
 
 This is a known-failure reproduction, not a passing portability gate. No upstream
 report has been sent. Recheck it when updating the pinned compiler.

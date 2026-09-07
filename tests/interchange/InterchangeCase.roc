@@ -2,7 +2,6 @@ import fuzz.Fuzz
 import time.ResolvedBoundary
 import time.ResolvedSelection
 import time.Coverage
-import time.Persistence
 import time.Explanation
 import time.SemanticFact
 import time.ICalDateTime
@@ -82,7 +81,7 @@ check_edtf = |input, day, date_text| {
 		Ok(value) => value
 		Err(_) => crash "Generated valid EDTF date rejected"
 	}
-	check_persistence(EdtfDate(parsed), { kind: "edtf-date", profile: "edtf-gregorian-date-v2", payload: source, axis: "none", unit: "none" })
+
 	if EdtfDate.to_text(parsed) != source or EdtfDate.parse(EdtfDate.to_text(parsed)) != Ok(parsed) {
 		crash "EDTF canonical serialization changed supplied resolution or qualifier"
 	}
@@ -124,7 +123,7 @@ check_edtf = |input, day, date_text| {
 
 # R13/R14: LOC 2019 prefix/suffix scope rules are independent expected fields.
 # Generated valid interior Gregorian dates, all three flags and four scopes;
-# native group identity, facts and versioned persistence must agree with those
+# native group identity, facts and canonical standard text must agree with those
 # expectations, not merely with a parser/serializer round trip.
 check_scoped_edtf = |input, day| {
 	year = input.year.to_str()
@@ -161,19 +160,7 @@ check_scoped_edtf = |input, day| {
 			crash "Scoped explanation lost group identity or invented interpretation"
 		}
 		check_declaration_limits(source, input.digits.to_u64())
-		check_persistence(EdtfDate(parsed), { kind: "edtf-date", profile: "edtf-gregorian-date-v2", payload: choice.text, axis: "none", unit: "none" })
-		profile = if choice.scope == YearMonth {
-			"native-qualified-calendar-value-v2"
-		} else {
-			"native-qualified-calendar-value-v1"
-		}
-		payload = "gregorian;day;${year};${input.month.to_str()};${day.to_str()}|${choice.name}=${flag.name}"
-		check_persistence(QualifiedCalendarValue(description), { kind: "qualified-calendar-value", profile, payload, axis: "none", unit: "none" })
-		legacy = Json.to_str({ format: "roc-time", version: "1", kind: "edtf-date", profile: "edtf-gregorian-date-v1", axis: "none", unit: "none", payload: choice.text })
-		match Persistence.parse(legacy) {
-			Err(InvalidEdtfDate(_)) => {}
-			_ => crash "Old persistence profile accepted new scoped syntax"
-		}
+
 	}
 }
 
@@ -229,7 +216,7 @@ check_timestamp = |input, day, date_text| {
 		Ok(value) => value
 		Err(_) => crash "Generated valid offset timestamp rejected"
 	}
-	check_persistence(OffsetTimestamp(parsed), { kind: "offset-timestamp", profile: "rfc3339-microseconds-rfc9557-base-v1", payload: canonical, axis: "none", unit: "none" })
+
 	if OffsetTimestamp.to_text(parsed) != canonical or OffsetTimestamp.parse(canonical) != Ok(parsed) {
 		crash "Timestamp canonical serialization changed semantic parts"
 	}
@@ -279,8 +266,7 @@ check_timestamp = |input, day, date_text| {
 	}
 	check_exact_interval(input, date_text, parsed, expected, elapsed_days)
 	check_ixdtf(input, parsed, expected)
-	check_core_persistence(expected)
-	check_rfc_persistence(input, day, h, m, s)
+	check_rfc_text(input, day, h, m, s)
 }
 
 # Mutations remain in the property's domain: ordinary structured public failures
@@ -340,7 +326,7 @@ check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
 		Ok(value) => value
 		Err(_) => crash "Valid generated exact interval rejected"
 	}
-	check_persistence(ExactInterval(interval), { kind: "exact-interval", profile: "exact-offset-interval-v1", payload: source, axis: "none", unit: "none" })
+
 	expected_span = model_span(expected, expected + 1000000)
 	check_exact_explanation(interval, expected_span, input.digits, timestamp, end)
 	if ExactInterval.span(interval) != expected_span or ExactInterval.to_text(interval) != source or
@@ -394,7 +380,7 @@ check_ixdtf = |input, timestamp, expected| {
 		Ok(value) => value
 		Err(_) => crash "Generated supported IXDTF annotations rejected"
 	}
-	check_persistence(Ixdtf(parsed), { kind: "ixdtf", profile: "rfc9557-microseconds-v1", payload: source, axis: "none", unit: "none" })
+
 	if Ixdtf.to_text(parsed) != source or Ixdtf.parse(Ixdtf.to_text(parsed)) != Ok(parsed) or
 		Ixdtf.parts(parsed).timestamp != timestamp or Ixdtf.preferred_calendar(parsed) != Some("gregory") or
 			Ixdtf.new(Ixdtf.parts(parsed)) != Ok(parsed) {
@@ -414,9 +400,9 @@ check_ixdtf = |input, timestamp, expected| {
 		Ixdtf.Snapshot.source(snapshot) != parsed or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) {
 		crash "IXDTF snapshot changed source position or rule offset"
 	}
-	_ = check_snapshot_persistence(snapshot, expected, offset)
-	check_transition_snapshot_persistence(expected)
-	check_civil_snapshot_persistence(expected)
+	_ = check_snapshot(snapshot, expected, offset)
+	check_transition_snapshot(expected)
+	check_civil_snapshot(expected)
 	check_snapshot_explanation(snapshot, expected, Gregorian, input.precision.to_u64())
 	presentation = match Ixdtf.Snapshot.presentation(snapshot) {
 		Ok(value) => value
@@ -460,7 +446,7 @@ check_ixdtf = |input, timestamp, expected| {
 		Ixdtf.Snapshot.presentation(hebrew_snapshot) != Err(UnsupportedCalendar("hebrew")) {
 		crash "Calendar presentation preference changed timestamp meaning"
 	}
-	_ = check_snapshot_persistence(
+	_ = check_snapshot(
 		hebrew_snapshot,
 		expected,
 		if input.qualifier < 2 {
@@ -481,55 +467,7 @@ constant_rules = |boundary, offset, version| match ZoneRules.new_bounded("Synthe
 	Err(_) => crash "Valid fixed synthetic interpretation context"
 }
 
-# R01/R14: versioned envelopes preserve nominal kind and exact string payloads.
-# Expected metadata is declared here independently of the serializer. The
-# underlying temporal fields/boundaries are checked against the models above;
-# this law adds persistence without using a round trip as the semantic oracle.
-check_persistence = |value, expected| {
-	envelope = match Persistence.new(value) {
-		Ok(found) => found
-		Err(_) => crash "Bounded persistence declaration rejected"
-	}
-	text = Persistence.to_text(envelope)
-	fields : Try({ format : Str, version : Str, kind : Str, profile : Str, axis : Str, unit : Str, payload : Str }, [InvalidJson(Str), MissingRequiredField(Str)])
-	fields = Json.parse(text)
-	match fields {
-		Ok(record) => if record != { format: "roc-time", version: "1", kind: expected.kind, profile: expected.profile, axis: expected.axis, unit: expected.unit, payload: expected.payload } {
-			crash "Persistence envelope changed independently expected metadata or payload"
-		}
-		Err(_) => crash "Persistence envelope is not a JSON object of seven strings"
-	}
-	replay = match Persistence.parse(text) {
-		Ok(found) => found
-		Err(_) => crash "Canonical persistence envelope rejected"
-	}
-	if Persistence.value(replay) != value or Persistence.to_text(replay) != text {
-		crash "Persistence round trip lost nominal value or canonical text"
-	}
-}
-
-check_core_persistence = |generated| {
-	check_persistence(PosixSpan(model_span(I64.lowest, I64.highest)), { kind: "posix-span", profile: "posix-half-open-span-v1", axis: "posix-1970", unit: "microsecond", payload: "-9223372036854775808/9223372036854775807" })
-	# These values cannot all be represented exactly by a JSON/F64 number.
-	# Keep them as decimal strings and verify both coordinate domain tags.
-	for coordinate in [I64.lowest, -9007199254740993, 0, 9007199254740993, I64.highest, generated] {
-		payload = coordinate.to_str()
-		check_persistence(PosixBoundary(PosixBoundary.from_microseconds(coordinate)), { kind: "posix-boundary", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "microsecond", payload })
-		check_persistence(PosixDelta(PosixDelta.from_microseconds(coordinate)), { kind: "posix-delta", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "microsecond", payload })
-	}
-	bad_version = Json.to_str({ format: "roc-time", version: "2", kind: "posix-boundary", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "microsecond", payload: generated.to_str() })
-	match Persistence.parse(bad_version) {
-		Err(UnknownVersion("2")) => {}
-		_ => crash "Unknown persistence version accepted"
-	}
-	bad_unit = Json.to_str({ format: "roc-time", version: "1", kind: "posix-boundary", profile: "posix-microseconds-v1", axis: "posix-1970", unit: "nanosecond", payload: generated.to_str() })
-	match Persistence.parse(bad_unit) {
-		Err(UnsupportedUnit("nanosecond")) => {}
-		_ => crash "Persistence silently changed coordinate units"
-	}
-}
-
-check_rfc_persistence = |input, day, h, m, s| {
+check_rfc_text = |input, day, h, m, s| {
 	source = "${input.year.to_str()}${pad(input.month.to_u64(), 2)}${pad(day.to_u64(), 2)}T${pad(h.to_u64(), 2)}${pad(m.to_u64(), 2)}${pad(s.to_u64(), 2)}Z"
 	date = match ICalDateTime.parse(source) {
 		Ok(found) => found
@@ -545,9 +483,12 @@ check_rfc_persistence = |input, day, h, m, s| {
 		Ok(found) => found
 		Err(_) => crash "Generated supported RFC period rejected"
 	}
-	check_persistence(ICalDateTime(date), { kind: "rfc-date-time", profile: "rfc5545-datetime-values-v1", axis: "none", unit: "none", payload: source })
-	check_persistence(ICalDuration(duration), { kind: "rfc-duration", profile: "rfc5545-positive-duration-v1", axis: "none", unit: "none", payload: duration_source })
-	check_persistence(ICalPeriod(period), { kind: "rfc-period", profile: "rfc5545-period-values-v1", axis: "none", unit: "none", payload: period_source })
+
+	if ICalDateTime.to_text(date) != source or ICalDateTime.parse(ICalDateTime.to_text(date)) != Ok(date) or
+		ICalDuration.to_text(duration) != duration_source or ICalDuration.parse(ICalDuration.to_text(duration)) != Ok(duration) or
+			ICalPeriod.to_text(period) != period_source or ICalPeriod.parse(ICalPeriod.to_text(period)) != Ok(period) {
+		crash "RFC standard text changed generated fields or canonical spelling"
+	}
 	check_rfc_explanation(input, day, h, m, s, source, date, duration, period)
 }
 
@@ -689,46 +630,19 @@ check_declaration_limits = |source, bytes| {
 	}
 }
 
-# R09/R14: persistence restores an actual immutable interpretation, not just
-# name/version labels or its current point result. Expected positions and
-# offsets are supplied by the independent models above and below.
-check_snapshot_persistence = |snapshot, expected, expected_offset| {
-	wrapped = match Persistence.new(IxdtfSnapshot(snapshot)) {
-		Ok(value) => value
-		Err(_) => crash "Bounded snapshot persistence rejected"
+# R09: compare immutable snapshot observations with independent coordinates.
+check_snapshot = |snapshot, expected, expected_offset| {
+	if Ixdtf.Snapshot.boundary(snapshot) != PosixBoundary.from_microseconds(expected) or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(expected_offset) {
+		crash "Snapshot differs from independent position and offset"
 	}
-	text = Persistence.to_text(wrapped)
-	restored_envelope = match Persistence.parse(text) {
-		Ok(value) => value
-		Err(_) => crash "Snapshot canonical persistence failed to restore"
-	}
-	restored = match Persistence.value(restored_envelope) {
-		IxdtfSnapshot(value) => value
-		_ => crash "Persistence changed snapshot kind"
-	}
-	if Ixdtf.Snapshot.boundary(restored) != PosixBoundary.from_microseconds(expected) or
-		Ixdtf.Snapshot.offset(restored) != FixedOffset.from_seconds(expected_offset) or
-			Ixdtf.Snapshot.source(restored) != Ixdtf.Snapshot.source(snapshot) or
-				Ixdtf.Snapshot.presentation(restored) != Ixdtf.Snapshot.presentation(snapshot) or
-					restored != snapshot or Persistence.to_text(restored_envelope) != text {
-		crash "Persisted snapshot lost source, modeled result or semantic identity"
-	}
-	match (Ixdtf.Snapshot.context(snapshot), Ixdtf.Snapshot.context(restored)) {
-		(None, None) => {}
-		(Some(original), Some(replay)) => if ZoneRules.definition(original) != ZoneRules.definition(replay) {
-			crash "Snapshot persistence changed full immutable interpretation data"
-		}
-		_ => crash "Snapshot context presence changed"
-	}
-	restored
 }
 
-check_transition_snapshot_persistence = |coordinate| {
+check_transition_snapshot = |coordinate| {
 	timestamp = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(coordinate), UnassertedUtc, 6) {
 		Ok(value) => value
 		Err(_) => crash "Bounded model UTC timestamp rejected"
 	}
-	source = match Ixdtf.new({ timestamp, zone: Some({ critical: Bool.True, identifier: Named("Synthetic/Archive") }), tags: [] }) {
+	source = match Ixdtf.new({ timestamp, zone: Some({ critical: Bool.True, identifier: Named("Synthetic/Context") }), tags: [] }) {
 		Ok(value) => value
 		Err(_) => crash "Valid synthetic snapshot declaration rejected"
 	}
@@ -737,7 +651,7 @@ check_transition_snapshot_persistence = |coordinate| {
 	validity = model_span(coordinate - 1, coordinate + 4)
 	var $snapshots = []
 	for later_offset in [1.I32, 2] {
-		rules = match ZoneRules.new_bounded("Synthetic/Archive", "same-version", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], { minimum: 0, maximum: 2 }) {
+		rules = match ZoneRules.new_bounded("Synthetic/Context", "same-version", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], { minimum: 0, maximum: 2 }) {
 			Ok(value) => value
 			Err(_) => crash "Microsecond synthetic transition fixture rejected"
 		}
@@ -745,16 +659,16 @@ check_transition_snapshot_persistence = |coordinate| {
 			Ok(value) => value
 			Err(_) => crash "Synthetic point before transition failed"
 		}
-		restored = check_snapshot_persistence(snapshot, coordinate, 0)
-		retained = match Ixdtf.Snapshot.context(restored) {
+		check_snapshot(snapshot, coordinate, 0)
+		retained = match Ixdtf.Snapshot.context(snapshot) {
 			Some(value) => value
-			None => crash "Restored named snapshot lost its rules"
+			None => crash "Named snapshot lost its rules"
 		}
 		if ZoneRules.offset_at(retained, PosixBoundary.from_microseconds(coordinate + 1)) != Ok(FixedOffset.from_seconds(later_offset)) or
 			ZoneRules.validity(retained) != validity {
-			crash "Snapshot persistence preserved only the queried point, not transition/validity evidence"
+			crash "Snapshot retained only the queried point, not transition/validity evidence"
 		}
-		$snapshots = $snapshots.append(restored)
+		$snapshots = $snapshots.append(snapshot)
 	}
 	first = match $snapshots.get(0) {
 		Ok(value) => value
@@ -777,7 +691,7 @@ check_transition_snapshot_persistence = |coordinate| {
 # Shifting their origin through the generated range does not change the model.
 # Mixed Gregorian/Julian endpoint declarations retain identity despite denoting
 # positions on the same local coordinate axis.
-check_civil_snapshot_persistence = |origin| {
+check_civil_snapshot = |origin| {
 	fold = civil_fixture_rules(origin, 2, 0)
 	gap = civil_fixture_rules(origin, 0, 2)
 	lower = civil_fixture_label(origin + 500000, Gregorian)
@@ -788,17 +702,14 @@ check_civil_snapshot_persistence = |origin| {
 			Ok(found) => found
 			Err(_) => crash "Independent fold occurrence fixture rejected"
 		}
-		replay = match replay_snapshot_value(ResolvedBoundary(snapshot)) {
-			ResolvedBoundary(found) => found
-			_ => crash "Civil boundary persistence changed nominal kind"
+
+		if ResolvedBoundary.boundary(snapshot) != PosixBoundary.from_microseconds(choice.position) or
+			ResolvedBoundary.offset(snapshot) != FixedOffset.from_seconds(choice.offset) or
+				ResolvedBoundary.source(snapshot) != lower or ResolvedBoundary.policy(snapshot) != choice.policy or
+					ZoneRules.definition(ResolvedBoundary.rules(snapshot)) != ZoneRules.definition(fold) {
+			crash "Civil boundary changed independently modeled occurrence or policy"
 		}
-		if ResolvedBoundary.boundary(replay) != PosixBoundary.from_microseconds(choice.position) or
-			ResolvedBoundary.offset(replay) != FixedOffset.from_seconds(choice.offset) or
-				ResolvedBoundary.source(replay) != lower or ResolvedBoundary.policy(replay) != choice.policy or
-					ZoneRules.definition(ResolvedBoundary.rules(replay)) != ZoneRules.definition(fold) or replay != snapshot {
-			crash "Civil boundary persistence changed independently modeled occurrence or policy"
-		}
-		source = Explanation.new(ResolvedBoundary(replay))
+		source = Explanation.new(ResolvedBoundary(snapshot))
 		if explanation_fact(source, 0) != CivilBoundaryDescription({ source: lower, policy: choice.policy, boundary: PosixBoundary.from_microseconds(choice.position), offset: FixedOffset.from_seconds(choice.offset) }) or Explanation.fact_count(source) != 2 {
 			crash "Boundary explanation lost modeled occurrence, calendar or policy"
 		}
@@ -814,25 +725,22 @@ check_civil_snapshot_persistence = |origin| {
 			Ok(found) => found
 			Err(_) => crash "Independent civil selection fixture rejected"
 		}
-		replay = match replay_snapshot_value(ResolvedSelection(snapshot)) {
-			ResolvedSelection(found) => found
-			_ => crash "Civil selection persistence changed nominal kind"
-		}
-		if ResolvedSelection.coverage(replay) != fixture.extent or ResolvedSelection.start(replay) != lower or
-			ResolvedSelection.end(replay) != upper or
-				ZoneRules.definition(ResolvedSelection.rules(replay)) != ZoneRules.definition(fixture.rules) or replay != snapshot {
-			crash "Civil selection persistence erased empty/disconnected coverage or endpoint calendar identity"
+
+		if ResolvedSelection.coverage(snapshot) != fixture.extent or ResolvedSelection.start(snapshot) != lower or
+			ResolvedSelection.end(snapshot) != upper or
+				ZoneRules.definition(ResolvedSelection.rules(snapshot)) != ZoneRules.definition(fixture.rules) {
+			crash "Civil selection erased empty/disconnected coverage or endpoint calendar identity"
 		}
 		members = if fixture.extent == Coverage.empty {
 			[]
 		} else {
 			[model_span(origin - 1500000, origin - 1250000), model_span(origin + 500000, origin + 750000)]
 		}
-		check_civil_explanation(replay, lower, upper, fixture.rules, members)
+		check_civil_explanation(snapshot, lower, upper, fixture.rules, members)
 	}
 }
 
-civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded("Synthetic/CivilPersistence", "v1", model_span(origin - 4000000, origin + 4000000), FixedOffset.from_seconds(initial), [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 }) {
+civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded("Synthetic/CivilModel", "v1", model_span(origin - 4000000, origin + 4000000), FixedOffset.from_seconds(initial), [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 }) {
 	Ok(found) => found
 	Err(_) => crash "Valid two-segment civil fixture rules"
 }
@@ -840,22 +748,6 @@ civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded("Synt
 civil_fixture_label = |coordinate, calendar| match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(coordinate), calendar) {
 	Ok(found) => found
 	Err(_) => crash "Bounded civil fixture label"
-}
-
-replay_snapshot_value = |value| {
-	envelope = match Persistence.new(value) {
-		Ok(found) => found
-		Err(_) => crash "Small civil snapshot persistence rejected"
-	}
-	text = Persistence.to_text(envelope)
-	replay = match Persistence.parse(text) {
-		Ok(found) => found
-		Err(_) => crash "Civil snapshot canonical persistence failed"
-	}
-	if Persistence.to_text(replay) != text {
-		crash "Civil snapshot persistence is not canonically stable"
-	}
-	Persistence.value(replay)
 }
 
 # R07/R09/R14: raw segment preimages above are the member oracle; rendering

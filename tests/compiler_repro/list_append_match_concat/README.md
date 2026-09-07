@@ -38,10 +38,8 @@ lowering or reference-counting cause.
 The equivalent [hoisted control](hoisted/main.roc) constructs each ending's
 fields in a pure match and performs one outer list update. Run/build that root
 with the same commands to compare. It preserves the expected list in all three
-modes. This is the equivalent source shape used by `PersistenceEndings`; no
-temporal semantics or archive bytes are changed to accommodate the defect.
+modes. Both roots construct the same field sequence.
 
 This is a known-failure compiler reproducer, not a passing package semantic
-test. Before removing the equivalent source form after a compiler update,
-verify both roots and the public schedule archive resource gate. No upstream
-report has been sent.
+test. Recheck both roots when evaluating a compiler update. No upstream report
+has been sent.

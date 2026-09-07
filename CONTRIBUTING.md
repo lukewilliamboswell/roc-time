@@ -41,7 +41,7 @@ third-party Python dependencies.
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
 | `bundle.py` | Bundle `package/` into a distributable `.tar.zst` |
-| `docs.py` | Generate API docs and the user landing guide into `www/<version>` |
+| `docs.py` | Generate API docs into an ignored build directory |
 | `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
 | `test_bundle_examples.py` | Verify examples against exact core/zone archives with fresh HTTP acquisition |
 | `test_bundle_failures.py` | Reject missing, swapped and malformed candidate bundles |
@@ -198,30 +198,15 @@ measuring construction, definition access and first/resumed consumption
 separately. Checked definitions prepare endings once; this evidence does not
 establish retained-memory bounds.
 
-The staged [schedule archive application](tests/schedule_archive/main.roc)
-stores an application JSON envelope containing a string `series_id` and a
-versioned `Persistence` archive of `ScheduleDefinition`. Loading recovers the
-identifier and the complete immutable interpretation context, then creates
-fresh cursors for overlapping windows. Query windows and cursor progress are
-not part of the archive. Native labels and policies remain distinct from the
-iCalendar origin; the native archive is not limited to RFC text precision or
-years. The codec's field grammar and caps belong in
-[PersistenceSchedule](package/PersistenceSchedule.roc).
-
-Run `ROC=/path/to/pinned/roc python3 scripts/test_local_examples.py` for the
-application and its composed checks, including native dev/speed execution.
-The runner stages the actual `ScheduleArchive.roc` beside
-[ScheduleArchiveChecks](tests/schedule_archive_checks/ScheduleArchiveChecks.roc),
-so the checks exercise the application's save/load functions. Their independent
-synthetic epoch model covers source identity, exceptions and differing endings,
-and distinguishes contexts with identical names/versions but different tables.
-Actual fold/gap labels exercise saved occurrence and gap policies, preserving
-ambiguity/rejection errors and explicit adjustment evidence after loading.
-Native fractional labels and year 10000 survive archive round trips while RFC
-export rejects them explicitly. Malformed/missing envelopes and wrong archive
-kinds fail. The full integration gate also runs the application against the
-distributable bundle; these staged APIs need a compatible release before public
-example promotion.
+The [UTC cancellation fixtures](tests/utc_cancellations_checks/README.md)
+extend this evidence to zoned DTSTART with UTC EXDATE. They distinguish original
+source exclusions from selected-boundary exclusions across actual gaps/folds,
+colliding source labels and explicit RDATE/PERIOD inclusions. Original and saved
+definitions run with different finite budgets against fixed independent
+positions and identities. `test_local_examples.py` runs the composed checks in
+interpreter/dev/speed modes; `all_tests.py` also checks the independently
+calculated UTC coordinates and distributable bundles. The meeting exchange
+application demonstrates a UTC cancellation for a local Paris meeting.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
@@ -346,32 +331,24 @@ inputs and consumed outputs. Separate input construction, algorithm and output
 formatting when measuring. Resource evidence is specific to compiler, backend,
 input size and ownership; do not generalize one passing probe to all operations.
 
-The same `fixture_platform.py --verify` command runs the
-[schedule persistence resource fixture](tests/schedule_persistence_resource/main.roc).
-It measures input storage, definition preparation/access, archive construction,
-serialization, load, fresh cursor construction and first/resumed consumption
-separately. It varies 0, 1, 64 and 256 ending inputs over owned/shared/sliced
-collections and compares windows ending in years 2001 and 200000 for a `Forever`
-rule. Five-second subprocess bounds, observable semantic checks and deliberately
-failing hosted allocation assertions guard dev/speed builds against hidden
-enumeration or missing assertions. This is requested-byte traffic evidence,
-not a measurement of live or retained archive memory.
-
-The pinned compiler has a known list-update defect isolated by
-[list_append_match_concat](tests/compiler_repro/list_append_match_concat/README.md).
-That standalone reproducer fails in interpreter, native dev and native speed;
-it is not part of the passing semantic gate. `PersistenceEndings` uses the
-equivalent source form illustrated by its hoisted control, preserving archive
-fields and temporal meaning. When changing compiler pins or simplifying that
-source, rerun both reproducer roots and the public schedule persistence resource
-gate. The reproducer does not establish the compiler's internal failure cause.
+The [boundary exclusion fixture](tests/boundary_exclusions_resource/main.roc)
+runs through the same resource command. It separates table input/construction,
+definition access, cursor construction and first/resumed consumption for
+0, 1, 64 and 4096 exclusions, owned/shared/sliced lists and two large horizons.
+Five-second execution bounds and always-active failing allocation controls
+guard against eager execution. The recurrence fuzz model independently applies
+piecewise offsets and both exclusion domains to a finite source grid. Its
+[saved buffer-limit regression](tests/fuzz/boundary-exclusion-merge-buffer.json)
+starts with one merge slot and resumes the returned cursor with two only after
+an explicit `BufferLimit`; a permanently insufficient buffer does not promise
+forward progress.
 
 [structural_duration_hash](tests/compiler_repro/structural_duration_hash/README.md)
 isolates a compiler crash when deriving a structural hash key containing a
 nominal duration tail. Its scalar control checks and executes in interpreter,
 dev and speed modes. `ScheduleEndings` hashes the complete declaration fields
-explicitly; the schedule archive checks exercise dictionary lookup across
-save/load for both definitions and the public persistence value union. Recheck
+explicitly; the schedule definition checks exercise dictionary lookup for
+checked native definitions. Recheck
 the failing root and its control when upgrading the compiler.
 
 The same command runs [recurrence prefix resource checks](tests/recurrence_resource/main.roc)
@@ -459,23 +436,6 @@ explanation separately with a runtime five-scope input and a 16 KiB ceiling per
 scope. It checks the year/month group fact and canonical text, allocation-free
 rejection above 64 input bytes, and a dedicated zero-ceiling failing control.
 
-Native persistence resource checks in `tests/persistence_resource/main.roc`
-separate checked construction, encoding and decoding for 1/32/1,024 canonical
-coverage members. Small and full-range signed coordinates distinguish member
-work from coordinate distance. A 1,025-member value must fail construction before
-allocation; rejecting its JSON still includes envelope decoding costs. The gate
-runs dev/speed builds with finite subprocess limits and a dedicated failing
-allocation ceiling. These counters measure requested allocation traffic, not
-live or retained bytes.
-
-`tests/calendar_persistence_resource/main.roc` separates native calendar and
-qualified-description encoding/decoding for zero/eight qualifiers and all six
-fractional resolutions. The final unit of the last supported Julian day must
-remain persistable although its exclusive upper boundary is out of range.
-Input-byte and qualifier-count limits are checked with structured errors. The
-normal fixture gate runs dev/speed builds and a dedicated failing allocation
-ceiling; decoding error costs include the outer JSON envelope.
-
 `tests/explanation_resource/main.roc` compares bounded rendering against small
 and large retained rule tables and metadata strings. It checks zero-budget
 behavior, UTF-8 previews, rendering completeness and 100,000 paired snapshot fact
@@ -495,26 +455,6 @@ checks fact reads, inspection and zero/tiny/full rendering budgets in dev and
 speed builds, including maximum-I64 calendar-day declarations and allocation
 ceiling negative controls. Its counters measure requested allocation bytes,
 not retained memory.
-
-Snapshot persistence has a separate fixture at
-`tests/snapshot_persistence_resource/main.roc`. It measures checked construction,
-encoding, load validation and repeated stored reads separately, with 0, 2 and
-1024 transitions across full-I64 validity. Larger tables and oversized metadata must fail before encoding;
-allocation ceiling controls run in dev and speed builds. Functional interchange
-properties distinguish contexts with identical labels and current results but
-different microsecond transitions. These are requested-allocation observations,
-not retained-memory measurements or authenticated database provenance.
-
-Civil persistence uses `tests/civil_persistence_resource/main.roc`: repeated
-one-microsecond selections produce many disconnected members under a finite
-synthetic fold table with full-I64 validity. Construction, encoding, loading
-and stored reads are measured separately. A retained partial cursor is resumed
-under a separate allocation ceiling, then checked unchanged through its original
-branch. Transition/member overflows must fail before encoding; both dev and speed
-builds include failing allocation controls.
-The interchange generator independently checks fold policies and empty gap
-coverage. Neither canonical text agreement nor allocation traffic establishes
-retained memory or correctness without the corresponding semantic fixtures.
 
 Selection explanation evidence in `tests/selection_explanation_resource/main.roc`
 separates stored fact reads from bounded rendering for coverage, civil boundaries,
@@ -637,7 +577,7 @@ Run the release workflow from GitHub Actions with a release version such as `0.1
 or `0.1.0-rc1`. The pinned release action marks RC versions as prereleases;
 their docs remain versioned and do not replace the stable docs redirect.
 It builds and tests the exact core/zone pair, creates the GitHub release,
-generates versioned docs, opens a follow-up PR for docs and published examples
+generates versioned docs, opens a follow-up PR for published examples
 against the default branch, and publishes docs to GitHub Pages. Released examples
 are validated in an isolated checkout of the tag using their release compiler
 and published URLs; the reviewed follow-up promotes that complete public example
@@ -649,8 +589,9 @@ automatically trigger ordinary PR workflows. The separate controller reports
 pass for the exact generated commit. It does not approve or merge the PR. If the
 base or generated branch moves, regenerate and validate against the current base;
 the creator refuses to overwrite unrelated or unsigned branch work.
-Merge the previous docs follow-up before publishing another version: site
-assembly refuses missing earlier release documentation. The highest stable package version remains the public documentation default;
+API documentation is stored as immutable release assets and restored during
+Pages assembly. Generated pages are not checked into Git; authored guides live
+in `www/site/`. Assembly refuses missing earlier release documentation;
 each release tag and starter manifest records its own compiler pin.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published

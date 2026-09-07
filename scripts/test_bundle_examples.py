@@ -112,7 +112,7 @@ def copy_internal_examples(destination: Path, core: str, zones: str) -> list[Pat
     from roc_version import package_pin
     from update_example_urls import copy_examples
     entries = []
-    for name in ("appointment_display", "zoned_appointment", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange", "meeting_exchange", "schedule_archive", "schedule_archive_checks"):
+    for name in ("appointment_display", "zoned_appointment", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange", "meeting_exchange", "schedule_definition_checks", "utc_cancellations_checks"):
         entries.extend(copy_examples(destination / name, core, zones,
                                     compiler=package_pin(ROOT),
                                     source=ROOT / "tests" / name))
@@ -122,8 +122,6 @@ def copy_internal_examples(destination: Path, core: str, zones: str) -> list[Pat
                  destination / "clock_deadline_checks/Deadline.roc")
     shutil.copy2(ROOT / "tests/invoice_report/InvoiceReport.roc",
                  destination / "invoice_report_checks/InvoiceReport.roc")
-    shutil.copy2(ROOT / "tests/schedule_archive/ScheduleArchive.roc",
-                 destination / "schedule_archive_checks/ScheduleArchive.roc")
     return entries
 
 
@@ -176,7 +174,7 @@ def check_output(example: Path, actual: str, *, expected_dir: Path | None = None
         check_clock_output(actual, clock_window)
         return
     expected = (expected_dir or ROOT / "tests" / "examples") / f"{example.parent.name}.txt"
-    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display", "zoned_appointment", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange", "meeting_exchange", "schedule_archive", "schedule_archive_checks"} and not expected.is_file():
+    if example.parent.name in {"booking_exchange", "archive_search", "staffing", "appointment_display", "zoned_appointment", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange", "meeting_exchange", "schedule_definition_checks", "utc_cancellations_checks"} and not expected.is_file():
         raise SystemExit(f"Missing required output fixture: {expected}")
     if expected.exists() and actual != expected.read_text(encoding="utf-8"):
         raise SystemExit(f"Unexpected output from {example.parent.name}:\n{actual}")

@@ -6,9 +6,9 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
-- Resolve broader mixed UTC/local property support and UTC EXDATE matching
-  against gap-adjusted sources before widening the timed profile: projecting
-  an adjusted boundary cannot recover its original label.
+- Resolve broader mixed UTC/local RDATE and PERIOD property support before
+  widening the timed profile. Preserve source labels and selected boundaries
+  independently; projecting an adjusted boundary cannot recover its source.
 - Resolve omitted yearly defaults before widening RFC adaptation, retaining
   the shared native execution engine.
 - Extend independent timed expectations beyond UTC to local-zone transitions
@@ -16,38 +16,6 @@ finite immutable zone rules and event/coverage distinctions.
   bounded fuzz models, invalid-input checks and realistic applications.
 
 ## Decisions and acceptance still needed
-
-### UTC cancellations for zoned meetings
-
-The next candidate caller receives local DTSTART and UTC EXDATE properties from
-an extracted calendar feed. Keep floating/UTC mixtures and mixed-form RDATE or
-PERIOD values outside this first extension. The existing timed profile must
-continue rejecting unsupported combinations until the complete slice lands.
-
-- Preserve local exclusions as source labels and UTC exclusions as boundary
-  values. Resolve candidates through the existing engine before matching UTC
-  exclusions; never project an excluded boundary back into a source label.
-  Apply exclusions to explicit inclusions too, without replenishing COUNT.
-- Settle the collision rule when different source labels map to one excluded
-  boundary. Excluding all matching boundaries is the candidate behavior; local
-  exclusions remain source-specific. Preserve identity and BYSETPOS ordering.
-- Decide whether boundary exclusions belong in the native recurrence definition
-  or a shared prepared filter. Do not introduce a second cursor engine or an
-  unbounded scan hidden inside one work unit.
-- Preserve both domains through checked construction, definition access,
-  canonical export, explanation and versioned persistence. Existing version-1
-  archives contain a timed profile identifier; changing a global profile
-  constant must not make them unreadable. Select explicit compatible versions
-  before extending the stored grammar.
-- Use the RFC gap/fold cases below, synthetic colliding-source cases, COUNT and
-  PERIOD-inclusion precedence, overlapping windows and resumption. Pair saved
-  and restored execution with an independent piecewise-offset model. Measure
-  large exclusion sets with tiny consumption budgets.
-
-A gap source such as New York 2007-03-11 02:30 maps to 07:30Z under the RFC
-before-gap policy, but projecting 07:30Z yields 03:30 and loses source identity.
-At the 2007-11-04 fold, 01:30 selects 05:30Z; a 06:30Z exclusion must not remove
-that first occurrence merely because both boundaries project to 01:30.
 
 ### Broader import and execution
 

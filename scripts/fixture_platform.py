@@ -186,19 +186,19 @@ def verify_interchange(target: str) -> None:
                                         capture_output=True, timeout=5)
                 if result.returncode or result.stdout != b"instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n":
                     raise RuntimeError(f"{mode}/{tags}/{transitions}: interchange probe failed: {result.stderr!r}")
-                match = re.search(rb" work=((?:\d+,){29}\d+)\n$", result.stderr)
+                match = re.search(rb" work=((?:\d+,){25}\d+)\n$", result.stderr)
                 if match is None:
                     raise RuntimeError(f"{mode}: missing interchange resource observations")
                 counts = tuple(int(value) for value in match[1].split(b","))
-                if counts[3] != 0 or counts[9] != 0 or counts[14] != 0 or any(counts[21:24]):
+                if counts[3] != 0 or counts[10] != 0 or any(counts[17:20]):
                     raise RuntimeError(f"{mode}: stored snapshot reads or oversized rejection allocated: {counts}")
                 observations.append(counts)
             if observations[0] != observations[1]:
                 raise RuntimeError(f"{mode}: interchange traffic varies with retained rule size: {observations}")
             print(f"PASS interchange {mode}/{tags} tags: 2/16384 transitions requested bytes {observations[0]}; 100000 stored reads")
-            print(f"PASS EDTF {mode}: cumulative requested bytes parse/serialize/bounded explanation/oversized rejection {observations[0][11:15]}; 16384-byte ceiling per operation")
-            print(f"PASS civil text {mode}: requested bytes date parse/output, clock parse/output, local parse/output, three oversized rejections {observations[0][15:24]}; 4096-byte ceiling per operation")
-            print(f"PASS English presentation {mode}: requested bytes date/clock/local and precision/calendar rejections {observations[0][24:]}; 4096-byte ceiling per operation")
+            print(f"PASS EDTF {mode}: cumulative requested bytes parse/serialize/bounded explanation/oversized rejection {observations[0][7:11]}; 16384-byte ceiling per operation")
+            print(f"PASS civil text {mode}: requested bytes date parse/output, clock parse/output, local parse/output, three oversized rejections {observations[0][11:20]}; 4096-byte ceiling per operation")
+            print(f"PASS English presentation {mode}: requested bytes date/clock/local and precision/calendar rejections {observations[0][20:]}; 4096-byte ceiling per operation")
         failed = subprocess.run([binary, "16384", "32", "0"], capture_output=True, timeout=5)
         if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
             raise RuntimeError(f"{mode}: interchange negative control failed")
@@ -220,13 +220,13 @@ def verify_interchange(target: str) -> None:
             command = [binary, "2", "1", "4194304", exact_text, edtf_text, "16384",
                        date, clock, f"{date}T{clock}", "4096"]
             result = subprocess.run(command + ["0", english_date], capture_output=True, timeout=5)
-            match = re.search(rb" work=((?:\d+,){29}\d+)\n$", result.stderr)
+            match = re.search(rb" work=((?:\d+,){25}\d+)\n$", result.stderr)
             if result.returncode or match is None:
                 raise RuntimeError(f"{mode}/{date}/{clock}: civil text probe failed: {result.stderr!r}")
             counts = tuple(int(value) for value in match[1].split(b","))
-            if any(counts[21:24]) or any(value > 4096 for value in counts[15:21] + counts[24:]):
+            if any(counts[17:20]) or any(value > 4096 for value in counts[11:17] + counts[20:]):
                 raise RuntimeError(f"{mode}: civil text allocation ceiling failed: {counts}")
-            print(f"PASS civil text {mode}/{date}/{clock}: requested bytes {counts[15:24]}; English presentation/rejections {counts[24:]}")
+            print(f"PASS civil text {mode}/{date}/{clock}: requested bytes {counts[11:20]}; English presentation/rejections {counts[20:]}")
         # Inject excessive runtime allocation separately into each measured
         # operation; zero-cost successful paths must still have live ceilings.
         for scope in range(1, 10):
@@ -238,61 +238,6 @@ def verify_interchange(target: str) -> None:
             if failed_civil.returncode == 0 or not (0 <= start < assertion < end):
                 raise RuntimeError(f"{mode}: civil text scope {scope} failing control failed: {failed_civil.stderr!r}")
         print(f"PASS civil text {mode}: six codec and three English presentation scopes reject injected excess traffic")
-
-
-def verify_persistence(target: str) -> None:
-    """Canonical member counts bound persistence, not coordinate distances."""
-    roc = os.environ.get("ROC", "roc")
-    source = "tests/persistence_resource/main.roc"
-    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
-    for mode in ("dev", "speed"):
-        binary = BUILD / f"persistence-{mode}"
-        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
-                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
-        for coordinates in ("small", "wide"):
-            observations = []
-            for count in (1, 32, 1024):
-                result = subprocess.run([binary, str(count), "1048576", coordinates], capture_output=True, timeout=5)
-                if result.returncode or result.stdout != b"coverage=preserved,span=preserved,1025=rejected\n":
-                    raise RuntimeError(f"{mode}/{coordinates}/{count}: persistence resources failed: {result.stderr!r}")
-                match = re.search(rb" work=((?:\d+,){6}\d+)\n$", result.stderr)
-                if match is None:
-                    raise RuntimeError(f"{mode}: missing persistence observations")
-                counts = tuple(int(value) for value in match[1].split(b","))
-                if counts[0] != 0 or counts[5] != 0:
-                    raise RuntimeError(f"{mode}: persistence construction/member-limit rejection allocated: {counts}")
-                observations.append(counts)
-            print(f"PASS persistence {mode}/{coordinates}: members 1/32/1024 requested bytes {observations}")
-        failed = subprocess.run([binary, "1024", "0", "wide"], capture_output=True, timeout=5)
-        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
-            raise RuntimeError(f"{mode}: persistence ceiling negative control failed")
-        print(f"PASS persistence {mode}: allocation negative control")
-
-
-def verify_calendar_persistence(target: str) -> None:
-    """Native calendar persistence preserves resolution without lowering."""
-    roc = os.environ.get("ROC", "roc")
-    source = "tests/calendar_persistence_resource/main.roc"
-    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
-    for mode in ("dev", "speed"):
-        binary = BUILD / f"calendar-persistence-{mode}"
-        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
-                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
-        for qualifications in (0, 8):
-            observations = []
-            for digits in range(1, 7):
-                result = subprocess.run([binary, str(digits), str(qualifications), "65536", "2147483647"], capture_output=True, timeout=5)
-                if result.returncode or result.stdout != b"calendar=preserved,qualifications=preserved,limits=rejected\n":
-                    raise RuntimeError(f"{mode}/{qualifications}/{digits}: native calendar resources failed: {result.stderr!r}")
-                match = re.search(rb" work=((?:\d+,){5}\d+)\n$", result.stderr)
-                if match is None:
-                    raise RuntimeError(f"{mode}: missing native calendar observations")
-                observations.append(tuple(int(value) for value in match[1].split(b",")))
-            print(f"PASS calendar persistence {mode}/{qualifications} qualifications: fraction widths1..6 requested bytes {observations}")
-        failed = subprocess.run([binary, "6", "8", "0", "2147483647"], capture_output=True, timeout=5)
-        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
-            raise RuntimeError(f"{mode}: native calendar ceiling negative control failed")
-        print(f"PASS calendar persistence {mode}: allocation negative control")
 
 
 def verify_explanation(target: str) -> None:
@@ -354,61 +299,6 @@ def verify_declaration_explanation(target: str) -> None:
         if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
             raise RuntimeError(f"{mode}: declaration explanation negative control failed")
         print(f"PASS declaration explanation {mode}: allocation negative control")
-
-def verify_snapshot_persistence(target: str) -> None:
-    """Persist full finite rule evidence and reject oversize input before encoding."""
-    roc = os.environ.get("ROC", "roc")
-    source = "tests/snapshot_persistence_resource/main.roc"
-    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
-    for mode in ("dev", "speed"):
-        binary = BUILD / f"snapshot-persistence-{mode}"
-        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
-                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
-        for count, metadata in ((0, 16), (2, 16), (1024, 16), (1025, 16), (16384, 16), (2, 4097)):
-            rejected = count > 1024 or metadata > 4096
-            result = subprocess.run([binary, str(count), str(metadata), "8388608"], capture_output=True, timeout=5)
-            expected = b"rejected-before-encoding\n" if rejected else b"snapshot=restored,reads=stored\n"
-            if result.returncode or result.stdout != expected:
-                raise RuntimeError(f"{mode}/{count}/{metadata}: snapshot persistence failed: {result.stderr!r}")
-            match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
-            if match is None:
-                raise RuntimeError(f"{mode}: missing snapshot persistence observations")
-            counts = tuple(int(value) for value in match[1].split(b","))
-            if (rejected and counts != (0,)) or (not rejected and (len(counts) != 4 or counts[-1] != 0)):
-                raise RuntimeError(f"{mode}: snapshot persistence resource assertions failed: {counts}")
-            print(f"PASS snapshot persistence {mode}/{count} transitions/{metadata} metadata bytes: requested bytes {counts}")
-        failed = subprocess.run([binary, "2", "16", "0"], capture_output=True, timeout=5)
-        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
-            raise RuntimeError(f"{mode}: snapshot persistence negative control failed")
-        print(f"PASS snapshot persistence {mode}: allocation negative control")
-
-def verify_civil_persistence(target: str) -> None:
-    """Repeated civil labels preserve policies and disconnected selection members."""
-    roc = os.environ.get("ROC", "roc")
-    source = "tests/civil_persistence_resource/main.roc"
-    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
-    for mode in ("dev", "speed"):
-        binary = BUILD / f"civil-persistence-{mode}"
-        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
-                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
-        for form in ("boundary", "selection"):
-            for count in (0, 2, 64, 256, 512, 1023, 1024, 1025):
-                rejected = count > 1024 or (form == "selection" and count >= 1024)
-                result = subprocess.run([binary, str(count), form, "2097152"], capture_output=True, timeout=10)
-                expected = b"civil=rejected-before-encoding\n" if rejected else b"civil=restored,coverage=preserved\n"
-                if result.returncode or result.stdout != expected:
-                    raise RuntimeError(f"{mode}/{count}/{form}: civil persistence failed: {result.stderr!r}")
-                match = re.search(rb" work=([0-9,]+)\n$", result.stderr)
-                if match is None:
-                    raise RuntimeError(f"{mode}: missing civil persistence observations")
-                counts = tuple(int(value) for value in match[1].split(b","))
-                if (rejected and counts != (0,)) or (not rejected and (len(counts) != 6 or counts[3] != 0)):
-                    raise RuntimeError(f"{mode}: civil persistence resource assertions failed: {counts}")
-                print(f"PASS civil persistence {mode}/{form}/{count} transitions: requested bytes {counts}")
-        failed = subprocess.run([binary, "2", "selection", "0"], capture_output=True, timeout=10)
-        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
-            raise RuntimeError(f"{mode}: civil persistence negative control failed")
-        print(f"PASS civil persistence {mode}: allocation negative control")
 
 def verify_selection_explanation(target: str) -> None:
     """Fixed semantic fact budgets over retained coverage and civil providers."""
@@ -621,39 +511,36 @@ def verify_schedule_definition(target: str) -> None:
         print(f"PASS schedule definition {mode}: allocation failure control")
 
 
-def verify_schedule_persistence(target: str) -> None:
-    """Native archives preserve declarations without enumerating their domains."""
+def verify_boundary_exclusions(target: str) -> None:
+    """Bounded prefix evaluation uses immutable boundary exclusions directly."""
     roc = os.environ.get("ROC", "roc")
-    source = "tests/schedule_persistence_resource/main.roc"
+    source = "tests/boundary_exclusions_resource/main.roc"
     subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
     for mode in ("dev", "speed"):
-        binary = BUILD / f"schedule-persistence-{mode}"
+        binary = BUILD / f"boundary-exclusions-{mode}"
         subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
                         f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
         for ownership in ("owned", "shared", "sliced"):
-            for count in (0, 1, 64, 256):
+            for count in (0, 1, 64, 4096):
                 observations = []
                 for horizon in (2001, 200000):
-                    # A linear envelope over these bounded fixture sizes also
-                    # rejects copying the accumulated prefix for each ending.
-                    ceiling = 131072 + count * 4096
-                    result = subprocess.run([binary, str(count), ownership, str(horizon), str(ceiling)], capture_output=True, timeout=5)
-                    if result.returncode or result.stdout != b"schedule-persistence":
-                        raise RuntimeError(f"{mode}/{count}/{ownership}/{horizon}: definition failed: {result.stderr!r}")
-                    match = re.search(rb" work=((?:\d+,){8}\d+)\n$", result.stderr)
+                    result = subprocess.run([binary, str(count), ownership, str(horizon), "16384"], capture_output=True, timeout=5)
+                    if result.returncode or result.stdout != b"boundary-exclusions":
+                        raise RuntimeError(f"{mode}/{count}/{ownership}/{horizon}: boundary exclusion fixture failed: {result.stderr!r}")
+                    match = re.search(rb" work=((?:\d+,){5}\d+)\n$", result.stderr)
                     if match is None:
-                        raise RuntimeError("missing schedule persistence allocation observations")
+                        raise RuntimeError("missing boundary exclusion allocation observations")
                     traffic = tuple(int(value) for value in match[1].split(b","))
-                    if any(traffic[i] > ceiling for i in (1, 3, 4, 5)) or traffic[2] != 0 or any(value > 16384 for value in traffic[6:]):
-                        raise RuntimeError(f"schedule persistence resource bounds exceeded: {traffic}")
+                    if traffic[1] > 65536 + count * 64 or traffic[2] != 0 or any(value > 16384 for value in traffic[3:]):
+                        raise RuntimeError(f"boundary exclusion resource bounds exceeded: {traffic}")
                     observations.append(traffic)
                 if observations[0] != observations[1]:
-                    raise RuntimeError(f"definition work depends on query horizon: {observations}")
-                print(f"PASS schedule persistence {mode}/{count}/{ownership}: input/prepare/access/archive/text/load/cursor/first/resume requested bytes {observations[0]}")
-        failed = subprocess.run([binary, "64", "shared", "200000", "0"], capture_output=True, timeout=5)
+                    raise RuntimeError(f"boundary exclusion work depends on query horizon: {observations}")
+                print(f"PASS boundary exclusions {mode}/{count}/{ownership}: input/construct/access/cursor/first/resume requested bytes {observations[0]}")
+        failed = subprocess.run([binary, "4096", "shared", "200000", "0"], capture_output=True, timeout=5)
         if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
-            raise RuntimeError(f"{mode}: schedule persistence allocation failure control failed")
-        print(f"PASS schedule persistence {mode}: allocation failure control")
+            raise RuntimeError(f"{mode}: boundary exclusion allocation failure control failed")
+        print(f"PASS boundary exclusions {mode}: allocation failure control")
 
 
 if __name__ == "__main__":
@@ -666,12 +553,8 @@ if __name__ == "__main__":
         verify_recurrence(selected_target)
         verify_intervals(selected_target)
         verify_interchange(selected_target)
-        verify_persistence(selected_target)
-        verify_calendar_persistence(selected_target)
         verify_explanation(selected_target)
         verify_declaration_explanation(selected_target)
-        verify_snapshot_persistence(selected_target)
-        verify_civil_persistence(selected_target)
         verify_selection_explanation(selected_target)
         verify_recurrence_explanation(selected_target)
         verify_timestamp_format(selected_target)
@@ -679,6 +562,6 @@ if __name__ == "__main__":
         verify_date_export(selected_target)
         verify_timed_export(selected_target)
         verify_schedule_definition(selected_target)
-        verify_schedule_persistence(selected_target)
+        verify_boundary_exclusions(selected_target)
     else:
         print(selected_target)

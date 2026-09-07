@@ -24,7 +24,6 @@ package
 		OffsetTimestamp,
 		ExactInterval,
 		Ixdtf,
-		Persistence,
 		SemanticFact,
 		Explanation,
 		EnglishGregorian,
