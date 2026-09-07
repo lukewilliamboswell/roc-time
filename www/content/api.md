@@ -53,7 +53,7 @@ For reusable timed appointments, construct a `ScheduleDefinition` with
 `from_ical` or `from_native`, create a cursor for a source-start window, and call
 `TimedSchedule.collect` with explicit work and output limits. Keep the returned
 batch intact: `Limited` carries incomplete progress and resumption state, not a
-complete list of appointments. See [scheduling](schedules.md) for the query model.
+complete list of appointments. See [scheduling](schedules.html) for the query model.
 
 Start with `DateRecurrence` for date-only rules. The lower-level patterns and
 `TimedRecurrence` are useful when composing selectors or working with starts

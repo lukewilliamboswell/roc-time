@@ -28,11 +28,19 @@ A repeated clock label can identify more than one boundary. A skipped label can 
 
 Finite rules also have a validity boundary. A visible candidate is not enough if missing context prevents proving that all candidates were considered. An out-of-validity error is not an instruction to assume UTC.
 
-## Development-only convenience APIs
+## Parse and present civil labels
 
-For civil text parsing, English Gregorian presentation and weekday, ordinal-day or ISO week-date queries, check the APIs available in your chosen package.
+Use the civil text parsers for validated date and clock labels, and
+`EnglishGregorian` for explicit English Gregorian presentation. Gregorian dates
+also expose weekday, ordinal-day and ISO week-date queries. These operations do
+not require zone interpretation; display does not prove that a local label exists
+in a particular zone.
 
-The working [invoice report](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/invoice_report) and [named-zone appointment](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/zoned_appointment) scenarios exercise those APIs with local development packages. They require a checkout and its pinned development compiler; verify availability before copying their imports into a released app.
+The [invoice report](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/invoice_report)
+and [named-zone appointment](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/zoned_appointment)
+scenarios exercise these APIs against local source. Run these test applications
+from a checkout with its package-pinned compiler. For an application using a
+released package, consult that release's API documentation and compiler pin.
 
 ## API reference
 
