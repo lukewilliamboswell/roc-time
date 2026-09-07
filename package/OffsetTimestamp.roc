@@ -23,7 +23,7 @@ import PosixBoundary
 ## Leap seconds, fractions beyond six digits and IXDTF annotations are explicitly
 ## unsupported. No rounding, zone lookup, implicit clock or full ISO claim.
 ## Parsing checks a 256-byte limit before copying; construction, conversion and
-## formatting have constant bounded work. Native persistence is a separate format.
+## formatting have constant bounded work. Canonical standard text can be stored directly.
 OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }.{
 	Offset : [UnassertedUtc, Asserted(FixedOffset)]
 	Parts : { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }
@@ -276,7 +276,12 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		if $count > 6 {
 			return Err(UnsupportedPrecision)
 		}
-		new({ date, clock, fraction_digits: $count, offset: $offset })
+		# The parser has already established every new invariant: four year
+		# digits give 0..9999, nominal constructors validate date/clock, the
+		# fraction is scaled to its supplied width (at most six), and numeric
+		# offsets contain bounded hours/minutes, hence whole minutes within
+		# +/-23:59. Preserve the validated fields without checking them twice.
+		Ok({ date, clock, fraction_digits: $count, offset: $offset })
 	}
 
 	## Validated fields need at most 32 ASCII bytes: 19 fixed, 7 fractional,

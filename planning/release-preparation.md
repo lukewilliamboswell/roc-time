@@ -5,6 +5,11 @@ current cancellation/fuzz failures and removing private archive formats.
 
 ## Remaining deliverables
 
+- Validate the profiled performance changes on the exact support compiler before
+  publication. Keep benchmark and measurement smoke in the integration gate.
+  Run comparative timings separately from builds/tests; preserve checksums,
+  semantic oracles and explicit interpretation/ownership scope. Remaining gaps
+  require measured costs, not a blanket claim of parity with another library.
 - Prepare the `roc-0.1.x` support branch with the selected changes while retaining
   the pilot stable compiler (`nightly-2026-09-05-b195f5b`). From support tip
   `c4cf2ff`, review `932a859` followed by the ordered first-parent commits in
