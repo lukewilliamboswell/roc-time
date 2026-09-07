@@ -79,6 +79,11 @@ class DocsIndexTests(unittest.TestCase):
         self.temporary_root = temporary_root
 
     def test_real_nested_api_methods_are_documented_and_searchable(self):
+        self.assertEqual(
+            (docs.ROOT / "tzdb/Database.roc").read_bytes(),
+            (docs.ROOT / "tzdb/package/Database.roc").read_bytes(),
+            "Edit authoritative tzdb/Database.roc and regenerate the distributable package",
+        )
         # Aliases can typecheck while hiding their associated methods in docs.
         # Exercise the actual package/compiler, not invented HTML expectations.
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as directory:

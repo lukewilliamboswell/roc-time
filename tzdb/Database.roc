@@ -1,11 +1,23 @@
-## Hand-maintained implementation, copied into the generated distributable pack.
-## The imported assets are decoded by top-level values at compile time. Runtime
-## lookup shares those immutable values; it does not parse text or load files.
+# Hand-maintained implementation, copied into the generated distributable pack.
+# The imported assets are decoded by top-level values at compile time. Runtime
+# lookup shares those immutable values; it does not parse text or load files.
 import "zones.txt" as zone_text : Str
 import "names.txt" as name_text : Str
 
+## Read the immutable IANA time-zone rules distributed with this package.
+## Look up a zone by name, then pass its record to the core package's
+## ZoneRules.from_database. Rules have an explicit finite validity interval;
+## they do not depend on the host's timezone settings or installed database.
 Database :: [].{
+	## Zone rules and provenance for the core package's ZoneRules.from_database adapter.
+	## requested_name preserves the lookup name; canonical_name identifies its target.
+	## start_second is inclusive and end_second exclusive, in POSIX seconds since
+	## 1970-01-01. Offsets are whole seconds, local minus POSIX. source_version,
+	## source_digest and profile describe the supplied rule snapshot.
 	Record : { schema : U16, axis : Str, requested_name : Str, canonical_name : Str, source_version : Str, source_digest : Str, profile : Str, future_handling : Str, start_second : I64, end_second : I64, initial_offset : I32, minimum_offset : I32, maximum_offset : I32, transitions : List({ second : I64, offset : I32 }) }
+	## Look up an exact, case-sensitive IANA zone name or supported alias, such as
+	## Europe/Paris. UnknownZone retains an unrecognized name; no local zone or
+	## fallback is selected. The returned immutable record may share rule storage.
 	get : Str -> Try(Record, [UnknownZone(Str), ..])
 	get = |name| {
 		index = match find_name(name) {
