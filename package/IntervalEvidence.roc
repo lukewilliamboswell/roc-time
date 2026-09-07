@@ -14,10 +14,21 @@ import Coverage
 ## Independent construction never materializes the Cartesian product. Point
 ## queries cost O(log n) for paired choices and O(1) for independent choices.
 IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite : Coverage }.{
+
+	## Canonical supplied choices. Paired retains start/end correlation; Independent
+	## retains each endpoint list, including endpoints with no admissible partner.
 	Declaration : [Paired(List(PosixSpan)), Independent({ starts : List(PosixBoundary), ends : List(PosixBoundary) })]
+
+	## Point membership across admissible intervals: all (Definite), some but not
+	## all (Possible), or none (Impossible).
 	Truth : [Definite, Possible, Impossible]
+
+	## Identifier of the finite POSIX interval interpretation model.
 	profile : Str
 	profile = "finite-posix-interval-alternatives-v1"
+
+	## Construct evidence from 1 to 4096 correlated interval choices. Sort and
+	## deduplicate choices while preserving each interval as one alternative.
 	paired : List(PosixSpan) -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives, ..])
 	paired = |choices| {
 		if choices.is_empty() {
@@ -56,6 +67,10 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 		}
 		Ok({ declaration: Paired($canonical), possible: Coverage.from_spans($canonical), definite: between($latest_start, $earliest_end) })
 	}
+
+	## Admit every strictly ordered start/end pair from the supplied lists without
+	## materializing their product. Reject empty lists, lists over 4096 entries,
+	## or inputs with no start strictly before any end.
 	independent : { starts : List(PosixBoundary), ends : List(PosixBoundary) } -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives, ..])
 	independent = |choices| {
 		if choices.starts.is_empty() or choices.ends.is_empty() {
@@ -107,8 +122,13 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 	## explicit projections of evidence, not the unknown actual interval.
 	possible_coverage : IntervalEvidence -> Coverage
 	possible_coverage = |evidence| evidence.possible
+
+	## Return the intersection of all admissible intervals: the points that must
+	## be inside the unknown interval. The intersection can be empty.
 	definite_coverage : IntervalEvidence -> Coverage
 	definite_coverage = |evidence| evidence.definite
+
+	## Return the normalized choices and their paired or independent interpretation.
 	declaration : IntervalEvidence -> Declaration
 	declaration = |evidence| evidence.declaration
 
@@ -117,6 +137,8 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 	## This does not claim equivalence for all interval-reasoning propositions.
 	is_eq : IntervalEvidence, IntervalEvidence -> Bool
 	is_eq = |a, b| a.declaration == b.declaration
+
+	## Hash the canonical declaration consistently with declaration equality.
 	to_hash : IntervalEvidence, Hasher -> Hasher
 	to_hash = |evidence, hasher| match evidence.declaration {
 		Paired(choices) => {
@@ -138,6 +160,8 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 			choices.ends.len().to_hash($state)
 		}
 	}
+
+	## Summarize the declaration kind and choice counts without enumerating pairs.
 	to_inspect : IntervalEvidence -> Str
 	to_inspect = |evidence| match evidence.declaration {
 		Paired(choices) => "IntervalEvidence(Paired, alternatives=${choices.len().to_str()})"

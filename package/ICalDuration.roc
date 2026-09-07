@@ -33,7 +33,7 @@ import TimedOccurrence
 ## ```
 ICalDuration :: { days : I64, seconds : I64 }.{
 
-	## Generic encodings carry canonical text, never the opaque backing record.
+	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
 	parser_for : encoding -> (state -> Try({ value : ICalDuration, rest : state }, [InvalidICalDuration(Error), Encoding(err), ..]))
@@ -54,6 +54,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 		}
 	}
 
+	## Encodes the canonical standard text as a string in the selected encoding; encoding failures pass through.
 	encoder_for : encoding -> (ICalDuration, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
@@ -71,10 +72,13 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 		Err(error) => Err(BadQuotedBytes("Invalid ICalDuration literal: ${Str.inspect(error)}"))
 	}
 
+	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc5545-positive-duration-v1"
+	## Reports malformed grammar, nonpositive duration, numerical range overflow or the input byte limit.
 	Error : [Malformed, NonPositive, OutOfRange, TooLarge]
 
+	## Parses a positive week/day/time duration. Days remain calendar quantities; hours, minutes and seconds form the coordinate tail. No zone is consulted.
 	parse : Str -> Try(ICalDuration, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 256 {
@@ -185,13 +189,15 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	## Equality compares nominal days and coordinate seconds, without an anchor.
 	is_eq : ICalDuration, ICalDuration -> Bool
 	is_eq = |a, b| a.days == b.days and a.seconds == b.seconds
+	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : ICalDuration, Hasher -> Hasher
 	to_hash = |value, hasher| value.seconds.to_hash(value.days.to_hash(hasher))
 
+	## Returns calendar days and coordinate seconds separately. One day is not replaced by 86400 coordinate seconds.
 	components : ICalDuration -> { days : I64, seconds : I64 }
 	components = |value| { days: value.days, seconds: value.seconds }
 
-	## Lower into the shared appointment engine. Days advance the original
+	## Converts to a duration for TimedOccurrence. Days advance the original
 	## source before the coordinate tail. The RFC timed policy selects the
 	## first fold occurrence and uses the offset before a gap (erratum 4271).
 	to_duration : ICalDuration -> TimedOccurrence.Duration
@@ -225,12 +231,14 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	## an invented anchor or conversion of calendar days to elapsed seconds.
 	fact_count : ICalDuration -> U64
 	fact_count = |_| 1
+	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ICalDuration, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| if index == 0 {
 		Item(SemanticFact.new(ICalDurationDescription({ role: Standalone, days: value.days, seconds: value.seconds })))
 	} else {
 		End
 	}
+	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ICalDuration -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)

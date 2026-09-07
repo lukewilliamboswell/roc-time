@@ -41,21 +41,32 @@ import CivilDay
 ## is Friday, ordinal day 1, in ISO week 53 of 2020. Group by both `week_year`
 ## and `week`; the Gregorian year alone does not identify an ISO week.
 GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
+	## Astronomical year and one-based month/day fields for a Gregorian date.
+	## Year zero means 1 BCE; from_fields validates combinations and provider range.
 	Fields : { year : I64, month : U8, day : U8 }
+	## Parsing failures distinguish unfinished input, malformed text, invalid calendar
+	## fields, unsupported year range and input longer than the profile limit.
 	Error : [Malformed, Incomplete, OutOfRange, InvalidMonth, InvalidDay, TooLarge]
+	## Weekday names in Monday-through-Sunday order. They describe civil dates,
+	## without a timezone or an elapsed-duration interpretation.
 	Weekday : [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+	## ISO week-based year, week number (1..53) and weekday.
+	## The week_year may differ from the ordinary calendar year near New Year.
 	IsoWeekDate : { week_year : I64, week : U8, weekday : Weekday }
 
 	## Native Gregorian full-date text, with no timezone or reduced resolution.
 	## Years 0..9999 have four digits; negative years have a minus and at least
 	## four magnitude digits; larger positive years have a plus and no padding.
 	## Signed expanded years are a library extension, not an RFC 3339 claim.
-	## Parsing checks a 64-byte input limit before copying and has bounded work.
+	## Input longer than 64 UTF-8 bytes returns TooLarge; parsing work is bounded.
 	## Incomplete means a valid unfinished prefix. Completed invalid fields and
 	## impossible day prefixes (such as 1900-02-3) retain constructor errors.
 	profile : Str
 	profile = "native-gregorian-full-date-v1"
 
+	## Build a decoder for one encoded string containing a Gregorian full date.
+	## Return the validated date and unconsumed encoding state; distinguish
+	## InvalidGregorianDate from failures of the outer Encoding.
 	parser_for : encoding -> (state -> Try({ value : GregorianDate, rest : state }, [InvalidGregorianDate(Error), Encoding(err), ..]))
 		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
 	parser_for = |encoding| {
@@ -72,6 +83,8 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		}
 	}
 
+	## Build an encoder that writes this date as its canonical full-date string
+	## using the supplied string encoding. Propagate errors from that encoding.
 	encoder_for : encoding -> (GregorianDate, state -> Try(state, err))
 		where [encoding.encode_str : Str, state -> Try(state, err)]
 	encoder_for = |_encoding| {
@@ -79,12 +92,18 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		|value, state| Encoding.encode_str(to_text(value), state)
 	}
 
+	## Support validated quoted date literals when the expected type is GregorianDate.
+	## Invalid literals are rejected with BadQuotedBytes; use parse for runtime text.
 	from_quote : Str -> Try(GregorianDate, [BadQuotedBytes(Str)])
 	from_quote = |text| match parse(text) {
 		Ok(value) => Ok(value)
 		Err(error) => Err(BadQuotedBytes("Invalid GregorianDate literal: ${Str.inspect(error)}"))
 	}
 
+	## Parse a full Gregorian date using the declared native profile, such as
+	## 2026-09-07. Signed expanded years are supported within the provider range.
+	## Return structured errors for invalid dates, incomplete or malformed text,
+	## and inputs beyond the profile limits.
 	parse : Str -> Try(GregorianDate, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 64 {
@@ -221,6 +240,9 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		"${year}-${pad_two(fields.month)}-${pad_two(fields.day)}"
 	}
 
+	## Validate a proleptic Gregorian date with astronomical year numbering.
+	## Return OutOfRange outside the supported year range, InvalidMonth outside
+	## 1..12, or InvalidDay for a nonexistent day. No clamping is performed.
 	from_fields : Fields -> Try(GregorianDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
 	from_fields = |fields| {
 		length = days_in_month(fields.year, fields.month)?
@@ -230,6 +252,8 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(Date(fields))
 	}
 
+	## Return the number of days in a Gregorian month, including its leap-year rule.
+	## Reject unsupported years with OutOfRange and months outside 1..12 with InvalidMonth.
 	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth, ..])
 	days_in_month = |year, month| {
 		if year < -2147483648 or year > 2147483647 {
@@ -241,6 +265,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(month_length(year, month))
 	}
 
+	## Read the validated astronomical year and one-based month/day in the Gregorian calendar.
 	to_fields : GregorianDate -> Fields
 	to_fields = |Date(fields)| fields
 
@@ -286,6 +311,8 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		{ week_year, week, weekday: weekday_tag(index) }
 	}
 
+	## Convert this date to the shared civil-day coordinate.
+	## Equal dates across calendars have equal coordinates; no timezone is chosen.
 	to_civil_day : GregorianDate -> CivilDay
 	to_civil_day = |Date(date)| {
 		# Common-year days preceding each month. Nominal construction establishes
@@ -312,6 +339,8 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		CivilDay.from_day_number(year_start(date.year) + before + leap_day + U8.to_i64(date.day) - 1)
 	}
 
+	## Describe a shared civil-day coordinate in the Gregorian calendar.
+	## Return OutOfRange if that day lies outside the supported year range.
 	from_civil_day : CivilDay -> Try(GregorianDate, [OutOfRange, ..])
 	from_civil_day = |day| {
 		number = CivilDay.to_day_number(day)
@@ -360,24 +389,33 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(Date({ year, month, day: day_of_month }))
 	}
 
+	## Hash Gregorian dates consistently with equality for dictionary and set keys.
+	## Hash values are not a stable serialization format.
 	to_hash : GregorianDate, Hasher -> Hasher
 	to_hash = |Date(fields), hasher| fields.day.to_hash(fields.month.to_hash(fields.year.to_hash(hasher)))
 
+	## Return a concise diagnostic description of these Gregorian dates.
+	## Use explicit conversions or text serialization when storing or exchanging data.
 	to_inspect : GregorianDate -> Str
 	to_inspect = |Date(fields)| "GregorianDate(${fields.year.to_str()}, ${fields.month.to_str()}, ${fields.day.to_str()})"
 
+	## Whether the first of two Gregorian dates precedes the second in their numeric order.
 	is_lt : GregorianDate, GregorianDate -> Bool
 	is_lt = |a, b| to_civil_day(a) < to_civil_day(b)
 
+	## Whether the first of two Gregorian dates precedes or equals the second.
 	is_lte : GregorianDate, GregorianDate -> Bool
 	is_lte = |a, b| to_civil_day(a) <= to_civil_day(b)
 
+	## Whether the first of two Gregorian dates follows the second in their numeric order.
 	is_gt : GregorianDate, GregorianDate -> Bool
 	is_gt = |a, b| to_civil_day(a) > to_civil_day(b)
 
+	## Whether the first of two Gregorian dates follows or equals the second.
 	is_gte : GregorianDate, GregorianDate -> Bool
 	is_gte = |a, b| to_civil_day(a) >= to_civil_day(b)
 
+	## Equality of Gregorian dates; values of other temporal domains must be converted explicitly.
 	is_eq : GregorianDate, GregorianDate -> Bool
 	is_eq = |Date(a), Date(b)| a.year == b.year and a.month == b.month and a.day == b.day
 

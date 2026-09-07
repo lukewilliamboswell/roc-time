@@ -42,12 +42,20 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 		Ok({ id, date, days, pending })
 	}
 
+	## Outcome of interpreting one all-day occurrence. Limited retains a cursor; Complete
+	## supplies the occurrence even when its coverage is empty.
 	Batch(id) : {
 		segments : U64,
 		buffered : U64,
 		status : [Complete(AllDayOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })],
 	}
+
+	## Pending interpretation of an all-day declaration. Retain this value when a zone work or
+	## buffer limit stops collection.
 	Cursor(id) :: { id : id, date : Calendar.Date, days : U64, pending : ZoneRules.SelectionCursor }.{
+
+		## Advance interpretation within the supplied zone segment/member limits. Resume Limited with
+		## its returned cursor; only Complete supplies a fully interpreted occurrence.
 		collect : Cursor(id), ZoneRules.SelectionLimits -> Try(Batch(id), [OutOfRange, ..])
 		collect = |state, limits| {
 			batch = ResolvedSelection.collect(state.pending, limits)?
@@ -57,19 +65,38 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 			}
 			Ok({ segments: batch.segments, buffered: batch.buffered, status })
 		}
+
+		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+		## Use typed accessors for application logic; this text is not a storage format.
 		to_inspect : Cursor(id) -> Str
 		to_inspect = |state| "AllDayOccurrence.Cursor(${Str.inspect(state.date)}, days=${state.days.to_str()})"
 	}
+
+	## Return the application identifier; equal coverage does not make two events identical.
 	id : AllDayOccurrence(id) -> id
 	id = |occurrence| occurrence.id
+
+	## Return the source calendar date, before any zone interpretation.
 	date : AllDayOccurrence(id) -> Calendar.Date
 	date = |occurrence| occurrence.date
+
+	## Return the positive number of civil days covered by the declaration, not elapsed 24-hour
+	## units.
 	days : AllDayOccurrence(id) -> U64
 	days = |occurrence| occurrence.days
+
+	## Return the immutable interpreted civil selection, including its original rules and
+	## disconnected pieces.
 	selection : AllDayOccurrence(id) -> ResolvedSelection
 	selection = |occurrence| occurrence.selection
+
+	## Return the selected timeline pieces. A skipped date may have empty coverage; repeated
+	## labels can produce disconnected pieces.
 	coverage : AllDayOccurrence(id) -> Coverage
 	coverage = |occurrence| ResolvedSelection.coverage(occurrence.selection)
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : AllDayOccurrence(id) -> Str
 	to_inspect = |occurrence| "AllDayOccurrence(${Str.inspect(occurrence.date)}, days=${occurrence.days.to_str()}, ${Str.inspect(coverage(occurrence))})"
 }

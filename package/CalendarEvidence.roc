@@ -22,9 +22,19 @@ import PosixSpan
 ## fields and exclusive civil bounds once, then sorts/deduplicates in O(n log n), without zone interpretation or
 ## enumeration. Canonical order is local position, not resolved timeline order.
 CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List({ value : Calendar.Value, end : LocalDateTime }) }.{
+
+	## Point membership across admissible alternatives: Definite means all, Possible
+	## means some but not all, and Impossible means none.
 	Truth : [Definite, Possible, Impossible]
+
+	## Identifier of the finite-alternative interpretation model used by this type.
 	profile : Str
 	profile = "finite-calendar-alternatives-v1"
+
+	## Validate a nonempty list of at most 4096 supplied alternatives, then sort and
+	## deduplicate it. Reject calendar/resolution changes, changes to unqualified
+	## components, and alternatives whose exclusive civil end cannot be represented.
+	## Indexed errors refer to the original input list, starting at zero.
 	new : QualifiedCalendarValue, List(Calendar.Value) -> Try(CalendarEvidence, [InconsistentEvidence, TooManyAlternatives, CalendarMismatch(U64), ResolutionMismatch(U64), UnqualifiedComponent({ index : U64, scope : QualifiedCalendarValue.Scope }), CandidateOutOfRange(U64), ..])
 	new = |description, alternatives| {
 		if alternatives.is_empty() {
@@ -85,6 +95,8 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 		}
 		Ok({ description, alternatives: $canonical })
 	}
+
+	## Return the qualified description to which these alternatives apply.
 	description : CalendarEvidence -> QualifiedCalendarValue
 	description = |evidence| evidence.description
 
@@ -94,7 +106,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 
 	## Is this one POSIX instant inside the unknown actual selection? Only the
 	## point must lie within the rules' validity; no claim about full preimages
-	## outside that validity is made. Projection is O(log transition_count).
+	## outside that validity is made. Projection scans at most the transition table.
 	## Each subsequent work unit checks one alternative's civil bounds in O(1).
 	## Rules, point and model are immutable across resumptions. No coverage list
 	## is built. Construction rejects an unrepresentable exclusive civil bound
@@ -106,8 +118,18 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 		local = FixedOffset.project(offset, point, calendar)?
 		Ok({ evidence, rules, point, local, index: 0, yes: Bool.False, no: Bool.False })
 	}
+
+	## Work performed by one collect call and either a conclusive truth value or
+	## the cursor to resume. Limited does not imply Possible or Impossible.
 	Batch : { examined : U64, status : [Complete(Truth), Limited(Query)] }
+
+	## An immutable point query retaining its evidence, zone context and progress.
+	## Use collect to examine alternatives under a per-call work budget.
 	Query :: { evidence : CalendarEvidence, rules : ZoneRules, point : PosixBoundary, local : LocalDateTime, index : U64, yes : Bool, no : Bool }.{
+
+		## Examine at most max_alternatives additional alternatives. Stop early once
+		## both an inclusion and an exclusion witness establish Possible; otherwise
+		## return a resumable Limited result until every alternative has been checked.
 		collect : Query, { max_alternatives : U64 } -> Batch
 		collect = |initial, limits| {
 			var $state = initial
@@ -138,11 +160,18 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 			}
 			crash "Evidence loop returns an outcome"
 		}
+
+		## Summarize the query point and progress without examining more alternatives.
 		to_inspect : Query -> Str
 		to_inspect = |state| "CalendarEvidence.Query(examined=${state.index.to_str()}, point=${Str.inspect(state.point)})"
 	}
+
+	## Compare the description and canonical alternatives, preserving model identity
+	## rather than comparing only the result of a particular point query.
 	is_eq : CalendarEvidence, CalendarEvidence -> Bool
 	is_eq = |a, b| a.description == b.description and a.alternatives == b.alternatives
+
+	## Hash the description and canonical alternatives consistently with is_eq.
 	to_hash : CalendarEvidence, Hasher -> Hasher
 	to_hash = |evidence, hasher| {
 		var $state = evidence.description.to_hash(hasher)
@@ -151,6 +180,8 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 		}
 		evidence.alternatives.len().to_hash($state)
 	}
+
+	## Summarize the description and alternative count without resolving selections.
 	to_inspect : CalendarEvidence -> Str
 	to_inspect = |evidence| "CalendarEvidence(alternatives=${evidence.alternatives.len().to_str()}, description=${Str.inspect(evidence.description)})"
 }

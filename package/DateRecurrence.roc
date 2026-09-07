@@ -48,7 +48,13 @@ DateRecurrence :: {
 	inclusions : List(GregorianDate),
 	exclusions : List(GregorianDate),
 }.{
+
+	## Stop the generated series by source count or inclusive final date, or leave it unbounded.
+	## Exclusions do not replenish COUNT; explicit inclusions remain outside rule termination.
 	Termination : [Forever, Count(U64), Until(GregorianDate)]
+
+	## Calendar candidates, termination, period positions and explicit date additions/exclusions.
+	## Construction checks selector combinations before any query begins.
 	Spec : {
 		pattern : CalendarPattern.Spec,
 		termination : Termination,
@@ -56,6 +62,9 @@ DateRecurrence :: {
 		inclusions : List(GregorianDate),
 		exclusions : List(GregorianDate),
 	}
+
+	## The anchor and checked declaration fields, independent of query progress. Rebuilding a
+	## declaration creates no occurrences and does not save a cursor.
 	Definition : { anchor : GregorianDate, spec : Spec }
 
 	## Read the semantic definition without scanning periods or occurrences.
@@ -66,15 +75,30 @@ DateRecurrence :: {
 		anchor: rule.anchor,
 		spec: { pattern: CalendarPattern.definition(rule.pattern), termination: rule.termination, by_set_pos: rule.positions, inclusions: rule.inclusions, exclusions: rule.exclusions },
 	}
+
+	## Half-open source-date query: include starts at start, exclude starts at end. The original
+	## series anchor and COUNT are retained across windows.
 	Window : { start : GregorianDate, end : GregorianDate }
+
+	## Maximum candidate work, buffered dates and emitted dates for this call. A limit is an
+	## incomplete result, not proof that no more dates exist.
 	Limits : { max_steps : U64, max_buffered : U64, max_occurrences : U64 }
+
+	## The exhausted candidate-work, buffer or output budget. Continue from the returned cursor
+	## rather than recreating a recurrence from the last visible date.
 	Limit : [WorkLimit, BufferLimit, OutputLimit]
+
+	## Dates collected within the window, work accounting and Complete or Limited status. Limited
+	## preserves the continuation even if no dates were emitted.
 	Batch : {
 		dates : List(GregorianDate),
 		steps : U64,
 		buffered : U64,
 		status : [Complete, Limited({ cursor : Cursor, reason : Limit })],
 	}
+
+	## Accumulator and work accounting from bounded folding. A limited result preserves both the
+	## accumulator and continuation.
 	FoldBatch(acc) : {
 		value : acc,
 		occurrences : U64,
@@ -82,6 +106,9 @@ DateRecurrence :: {
 		buffered : U64,
 		status : [Complete, Limited({ cursor : Cursor, reason : Limit }), Stopped(Cursor)],
 	}
+
+	## One date and continuation, End, or a resumable limit with the work performed. Always
+	## inspect the status before consuming a date.
 	Next : {
 		steps : U64,
 		buffered : U64,
@@ -372,6 +399,8 @@ DateRecurrence :: {
 			},
 		)
 
+		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+		## Use typed accessors for application logic; this text is not a storage format.
 		to_inspect : Cursor -> Str
 		to_inspect = |state| "DateRecurrence.Cursor(period=${state.period.to_str()}, counted=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
 	}
@@ -379,6 +408,9 @@ DateRecurrence :: {
 	## Declaration facts only: no cursor, period scan or occurrence generation.
 	fact_count : DateRecurrence -> U64
 	fact_count = |rule| 2 + RecurrenceFacts.count(CalendarPattern.definition(rule.pattern), None, rule.positions) + rule.inclusions.len() + rule.exclusions.len()
+
+	## Read one semantic explanation fact by zero-based index; End means the index is past the
+	## declaration’s facts. Does not resolve zones or enumerate occurrences.
 	fact_at : DateRecurrence, U64 -> [End, Item(SemanticFact)]
 	fact_at = |rule, index| {
 		if index >= fact_count(rule) {
@@ -407,6 +439,9 @@ DateRecurrence :: {
 		}
 		Item(SemanticFact.new(RecurrenceException({ kind: Exclusion, source: Date(fact_date(rule.exclusions, exception - rule.inclusions.len())) })))
 	}
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : DateRecurrence -> Str
 	to_inspect = |rule| {
 		summary = match fact_at(rule, 0) {

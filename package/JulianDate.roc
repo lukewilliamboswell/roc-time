@@ -4,8 +4,13 @@ import CivilDay
 ## Valid years are -2147483648 through 2147483647, inclusive.
 ## No timezone or resolved timeline is implied by a date.
 JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
+	## Astronomical year and one-based month/day fields for a Julian date.
+	## Year zero means 1 BCE; from_fields validates combinations and provider range.
 	Fields : { year : I64, month : U8, day : U8 }
 
+	## Validate a proleptic Julian date with astronomical year numbering.
+	## Return OutOfRange outside the supported year range, InvalidMonth outside
+	## 1..12, or InvalidDay for a nonexistent day. No clamping is performed.
 	from_fields : Fields -> Try(JulianDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
 	from_fields = |fields| {
 		length = days_in_month(fields.year, fields.month)?
@@ -15,6 +20,8 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(Date(fields))
 	}
 
+	## Return the number of days in a Julian month, including its leap-year rule.
+	## Reject unsupported years with OutOfRange and months outside 1..12 with InvalidMonth.
 	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth, ..])
 	days_in_month = |year, month| {
 		if year < -2147483648 or year > 2147483647 {
@@ -26,9 +33,12 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(month_length(year, month))
 	}
 
+	## Read the validated astronomical year and one-based month/day in the Julian calendar.
 	to_fields : JulianDate -> Fields
 	to_fields = |Date(fields)| fields
 
+	## Convert this date to the shared civil-day coordinate.
+	## Equal dates across calendars have equal coordinates; no timezone is chosen.
 	to_civil_day : JulianDate -> CivilDay
 	to_civil_day = |Date(date)| {
 		var $before = 0.I64
@@ -40,6 +50,8 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		CivilDay.from_day_number(year_start(date.year) + $before + U8.to_i64(date.day) - 1)
 	}
 
+	## Describe a shared civil-day coordinate in the Julian calendar.
+	## Return OutOfRange if that day lies outside the supported year range.
 	from_civil_day : CivilDay -> Try(JulianDate, [OutOfRange, ..])
 	from_civil_day = |day| {
 		number = CivilDay.to_day_number(day)
@@ -71,24 +83,33 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		Ok(Date({ year: $lower, month: $month, day: day_of_month }))
 	}
 
+	## Hash Julian dates consistently with equality for dictionary and set keys.
+	## Hash values are not a stable serialization format.
 	to_hash : JulianDate, Hasher -> Hasher
 	to_hash = |Date(fields), hasher| fields.day.to_hash(fields.month.to_hash(fields.year.to_hash(hasher)))
 
+	## Return a concise diagnostic description of these Julian dates.
+	## Use explicit conversions or text serialization when storing or exchanging data.
 	to_inspect : JulianDate -> Str
 	to_inspect = |Date(fields)| "JulianDate(${fields.year.to_str()}, ${fields.month.to_str()}, ${fields.day.to_str()})"
 
+	## Whether the first of two Julian dates precedes the second in their numeric order.
 	is_lt : JulianDate, JulianDate -> Bool
 	is_lt = |a, b| to_civil_day(a) < to_civil_day(b)
 
+	## Whether the first of two Julian dates precedes or equals the second.
 	is_lte : JulianDate, JulianDate -> Bool
 	is_lte = |a, b| to_civil_day(a) <= to_civil_day(b)
 
+	## Whether the first of two Julian dates follows the second in their numeric order.
 	is_gt : JulianDate, JulianDate -> Bool
 	is_gt = |a, b| to_civil_day(a) > to_civil_day(b)
 
+	## Whether the first of two Julian dates follows or equals the second.
 	is_gte : JulianDate, JulianDate -> Bool
 	is_gte = |a, b| to_civil_day(a) >= to_civil_day(b)
 
+	## Equality of Julian dates; values of other temporal domains must be converted explicitly.
 	is_eq : JulianDate, JulianDate -> Bool
 	is_eq = |Date(a), Date(b)| a.year == b.year and a.month == b.month and a.day == b.day
 

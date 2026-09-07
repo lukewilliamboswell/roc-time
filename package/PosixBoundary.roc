@@ -21,30 +21,45 @@ import PosixDelta
 ## Examples assume a package dependency named `time`.
 PosixBoundary :: [Micros(I64)].{
 
-	## Nearest rounding resolves exact ties to the even microsecond.
+	## Precision reduction policy. RejectSubmicrosecond rejects inexact input;
+	## Floor rounds toward negative infinity, Ceiling toward positive infinity,
+	## and TowardZero discards the fractional part. NearestTiesEven chooses the
+	## closest microsecond, resolving exact ties to the even microsecond.
 	Rounding : [RejectSubmicrosecond, Floor, Ceiling, TowardZero, NearestTiesEven]
 
+	## Construct an exact position from signed microseconds since the POSIX epoch,
+	## 1970-01-01T00:00:00Z. Every I64 value is accepted; leap seconds are not distinct.
 	from_microseconds : I64 -> PosixBoundary
 	from_microseconds = |value| Micros(value)
 
+	## Read the signed microsecond count since the POSIX epoch.
 	to_microseconds : PosixBoundary -> I64
 	to_microseconds = |Micros(value)| value
 
+	## Convert nanoseconds since the POSIX epoch without losing precision.
+	## Return Submicrosecond unless divisible by 1000, or OutOfRange if the result
+	## cannot fit the supported I64 microsecond range.
 	from_nanoseconds : I128 -> Try(PosixBoundary, [Submicrosecond, OutOfRange, ..])
 	from_nanoseconds = |value| {
 		from_nanoseconds_with_rounding(value, RejectSubmicrosecond)
 	}
 
+	## Convert nanoseconds since the POSIX epoch using the supplied rounding policy.
+	## Range is checked after rounding; RejectSubmicrosecond rejects an inexact input.
 	from_nanoseconds_with_rounding : I128, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange, ..])
 	from_nanoseconds_with_rounding = |value, policy| {
 		Ok(Micros(quantize(value, 1000, policy)?))
 	}
 
+	## Convert exact decimal seconds since the POSIX epoch with explicit rounding.
+	## RejectSubmicrosecond preserves exactness; a rounded result outside I64
+	## microseconds returns OutOfRange.
 	from_seconds : Dec, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange, ..])
 	from_seconds = |value, policy| {
 		Ok(Micros(quantize(Dec.to_attos(value), 1000000000000, policy)?))
 	}
 
+	## Compare exact POSIX positions, returning LT, EQ or GT.
 	compare : PosixBoundary, PosixBoundary -> [LT, EQ, GT]
 	compare = |Micros(a), Micros(b)| {
 		if a < b {
@@ -56,27 +71,38 @@ PosixBoundary :: [Micros(I64)].{
 		}
 	}
 
+	## Whether the first of two POSIX positions precedes the second in their numeric order.
 	is_lt : PosixBoundary, PosixBoundary -> Bool
 	is_lt = |Micros(a), Micros(b)| a < b
 
+	## Whether the first of two POSIX positions precedes or equals the second.
 	is_lte : PosixBoundary, PosixBoundary -> Bool
 	is_lte = |Micros(a), Micros(b)| a <= b
 
+	## Whether the first of two POSIX positions follows the second in their numeric order.
 	is_gt : PosixBoundary, PosixBoundary -> Bool
 	is_gt = |Micros(a), Micros(b)| a > b
 
+	## Whether the first of two POSIX positions follows or equals the second.
 	is_gte : PosixBoundary, PosixBoundary -> Bool
 	is_gte = |Micros(a), Micros(b)| a >= b
 
+	## Hash POSIX positions consistently with equality for dictionary and set keys.
+	## Hash values are not a stable serialization format.
 	to_hash : PosixBoundary, Hasher -> Hasher
 	to_hash = |Micros(value), hasher| value.to_hash(hasher)
 
+	## Return a concise diagnostic description of these POSIX positions.
+	## Use explicit conversions or text serialization when storing or exchanging data.
 	to_inspect : PosixBoundary -> Str
 	to_inspect = |Micros(value)| "PosixBoundary(${value.to_str()} microseconds)"
 
+	## Equality of POSIX positions; values of other temporal domains must be converted explicitly.
 	is_eq : PosixBoundary, PosixBoundary -> Bool
 	is_eq = |Micros(a), Micros(b)| a == b
 
+	## Add a signed POSIX displacement to a position. Return OutOfRange on overflow.
+	## For calendar-day or month changes, use calendar arithmetic with an explicit context.
 	shift : PosixBoundary, PosixDelta -> Try(PosixBoundary, [OutOfRange, ..])
 	shift = |Micros(value), delta| {
 		match I64.plus_try(value, PosixDelta.to_microseconds(delta)) {
@@ -85,6 +111,9 @@ PosixBoundary :: [Micros(I64)].{
 		}
 	}
 
+	## Return the first position minus the second, as a signed POSIX displacement.
+	## OutOfRange is possible even when both positions individually fit.
+	## This is coordinate width, not leap-aware physical elapsed time.
 	difference : PosixBoundary, PosixBoundary -> Try(PosixDelta, [OutOfRange, ..])
 	difference = |Micros(a), Micros(b)| {
 		match I64.minus_try(a, b) {
@@ -107,7 +136,7 @@ PosixBoundary :: [Micros(I64)].{
 	expect from_nanoseconds(9223372036854775808000) == Err(OutOfRange)
 	expect from_nanoseconds(-9223372036854775809000) == Err(OutOfRange)
 
-	## A nearest-point oracle over a finite lattice, independent of quotient rounding.
+	# A nearest-point oracle over a finite lattice, independent of quotient rounding.
 	expect {
 		var $valid = Bool.True
 		for n in [-2501.I128, -2500, -2499, -1500, -501, -500, -499, -1, 0, 1, 499, 500, 501, 1500, 2499, 2500, 2501] {

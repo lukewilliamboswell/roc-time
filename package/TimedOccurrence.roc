@@ -26,9 +26,22 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 
 	## Endpoint intent is distinct from an elapsed or calendar quantity.
 	Ending : [After(Duration), AtBoundary(PosixBoundary), AtLocal(LocalEnd)]
+
+	## An explicit local end label with its own fold and gap policies. These policies can differ
+	## from those used for the start.
 	LocalEnd : { source : LocalDateTime, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
+
+	## Choose positive coordinate displacement or calendar components with explicit end
+	## interpretation. A calendar day need not have 24 coordinate hours.
 	Duration : [Coordinate(PosixDelta), Calendar(CalendarDuration)]
+
+	## Nonnegative year/month/day components, invalid-date policy and coordinate tail, plus end
+	## fold/gap policies. At least one component or tail must be positive; the tail is applied
+	## after the calendar end is resolved.
 	CalendarDuration : { delta : Calendar.Delta, invalid_date : Calendar.Arithmetic.Policy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
+
+	## Result of interpreting one appointment ending. Complete supplies the event; Limited
+	## preserves pending interpretation and its reason.
 	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })] }
 
 	## Validate the duration's component domain without interpreting an anchor.
@@ -113,7 +126,14 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			Ok(Explicit({ id, start, spec, pending }))
 		}
 	}
+
+	## Pending appointment-end interpretation retaining the already resolved start. Resume this
+	## cursor instead of selecting the start again.
 	Cursor(id) :: [Ready(TimedOccurrence(id)), Explicit({ id : id, start : TimedRecurrence.Occurrence, spec : LocalEnd, pending : ZoneRules.ClassificationCursor }), Pending({ id : id, start : TimedRecurrence.Occurrence, spec : CalendarDuration, end_source : LocalDateTime, pending : ZoneRules.ClassificationCursor })].{
+
+		## Resolve the pending ending within zone work/storage limits. Complete returns the nonempty
+		## span; Limited retains progress. Invalid endpoints or unsupported interpretation remain
+		## structured errors.
 		collect : Cursor(id), ZoneRules.ClassificationLimits -> Try(Batch(id), [InvalidDuration, OutOfRange, Gap, Ambiguous, AmbiguousGap, OffsetConflict, ..])
 		collect = |state, limits| match state {
 			Ready(value) => Ok({ segments: 0, buffered: 0, status: Complete(value) })
@@ -143,6 +163,9 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 				Ok({ segments: batch.segments, buffered: batch.buffered, status })
 			}
 		}
+
+		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+		## Use typed accessors for application logic; this text is not a storage format.
 		to_inspect : Cursor(id) -> Str
 		to_inspect = |state| match state {
 			Ready(_) => "TimedOccurrence.Cursor(ready)"
@@ -150,8 +173,14 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			Explicit(_) => "TimedOccurrence.Cursor(explicit local end pending)"
 		}
 	}
+
+	## Return the application identity carried by this appointment. Distinct source occurrences
+	## can occupy the same span.
 	id : TimedOccurrence(id) -> id
 	id = |value| value.id
+
+	## Return the interpreted start with its original source, selected boundary, gap evidence and
+	## immutable rules.
 	start : TimedOccurrence(id) -> TimedRecurrence.Occurrence
 	start = |value| value.start
 
@@ -160,6 +189,9 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## This accessor performs no zone lookup or recurrence evaluation.
 	source : TimedOccurrence(id) -> LocalDateTime
 	source = |value| TimedRecurrence.Occurrence.source(value.start)
+
+	## Return the declared ending intent: duration, explicit boundary or local endpoint with its
+	## policies.
 	ending : TimedOccurrence(id) -> Ending
 	ending = |value| value.ending
 
@@ -170,6 +202,9 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 		After(duration) => Some(duration)
 		_ => None
 	}
+
+	## Return the resolved nonempty half-open appointment span. Calendar endpoints have already
+	## been interpreted; this does not re-resolve them.
 	span : TimedOccurrence(id) -> PosixSpan
 	span = |value| value.span
 
@@ -177,6 +212,9 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## Explicit resolved boundaries and coordinate durations have no local anchor.
 	calendar_anchor : TimedOccurrence(id) -> [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })]
 	calendar_anchor = |value| value.calendar_anchor
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : TimedOccurrence(id) -> Str
 	to_inspect = |value| "TimedOccurrence(${Str.inspect(value.span)})"
 }

@@ -26,11 +26,14 @@ import PosixBoundary
 ## materializing a byte list. Construction, conversion and
 ## formatting have constant bounded work. Canonical standard text can be stored directly.
 OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }.{
+	## UnassertedUtc represents Z or -00:00 without an asserted local offset. Asserted retains a numeric offset, including explicit +00:00.
 	Offset : [UnassertedUtc, Asserted(FixedOffset)]
+	## Validated Gregorian date and clock, supplied fractional width, and offset assertion. Use new to validate an edited record.
 	Parts : { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }
+	## Separates malformed/incomplete input, invalid date/time/offset, size/range limits, and unsupported precision, leap seconds or annotations.
 	Error : [Malformed, Incomplete, InvalidDate, InvalidTime, InvalidOffset, OutOfRange, TooLarge, UnsupportedPrecision, UnsupportedLeapSecond, UnsupportedAnnotations]
 
-	## Generic encodings carry canonical text, never the opaque backing record.
+	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
 	parser_for : encoding -> (state -> Try({ value : OffsetTimestamp, rest : state }, [InvalidOffsetTimestamp(Error), Encoding(err), ..]))
@@ -51,6 +54,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		}
 	}
 
+	## Encodes the canonical standard text as a string in the selected encoding; encoding failures pass through.
 	encoder_for : encoding -> (OffsetTimestamp, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
@@ -68,9 +72,11 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		Err(error) => Err(BadQuotedBytes("Invalid OffsetTimestamp literal: ${Str.inspect(error)}"))
 	}
 
+	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc3339-microseconds-rfc9557-base-v1"
 
+	## Checks a four-digit Gregorian timestamp declaration, exact fractional width 0–6, and whole-minute numeric offset within +/-23:59. Precision loss is rejected.
 	new : Parts -> Try(OffsetTimestamp, Error)
 	new = |parts| {
 		year = GregorianDate.to_fields(parts.date).year
@@ -96,8 +102,10 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		Ok({ date: parts.date, clock: parts.clock, fraction_digits: parts.fraction_digits, offset: parts.offset })
 	}
 
+	## Returns the retained date, clock, fractional width and offset assertion for inspection or checked editing through new.
 	parts : OffsetTimestamp -> Parts
 	parts = |value| { date: value.date, clock: value.clock, fraction_digits: value.fraction_digits, offset: value.offset }
+	## Returns the supplied Gregorian clock label without applying its offset. Use boundary for a resolved POSIX coordinate.
 	local_label : OffsetTimestamp -> LocalDateTime
 	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
 
@@ -133,6 +141,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		new({ date, clock: LocalDateTime.clock(local), fraction_digits, offset })
 	}
 
+	## Parses the supported RFC timestamp profile, retaining fractional width and offset assertion. Valid incomplete prefixes remain errors; unsupported precision is never rounded.
 	parse : Str -> Try(OffsetTimestamp, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 256 {
@@ -373,8 +382,10 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		}
 	}
 
+	## Compares the retained declaration, including fractional width and offset assertion. Use boundary when comparing resolved positions.
 	is_eq : OffsetTimestamp, OffsetTimestamp -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock and a.fraction_digits == b.fraction_digits and a.offset == b.offset
+	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : OffsetTimestamp, Hasher -> Hasher
 	to_hash = |value, hasher| {
 		state = value.fraction_digits.to_hash(value.clock.to_hash(value.date.to_hash(hasher)))
@@ -388,12 +399,14 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	## assertion. Reading facts never resolves a zone or materializes coverage.
 	fact_count : OffsetTimestamp -> U64
 	fact_count = |_| 1
+	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| if index == 0 {
 		Item(SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local: local_label(value), fraction_digits: value.fraction_digits, offset: value.offset, zone_present: Bool.False, annotation_count: 0 })))
 	} else {
 		End
 	}
+	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : OffsetTimestamp -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)

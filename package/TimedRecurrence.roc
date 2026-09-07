@@ -38,13 +38,20 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## remain outside rule termination. A boundary before all starts yields no
 	## rule occurrences; it cannot be compared to the unresolved anchor at new.
 	Termination : [Forever, Count(U64), Until(LocalDateTime), UntilBoundary(PosixBoundary)]
+
+	## Calendar recurrence fields, effective clock selection, termination and BYSETPOS positions.
+	## Use the subdaily constructor for frequencies smaller than a day.
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
+
+	## Window-free native declaration retaining anchor precision, effective selectors and
+	## separate local-source and boundary exclusions. This is an editing interface, not a
+	## standardized storage document.
 	Definition : { anchor : LocalDateTime, pattern : [Calendar(CalendarPattern.Spec), Subdaily({ frequency : SubdailyPattern.Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec })], clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16), inclusions : List(LocalDateTime), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary) }
 
 	## Effective field selectors and source labels, without clock products,
 	## occurrence enumeration or interpretation. Immutable lists may be shared.
 	## Every candidate retains the microsecond field of the anchor clock.
-	## Subdaily calendar fields are filters, with no placeholder period defaults.
+	## In subdaily rules, empty calendar filter lists leave those fields unrestricted.
 	definition : TimedRecurrence -> Definition
 	definition = |rule| {
 		pattern = match rule.schedule {
@@ -79,6 +86,10 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		}
 		with_boundary_exclusions(with_exclusions(with_inclusions(base, $starts)?, value.exclusions)?, value.boundary_exclusions)
 	}
+
+	## Construct a timed calendar recurrence from a Gregorian date and clock anchor. Validate
+	## calendar/clock selectors, termination and positions before any zone lookup or occurrence
+	## expansion.
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new = |start, spec| {
 		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
@@ -90,7 +101,14 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		}
 		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], boundary_exclusions: [], inclusions: [] })
 	}
+
+	## Subdaily period/filter specification, termination and positions. Candidate clocks retain
+	## the anchor microsecond field.
 	SubdailySpec : { pattern : SubdailyPattern.Spec, termination : Termination, by_set_pos : List(I16) }
+
+	## Construct an hourly, minutely or secondly recurrence from local fields. Frequency-specific
+	## clock defaults and calendar filters are checked once; elapsed-time interpretation still
+	## requires explicit rules.
 	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new_subdaily = |start, spec| {
 		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
@@ -164,6 +182,9 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		data = fact_pattern(rule.schedule)
 		3 + RecurrenceFacts.count(data.calendar, Some(rule.clocks), rule.positions) + rule.inclusions.len() + rule.exclusions.len() + rule.boundary_exclusions.len()
 	}
+
+	## Read one semantic explanation fact by zero-based index; End means the index is past the
+	## declaration’s facts. Does not resolve zones or enumerate occurrences.
 	fact_at : TimedRecurrence, U64 -> [End, Item(SemanticFact)]
 	fact_at = |rule, index| {
 		if index >= fact_count(rule) {
@@ -200,6 +221,9 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		}
 		Item(SemanticFact.new(RecurrenceBoundaryExclusion(label_at(rule.boundary_exclusions, local_index - rule.exclusions.len()))))
 	}
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : TimedRecurrence -> Str
 	to_inspect = |rule| {
 		summary = match fact_at(rule, 0) {
@@ -213,25 +237,64 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		"${summary} ${ending}"
 	}
 
+	## Half-open window of original local source starts. Querying another window does not reset
+	## the anchored series COUNT.
 	Window : { start : LocalDateTime, end : LocalDateTime }
+
+	## Immutable zone rules and explicit fold/gap policies for generated starts. No machine zone
+	## or implicit occurrence choice is supplied.
 	Context : { rules : ZoneRules, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
+
+	## Per-call candidate steps, interpreted-period buffer, zone segments and zone candidates.
+	## Exhaustion returns a resumable limit rather than an empty success.
 	Limits : { max_steps : U64, max_buffered : U64, max_zone_segments : U64, max_zone_candidates : U64 }
+
+	## Which candidate or zone budget prevented completion. OutputLimit also indicates a full
+	## output page; resume to determine whether more values exist.
 	Limit : [WorkLimit, BufferLimit, ZoneWorkLimit, ZoneBufferLimit, OutputLimit]
+
+	## A selected recurrence start retaining source identity separately from its resolved
+	## boundary and any gap adjustment.
 	Occurrence :: { source : LocalDateTime, choice : ZoneRules.BoundaryChoice, rules : ZoneRules }.{
+
+		## Return the original local source label. A gap adjustment never replaces this identity with
+		## its projected wall-clock label.
 		source : Occurrence -> LocalDateTime
 		source = |value| value.source
+
+		## Return the selected POSIX boundary. Different source labels can select the same boundary.
 		boundary : Occurrence -> PosixBoundary
 		boundary = |value| value.choice.boundary
+
+		## Report exact resolution or the forward gap whose before-offset policy selected this
+		## boundary.
 		adjustment : Occurrence -> [Exact, BeforeGap(ZoneRules.GapTransition)]
 		adjustment = |value| value.choice.adjustment
+
+		## Return the immutable rules used to resolve this occurrence, suitable for consistent
+		## interpretation of its ending.
 		rules : Occurrence -> ZoneRules
 		rules = |value| value.rules
+
+		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+		## Use typed accessors for application logic; this text is not a storage format.
 		to_inspect : Occurrence -> Str
 		to_inspect = |value| "TimedRecurrence.Occurrence(${Str.inspect(value.source)}, ${Str.inspect(value.choice.boundary)})"
 	}
+
+	## One interpreted source occurrence with continuation, End, or Limited progress. Counters
+	## expose candidate and zone work for the call.
 	Next : { steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [End, Item({ occurrence : Occurrence, cursor : Cursor }), Limited({ cursor : Cursor, reason : Limit })] }
+
+	## Candidate/zone work limits plus the maximum number of occurrences returned in this batch.
 	CollectLimits : { work : Limits, max_occurrences : U64 }
+
+	## Interpreted starts with resource accounting and completion status. Limited carries the
+	## cursor preserving COUNT, position selection and exceptions.
 	Batch : { occurrences : List(Occurrence), steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [Complete, Limited({ cursor : Cursor, reason : Limit })] }
+
+	## Start a bounded source-window query using explicit immutable rules and fold/gap policies.
+	## Reject invalid windows; defer interpretation errors to cursor consumption.
 	cursor : TimedRecurrence, Window, Context -> Try(Cursor, [EmptyWindow, ReversedWindow, OutOfRange, ..])
 	cursor = |rule, window, context| {
 		match LocalDateTime.compare_position(window.start, window.end) {
@@ -254,6 +317,9 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		frame = timed_frame(effective_rule, 0)?
 		Ok({ rule: effective_rule, boundary_cutoff, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0, inclusion_index: 0, held: None, rule_ended: Bool.False, inclusion_pending: None })
 	}
+
+	## Resumable recurrence execution state for one source window and immutable context. Keep it
+	## intact across limited queries.
 	Cursor :: {
 		rule : TimedRecurrence,
 		boundary_cutoff : [None, Some(PosixBoundary)],
@@ -448,6 +514,9 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 				}
 			},
 		)
+
+		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+		## Use typed accessors for application logic; this text is not a storage format.
 		to_inspect : Cursor -> Str
 		to_inspect = |state| "TimedRecurrence.Cursor(period=${state.period.to_str()}, count=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
 	}

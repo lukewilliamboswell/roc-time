@@ -12,11 +12,10 @@ import LocalDateTime
 ## This subset is not EDTF Level 0 conformance, which also requires timestamps
 ## and intervals. Source spelling is not preserved.
 ##
-## Source: Library of Congress EDTF published specification, February 4, 2019,
-## https://www.loc.gov/standards/datetime/ (accessed 2026-09-07), Level 0 Date,
-## Level 1 Qualification of a date (complete), and Level 2 Qualification of
-## individual components. Unit fixtures below transcribe
-## example meanings; expected fields are independent of parsing/serialization.
+## Scope follows the Library of Congress EDTF specification (February 4, 2019):
+## Date, Qualification of a date, and Qualification of individual components.
+## https://www.loc.gov/standards/datetime/
+# Source accessed 2026-09-07. Unit fixtures transcribe independent example meanings.
 ##
 ## Parsing is bounded by 64 UTF-8 bytes. Valid partial grammar prefixes return
 ## Incomplete. Invalid fields/grammar return Malformed. Selected recognized
@@ -36,9 +35,10 @@ import LocalDateTime
 ## }
 ## ```
 EdtfDate :: { raw : QualifiedCalendarValue }.{
+	## Distinguishes malformed or incomplete input, size/range limits, and unsupported calendar, resolution or qualification.
 	Error : [Malformed, Incomplete, TooLarge, OutOfRange, UnsupportedForm, UnsupportedCalendar, UnsupportedResolution, UnsupportedQualification]
 
-	## Generic encodings carry canonical text, never the opaque backing record.
+	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
 	parser_for : encoding -> (state -> Try({ value : EdtfDate, rest : state }, [InvalidEdtfDate(Error), Encoding(err), ..]))
@@ -59,6 +59,7 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		}
 	}
 
+	## Encodes the canonical standard text as a string in the selected encoding; encoding failures pass through.
 	encoder_for : encoding -> (EdtfDate, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
@@ -76,8 +77,10 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		Err(error) => Err(BadQuotedBytes("Invalid EdtfDate literal: ${Str.inspect(error)}"))
 	}
 
+	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "edtf-gregorian-date"
+	## Parses a Gregorian year, year-month or full date with supported scoped qualifiers. Rejects excluded EDTF forms explicitly; never invents omitted components.
 	parse : Str -> Try(EdtfDate, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 64 {
@@ -169,6 +172,7 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		Ok({ raw: raw })
 	}
 
+	## Checks that a qualified native description fits this Gregorian date-only profile, including year range and qualifier scopes.
 	from_description : QualifiedCalendarValue -> Try(EdtfDate, Error)
 	from_description = |raw| {
 		value = QualifiedCalendarValue.described_value(raw)
@@ -197,8 +201,10 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		}
 		Ok({ raw: raw })
 	}
+	## Returns the qualified calendar description, preserving resolution and independent qualifier scopes without assigning an uncertainty tolerance.
 	description : EdtfDate -> QualifiedCalendarValue
 	description = |value| value.raw
+	## Canonical EDTF date text preserving resolution and qualifier meaning; the original placement or spelling of equivalent qualifiers need not survive.
 	to_text : EdtfDate -> Str
 	to_text = |wrapped| {
 		raw = wrapped.raw
@@ -217,12 +223,16 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		suffix = scope_marker(qualifications, Whole)
 		"${date}${suffix}"
 	}
+	## Compares calendar descriptions, resolution and qualifiers, not a guessed interval of possible dates.
 	is_eq : EdtfDate, EdtfDate -> Bool
 	is_eq = |a, b| QualifiedCalendarValue.is_eq(a.raw, b.raw)
+	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : EdtfDate, Hasher -> Hasher
 	to_hash = |value, hasher| QualifiedCalendarValue.to_hash(value.raw, hasher)
+	## Number of indexed semantic facts available through fact_at.
 	fact_count : EdtfDate -> U64
 	fact_count = |value| QualifiedCalendarValue.fact_count(value.raw)
+	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : EdtfDate, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match QualifiedCalendarValue.fact_at(value.raw, index) {
 		End => End
@@ -235,6 +245,7 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 			Item(fact)
 		}
 	}
+	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : EdtfDate -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)

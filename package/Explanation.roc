@@ -45,11 +45,25 @@ import ICalPeriod
 ## reports ByteLimit. ByteLimit takes precedence over field-preview truncation;
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
+
+	## A supported description, rule, coverage value, or stored interpretation result.
+	## SelectionBatch also permits explaining why evaluation remains incomplete.
 	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(Calendar.Value), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
+
+	## Per-render limits on indexed fact accesses and total UTF-8 output bytes.
+	## A zero limit prevents any fact from being visited.
 	Budget : { max_facts : U64, max_utf8_bytes : U64 }
+
+	## Rendered text, visited/available fact counts, and rendering completeness.
+	## Limited identifies a fact budget, byte budget, or individual text preview
+	## limit; Complete does not assert that the source interpretation is complete.
 	Report : { text : Str, status : [Complete, Limited([FactLimit, ByteLimit, TextLimit])], visited_facts : U64, total_facts : U64 }
+
+	## Retain a source for indexed facts or bounded rendering, without interpreting it.
 	new : Source -> Explanation
 	new = |source| { source: source }
+
+	## Return the number of facts available from the retained source without rendering them.
 	fact_count : Explanation -> U64
 	fact_count = |value| match value.source {
 		DateRecurrence(v) => DateRecurrence.fact_count(v)
@@ -70,6 +84,9 @@ Explanation :: { source : Source }.{
 		ICalDuration(v) => ICalDuration.fact_count(v)
 		ICalPeriod(v) => ICalPeriod.fact_count(v)
 	}
+
+	## Read one zero-based source fact; return End beyond fact_count. This does not
+	## resolve zones, enumerate recurrence occurrences, or complete a limited batch.
 	fact_at : Explanation, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match value.source {
 		DateRecurrence(v) => DateRecurrence.fact_at(v, index)
@@ -90,6 +107,10 @@ Explanation :: { source : Source }.{
 		ICalDuration(v) => ICalDuration.fact_at(v, index)
 		ICalPeriod(v) => ICalPeriod.fact_at(v, index)
 	}
+
+	## Render newline-separated semantic facts within both budgets. Text fields are
+	## previewed to 256 bytes; inspect Report.status to detect any truncation.
+	## The text is explanatory prose, not an interchange format.
 	plain : Explanation, Budget -> Report
 	plain = |value, budget| {
 		total = fact_count(value)
@@ -138,6 +159,8 @@ Explanation :: { source : Source }.{
 		}
 		{ text: $text, status, visited_facts: $index, total_facts: total }
 	}
+
+	## Summarize the explanation and its fact count without rendering all facts.
 	to_inspect : Explanation -> Str
 	to_inspect = |value| "Explanation(facts=${fact_count(value).to_str()})"
 }

@@ -59,6 +59,8 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 		Ok({ start: new(bounds.start.date, bounds.start.clock), end: new(bounds.end.date, bounds.end.clock) })
 	}
 
+	## Errors from the native Gregorian local-label parser, including invalid date
+	## or clock fields, incomplete/malformed input and unsupported precision.
 	TextError : [TooLarge, Incomplete, Malformed, InvalidDate(GregorianDate.Error), InvalidTime(ClockTime.Error)]
 
 	## Parse an explicitly Gregorian local label: date, uppercase T, then clock.
@@ -106,14 +108,20 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 		Ok("${GregorianDate.to_text(day)}T${ClockTime.to_text(value.clock)}")
 	}
 
+	## Combine a validated calendar date and clock label without choosing an offset
+	## or timezone. Resolve the result explicitly before timeline computation.
 	new : Calendar.Date, ClockTime -> LocalDateTime
 	new = |date, clock| { date, clock }
 
+	## Read the calendar date as described, retaining its calendar identity.
 	date : LocalDateTime -> Calendar.Date
 	date = |value| value.date
+	## Read the local clock label without resolving it to a timeline.
 	clock : LocalDateTime -> ClockTime
 	clock = |value| value.clock
 
+	## Describe the same civil-day and clock position in another supported calendar.
+	## The clock is unchanged; an unsupported destination date returns OutOfRange.
 	in_calendar : LocalDateTime, Calendar -> Try(LocalDateTime, [OutOfRange, ..])
 	in_calendar = |value, target| {
 		converted = Calendar.Date.in_calendar(value.date, target)?
@@ -136,14 +144,20 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 		}
 	}
 
+	## Whether both labels have the same civil-day coordinate and clock position.
+	## Different calendar descriptions can match; no timezone is involved.
 	same_position : LocalDateTime, LocalDateTime -> Bool
 	same_position = |a, b| compare_position(a, b) == EQ
 
 	## Description equality preserves the calendar as well as the clock label.
 	is_eq : LocalDateTime, LocalDateTime -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock
+	## Hash description identity, including the calendar and clock, consistently
+	## with is_eq. Use explicit conversion when keys should ignore calendar identity.
 	to_hash : LocalDateTime, Hasher -> Hasher
 	to_hash = |value, hasher| value.clock.to_hash(value.date.to_hash(hasher))
+	## Describe the calendar date and local clock for diagnostics, without choosing
+	## a zone or resolving an occurrence.
 	to_inspect : LocalDateTime -> Str
 	to_inspect = |value| "LocalDateTime(${Str.inspect(value.date)}, ${Str.inspect(value.clock)})"
 

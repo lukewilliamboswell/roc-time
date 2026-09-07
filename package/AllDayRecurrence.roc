@@ -21,6 +21,10 @@ AllDayRecurrence(id) :: {
 	zone_buffered : U64,
 	pending : [None, Some(AllDayOccurrence.Cursor({ series : id, date : GregorianDate }))],
 }.{
+
+	## Create a cursor for positive-duration all-day events within a source-date window.
+	## Empty/reversed windows and zero days fail; actual zone interpretation is deferred until
+	## consumption.
 	new : id, DateRecurrence, DateRecurrence.Window, U64, ZoneRules -> Try(AllDayRecurrence(id), [InvalidDuration, EmptyWindow, ReversedWindow, ..])
 	new = |series, rule, window, days, rules| {
 		if days == 0 {
@@ -29,8 +33,17 @@ AllDayRecurrence(id) :: {
 		dates = DateRecurrence.cursor(rule, window)?
 		Ok({ series, days, rules, dates, date_buffered: 0, zone_buffered: 0, pending: None })
 	}
+
+	## Separate budgets for date candidate work/storage and zone segment/member work. These
+	## limits apply per next call or across an entire collect call.
 	Limits : { max_date_steps : U64, max_date_buffered : U64, max_zone_segments : U64, max_zone_members : U64 }
+
+	## Why collection stopped before proving completion. Resume the returned cursor after
+	## choosing an adequate budget.
 	Limit : [DateWorkLimit, DateBufferLimit, ZoneWorkLimit, ZoneBufferLimit, OutputLimit]
+
+	## Collected identified events and work counters. Limited includes the cursor needed to
+	## continue the same series.
 	Batch(id) : {
 		occurrences : List(AllDayOccurrence({ series : id, date : GregorianDate })),
 		date_steps : U64,
@@ -62,6 +75,9 @@ AllDayRecurrence(id) :: {
 		}
 		Ok({ occurrences: $occurrences, date_steps: $date_steps, zone_segments: $zone_segments, status: Limited({ cursor: $state, reason: OutputLimit }) })
 	}
+
+	## One advancement: an event and continuation, End, or a resumable limit. Date and zone
+	## counters report work spent on this call.
 	Next(id) : {
 		date_steps : U64,
 		date_buffered : U64,
@@ -148,6 +164,9 @@ AllDayRecurrence(id) :: {
 			}
 		},
 	)
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : AllDayRecurrence(id) -> Str
 	to_inspect = |state| "AllDayRecurrence(days=${state.days.to_str()}, ${Str.inspect(state.dates)})"
 }

@@ -92,16 +92,30 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Construction validates duration and normalizes at most 4096 overrides once;
 	## no zone resolution or recurrence expansion. This is not a storage format.
 	Endings :: { duration : TimedOccurrence.Duration, overrides : List(Entry) }.{
+
+		## One source-label-specific ending. The original source identifies the override,
+		## even when another source resolves to the same boundary.
 		Entry : { source : LocalDateTime, ending : TimedOccurrence.Ending }
+
+		## Rejected default duration, excessive entries or conflicting endings for a source.
 		ConstructionError : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)]
+
+		## Check and normalize up to 4096 source-specific ending overrides. Duplicate equal endings
+		## collapse; conflicting endings for one source return ConflictingEnding.
 		normalize : List(Entry) -> Try(List(Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 		normalize = schedule_endings_normalize_endings
+
+		## Validate the positive default duration and normalize ending overrides once for reuse
+		## across queries. Does not resolve zones or enumerate starts.
 		new : TimedOccurrence.Duration, List(Entry) -> Try(Endings, [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
 		new = |duration, inputs| {
 			overrides = schedule_endings_normalize_endings(inputs)?
 			TimedOccurrence.validate_duration(duration)?
 			Ok({ duration, overrides })
 		}
+
+		## Compare retained duration and normalized source-ending intent. This is declaration
+		## equality, not equivalence of resulting appointment spans.
 		is_eq : Endings, Endings -> Bool
 		is_eq = |a, b| {
 			if !schedule_endings_same_duration_definition(a.duration, b.duration) or a.overrides.len() != b.overrides.len() {
@@ -118,6 +132,9 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 			}
 			Bool.True
 		}
+
+		## Hash the same declaration fields used by equality, including policies and original
+		## override sources, for dictionary keys.
 		to_hash : Endings, Hasher -> Hasher
 		to_hash = |value, hasher| {
 			var $hash = value.overrides.len().to_hash(schedule_endings_hash_duration(value.duration, hasher))
@@ -126,17 +143,44 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 			}
 			$hash
 		}
+
+		## Read the checked default duration and normalized overrides for editing or inspection. The
+		## returned fields are not a persistence format.
 		definition : Endings -> { duration : TimedOccurrence.Duration, overrides : List(Entry) }
 		definition = |value| { duration: value.duration, overrides: value.overrides }
 	}
 
+	## Replace the ending of one original source label with duration, explicit boundary or
+	## explicit local-end intent. Equal resolved boundaries do not merge source identities.
 	EndOverride : { source : LocalDateTime, ending : TimedOccurrence.Ending }
+
+	## Duration-only override for an original source label. Use EndOverride when an explicit
+	## endpoint must be retained.
 	Override : { source : LocalDateTime, duration : TimedOccurrence.Duration }
+
+	## Candidate and zone budgets shared by start and end interpretation during a call; output
+	## capacity is supplied separately to collect.
 	Limits : TimedRecurrence.Limits
+
+	## Which start, end or output budget stopped execution. Resume the returned cursor to retain
+	## source-series and pending-ending state.
 	Limit : [StartWorkLimit, StartBufferLimit, StartZoneWorkLimit, StartZoneBufferLimit, EndZoneWorkLimit, EndZoneBufferLimit, OutputLimit]
+
+	## One complete identified appointment with its continuation, End, or a resumable limit;
+	## counters include start and end work.
 	Next(id) : { steps : U64, zone_segments : U64, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, status : [End, Item({ occurrence : TimedOccurrence({ series : id, source : LocalDateTime }), cursor : TimedSchedule(id) }), Limited({ cursor : TimedSchedule(id), reason : Limit })] }
+
+	## Complete appointments emitted so far, work counters and Complete/Limited status. A Limited
+	## batch is valid partial output, not a complete schedule.
 	Batch(id) : { occurrences : List(TimedOccurrence({ series : id, source : LocalDateTime })), steps : U64, zone_segments : U64, status : [Complete, Limited({ cursor : TimedSchedule(id), reason : Limit })] }
+
+	## Malformed duration, invalid window, unavailable zone interpretation or range failure.
+	## Resource exhaustion is represented separately by a Limited result.
 	Error : [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields), Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart]
+
+	## Start an identified appointment query with one default duration and explicit start
+	## context. The window selects source starts; endings may extend beyond it. Invalid
+	## duration/window errors are checked before consumption.
 	new : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, ..])
 	new = |series, rule, window, duration, context| {
 		TimedOccurrence.validate_duration(duration)?
@@ -291,6 +335,9 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 			}
 		},
 	)
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : TimedSchedule(id) -> Str
 	to_inspect = |value| "TimedSchedule(start_buffered=${value.start_buffered.to_str()}, end_buffered=${value.end_buffered.to_str()})"
 }

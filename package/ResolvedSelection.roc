@@ -16,12 +16,19 @@ ResolvedSelection :: {
 	rules : ZoneRules,
 	coverage : Coverage,
 }.{
+
+	## Resolve the full half-open civil range and retain its inputs with complete
+	## coverage, including disconnected fold components. Reject empty/reversed
+	## labels and incomplete validity or numeric range; scan the finite rules.
+	## For explicit work and storage budgets, use a selection cursor with collect.
 	resolve : ZoneRules, LocalDateTime, LocalDateTime -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
 	resolve = |rules, start, end| {
 		coverage = ZoneRules.select(rules, start, end)?
 		Ok({ start, end, rules, coverage })
 	}
 
+	## Per-call segment work, retained member count, and either a complete snapshot
+	## or a cursor plus the limiting reason. Limited exposes no partial coverage.
 	Batch : {
 		segments : U64,
 		buffered : U64,
@@ -44,18 +51,28 @@ ResolvedSelection :: {
 		Ok({ segments: batch.segments, buffered: batch.buffered, status })
 	}
 
+	## Return the stored complete canonical coverage without reevaluating rules.
 	coverage : ResolvedSelection -> Coverage
 	coverage = |snapshot| snapshot.coverage
+
+	## Return the original inclusive civil start label.
 	start : ResolvedSelection -> LocalDateTime
 	start = |snapshot| snapshot.start
+
+	## Return the original exclusive civil end label.
 	end : ResolvedSelection -> LocalDateTime
 	end = |snapshot| snapshot.end
+
+	## Return the exact immutable rules retained by the selection.
 	rules : ResolvedSelection -> ZoneRules
 	rules = |snapshot| snapshot.rules
 
+	## Interpret the original civil range under another explicit rules snapshot.
+	## This can change the coverage or return a validity/range error.
 	reresolve : ResolvedSelection, ZoneRules -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
 	reresolve = |snapshot, new_rules| resolve(new_rules, snapshot.start, snapshot.end)
 
+	## Compare only the resulting POSIX coverage, ignoring source labels and rule provenance.
 	same_extent : ResolvedSelection, ResolvedSelection -> Bool
 	same_extent = |a, b| a.coverage == b.coverage
 
@@ -63,12 +80,18 @@ ResolvedSelection :: {
 	## same_extent instead compares only the resulting compatible-axis coverage.
 	is_eq : ResolvedSelection, ResolvedSelection -> Bool
 	is_eq = |a, b| a.start == b.start and a.end == b.end and a.coverage == b.coverage and ZoneRules.definition(a.rules) == ZoneRules.definition(b.rules)
+
+	## Hash the source labels, complete coverage and retained rules consistently
+	## with is_eq. Work includes coverage members and rule transitions.
 	to_hash : ResolvedSelection, Hasher -> Hasher
 	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.coverage.to_hash(value.end.to_hash(value.start.to_hash(hasher))))
 
 	## Complete snapshots expose stored canonical members without reevaluation.
 	fact_count : ResolvedSelection -> U64
 	fact_count = |snapshot| Coverage.member_count(snapshot.coverage) + 2
+
+	## Read the selection summary, context, then indexed coverage members.
+	## Return End beyond fact_count; stored coverage is not recomputed.
 	fact_at : ResolvedSelection, U64 -> [End, Item(SemanticFact)]
 	fact_at = |snapshot, index| {
 		if index == 0 {
@@ -87,6 +110,9 @@ ResolvedSelection :: {
 		Complete(snapshot) => fact_count(snapshot) + 1
 		Limited(_) => 3
 	}
+
+	## Read evaluation status followed by the snapshot facts when complete, or
+	## source/context facts when limited. Return End beyond batch_fact_count.
 	batch_fact_at : Batch, U64 -> [End, Item(SemanticFact)]
 	batch_fact_at = |batch, index| {
 		if index == 0 {
@@ -112,6 +138,7 @@ ResolvedSelection :: {
 		}
 	}
 
+	## Summarize source bounds and member count without traversing the coverage.
 	to_inspect : ResolvedSelection -> Str
 	to_inspect = |snapshot| match fact_at(snapshot, 0) {
 		Item(fact) => SemanticFact.summary(fact)
@@ -119,7 +146,7 @@ ResolvedSelection :: {
 	}
 }
 
-## Independent bounded timeline enumeration for R07 classification.
+# Independent bounded timeline enumeration for R07 classification.
 expect {
 	# Three distinct preimages; a one-member buffer must stop and resume
 	# without losing the segment that could not be appended.

@@ -24,12 +24,18 @@ EventCollection(id) :: [Events(List({ id : id, span : PosixSpan }))].{
 		Ok(Events(entries))
 	}
 
+	## Count identified events, including events with identical occupied spans.
+	## This differs from the coalesced member count of their coverage.
 	event_count : EventCollection(id) -> U64
 	event_count = |Events(entries)| entries.len()
 
+	## Read events in their original input order, retaining IDs and individual spans.
+	## The returned list may share storage with the collection.
 	to_entries : EventCollection(id) -> List({ id : id, span : PosixSpan })
 	to_entries = |Events(entries)| entries
 
+	## Visit events in original input order, preserving identity and overlapping spans.
+	## Iteration does not sort events or coalesce their occupied time.
 	iter : EventCollection(id) -> Iter({ id : id, span : PosixSpan })
 	iter = |Events(entries)| entries.iter()
 

@@ -32,10 +32,12 @@ import PosixBoundary
 ## }
 ## ```
 ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
+	## Utc requires a trailing Z. Local has no offset; its surrounding property determines floating versus named-zone interpretation.
 	Form : [Local, Utc]
+	## Distinguishes incomplete/malformed syntax, invalid Gregorian fields or time, year range, and unsupported leap seconds.
 	Error : [Malformed, Incomplete, OutOfRange, InvalidDate, InvalidTime, UnsupportedLeapSecond]
 
-	## Generic encodings carry canonical text, never the opaque backing record.
+	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
 	parser_for : encoding -> (state -> Try({ value : ICalDateTime, rest : state }, [InvalidICalDateTime(Error), Encoding(err), ..]))
@@ -56,6 +58,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		}
 	}
 
+	## Encodes the canonical standard text as a string in the selected encoding; encoding failures pass through.
 	encoder_for : encoding -> (ICalDateTime, state -> Try(state, err))
 		where [
 			encoding.encode_str : Str, state -> Try(state, err),
@@ -73,9 +76,11 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		Err(error) => Err(BadQuotedBytes("Invalid ICalDateTime literal: ${Str.inspect(error)}"))
 	}
 
+	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc5545-datetime-values-v1"
 
+	## Parses YYYYMMDDTHHMMSS with optional Z, years 0001–9999 and whole seconds. Accepts lowercase t/z; rejects numeric offsets and fractions.
 	parse : Str -> Try(ICalDateTime, Error)
 	parse = |text| {
 		length = text.count_utf8_bytes()
@@ -124,8 +129,10 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		Ok({ date, clock, form })
 	}
 
+	## Returns whether the declaration carries explicit UTC Z or an unresolved local label.
 	form : ICalDateTime -> Form
 	form = |value| value.form
+	## Returns validated Gregorian date and clock fields. Preserve form separately when choosing how to interpret them.
 	source : ICalDateTime -> { date : GregorianDate, clock : ClockTime }
 	source = |value| { date: value.date, clock: value.clock }
 
@@ -141,6 +148,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		Utc => FixedOffset.resolve(FixedOffset.from_seconds(0), local_label(value))
 	}
 
+	## Canonical compact DATE-TIME value with uppercase T/Z and no fractional digits. Local values remain local.
 	to_text : ICalDateTime -> Str
 	to_text = |value| {
 		date = GregorianDate.to_fields(value.date)
@@ -151,8 +159,10 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		}
 		"${pad(date.year.to_str(), 4)}${pad(date.month.to_str(), 2)}${pad(date.day.to_str(), 2)}T${pad(clock.hour.to_str(), 2)}${pad(clock.minute.to_str(), 2)}${pad(clock.second.to_str(), 2)}${suffix}"
 	}
+	## Compares date, clock and UTC/local form; identical clock labels in different forms are distinct declarations.
 	is_eq : ICalDateTime, ICalDateTime -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock and a.form == b.form
+	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : ICalDateTime, Hasher -> Hasher
 	to_hash = |value, hasher| {
 		marker = match value.form {
@@ -170,6 +180,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 	} else {
 		1
 	}
+	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ICalDateTime, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| {
 		if index >= fact_count(value) {
@@ -181,6 +192,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			Item(SemanticFact.new(Requirement(ZoneContext)))
 		}
 	}
+	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ICalDateTime -> Str
 	to_inspect = |value| match fact_at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
