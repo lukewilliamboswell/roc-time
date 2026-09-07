@@ -15,8 +15,8 @@ ScheduleExchange :: [].{
 			exclusions: [],
 		})?
 		definition = DateRecurrence.definition(imported)
-		added = parse_date("2025-07-04")?
-		removed = parse_date("2025-03-31")?
+		added = "2025-07-04"
+		removed = "2025-03-31"
 		edited = DateRecurrence.new(
 			definition.anchor,
 			{
@@ -30,8 +30,8 @@ ScheduleExchange :: [].{
 			Err(error) => return Err(Export(error))
 		}
 		restored = import_parts(parts)?
-		start = parse_date("2025-01-01")?
-		end = parse_date("2025-08-01")?
+		start = "2025-01-01"
+		end = "2025-08-01"
 		cursor = DateRecurrence.cursor(restored, { start, end })?
 		batch = DateRecurrence.Cursor.collect(
 			cursor,
@@ -79,9 +79,4 @@ limit_name = |reason| match reason {
 	WorkLimit => "work budget reached"
 	BufferLimit => "buffer budget reached"
 	OutputLimit => "output budget reached"
-}
-
-parse_date = |text| match GregorianDate.parse(text) {
-	Ok(value) => Ok(value)
-	Err(error) => Err(Date(error))
 }
