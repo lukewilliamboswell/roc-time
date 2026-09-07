@@ -12,11 +12,12 @@ from urllib.parse import urlsplit
 import zipfile
 
 sys.dont_write_bytecode = True
-from roc_version import package_pin, replace_pin
+from roc_version import package_pin, replace_pin, read_pin
 from update_example_urls import migrate_ical_names
+from promote_examples import PROMOTED, ZONE_STARTERS, application_source, sources as application_sources
 
 ROOT = Path(__file__).resolve().parents[1]
-STARTERS = ("booking_exchange", "archive_search", "staffing", "clock_deadline")
+STARTERS = ("booking_exchange", "archive_search", "staffing", "clock_deadline") + PROMOTED
 PREFIX = "roc-time-starter"
 
 # Kept here so the generator is the complete source of every generated file.
@@ -118,8 +119,7 @@ cd roc-time-starter/examples/booking_exchange
 roc main.roc
 ```
 
-Run `roc main.roc` inside `archive_search`, `staffing` or `clock_deadline` to try the other
-applications, or `roc build main.roc` to create an executable. No Python setup
+Run `roc main.roc` inside any of the application folders listed below, or `roc build main.roc` to create an executable. No Python setup
 is needed to run these Roc applications.
 
 An optional Python 3 wrapper supports `python3 run.py check booking_exchange`,
@@ -127,6 +127,11 @@ An optional Python 3 wrapper supports `python3 run.py check booking_exchange`,
 root. It checks the compiler version and places builds under `build/`. Set
 `ROC` to an executable path when using the wrapper with a compiler off PATH.
 
+- `zoned_appointment`: interpret an appointment using named-zone rules.
+- `appointment_display`: display an appointment with explicit formatting choices.
+- `invoice_report`: group invoice dates into a reporting window.
+- `schedule_exchange`: import, edit and export all-day recurrence values.
+- `meeting_exchange`: edit timed meetings and export RFC property values.
 - `booking_exchange`: exchange explicit appointment timestamps and find availability.
 - `archive_search`: preserve archive date precision and qualification while searching.
 - `clock_deadline`: read the platform clock, check an expiry and encode a JSON record.
@@ -135,7 +140,7 @@ root. It checks the compiler version and places builds under `build/`. Set
 
 The `manifest.json` records the compiler and both bundle roles. Each application's
 `main.roc` declares the actual release URLs; companion modules contain its domain
-logic. The optional zones archive is required by staffing. Neither an unavailable
+logic. The zones archive is used by staffing, zoned_appointment and meeting_exchange. Neither an unavailable
 archive nor an unsupported compiler is silently replaced with checkout sources.
 '''
 
@@ -152,14 +157,16 @@ def build(output: Path, bundle_url: str, zone_bundle_url: str) -> Path:
         "LICENSE": (ROOT / "LICENSE").read_bytes(),
         ".roc-version": (compiler + "\n").encode(),
         "README.md": readme(compiler).encode(),
-        "run.py": RUNNER.encode(),
+        "run.py": RUNNER.replace('STARTERS = ("booking_exchange", "archive_search", "staffing", "clock_deadline")', f"STARTERS = {STARTERS!r}").encode(),
         "manifest.json": (json.dumps({"format": "roc-time-starter", "version": 1,
                                      "compiler": compiler, "bundles": {"core": bundle_url, "zones": zone_bundle_url},
                                      "starters": list(STARTERS)}, indent=2, sort_keys=True) + "\n").encode(),
     }
     for starter in STARTERS:
-        directory = ROOT / "examples" / starter
-        sources = sorted(directory.rglob("*.roc"))
+        directory = application_source(ROOT, starter)
+        sources = application_sources(directory)
+        if directory.parent.name == "tests":
+            read_pin(directory / "main.roc")  # Validate source; output is rebound below.
         if not (directory / "main.roc").is_file() or len(sources) < 2:
             raise ValueError(f"incomplete starter folder: {starter}")
         for path in sources:
@@ -170,7 +177,7 @@ def build(output: Path, bundle_url: str, zone_bundle_url: str) -> Path:
                 source = replace_pin(source, compiler)
                 source, core_count = re.subn(r'(?m)^(\s*time:\s*)"[^"]+"', lambda match: f'{match[1]}"{bundle_url}"', source)
                 source, zone_count = re.subn(r'(?m)^(\s*zones:\s*)"[^"]+"', lambda match: f'{match[1]}"{zone_bundle_url}"', source)
-                if core_count != 1 or zone_count != (1 if starter == "staffing" else 0):
+                if core_count != 1 or zone_count != (1 if starter in ZONE_STARTERS else 0):
                     raise ValueError(f"unexpected package declarations: {path}")
             files[f"examples/{starter}/{path.relative_to(directory).as_posix()}"] = source.encode()
     output = Path(output)

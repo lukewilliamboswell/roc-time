@@ -112,6 +112,15 @@ def main():
             update_examples(kit / "examples", core_url, zone_url)
             metadata["bundles"] = {"core": core_url, "zones": zone_url}
             (kit / "manifest.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+            if metadata["starters"] != list(STARTERS):
+                raise RuntimeError("starter manifest omits a release application")
+            from promote_examples import PROMOTED, application_source, sources
+            for starter in PROMOTED:
+                source = application_source(ROOT, starter)
+                expected_members = {p.relative_to(source) for p in sources(source)}
+                actual_members = {p.relative_to(kit / "examples" / starter) for p in (kit / "examples" / starter).rglob("*.roc")}
+                if actual_members != expected_members:
+                    raise RuntimeError(f"promoted application lost companion modules: {starter}")
             for starter in STARTERS:
                 expected = None if starter == "clock_deadline" else (ROOT / f"tests/examples/{starter}.txt").read_text()
                 invoke(kit, work / "cache", "check", starter)

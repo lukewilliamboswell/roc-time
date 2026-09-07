@@ -163,6 +163,42 @@ class BumpSummaryTests(unittest.TestCase):
                 summarize_bump(source, output, "https://example.com/not-a-run")
 
 
+class PromotionTests(unittest.TestCase):
+    def test_release_copy_preserves_staged_sources_and_binds_roles(self):
+        import shutil
+        from promote_examples import PROMOTED, ZONE_STARTERS, promote
+        from roc_version import package_pin, read_pin, replace_pin
+        with tempfile.TemporaryDirectory(dir=ROOT / ".roc-time-tmp") as directory:
+            root = Path(directory)
+            for role in ("package", "tzdb/package"):
+                (root / role).mkdir(parents=True)
+                shutil.copyfile(ROOT / role / "main.roc", root / role / "main.roc")
+            for name in PROMOTED:
+                shutil.copytree(ROOT / "tests" / name, root / "tests" / name)
+            staged_main = root / "tests" / PROMOTED[0] / "main.roc"
+            other_pin = "nightly-2026-09-05-b195f5b" if package_pin(ROOT) != "nightly-2026-09-05-b195f5b" else "nightly-2026-09-06-d85e877"
+            staged_main.write_text(replace_pin(staged_main.read_text(), other_pin))
+            nested = root / "tests" / PROMOTED[0] / "nested" / "Data.roc"
+            nested.parent.mkdir()
+            nested.write_text("Data :: []\n")
+            original = {p: p.read_bytes() for p in (root / "tests").rglob("*.roc")}
+            core, zones = "https://example.com/core.tar.zst", "https://example.com/zones.tar.zst"
+            with self.assertRaisesRegex(ValueError, "compiler"):
+                promote(root, "wrong", core, zones)
+            self.assertFalse((root / "examples").exists())
+            paths = promote(root, package_pin(ROOT), core, zones)
+            self.assertEqual(len(paths), 5)
+            for path in paths:
+                self.assertEqual(read_pin(path), package_pin(ROOT))
+                self.assertIn(core, path.read_text())
+                self.assertEqual(zones in path.read_text(), path.parent.name in ZONE_STARTERS)
+            self.assertEqual((root / "examples" / PROMOTED[0] / "nested/Data.roc").read_bytes(), nested.read_bytes())
+            self.assertEqual(original, {p: p.read_bytes() for p in original})
+            before = {p: p.read_bytes() for p in (root / "examples").rglob("*.roc")}
+            promote(root, package_pin(ROOT), core, zones)
+            self.assertEqual(before, {p: p.read_bytes() for p in before})
+
+
 class StarterReleaseTests(unittest.TestCase):
     def setUp(self):
         temporary = ROOT / ".roc-time-tmp"
@@ -281,7 +317,7 @@ def main() -> None:
             core = manifest["bundles"]["core"]
             zones = manifest["bundles"]["zones"]
             link = f"https://github.com/{args.repo}/releases/download/{quote(args.version, safe='')}/roc-time-starter.zip"
-            header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, archive search, staffing and clock deadline examples. "
+            header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, reporting, appointment display, schedule exchange, staffing and clock deadline examples. "
                       f"Use [Roc {compiler}](https://github.com/roc-lang/nightlies/releases/tag/{compiler}); "
                       "each application declares its compiler in its header. Unzip the kit, enter "
                       "`examples/booking_exchange`, and run `roc main.roc`. Python is not required.\n\n")
