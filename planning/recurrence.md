@@ -6,6 +6,9 @@ finite immutable zone rules and event/coverage distinctions.
 
 ## Deliverables
 
+- Complete the supported schedule input/output workflow below before widening
+  recurrence import. Deliver canonical DATE export as a small independent slice,
+  then timed meeting definitions and durable interpretation.
 - Resolve broader mixed UTC/local property support and UTC EXDATE matching
   against gap-adjusted sources before widening the timed profile: projecting
   an adjusted boundary cannot recover its original label.
@@ -24,6 +27,47 @@ The caller must be able to import or construct a meeting schedule, change its
 definition through checked public construction, export canonical text, save/load
 the native definition and evaluate the restored schedule over a bounded window.
 This is an R11–R12/R14/R16 deliverable, using the existing execution engine.
+
+Implement in reviewable slices:
+
+1. **Checked DATE export.** Add a semantic definition accessor to
+   `DateRecurrence` and canonical extracted-property output to `RfcDateRule`.
+   Reuse `CalendarPattern.definition`; reconstruct edits through
+   `DateRecurrence.new`. Export checks the adapter's year range and unsupported
+   selector/default combinations before returning `Parts`. Native definitions
+   outside the declared RFC profile fail explicitly. Test a monthly day-31
+   schedule with COUNT and an exclusion: exporting must not turn skipped months
+   into clamped dates or replenish excluded occurrences. This is useful on its
+   own, but does not complete timed schedules or durable native persistence.
+2. **Timed meeting exchange.** Add checked semantic access for `TimedRecurrence`
+   and `RfcTimedRule`, then canonical extracted-property output for the existing
+   timed profile. Reuse the calendar, clock and subdaily definition accessors;
+   preserve start form, termination domain, inclusions, exclusions and PERIOD
+   endings. Use an explicit local weekly meeting, COUNT, one excluded source and
+   one added occurrence with a different ending as the caller scenario. Change
+   the definition through checked construction, export it, import it again and
+   evaluate both across a fixed transition. Canonical output is semantic text,
+   not the original spelling or an ICS document.
+3. **Durable definition and context.** Introduce a checked schedule definition
+   separate from `TimedSchedule`, which is an evaluation cursor tied to a window.
+   Save/load the definition through a declared versioned persistence kind, then
+   create fresh bounded cursors for two overlapping windows. Resolve the context
+   and identity choices below before freezing the format. A saved RFC `Parts`
+   record alone does not preserve native policies, series identity or zone rules.
+
+The smallest complete timed workflow must retain the meeting's series identity,
+original exception labels, default duration, explicit ending overrides and RFC
+mode/policy, plus reproducible interpretation. Choose whether identity belongs in
+an application envelope or a supported persistence type; generic application
+identifiers must not accidentally acquire a private compiler encoding. Keep
+query windows and evaluation progress outside the definition archive.
+
+Construction/export/save/load costs must depend on bounded definition bytes,
+selectors, exception entries and stored transitions, not occurrence count or
+query duration. Set explicit archive count/byte caps and test an unbounded rule
+with a tiny consumption budget to detect accidental expansion while saving.
+Retain a native fractional-second or out-of-profile year case to
+prove RFC export rejects precision/range loss instead of narrowing silently.
 
 - Declare separately what RFC text can represent and what versioned native
   persistence preserves. Reject unrepresentable native definitions explicitly;
