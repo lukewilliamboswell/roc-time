@@ -21,7 +21,6 @@ AppointmentDisplay :: [].{
 			Ok(value) => value
 			Err(error) => return Err(Display(error))
 		}
-		lines : List(Str)
 		lines = [
 			"Appointment: ${heading}",
 			"Date: ${EnglishGregorian.date(day)}",
