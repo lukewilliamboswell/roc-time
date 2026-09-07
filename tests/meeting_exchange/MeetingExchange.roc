@@ -7,6 +7,7 @@ import time.PosixSpan
 import time.TimedRecurrence
 import time.TimedOccurrence
 import time.TimedSchedule
+import time.ScheduleDefinition
 import time.ZoneRules
 
 ## Exchange extracted iCalendar timed property values with explicit zone rules.
@@ -38,7 +39,11 @@ MeetingExchange :: [].{
 			start: local_text("2026-03-20T00:00")?,
 			end: local_text("2026-04-15T00:00")?,
 		}
-		schedule = ICalTimedRule.schedule("team-meeting", restored, window, Local(rules))?
+		meeting = match ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) {
+			Ok(value) => value
+			Err(error) => return Err(Definition(error))
+		}
+		schedule = ScheduleDefinition.cursor("team-meeting", meeting, window)?
 		batch = match TimedSchedule.collect(
 			schedule,
 			{

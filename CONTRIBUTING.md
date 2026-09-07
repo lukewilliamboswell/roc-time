@@ -190,7 +190,13 @@ canonical properties to validate their byte cap; its allocation traffic is
 measured separately. These counters measure requested bytes, not retained
 memory. The staged [meeting exchange application](tests/meeting_exchange/main.roc)
 is checked against local sources and distributable bundles; public promotion
-waits for a compatible release.
+waits for a compatible release. The same oracle and fuzz models exercise
+`ScheduleDefinition` construction and fresh-window cursors, including source
+identities and native fractional labels. Its hosted resource gate varies
+0–4096 ending overrides, owned/shared/sliced inputs and finite query horizons,
+measuring construction, definition access and first/resumed consumption
+separately. Checked definitions prepare endings once; this evidence does not
+establish native persistence or retained-memory bounds.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from

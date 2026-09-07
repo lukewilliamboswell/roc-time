@@ -9,8 +9,13 @@ case and deliberately wrong, malformed and missing output controls.
 
 Requirements: R01, R07, R11, R12, R14 and R16. Successful cases compare canonical
 property text and independently expected source labels and microsecond spans.
-Every case evaluates the original with small resumable work/output budgets and
-the rebuilt/exported/imported rule with broad budgets. COUNT/window cases use
+Every successful case evaluates the original with small resumable work/output
+budgets and the rebuilt/exported/imported rule with broad budgets. It also
+checks fresh `ScheduleDefinition` cursors against those same independently
+expected events, using the iCalendar origin and a native equivalent for
+period-free cases. Event series/source identities are observed explicitly.
+Native construction checks reject invalid durations and conflicting endings;
+precision and calendar descriptions remain available through definition access. COUNT/window cases use
 two overlapping windows and exclusions. Native-only values test checked precision,
 year, count and byte limits. Wrong UTC/local UNTIL and interpretation contexts
 must return the specific declared errors.

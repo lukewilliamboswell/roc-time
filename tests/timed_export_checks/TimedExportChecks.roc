@@ -12,6 +12,8 @@ import time.GregorianDate
 import time.CalendarDate
 import time.ClockTime
 import time.ICalDuration
+import time.ScheduleDefinition
+import time.PosixDelta
 
 # R07/R11/R12/R14: the native executable receives inputs only. Expected text
 # and coordinates are authored independently in reference.py/cases.jsonl.
@@ -49,6 +51,11 @@ TimedExportChecks :: [].{
 		} else {
 			Local(rules(at(args, 9)))
 		}
+		saved = match ScheduleDefinition.from_ical({ rule: restored, context }) {
+			Ok(value) => value
+			Err(IncompatibleContext) => return "IncompatibleContext"
+			Err(_) => crash "Window-free ICal definition rejected"
+		}
 		match ICalTimedRule.schedule(42.U64, restored, window, context) {
 			Ok(_) => {}
 			Err(IncompatibleContext) => return "IncompatibleContext"
@@ -56,8 +63,38 @@ TimedExportChecks :: [].{
 		}
 		first = collect(original, window, context, Bool.True)
 		second = collect(restored, window, context, Bool.False)
-		if first != second {
+		third = collect_cursor(ScheduleDefinition.cursor(42.U64, saved, window) ?? crash "Definition cursor rejected", Bool.True)
+		if first != second or first != third {
 			crash "Export changed bounded execution"
+		}
+		# All period-free cases can also be described directly in the native
+		# API, using explicit equivalent RFC policies and the same fixed data.
+		if definition.periods.is_empty() {
+			native_context = { rules: context_rules(context), occurrence: First, gap: UseOffsetBeforeGap }
+			spec = { rule: definition.rule, duration: ICalDuration.to_duration(definition.duration), overrides: [], context: native_context }
+			native_saved = ScheduleDefinition.from_native(spec) ?? crash "Native definition rejected"
+			fourth = collect_cursor(ScheduleDefinition.cursor(42.U64, native_saved, window) ?? crash "Native cursor rejected", Bool.False)
+			if first != fourth {
+				crash "Native definition changed independent expected execution"
+			}
+			zero = I64.from_str(args.get(10) ?? "0") ?? 0
+			match ScheduleDefinition.from_native({ ..spec, duration: Coordinate(PosixDelta.from_microseconds(zero)) }) {
+				Err(InvalidDuration) => {}
+				_ => crash "Zero duration accepted"
+			}
+			source = TimedRecurrence.definition(definition.rule).anchor
+			match ScheduleDefinition.from_native({
+				..spec,
+				overrides: [
+					{ source, ending: After(Coordinate(PosixDelta.from_microseconds(zero + 1))) },
+					{ source, ending: After(Coordinate(PosixDelta.from_microseconds(zero + 2))) },
+				],
+			}) {
+				Err(ConflictingEnding(label_value)) => if label_value != source {
+					crash "Conflict lost source"
+				}
+				_ => crash "Conflicting endings accepted"
+			}
 		}
 		Json.to_str({ parts: { start: exported.start, rule: exported.rule, duration: exported.duration, inclusions: exported.inclusions, exclusions: exported.exclusions, periods: exported.periods, mode: Str.inspect(exported.mode) }, occurrences: first })
 	}
@@ -126,6 +163,24 @@ native = |name| {
 			Forever
 		},
 	}) ?? crash "Native construction rejected"
+	# A native definition is valid independently of RFC text precision/year
+	# restrictions and of whether its source can resolve within the timeline.
+	native_saved = ScheduleDefinition.from_native({
+		rule: changed,
+		duration: Coordinate(PosixDelta.from_microseconds(1)),
+		overrides: [],
+		context: { rules: context_rules(Utc), occurrence: RequireUnique, gap: RejectGap },
+	}) ?? crash "Native schedule narrowed the native domain"
+	match ScheduleDefinition.definition(native_saved) {
+		Native(spec) => {
+			original_native = TimedRecurrence.definition(changed)
+			restored_native = TimedRecurrence.definition(spec.rule)
+			if restored_native.anchor != original_native.anchor or restored_native.exclusions != original_native.exclusions or restored_native.inclusions != original_native.inclusions or spec.duration != Coordinate(PosixDelta.from_microseconds(1)) {
+				crash "Native schedule definition lost exact fields"
+			}
+		}
+		ICal(_) => crash "Native schedule changed variant"
+	}
 	if name == "native-julian-exdate" {
 		rebuilt = TimedRecurrence.definition(changed)
 		if rebuilt.exclusions != $exceptions {
@@ -180,6 +235,14 @@ exact_cap = |name| {
 
 at = |items, index| items.get(index) ?? crash "Fixture arity"
 
+context_rules = |context| match context {
+	Local(value) => value
+	Utc => {
+		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest)) ?? crash "UTC fixture validity"
+		ZoneRules.new_bounded("UTC", "fixed-test", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) ?? crash "UTC fixture rules"
+	}
+}
+
 values = |text| if text == "-" {
 	[]
 } else {
@@ -216,10 +279,15 @@ rules = |name| {
 }
 
 collect = |rule, window, context, tiny| {
-	var $cursor = match ICalTimedRule.schedule(42.U64, rule, window, context) {
+	cursor = match ICalTimedRule.schedule(42.U64, rule, window, context) {
 		Ok(value) => value
 		Err(_) => crash "Schedule rejected"
 	}
+	collect_cursor(cursor, tiny)
+}
+
+collect_cursor = |cursor, tiny| {
+	var $cursor = cursor
 	var $output = []
 	var $calls = 0.U64
 	while $calls < 10000 {
@@ -249,6 +317,10 @@ collect = |rule, window, context, tiny| {
 		) ?? crash "Execution rejected"
 		for value in batch.occurrences {
 			span = TimedOccurrence.span(value)
+			identity = TimedOccurrence.id(value)
+			if identity.series != 42 or identity.source != TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)) {
+				crash "Schedule changed series or source identity"
+			}
 			$output = $output.append({
 				source: LocalDateTime.to_gregorian_text(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value))) ?? crash "Source calendar",
 				start: PosixBoundary.to_microseconds(PosixSpan.start(span)),

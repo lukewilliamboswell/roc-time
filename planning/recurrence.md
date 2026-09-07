@@ -29,10 +29,10 @@ This is an R11–R12/R14/R16 deliverable, using the existing execution engine.
 
 ### Durable definition and context
 
-Introduce a checked, window-free schedule definition separate from
-`TimedSchedule`, which is an evaluation cursor. Reuse native recurrence and zone
-rule definition accessors. Extract window-independent ending validation from the
-existing schedule constructor rather than inventing a validation window.
+Add versioned persistence for `ScheduleDefinition`, using its semantic origin
+and the existing native recurrence/zone definition accessors. Loading must use
+the same checked constructors; keep query windows and progress outside the
+archive.
 
 Keep native and iCalendar definitions explicit: native storage must preserve
 fractional labels, calendar/elapsed duration policies and source-keyed ending
@@ -47,13 +47,33 @@ alone is insufficient. Keep generic series IDs in an application envelope and
 show the restored ID passed into fresh cursors for two overlapping windows.
 The temporal persistence type must not encode arbitrary application types.
 
-Select the versioned kind and exact field grammar before implementation. Reuse
-the existing 65536-byte envelope, 49152-byte payload, 1024-transition and
-4096-byte rule-metadata limits where applicable; define selector, exception and
-override caps explicitly and preflight them before serialization. Determine how
-native and iCalendar variants share field encoding without obscuring their
-policy distinctions. A well-formed definition exceeding archive limits must
-return an explicit error.
+Use kind `schedule-definition`, profile `timed-schedule-definition-v1`, axis
+`posix-1970` and unit `microsecond` in the existing version-1 envelope. Finalize
+the flat JSON string-array grammar before encoding it: begin with `native` or
+`ical`, followed by a shared native recurrence block, origin-specific ending
+fields and the explicit context suffix. The recurrence block retains the anchor,
+pattern/frequency/interval, calendar and clock selectors, termination domain and
+counted source exceptions. Reuse native fraction-6 local labels, preserving
+calendar identity. COUNT needs canonical U64 parsing; the I64 integer helper
+must not narrow it. Other integers retain their nominal signed/unsigned domains.
+
+Native ending fields distinguish coordinate/calendar duration and
+After/AtBoundary/AtLocal overrides, including all endpoint policies. iCalendar
+fields retain the supported profile/mode and canonical duration/PERIOD values;
+its interpretation policies follow that profile. Local context appends the
+complete existing rule transport; iCalendar UTC uses an explicit UTC marker.
+
+Reuse the 65536-byte envelope, 49152-byte payload, 1024-transition and 4096-byte
+rule-metadata limits. Preflight counts before encoding or typed decoding;
+proposed archive caps are 4096 combined selectors, 1024 combined exception
+labels and 1024 overrides/PERIODs. Prove exact byte boundaries and reject any
+well-formed definition exceeding archive limits. Settle persistence equality
+and hashing using the checked canonical declaration and complete embedded
+context, without adding recurrence-set equality or repeated interpretation.
+Preserve selector ordering/duplicates retained by native definition access and
+PERIOD order/ending intent. Do not introduce encoding-only normalization that
+makes construction and save/load disagree. Keep existing persistence kinds'
+equality and hash discriminators unchanged when adding this kind.
 
 The smallest complete timed workflow must retain the meeting's series identity,
 original exception labels, default duration, explicit ending overrides and RFC
