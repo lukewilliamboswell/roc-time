@@ -81,7 +81,12 @@ import Coverage
 ## qualifier list retains |. Qualification order canonicalizes via the native
 ## constructor. Names are lowercase; integers have no leading zeros or + sign.
 ## These native grammars are not ISO/EDTF. Payload decoding is capped at 1024
-## bytes and eight qualifiers; native canonical outputs need less than 512 bytes.
+## bytes. The version-1 native qualified profile permits eight scopes; values
+## containing the YearMonth group use native-qualified-calendar-value-v2 with
+## at most nine entries. Older scopes retain version-1 output. Decoding the old
+## profile never accepts the new group. Native canonical outputs stay below 512 bytes.
+## EDTF output uses edtf-gregorian-date-v2; saved version-1 EDTF dates remain
+## readable through their original whole-qualification grammar.
 ##
 ## Core kinds posix-boundary and posix-delta use profile posix-microseconds-v1,
 ## axis posix-1970, unit microsecond. Their payload is a canonical signed decimal
@@ -177,7 +182,9 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 			None => return Err(UnknownKind(fields.kind))
 			Some(inner) => inner
 		}
-		if fields.profile != expected.profile {
+		legacy_edtf = fields.kind == "edtf-date" and fields.profile == "edtf-gregorian-date-v1"
+		group_calendar = fields.kind == "qualified-calendar-value" and fields.profile == "native-qualified-calendar-value-v2"
+		if fields.profile != expected.profile and !legacy_edtf and !group_calendar {
 			return Err(UnsupportedProfile(fields.profile))
 		}
 		if fields.axis != expected.axis {
@@ -210,7 +217,13 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 			return Ok({ stored: IxdtfSnapshot(PersistenceSnapshot.snapshot(decoded)), snapshot_payload: PersistenceSnapshot.to_text(decoded) })
 		}
 		stored = match fields.kind {
-			"edtf-date" => match EdtfDate.parse(fields.payload) {
+			"edtf-date" => match (
+				if legacy_edtf {
+					EdtfDate.parse_v1(fields.payload)
+				} else {
+					EdtfDate.parse(fields.payload)
+				}
+			) {
 				Ok(inner) => EdtfDate(inner)
 				Err(error) => return Err(InvalidEdtfDate(error))
 			}
@@ -246,7 +259,13 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 				Ok(inner) => CalendarValue(inner)
 				Err(error) => return Err(InvalidCalendarValue(error))
 			}
-			"qualified-calendar-value" => match PersistenceCalendar.parse_qualified(fields.payload) {
+			"qualified-calendar-value" => match (
+				if group_calendar {
+					PersistenceCalendar.parse_qualified(fields.payload)
+				} else {
+					PersistenceCalendar.parse_qualified_v1(fields.payload)
+				}
+			) {
 				Ok(inner) => QualifiedCalendarValue(inner)
 				Err(error) => return Err(InvalidQualifiedCalendarValue(error))
 			}
@@ -289,7 +308,15 @@ Persistence :: { stored : Value, snapshot_payload : Str }.{
 		# Text declarations need at most 4096 bytes; even six-byte escaping
 		# plus fixed metadata fits inside the envelope's 64KiB cap.
 		# Snapshot payloads passed the exact escaped-envelope check at construction.
-		Json.to_str({ format: "roc-time", version: "1", kind, profile: description.profile, axis: description.axis, unit: description.unit, payload })
+		profile = match wrapped.stored {
+			QualifiedCalendarValue(inner) => if QualifiedCalendarValue.qualifications(inner).map(|item| item.scope).contains(YearMonth) {
+				"native-qualified-calendar-value-v2"
+			} else {
+				description.profile
+			}
+			_ => description.profile
+		}
+		Json.to_str({ format: "roc-time", version: "1", kind, profile, axis: description.axis, unit: description.unit, payload })
 	}
 
 	is_eq : Persistence, Persistence -> Bool
@@ -610,4 +637,31 @@ expect {
 			test_parse({ ..expected, axis: "none" }) == Err(UnsupportedAxis("none")) and
 				test_parse({ ..expected, profile: "future-v2" }) == Err(UnsupportedProfile("future-v2")) and
 					test_parse({ ..expected, payload: Json.to_str(["strict-v1", "1970-01-01T00:00:00Z[u-ca=hebrew]", "1", "0", "none"]) }) == Err(InvalidSnapshot(StoredMismatch))
+}
+
+expect {
+	# Saved v1 data keeps its old grammar. New output uses the wider EDTF
+	# profile; a caller cannot smuggle scoped syntax into the old profile.
+	old = { format: "roc-time", version: "1", kind: "edtf-date", profile: "edtf-gregorian-date-v1", axis: "none", unit: "none", payload: "1984?" }
+	loaded = test_parse(old)?
+	latest = test_parse({ ..old, profile: "edtf-gregorian-date-v2" })?
+	group = test_parse({ ..old, profile: "edtf-gregorian-date-v2", payload: "2004-06~-11" })?
+	loaded == latest and
+		Persistence.to_text(loaded) == Json.to_str({ ..old, profile: "edtf-gregorian-date-v2" }) and
+			Persistence.parse(Persistence.to_text(group)) == Ok(group) and
+				test_parse({ ..old, payload: "2004-06~-11" }) == Err(InvalidEdtfDate(Malformed)) and
+					test_parse({ ..old, profile: "edtf-gregorian-date-v3" }) == Err(UnsupportedProfile("edtf-gregorian-date-v3"))
+}
+
+expect {
+	# Group scope is native metadata, independent of the interchange spelling.
+	# Version 1 never gains the new scope merely because a newer reader loads it.
+	old = { format: "roc-time", version: "1", kind: "qualified-calendar-value", profile: "native-qualified-calendar-value-v1", axis: "none", unit: "none", payload: "gregorian;day;2004;6;11|month=approximate" }
+	individual = test_parse(old)?
+	current = { ..old, profile: "native-qualified-calendar-value-v2", payload: "gregorian;day;2004;6;11|year-month=approximate" }
+	group = test_parse(current)?
+	individual != group and Persistence.to_text(individual) == Json.to_str(old) and
+		Persistence.to_text(group) == Json.to_str(current) and
+			test_parse({ ..old, payload: current.payload }) == Err(InvalidQualifiedCalendarValue(UnsupportedScope("year-month"))) and
+				test_parse({ ..current, payload: "gregorian;year;2004|year-month=approximate" }) == Err(InvalidQualifiedCalendarValue(UnsuppliedComponent(YearMonth)))
 }

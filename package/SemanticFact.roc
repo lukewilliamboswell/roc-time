@@ -23,7 +23,7 @@ SemanticFact :: { value : Kind }.{
 	## are not additional source assertions and must not be rendered as such.
 	CalendarData : { kind : [CalendarValue, QualifiedCalendarValue, EdtfDate], calendar : Calendar, fields : CalendarDate.Fields, clock : ClockTime.Fields, resolution : Resolution, qualification_count : U64 }
 	TimestampData : { kind : [OffsetTimestamp, Ixdtf], local : LocalDateTime, fraction_digits : U8, offset : Offset, zone_present : Bool, annotation_count : U64 }
-	QualificationData : { scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction], qualifier : [Uncertain, Approximate, UncertainApproximate] }
+	QualificationData : { scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth], qualifier : [Uncertain, Approximate, UncertainApproximate] }
 	ZoneData : { critical : Bool, identifier : [Named(Str), Numeric(FixedOffset)] }
 	AnnotationData : { critical : Bool, key : Str, value : Str }
 

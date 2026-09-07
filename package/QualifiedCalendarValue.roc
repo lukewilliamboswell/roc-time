@@ -11,17 +11,19 @@ import ZoneRules
 ## A month qualification does not qualify the year/day or the whole value.
 ## This is a native description type, not an EDTF parser or reasoning model.
 ##
-## At most one qualification per supplied component and one for the whole value.
-## Construction validates and canonicalizes at most eight entries; input order
+## YearMonth qualifies the supplied year and month together, leaving finer
+## components unchanged. It supplies no tolerance or correlation model.
+## At most one qualification per supplied component, group and whole value.
+## Construction validates and canonicalizes at most nine entries; input order
 ## has no semantic meaning. Whole and component qualifications may coexist and
 ## are retained independently, without inferring redundancy or contradiction.
 QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualification) }.{
-	Scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction]
+	Scope : [Whole, Year, Month, Day, Hour, Minute, Second, Fraction, YearMonth]
 	Qualifier : [Uncertain, Approximate, UncertainApproximate]
 	Qualification : { scope : Scope, qualifier : Qualifier }
 	new : CalendarValue, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope), ..])
 	new = |value, qualifications| {
-		if qualifications.len() > 8 {
+		if qualifications.len() > 9 {
 			return Err(TooManyQualifications)
 		}
 		supplied = match CalendarValue.resolution(value) {
@@ -35,7 +37,12 @@ QualifiedCalendarValue :: { value : CalendarValue, qualifications : List(Qualifi
 		}
 		var $seen = []
 		for item in qualifications {
-			if scope_rank(item.scope) > supplied {
+			required = if item.scope == YearMonth {
+				2.U8
+			} else {
+				scope_rank(item.scope)
+			}
+			if required > supplied {
 				return Err(UnsuppliedComponent(item.scope))
 			}
 			if $seen.contains(item.scope) {
@@ -144,13 +151,26 @@ scope_rank = |scope| match scope {
 	Minute => 5
 	Second => 6
 	Fraction => 7
+	YearMonth => 8
+}
+
+expect {
+	year = CalendarValue.year(Gregorian, 2004)?
+	month = CalendarValue.month(Gregorian, 2004, 6)?
+	group = QualifiedCalendarValue.new(month, [{ scope: YearMonth, qualifier: Approximate }])?
+	whole = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: Approximate }])?
+	individual = QualifiedCalendarValue.new(month, [{ scope: Month, qualifier: Approximate }])?
+	group != whole and group != individual and
+		QualifiedCalendarValue.new(year, [{ scope: YearMonth, qualifier: Approximate }]) == Err(UnsuppliedComponent(YearMonth)) and
+			QualifiedCalendarValue.new(month, [{ scope: YearMonth, qualifier: Approximate }, { scope: YearMonth, qualifier: Uncertain }]) == Err(DuplicateScope(YearMonth)) and
+				QualifiedCalendarValue.fact_at(group, 3) == Item(SemanticFact.new(Qualification({ scope: YearMonth, qualifier: Approximate })))
 }
 
 expect {
 	year = CalendarValue.year(Gregorian, 2004)?
 	QualifiedCalendarValue.new(year, [{ scope: Month, qualifier: Approximate }]) == Err(UnsuppliedComponent(Month)) and
 		QualifiedCalendarValue.new(year, [{ scope: Year, qualifier: Uncertain }, { scope: Year, qualifier: Approximate }]) == Err(DuplicateScope(Year)) and
-			QualifiedCalendarValue.new(year, List.repeat({ scope: Year, qualifier: Uncertain }, 9)) == Err(TooManyQualifications)
+			QualifiedCalendarValue.new(year, List.repeat({ scope: Year, qualifier: Uncertain }, 10)) == Err(TooManyQualifications)
 }
 expect {
 	month = CalendarValue.month(Gregorian, 2004, 6)?

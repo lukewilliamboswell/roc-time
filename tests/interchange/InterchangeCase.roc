@@ -36,6 +36,7 @@ InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier
 		day = 1 + input.day % month_days(input.year, input.month)
 		date_text = "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}-${pad(day.to_u64(), 2)}"
 		check_edtf(input, day, date_text)
+		check_scoped_edtf(input, day)
 		check_timestamp(input, day, date_text)
 		check_timestamp_format_limits(input)
 		check_malformed(input, date_text)
@@ -81,7 +82,7 @@ check_edtf = |input, day, date_text| {
 		Ok(value) => value
 		Err(_) => crash "Generated valid EDTF date rejected"
 	}
-	check_persistence(EdtfDate(parsed), { kind: "edtf-date", profile: "edtf-gregorian-date-v1", payload: source, axis: "none", unit: "none" })
+	check_persistence(EdtfDate(parsed), { kind: "edtf-date", profile: "edtf-gregorian-date-v2", payload: source, axis: "none", unit: "none" })
 	if EdtfDate.to_text(parsed) != source or EdtfDate.parse(EdtfDate.to_text(parsed)) != Ok(parsed) {
 		crash "EDTF canonical serialization changed supplied resolution or qualifier"
 	}
@@ -118,6 +119,61 @@ check_edtf = |input, day, date_text| {
 	}
 	if QualifiedCalendarValue.qualifications(description) != expected_qualifications or EdtfDate.from_description(description) != Ok(parsed) {
 		crash "EDTF native adapter lost qualifier facts"
+	}
+}
+
+# R13/R14: LOC 2019 prefix/suffix scope rules are independent expected fields.
+# Generated valid interior Gregorian dates, all three flags and four scopes;
+# native group identity, facts and versioned persistence must agree with those
+# expectations, not merely with a parser/serializer round trip.
+check_scoped_edtf = |input, day| {
+	year = input.year.to_str()
+	month = pad(input.month.to_u64(), 2)
+	day_text = pad(day.to_u64(), 2)
+	flag = match input.qualifier % 3 {
+		0 => { marker: "?", value: Uncertain, name: "uncertain" }
+		1 => { marker: "~", value: Approximate, name: "approximate" }
+		_ => { marker: "%", value: UncertainApproximate, name: "uncertain-approximate" }
+	}
+	choices : List({ text : Str, scope : QualifiedCalendarValue.Scope, name : Str })
+	choices = [
+		{ text: "${flag.marker}${year}-${month}-${day_text}", scope: Year, name: "year" },
+		{ text: "${year}-${flag.marker}${month}-${day_text}", scope: Month, name: "month" },
+		{ text: "${year}-${month}-${flag.marker}${day_text}", scope: Day, name: "day" },
+		{ text: "${year}-${month}${flag.marker}-${day_text}", scope: YearMonth, name: "year-month" },
+	]
+	for choice in choices {
+		parsed = match EdtfDate.parse(choice.text) {
+			Ok(value) => value
+			Err(_) => crash "Generated scoped date rejected"
+		}
+		description = EdtfDate.description(parsed)
+		native = QualifiedCalendarValue.described_value(description)
+		fields = CalendarDate.to_fields(LocalDateTime.date(CalendarValue.start_label(native)))
+		if fields != { year: input.year.to_i64(), month: input.month, day } or CalendarValue.resolution(native) != Day or
+			QualifiedCalendarValue.qualifications(description) != [{ scope: choice.scope, qualifier: flag.value }] or
+				EdtfDate.to_text(parsed) != choice.text or EdtfDate.from_description(description) != Ok(parsed) {
+			crash "Scoped date changed supplied fields, resolution or scope"
+		}
+		source = Explanation.new(EdtfDate(parsed))
+		if explanation_fact(source, 2) != Requirement(UncertaintyModel) or
+			explanation_fact(source, 3) != Qualification({ scope: choice.scope, qualifier: flag.value }) {
+			crash "Scoped explanation lost group identity or invented interpretation"
+		}
+		check_declaration_limits(source, input.digits.to_u64())
+		check_persistence(EdtfDate(parsed), { kind: "edtf-date", profile: "edtf-gregorian-date-v2", payload: choice.text, axis: "none", unit: "none" })
+		profile = if choice.scope == YearMonth {
+			"native-qualified-calendar-value-v2"
+		} else {
+			"native-qualified-calendar-value-v1"
+		}
+		payload = "gregorian;day;${year};${input.month.to_str()};${day.to_str()}|${choice.name}=${flag.name}"
+		check_persistence(QualifiedCalendarValue(description), { kind: "qualified-calendar-value", profile, payload, axis: "none", unit: "none" })
+		legacy = Json.to_str({ format: "roc-time", version: "1", kind: "edtf-date", profile: "edtf-gregorian-date-v1", axis: "none", unit: "none", payload: choice.text })
+		match Persistence.parse(legacy) {
+			Err(InvalidEdtfDate(_)) => {}
+			_ => crash "Old persistence profile accepted new scoped syntax"
+		}
 	}
 }
 

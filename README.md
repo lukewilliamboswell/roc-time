@@ -70,7 +70,7 @@ These features work, but check that your input fits their scope.
 | Feature | Supported now | Main boundary |
 | --- | --- | --- |
 | Timestamp and booking text | Complete RFC offset timestamps, up to six fractional digits; exact start/end windows; canonical serialization | No leap-second or sub-microsecond input; this is not every ISO 8601 form |
-| EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%` | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
+| EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%`; development source also supports individual and year/month group qualifications | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
 | IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
 | RFC recurrence import | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed profiles | No complete ICS files, mixed UTC/local exceptions, or recurrence export/persistence yet |
 | Calendar and zone data | Gregorian and Julian; optional IANA 2025b data for 1800–2200 | Additional calendars are planned; zone data is a separate package dependency |
@@ -83,8 +83,8 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 
 ### Tier 3: Next, in user-impact order
 
-1. **Fill archive input/output gaps.** Individually/group-qualified components,
-   mixed-resolution interval endpoints, unknown/open bounds, then masks and sets.
+1. **Fill archive input/output gaps.** Mixed-resolution interval endpoints,
+   unknown/open bounds, then masks and sets.
    Each supported form needs faithful serialization and useful failure messages.
 2. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
