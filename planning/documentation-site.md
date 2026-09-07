@@ -5,14 +5,9 @@ without tracking generated HTML in Git.
 
 ## Remaining publication dependencies
 
-- Upload the byte-preserved documentation archives for `0.1.0-rc1`,
-  `0.1.0-rc2` and `0.1.0-rc3` to their corresponding releases before deploying
-  this workflow. Recover source bytes from the Git parent that still contains
-  `www/<version>/`; use `scripts/release_docs.py pack` and verify restored files
-  byte-for-byte. Never regenerate or replace those historical pages.
-- Verify the published asset digests and run the docs workflow. Confirm the
-  authored root and existing version URLs, including retry behavior. Missing
-  historical assets deliberately block deployment.
+- Run the docs workflow and confirm the authored root and existing version
+  URLs, including retry behavior. Missing historical assets deliberately block
+  deployment.
 - Verify durable guide links resolve to release metadata, the API navigation
   and working pinned examples. Authored prose must not duplicate release pins.
 
