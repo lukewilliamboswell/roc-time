@@ -76,11 +76,10 @@ parse_fixture = |text| match LocalDateTime.parse_gregorian(text) {
 }
 
 check_projection = |rules, boundary, expected| {
-	offset = ZoneRules.offset_at(rules, boundary)?
+	{ local, offset } = ZoneRules.project(rules, boundary, Gregorian)?
 	if FixedOffset.to_seconds(offset) != -14400 {
 		crash "target offset oracle"
 	}
-	local = FixedOffset.project(offset, boundary, Gregorian)?
 	if LocalDateTime.to_gregorian_text(local) != Ok(expected) {
 		crash "target local fields oracle"
 	}

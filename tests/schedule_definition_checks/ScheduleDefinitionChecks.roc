@@ -51,7 +51,7 @@ ScheduleDefinitionChecks :: [].{
 					crash "Declaration changed independently expected span"
 				}
 				identity = TimedOccurrence.id(occurrence)
-				if identity.series != loaded.series_id or identity.source != TimedRecurrence.Occurrence.source(TimedOccurrence.start(occurrence)) {
+				if identity.series != loaded.series_id or identity.source != TimedOccurrence.source(occurrence) {
 					crash "Declaration changed occurrence identity"
 				}
 			}

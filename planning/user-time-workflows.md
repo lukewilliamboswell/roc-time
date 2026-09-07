@@ -13,6 +13,14 @@ query APIs, promote these staged applications into the public example collection
 - [Invoice report](../tests/invoice_report/main.roc), with the core dependency.
 - [Schedule exchange](../tests/schedule_exchange/main.roc), with the core dependency and DATE export APIs.
 - [Meeting exchange](../tests/meeting_exchange/main.roc), with both dependencies, timed export and schedule-definition APIs.
+- [Upcoming meetings](../tests/upcoming_meetings/main.roc), showing definition reuse
+  and bounded pagination without an interchange round trip.
+
+Replace the existing invoice and staffing applications with the compatible
+staged versions in [invoice terms](../tests/invoice_terms/main.roc) and
+[overnight staffing](../tests/overnight_staffing/main.roc). These use validated
+typed literals and public text operations; preserve the published applications'
+old API calls until their dependency URLs are promoted together.
 
 Pin each compiler and immutable package URL. Include the applications in the
 starter kit and preserve their independent fixtures, scenario checks and exact

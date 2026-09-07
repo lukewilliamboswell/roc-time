@@ -156,6 +156,12 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	id = |value| value.id
 	start : TimedOccurrence(id) -> TimedRecurrence.Occurrence
 	start = |value| value.start
+
+	## Original local start label, including its calendar and fractional clock.
+	## A gap adjustment can project the selected boundary to a different label.
+	## This accessor performs no zone lookup or recurrence evaluation.
+	source : TimedOccurrence(id) -> LocalDateTime
+	source = |value| TimedRecurrence.Occurrence.source(value.start)
 	ending : TimedOccurrence(id) -> Ending
 	ending = |value| value.ending
 
@@ -435,6 +441,35 @@ expect {
 	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
 	rejected and match resumed.status {
 		Complete(value) => PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(1800000000))
+		Limited(_) => Bool.False
+	}
+}
+
+# A 00:30 source in a synthetic forward gap resolves using the pre-gap offset;
+# the resulting boundary projects to 01:30. Preserve source identity and its
+# fractional microsecond independently of that projection and of the end label.
+expect {
+	rules = test_rules(3600, 0)?
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(1800000123)?
+	original = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	end = LocalDateTime.new(CalendarDate.from_gregorian(CalendarArithmetic.shift_day(date, CalendarDelta.days(1), Reject)?), clock)
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
+	cursor = TimedRecurrence.cursor(rule, { start: original, end }, { rules, occurrence: RequireUnique, gap: UseOffsetBeforeGap })?
+	batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 10, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 2 })?
+	start = match batch.status {
+		Item(item) => item.occurrence
+		_ => crash "gap fixture occurrence"
+	}
+	appointment = TimedOccurrence.cursor(17.U8, start, Coordinate(PosixDelta.from_microseconds(1)))?
+	result = TimedOccurrence.Cursor.collect(appointment, { max_segments: 0, max_candidates: 0 })?
+	match result.status {
+		Complete(value) => {
+			boundary = PosixSpan.start(TimedOccurrence.span(value))
+			projected = FixedOffset.project(FixedOffset.from_seconds(3600), boundary, Gregorian)?
+			expected_projection = LocalDateTime.new(CalendarDate.from_gregorian(date), ClockTime.from_microseconds_since_midnight(5400000123)?)
+			TimedOccurrence.source(value) == original and projected == expected_projection and projected != TimedOccurrence.source(value) and boundary == PosixBoundary.from_microseconds(1800000123) and TimedOccurrence.id(value) == 17
+		}
 		Limited(_) => Bool.False
 	}
 }

@@ -5,6 +5,9 @@ current cancellation/fuzz failures and removing private archive formats.
 
 ## Remaining deliverables
 
+- Resolve the public preparation-contract decisions in
+  [API ergonomics](api-ergonomics.md) and select its pre-release scope. Optional
+  conveniences do not automatically block publication.
 - Prepare the `roc-0.1.x` support branch with the selected changes while retaining
   the pilot stable compiler (`nightly-2026-09-05-b195f5b`). From support tip
   `c4cf2ff`, review `932a859` followed by the ordered first-parent commits in

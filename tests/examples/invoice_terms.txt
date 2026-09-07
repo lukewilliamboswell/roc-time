@@ -1,0 +1,3 @@
+Payment terms: one calendar month, clamped to month end
+Issued: 2025-01-31
+Payment due: 2025-02-28

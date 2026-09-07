@@ -1,0 +1,8 @@
+Upcoming Paris meetings; one result per page
+2026-03-22T09:00:00 Paris
+Next page
+2026-03-29T09:00:00 Paris
+Next page
+2026-04-12T09:00:00 Paris
+Next page
+Complete; cancelled starts do not replenish COUNT.

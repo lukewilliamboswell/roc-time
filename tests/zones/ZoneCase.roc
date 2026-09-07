@@ -235,6 +235,24 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					input.second
 				}
 				label = probe + offset.to_i64() * 1000000
+				projected = match ZoneRules.project(rules, point(probe), Gregorian) {
+					Ok(value) => value
+					Err(_) => crash "valid generated projection rejected"
+				}
+				fields = CalendarDate.to_fields(LocalDateTime.date(projected.local))
+				expected_day = if label < 0 {
+					31
+				} else {
+					1
+				}
+				expected_clock = if label < 0 {
+					86400000000 + label
+				} else {
+					label
+				}
+				if fields.day != expected_day or ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(projected.local)) != expected_clock or FixedOffset.to_seconds(projected.offset) != offset {
+					crash "zone projection differs from independent piecewise offset model"
+				}
 				expected_member = label >= input.number and label < end_number
 				if Coverage.contains(selected, point(probe)) != expected_member {
 					crash "local selection differs from direct timeline membership"

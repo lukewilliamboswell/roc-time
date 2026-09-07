@@ -95,9 +95,12 @@ Coverage :: [Spans(List(PosixSpan))].{
 			Full(_) => Ok(Full)
 		}
 
-		## Internal cursor integration: return ownership of an unchanged full
-		## builder so callers need not retain an alias across a successful append.
-		## The public append_bounded adapter uses this same validation and merge.
+		## Bounded append that returns the unchanged builder on Full. Use this
+		## when resuming construction without retaining an alias across a successful
+		## append. The limit counts canonical members; overlap and touch can merge
+		## at capacity. Decreasing starts fail with UnsortedInput.
+		## append_bounded uses the same validation and merge, but discards the
+		## returned builder on Full. Retained snapshots may make later appends copy.
 		append_retaining : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full(SortedBuilder)], [UnsortedInput, ..])
 		append_retaining = |builder, span, limit| {
 			match builder.previous {
@@ -449,6 +452,27 @@ expect {
 			third = Coverage.SortedBuilder.append(second, c)?
 			blocked and unsorted and snapshot == Coverage.from_spans([a]) and
 				Coverage.SortedBuilder.to_coverage(third) == Coverage.from_spans([a, b, c])
+		}
+	}
+}
+
+# A full builder can resume with a larger budget without losing an input span.
+# The retained snapshot deliberately exercises shared storage as well.
+expect {
+	a = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(-1))?
+	b = PosixSpan.new(PosixBoundary.from_microseconds(1), PosixBoundary.from_microseconds(2))?
+	first = Coverage.SortedBuilder.append(Coverage.SortedBuilder.empty, a)?
+	snapshot = Coverage.SortedBuilder.to_coverage(first)
+	match Coverage.SortedBuilder.append_retaining(first, b, 1)? {
+		Added(_) => False
+		Full(resume) => match Coverage.SortedBuilder.append_retaining(resume, b, 2)? {
+			Full(_) => False
+			Added(done) => {
+				result = Coverage.SortedBuilder.to_coverage(done)
+				snapshot == Coverage.from_spans([a]) and
+					Coverage.member_count(result) == 2 and
+						result == Coverage.from_spans([a, b])
+			}
 		}
 	}
 }

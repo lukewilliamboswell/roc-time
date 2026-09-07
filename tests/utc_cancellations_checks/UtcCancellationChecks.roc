@@ -151,7 +151,7 @@ collect = |initial, tiny, series| {
 		}
 		for item in batch.occurrences {
 			identity = TimedOccurrence.id(item)
-			if identity.series != series or identity.source != TimedRecurrence.Occurrence.source(TimedOccurrence.start(item)) {
+			if identity.series != series or identity.source != TimedOccurrence.source(item) {
 				crash "Cancellation identity changed"
 			}
 			source = LocalDateTime.to_gregorian_text(identity.source) ?? crash "Fixture source calendar"

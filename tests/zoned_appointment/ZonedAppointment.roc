@@ -29,8 +29,7 @@ ZonedAppointment :: [].{
 	classify = |zone, local| ZoneRules.resolve(zone, local)
 
 	project = |zone, boundary| {
-		offset = ZoneRules.offset_at(zone, boundary)?
-		local = FixedOffset.project(offset, boundary, Gregorian)?
+		{ offset, local } = ZoneRules.project(zone, boundary, Gregorian)?
 		text = match EnglishGregorian.local_datetime(local, Exact) {
 			Ok(value) => value
 			Err(error) => return Err(Presentation(error))

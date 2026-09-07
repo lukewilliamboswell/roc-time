@@ -111,7 +111,7 @@ main! = |args| {
 		Err(_) => crash "bounded first date"
 	}
 	after_first = Host.allocated_bytes!({})
-	Host.assert!(first.occurrences.len() == 1 and first.occurrences.map(|value| TimedRecurrence.Occurrence.source(TimedOccurrence.start(value))).get(0) == Ok(anchor) and first.steps <= 8 and first.zone_segments <= 8)
+	Host.assert!(first.occurrences.len() == 1 and first.occurrences.map(|value| TimedOccurrence.source(value)).get(0) == Ok(anchor) and first.steps <= 8 and first.zone_segments <= 8)
 	for occurrence in first.occurrences {
 		Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(3600000000)))
 	}
@@ -125,7 +125,7 @@ main! = |args| {
 		Err(_) => crash "bounded resumed date"
 	}
 	after_second = Host.allocated_bytes!({})
-	Host.assert!(second.occurrences.len() == 1 and second.occurrences.map(|value| TimedRecurrence.Occurrence.source(TimedOccurrence.start(value))).get(0) == Ok(ExportFixture.local(2000, 2)) and second.steps <= 8 and second.zone_segments <= 8)
+	Host.assert!(second.occurrences.len() == 1 and second.occurrences.map(|value| TimedOccurrence.source(value)).get(0) == Ok(ExportFixture.local(2000, 2)) and second.steps <= 8 and second.zone_segments <= 8)
 	for occurrence in second.occurrences {
 		Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(3600000000)))
 	}
