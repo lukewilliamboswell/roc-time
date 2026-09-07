@@ -30,7 +30,7 @@ CivilArchive :: [].{
 			_ => return Err(UnexpectedArchiveKind)
 		}
 		coverage = ResolvedSelection.coverage(restored)
-		var lines = [
+		var $lines = [
 			"Synthetic fallback: archive a repeated local time",
 			"Local range: ${RfcDateTime.to_text(start)}/${RfcDateTime.to_text(end)}",
 			"First occurrence (restored): ${utc(ResolvedBoundary.boundary(first_restored))?}",
@@ -38,9 +38,9 @@ CivilArchive :: [].{
 			"Selection restored as ${Coverage.member_count(coverage).to_str()} separate windows:",
 		]
 		for span in Coverage.to_spans(coverage) {
-			lines = lines.append("${utc(PosixSpan.start(span))?}/${utc(PosixSpan.end(span))?}")
+			$lines = $lines.append("${utc(PosixSpan.start(span))?}/${utc(PosixSpan.end(span))?}")
 		}
-		Ok(Str.join_with(lines, "\n"))
+		Ok(Str.join_with($lines, "\n"))
 	}
 }
 
