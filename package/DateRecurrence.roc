@@ -56,6 +56,16 @@ DateRecurrence :: {
 		inclusions : List(GregorianDate),
 		exclusions : List(GregorianDate),
 	}
+	Definition : { anchor : GregorianDate, spec : Spec }
+
+	## Read the semantic definition without scanning periods or occurrences.
+	## Immutable selector/exception lists are shared. Reconstruct edits with new;
+	## inclusions and exclusions are already sorted and unique.
+	definition : DateRecurrence -> Definition
+	definition = |rule| {
+		anchor: rule.anchor,
+		spec: { pattern: CalendarPattern.definition(rule.pattern), termination: rule.termination, by_set_pos: rule.positions, inclusions: rule.inclusions, exclusions: rule.exclusions },
+	}
 	Window : { start : GregorianDate, end : GregorianDate }
 	Limits : { max_steps : U64, max_buffered : U64, max_occurrences : U64 }
 	Limit : [WorkLimit, BufferLimit, OutputLimit]

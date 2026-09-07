@@ -105,6 +105,53 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 			Ok(value) => value
 			Err(_) => crash "Valid RFC date rule rejected"
 		}
+		# R11/R14: independently specified canonical spelling and set ordering.
+		# Reparse/export stability is paired with the finite calendar model below.
+		exported = match RfcDateRule.to_parts(rule) {
+			Ok(value) => value
+			Err(_) => crash "Supported native DATE rule failed export"
+		}
+		expected_parts = {
+			start: anchor_text,
+			rule: "FREQ=MONTHLY;INTERVAL=${input.interval.to_str()};COUNT=${input.count.to_str()}${
+				if input.last_monday {
+					";BYDAY=MO;BYSETPOS=-1"
+				} else {
+					""
+				}
+			};WKST=MO",
+			inclusions: [anchor_text, "20240204", "20240331"],
+			exclusions: if input.exclude_anchor {
+				[anchor_text, "20240331"]
+			} else {
+				["20240331"]
+			},
+		}
+		if exported != expected_parts or RfcDateRule.to_parts(parsed) != Ok(expected_parts) {
+			crash "DATE export differs from canonical property model"
+		}
+		definition = DateRecurrence.definition(rule)
+		if definition.anchor != anchor or definition.spec.pattern != pattern {
+			crash "DATE definition lost anchor or selectors"
+		}
+		oversized = match DateRecurrence.new(definition.anchor, { ..definition.spec, termination: Count(2147483648 + input.count.to_u64()) }) {
+			Ok(value) => value
+			Err(_) => crash "Valid native large COUNT rejected"
+		}
+		if RfcDateRule.to_parts(oversized) != Err(OutOfRange("COUNT")) {
+			crash "DATE export narrowed native COUNT"
+		}
+		restored = match RfcDateRule.parse(exported) {
+			Ok(value) => value
+			Err(_) => crash "Canonical DATE properties failed import"
+		}
+		if RfcDateRule.to_parts(restored) != Ok(exported) {
+			crash "DATE canonical spelling is unstable"
+		}
+		restored_cursor = match DateRecurrence.cursor(restored, window) {
+			Ok(value) => value
+			Err(_) => crash "Restored query rejected"
+		}
 		match RfcDateRule.parse({ ..parts, rule: "${text};COUNT=1" }) {
 			Err(Duplicate("COUNT")) => {}
 			_ => crash "Duplicate rule part accepted"
@@ -202,6 +249,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 						Limited(_) => crash "Parsed recurrence unexpectedly limited"
 					}
 					check_consumers(cursor, limits, $normalized)
+					check_consumers(restored_cursor, limits, $normalized)
 					check_all_day(rule, window, $normalized)
 					return Fuzz.keep
 				}

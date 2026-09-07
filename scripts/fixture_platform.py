@@ -520,6 +520,40 @@ def verify_civil_queries(target: str) -> None:
         print(f"PASS civil queries {mode}: allocation failure control")
 
 
+def verify_date_export(target: str) -> None:
+    """Export finite definitions, never their logical occurrence domain."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/date_export_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"date-export-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for ownership in ("owned", "shared", "sliced"):
+            for count in (0, 1, 64, 4096):
+                observations = []
+                for horizon in (2001, 2000000000):
+                    ceiling = 65536 + count * 256
+                    result = subprocess.run([binary, str(count), ownership, str(horizon), str(ceiling)], capture_output=True, timeout=5)
+                    months = "" if count == 0 else ";BYMONTH=1" if count == 1 else ";BYMONTH=1,2,3,4,5,6,7,8,9,10,11,12"
+                    if result.returncode or result.stdout != f"FREQ=DAILY;INTERVAL=1{months};WKST=MO".encode():
+                        raise RuntimeError(f"{mode}/{count}/{ownership}/{horizon}: DATE export failed: {result.stderr!r}")
+                    match = re.search(rb" work=((?:\d+,){6}\d+)\n$", result.stderr)
+                    if match is None:
+                        raise RuntimeError("missing DATE export allocation observations")
+                    traffic = tuple(int(value) for value in match[1].split(b","))
+                    if traffic[2] != 0 or traffic[3] > ceiling or any(value > 4096 for value in traffic[4:]):
+                        raise RuntimeError(f"DATE definition/export/consumption bounds exceeded: {traffic}")
+                    observations.append(traffic)
+                if observations[0] != observations[1]:
+                    raise RuntimeError(f"DATE export resource use depends on query horizon: {observations}")
+                print(f"PASS DATE export {mode}/{count}/{ownership}: input/construct/access/export/cursor/first/resume requested bytes {observations[0]}")
+        failed = subprocess.run([binary, "64", "shared", "2000000000", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: DATE export allocation failure control failed")
+        print(f"PASS DATE export {mode}: allocation failure control")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -540,5 +574,6 @@ if __name__ == "__main__":
         verify_recurrence_explanation(selected_target)
         verify_timestamp_format(selected_target)
         verify_civil_queries(selected_target)
+        verify_date_export(selected_target)
     else:
         print(selected_target)
