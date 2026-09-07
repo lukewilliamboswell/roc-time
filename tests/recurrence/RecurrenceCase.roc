@@ -1101,7 +1101,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 				90000000000.I64
 			}
 			identity = TimedOccurrence.id(occurrence)
-			if identity.series != 42 or identity.source != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(expected_width)) {
+			if identity.series != 42 or identity.source != expected_source or TimedOccurrence.source(occurrence) != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(expected_width)) {
 				crash "schedule differs from independent UTC grid"
 			}
 			$index = $index + 1

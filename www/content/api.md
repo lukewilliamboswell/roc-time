@@ -4,6 +4,15 @@ Choose a module by the job you need to do. Module names below describe the curre
 
 ## Exact time and availability
 
+For booking availability, start with `ExactInterval.parse`, project each booking
+with `ExactInterval.span`, and build `Coverage`. Use `Coverage.complement_within`
+with an explicit opening span to find free windows. Keep an `EventCollection`
+when you also need booking identities: coverage merges occupied time and cannot
+recover which booking contributed it.
+
+For a single timestamp, start with `OffsetTimestamp.parse` and `to_text`.
+Convert to a `PosixBoundary` when you need timeline computation.
+
 | Task | Modules |
 | --- | --- |
 | Parse explicit-offset timestamps | `OffsetTimestamp` |
@@ -14,6 +23,17 @@ Choose a module by the job you need to do. Module names below describe the curre
 
 ## Calendar meaning and interpretation
 
+For invoice dates, start with `GregorianDate` and use `CalendarArithmetic` when
+advancing a month. Choose the invalid-date policy explicitly: January 31 with
+clamping and January 31 with rejection answer different business questions.
+Use `CalendarValue` when supplied precision, such as a whole month, is part of
+the meaning rather than an exact date.
+
+A `LocalDateTime` is a label awaiting interpretation. Use `FixedOffset` for a
+known offset or `ZoneRules` for a named-zone appointment, with an explicit policy
+for gaps and folds. Resolving a whole local-day selection is a separate operation:
+its timeline coverage can be empty or disconnected.
+
 | Task | Modules |
 | --- | --- |
 | Construct and convert civil dates | `GregorianDate`, `JulianDate`, `CalendarDate` |
@@ -23,10 +43,21 @@ Choose a module by the job you need to do. Module names below describe the curre
 
 ## Recurrence, import and storage
 
+For reusable timed appointments, construct a `ScheduleDefinition` with
+`from_ical` or `from_native`, create a cursor for a source-start window, and call
+`TimedSchedule.collect` with explicit work and output limits. Keep the returned
+batch intact: `Limited` carries incomplete progress and resumption state, not a
+complete list of appointments. See [scheduling](schedules.md) for the query model.
+
+Start with `DateRecurrence` for date-only rules. The lower-level patterns and
+`TimedRecurrence` are useful when composing selectors or working with starts
+without appointment endings; ordinary scheduling need not begin there.
+
 | Task | Modules |
 | --- | --- |
 | Generate calendar dates | `DateRecurrence`, `CalendarPattern` |
-| Generate identified timed appointments | `TimedRecurrence`, `TimedSchedule` |
+| Query reusable timed appointments | `ScheduleDefinition`, `TimedSchedule` |
+| Compose timed recurrence starts | `TimedRecurrence` |
 | Import extracted iCalendar values | `ICalDateRule`, `ICalTimedRule` |
 | Preserve imported descriptions | `EdtfDate`, `Ixdtf` |
 | Explain a supported value | `Explanation` |

@@ -60,7 +60,7 @@ main! = |args| {
 	after_first = Host.allocated_bytes!({})
 	Host.assert!(first.occurrences.len() == 1 and first.steps <= 8 and first.zone_segments <= 8)
 	for value in first.occurrences {
-		Host.assert!(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)) == anchor)
+		Host.assert!(TimedOccurrence.source(value) == anchor)
 		width = if count == 0 {
 			3600000000.I64
 		} else {
@@ -77,7 +77,7 @@ main! = |args| {
 	after_second = Host.allocated_bytes!({})
 	Host.assert!(second.occurrences.len() == 1 and second.steps <= 8 and second.zone_segments <= 8)
 	for value in second.occurrences {
-		Host.assert!(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)) == DefinitionFixture.label(1))
+		Host.assert!(TimedOccurrence.source(value) == DefinitionFixture.label(1))
 		width = if count <= 1 {
 			3600000000.I64
 		} else {

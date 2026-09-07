@@ -147,7 +147,7 @@ observe_timed = |input| {
 			Err(_) => crash "Timed oracle execution failed"
 		}
 		for value in batch.occurrences {
-			source = TimedRecurrence.Occurrence.source(TimedOccurrence.start(value))
+			source = TimedOccurrence.source(value)
 			fields = CalendarDate.to_fields(LocalDateTime.date(source))
 			if ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(source)) != 0 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(86400000000)) {
 				crash "Timed midnight lifting changed clock or width"

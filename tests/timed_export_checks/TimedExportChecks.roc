@@ -318,11 +318,11 @@ collect_cursor = |cursor, tiny| {
 		for value in batch.occurrences {
 			span = TimedOccurrence.span(value)
 			identity = TimedOccurrence.id(value)
-			if identity.series != 42 or identity.source != TimedRecurrence.Occurrence.source(TimedOccurrence.start(value)) {
+			if identity.series != 42 or identity.source != TimedOccurrence.source(value) {
 				crash "Schedule changed series or source identity"
 			}
 			$output = $output.append({
-				source: LocalDateTime.to_gregorian_text(TimedRecurrence.Occurrence.source(TimedOccurrence.start(value))) ?? crash "Source calendar",
+				source: LocalDateTime.to_gregorian_text(TimedOccurrence.source(value)) ?? crash "Source calendar",
 				start: PosixBoundary.to_microseconds(PosixSpan.start(span)),
 				end: PosixBoundary.to_microseconds(PosixSpan.end(span)),
 			})

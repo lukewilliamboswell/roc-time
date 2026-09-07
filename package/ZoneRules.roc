@@ -1,4 +1,5 @@
 import Coverage
+import Calendar
 import FixedOffset
 import LocalDateTime
 import PosixBoundary
@@ -217,6 +218,17 @@ ZoneRules :: {
 			$offset = transition.offset
 		}
 		Ok($offset)
+	}
+
+	## Project a resolved boundary into an explicitly selected calendar.
+	## Returns its local label and actual offset with one offset lookup. A fold
+	## needs no occurrence policy here: the supplied boundary selects the instant.
+	## Cost is the existing linear transition lookup plus scalar projection.
+	project : ZoneRules, PosixBoundary, Calendar -> Try({ local : LocalDateTime, offset : FixedOffset }, [OutsideValidity, OutOfRange, ..])
+	project = |rules, boundary, calendar| {
+		offset = offset_at(rules, boundary)?
+		local = FixedOffset.project(offset, boundary, calendar)?
+		Ok({ local, offset })
 	}
 
 	## Complete classification only when every possible candidate is covered.
@@ -814,4 +826,18 @@ expect {
 definition_status = |data| match ZoneRules.from_definition(data) {
 	Ok(_) => Ok({})
 	Err(error) => Err(error)
+}
+
+# Independent synthetic half-hour fold at POSIX zero: -900s with +1800s
+# and +900s with zero offset both label 1970-01-01 00:15. Validity is half-open.
+expect {
+	rules = ZoneRules.new_bounded("Synthetic/Projection", "fixture", PosixSpan.from_seconds(-3600, 3600, RejectSubmicrosecond)?, FixedOffset.from_seconds(1800), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 1800 })?
+	first = ZoneRules.project(rules, PosixBoundary.from_microseconds(-900000000), Gregorian)?
+	last = ZoneRules.project(rules, PosixBoundary.from_microseconds(900000000), Gregorian)?
+	julian = ZoneRules.project(rules, PosixBoundary.from_microseconds(900000000), Julian)?
+	LocalDateTime.to_gregorian_text(first.local) == Ok("1970-01-01T00:15:00") and first.local == last.local and
+		FixedOffset.to_seconds(first.offset) == 1800 and FixedOffset.to_seconds(last.offset) == 0 and
+			julian.local != last.local and LocalDateTime.same_position(julian.local, last.local) and
+				ZoneRules.project(rules, PosixBoundary.from_microseconds(3600000000), Gregorian) == Err(OutsideValidity) and
+					ZoneRules.project(rules, PosixBoundary.from_microseconds(-3600000001), Gregorian) == Err(OutsideValidity)
 }

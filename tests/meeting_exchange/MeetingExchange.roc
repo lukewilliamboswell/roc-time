@@ -68,7 +68,7 @@ MeetingExchange :: [].{
 		}
 		$lines = $lines.append("Reimported meetings in [2026-03-20, 2026-04-15), using Europe/Paris:")
 		for occurrence in batch.occurrences {
-			source = TimedRecurrence.Occurrence.source(TimedOccurrence.start(occurrence))
+			source = TimedOccurrence.source(occurrence)
 			local = LocalDateTime.to_gregorian_text(source)?
 			span = TimedOccurrence.span(occurrence)
 			start = utc(PosixSpan.start(span))?
