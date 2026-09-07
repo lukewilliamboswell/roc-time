@@ -25,7 +25,7 @@ def main() -> None:
         )
         run_example_checks(examples)
         run_example_apps(examples)
-        internal = copy_internal_examples(Path(directory) / "internal-scenarios", str(ROOT / "package/main.roc"))
+        internal = copy_internal_examples(Path(directory) / "internal-scenarios", str(ROOT / "package/main.roc"), str(ROOT / "tzdb/package/main.roc"))
         print("Testing unreleased caller scenarios against local sources.")
         run_example_checks(internal)
         run_example_apps(internal)

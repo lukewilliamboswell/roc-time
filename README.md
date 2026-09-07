@@ -85,8 +85,8 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 
 ### Tier 3: Next, in user-impact order
 
-1. **Finish everyday date/time workflows.** Named-zone appointments,
-   clock/expiry integration and application records.
+1. **Finish everyday date/time workflows.** Clock/expiry integration and
+   application records.
    Add weekday, ordinal-day and ISO-week queries for reporting.
 2. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
@@ -160,6 +160,13 @@ explicit precision: `local_datetime(appointment, Minute)` produces
 `Minute` and `Second` return `PrecisionLoss` if they would hide nonzero fields.
 The [appointment-display application](tests/appointment_display/main.roc) uses
 the development source and is checked against both local sources and the bundle.
+
+The development [named-zone appointment application](tests/zoned_appointment/main.roc)
+keeps a Paris appointment at the same local hour on the next civil day, displays
+it in New York, and shows why the two positions can be 23 or 25 hours apart on
+the POSIX timeline. It lists both choices for a repeated local time before making
+an explicit selection. Gaps, unknown zones and unavailable rule dates remain
+distinct results. Both core and zone-data packages are declared in its header.
 
 ## Prior art
 

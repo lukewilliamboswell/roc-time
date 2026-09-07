@@ -1,0 +1,10 @@
+Paris appointments, displayed in New York
+2026-03-28T09:30: 28 Mar 2026, 04:30:00 -> 29 Mar 2026, 03:30:00; 23 POSIX coordinate hours
+2026-10-24T09:30: 24 Oct 2026, 03:30:00 -> 25 Oct 2026, 04:30:00; 25 POSIX coordinate hours
+Repeated Paris label: 25 Oct 2026, 02:30
+Choice: 2026-10-25T02:30:00+02:00; 24 Oct 2026, 20:30:00 in New York
+Choice: 2026-10-25T02:30:00+01:00; 24 Oct 2026, 21:30:00 in New York
+Explicitly choosing Last: 24 Oct 2026, 21:30:00 in New York
+Spring label needs attention: Gap
+Zone lookup needs attention: UnknownZone("Example/Unknown")
+Beyond supplied rules: OutsideValidity

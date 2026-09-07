@@ -1,46 +1,9 @@
 # Everyday appointments and deadlines
 
-Objective: make two ordinary application workflows discoverable and executable
-through existing public types. Follow [R01–R02, R05, R07–R09 and R14–R16](../design.md#acceptance-requirements).
+Objective: complete the application-clock workflow and publish the staged caller
+applications. Follow [R01–R02, R05, R07–R09 and R14–R16](../design.md#acceptance-requirements).
 This is a caller-evidence project, not a request for a universal zoned datetime
 type, a new resolver or a core clock service.
-
-## Named-zone appointment
-
-Add a focused multi-file application that accepts a Gregorian local appointment,
-an explicit source zone and an explicit occurrence policy; advances the local
-date by one calendar day while retaining its clock label; and displays both
-appointments in a second named zone. Make repeated-time alternatives visible
-before selection. Gaps, missing names, finite rule validity and ambiguous
-occurrences must remain actionable errors or explicit review results.
-
-Reuse `LocalDateTime.parse_gregorian`, `ZoneRules.from_database`,
-`ZoneRules.resolve_occurrence` and the existing classification API. Calendar
-stepping composes `CalendarDate.as_gregorian`, `CalendarArithmetic.shift_day`
-with `CalendarDelta.days(1)` and an explicit policy, then `LocalDateTime.new`
-with the original `ClockTime`. Target-zone display composes
-`ZoneRules.offset_at`, `FixedOffset.project` and canonical local text output.
-Use `ResolvedBoundary` only when retaining the original interpretation is part
-of the scenario. Do not reconstruct source meaning from displayed output.
-
-Executable acceptance:
-
-- Use pinned zone-data fixtures to show the same local hour across a spring
-  transition while the two POSIX boundaries differ by 23 coordinate hours.
-  A fall transition must separately demonstrate 25 coordinate hours.
-- Show both boundaries of a repeated local label, and select explicitly.
-  A missing occurrence and a rules horizon failure must differ from ambiguity.
-- Project a chosen boundary into the second zone and independently check its
-  expected date, clock and offset. Displaying it must not change the boundary.
-- Pair the realistic example with narrow deterministic public-API tests using
-  independently sourced transition expectations. Reuse existing transition
-  corpora where their semantic intersection covers the scenario.
-- Run the multi-file application against local packages and the exact core/zone
-  bundles. Update recursive discovery, example index and release handling if a
-  new example folder is introduced.
-
-Published examples must retain working immutable dependencies until a release
-containing the direct native text APIs can be used.
 
 ## Application deadline and record
 
@@ -93,13 +56,17 @@ Executable acceptance:
 
 ## Scope and completion
 
-Implement the named-zone example first, then the platform-clock application with
-the explicit acquisition boundary above.
+Implement the platform-clock application with the explicit acquisition boundary
+above. When a compatible release includes the required APIs, promote the staged
+[named-zone appointment application](../tests/zoned_appointment/main.roc) into
+the public example collection with pinned compiler and core/zone URLs. Include it
+in the starter kit and retain its independent fixture and exact-output gates.
+Keep current public examples runnable until that release is available.
 Localized presentation, human relative phrases, timer/sleep services, a general
 zoned wrapper and speculative unit helpers are deferred until a concrete caller
 needs them. The broader design's outstanding obligations remain in
 [implement-design.md](implement-design.md).
 
 Remove each deliverable when its executable acceptance and user documentation
-land; remove this plan when both workflows are established. Keep implementation
+land; remove this plan when the application and publication work is complete. Keep implementation
 history and verification transcripts in commits, not this plan.

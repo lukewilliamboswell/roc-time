@@ -13,16 +13,7 @@ Keep the exact core, checked failures, explicit interpretation and microsecond
 contract. Prefer composition through existing public operations; add convenience
 APIs where a realistic caller otherwise has to reproduce temporal logic.
 
-1. **Complete the named-zone appointment workflow (R05/R07/R09/R16).** Follow
-   [user time workflows](user-time-workflows.md). From a
-   published data dependency, parse a local appointment, show repeated-time
-   alternatives, apply an explicit occurrence policy, advance one civil day while
-   preserving the clock label, and display the result in a second named zone.
-   Cover a gap, fold and provider-horizon failure with fixed rules. Advancing a
-   civil day must remain distinct from adding 24 coordinate hours; appointment
-   boundaries must remain distinct from a whole local-day selection. Reuse the
-   current data adapter and resolver rather than adding an implicit registry.
-2. **Connect clocks, numeric epochs and application records (R01/R02/R14/R16).**
+1. **Connect clocks, numeric epochs and application records (R01/R02/R14/R16).**
    Complete the integration path in [user time workflows](user-time-workflows.md).
    Demonstrate a real supported platform clock reading converted to a boundary,
    an expiry comparison and a timestamp inside an encoded application record.
@@ -33,7 +24,7 @@ APIs where a realistic caller otherwise has to reproduce temporal logic.
    text profile interacts with nanosecond-producing services; add an explicitly
    rounded text adapter only for a demonstrated integration. Clock acquisition,
    timers and monotonic measurements remain platform responsibilities.
-3. **Expose common civil queries (R05/R07/R16).** Follow
+2. **Expose common civil queries (R05/R07/R16).** Follow
    [civil ergonomics](civil-ergonomics.md). An invoice/reporting caller can
    obtain a weekday, ordinal day and ISO week date,
    without constructing a recurrence or copying private calendar calculations.
@@ -41,7 +32,7 @@ APIs where a realistic caller otherwise has to reproduce temporal logic.
    such as next-weekday or day/month selections when a concrete application needs
    them; selections must preserve exclusive ends, skipped dates and disconnected
    zoned coverage.
-4. **Finish schedule interchange (R11–R12/R14).** Follow
+3. **Finish schedule interchange (R11–R12/R14).** Follow
    [recurrence execution](recurrence.md) to carry the existing profile through
    parse/construct, canonical export, save/load and bounded evaluation. Preserve
    series state across windows and resumptions. Widen import from sourced calendar
