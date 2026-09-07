@@ -1,5 +1,5 @@
 import fuzz.Fuzz
-import time.Persistence
+import time.LocalDateTime
 import time.Explanation
 import time.SemanticFact
 import time.CalendarValue
@@ -40,7 +40,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			Ok(found) => found
 			Err(_) => crash "Valid decimal grid rejected"
 		}
-		check_calendar_persistence(input, h, m, s, fraction)
+		check_calendar_description(input, h, m, s, fraction)
 		start = (number // $width) * $width
 		check_bounds(value, start, $width)
 		hour = match CalendarValue.hour(date, h) {
@@ -468,104 +468,50 @@ check_interval_truth = |evidence, intervals, points| {
 	}
 }
 
-# R02/R14: native persistence retains calendar identity and every supplied
-# resolution. Expected payloads come from generated fields, not native bounds
-# or the serializer. Provider limits persist without any POSIX materialization.
-check_calendar_persistence = |input, h, m, s, fraction| {
+# R02/R13/R14: native calendar identity, provider limits and independently
+# ordered qualification scopes remain observable without coordinate lowering.
+check_calendar_description = |input, h, m, s, fraction| {
 	for calendar in [Gregorian, Julian] {
-		name = match calendar {
-			Gregorian => "gregorian"
-			Julian => "julian"
-		}
-		date = match CalendarDate.from_fields(calendar, { year: 1970, month: 1, day: 1 }) {
-			Ok(found) => found
-			Err(_) => crash "Valid native persistence date"
-		}
-		year = match CalendarValue.year(calendar, 1970) {
-			Ok(found) => found
-			Err(_) => crash "Valid native year"
-		}
-		month = match CalendarValue.month(calendar, 1970, 1) {
-			Ok(found) => found
-			Err(_) => crash "Valid native month"
-		}
-		hour = match CalendarValue.hour(date, h) {
-			Ok(found) => found
-			Err(_) => crash "Valid native hour"
-		}
-		minute = match CalendarValue.minute(date, h, m) {
-			Ok(found) => found
-			Err(_) => crash "Valid native minute"
-		}
-		second = match CalendarValue.second(date, h, m, s) {
-			Ok(found) => found
-			Err(_) => crash "Valid native second"
-		}
-		fractional = match CalendarValue.fractional_second(date, { hour: h, minute: m, second: s }, { digits: input.digits, value: fraction }) {
-			Ok(found) => found
-			Err(_) => crash "Valid native fractional cell"
-		}
-		fraction_payload = "${name};fraction;1970;1;1;${h.to_str()};${m.to_str()};${s.to_str()};${input.digits.to_str()};${fraction.to_str()}"
+		date = CalendarDate.from_fields(calendar, { year: 1970, month: 1, day: 1 }) ?? crash "valid description date"
+		fractional = CalendarValue.fractional_second(date, { hour: h, minute: m, second: s }, { digits: input.digits, value: fraction }) ?? crash "valid fractional description"
 		check_explanation(fractional, calendar, input, h, m, s, fraction)
-		for item in [
-			{ value: year, payload: "${name};year;1970" },
-			{ value: month, payload: "${name};month;1970;1" },
-			{ value: CalendarValue.day(date), payload: "${name};day;1970;1;1" },
-			{ value: hour, payload: "${name};hour;1970;1;1;${h.to_str()}" },
-			{ value: minute, payload: "${name};minute;1970;1;1;${h.to_str()};${m.to_str()}" },
-			{ value: second, payload: "${name};second;1970;1;1;${h.to_str()};${m.to_str()};${s.to_str()}" },
-			{ value: fractional, payload: fraction_payload },
-		] {
-			check_calendar_envelope(CalendarValue(item.value), "calendar-value", "native-calendar-value-v1", item.payload)
-		}
 		for limit in [-2147483648.I64, 2147483647] {
-			value = match CalendarValue.year(calendar, limit) {
-				Ok(found) => found
-				Err(_) => crash "Supported provider year limit rejected"
+			value = CalendarValue.year(calendar, limit) ?? crash "provider year limit rejected"
+			label = LocalDateTime.date(CalendarValue.start_label(value))
+			if CalendarDate.calendar(label) != calendar or CalendarDate.to_fields(label).year != limit or CalendarValue.resolution(value) != Year {
+				crash "native provider limit lost identity or resolution"
 			}
-			check_calendar_envelope(CalendarValue(value), "calendar-value", "native-calendar-value-v1", "${name};year;${limit.to_str()}")
 		}
-		# Qualifier scope and flags are independent. Generate an ordered oracle
-		# list, supply it reversed, and require canonical scope order on restore.
-		scopes : List({ scope : QualifiedCalendarValue.Scope, name : Str })
-		scopes = [{ scope: Whole, name: "whole" }, { scope: Year, name: "year" }, { scope: Month, name: "month" }, { scope: Day, name: "day" }, { scope: Hour, name: "hour" }, { scope: Minute, name: "minute" }, { scope: Second, name: "second" }, { scope: Fraction, name: "fraction" }]
+		scopes : List(QualifiedCalendarValue.Scope)
+		scopes = [Whole, Year, Month, Day, Hour, Minute, Second, Fraction]
 		var $items = []
 		var $expected = []
-		var $reversed = []
 		var $bits = input.number
-		for choice in scopes {
-			flag = match $bits % 3 {
-				0 => { value: Uncertain, name: "uncertain" }
-				1 => { value: Approximate, name: "approximate" }
-				_ => { value: UncertainApproximate, name: "uncertain-approximate" }
+		for scope in scopes {
+			qualifier = match $bits % 3 {
+				0 => Uncertain
+				1 => Approximate
+				_ => UncertainApproximate
 			}
 			if $bits % 2 == 0 {
-				$items = [{ scope: choice.scope, qualifier: flag.value }].concat($items)
-				token = "${choice.name}=${flag.name}"
-				$expected = $expected.append(token)
-				$reversed = [token].concat($reversed)
+				item = { scope, qualifier }
+				$items = [item].concat($items)
+				$expected = $expected.append(item)
 			}
 			$bits = $bits // 2
 		}
 		description = qualified(fractional, $items)
-		payload = "${fraction_payload}|${Str.join_with($expected, ";")}"
-		check_calendar_envelope(QualifiedCalendarValue(description), "qualified-calendar-value", "native-qualified-calendar-value-v1", payload)
-		noncanonical = calendar_envelope("qualified-calendar-value", "native-qualified-calendar-value-v1", "${fraction_payload}|${Str.join_with($reversed, ";")}")
-		match Persistence.parse(noncanonical) {
-			Ok(found) => if Persistence.value(found) != QualifiedCalendarValue(description) {
-				crash "Qualifier order changed persisted meaning"
-			}
-			Err(_) => crash "Valid reordered persisted qualifiers rejected"
+		if QualifiedCalendarValue.described_value(description) != fractional or QualifiedCalendarValue.qualifications(description) != $expected {
+			crash "native qualification normalization changed scopes or values"
 		}
-		duplicate = calendar_envelope("qualified-calendar-value", "native-qualified-calendar-value-v1", "${fraction_payload}|whole=uncertain;whole=approximate")
-		match Persistence.parse(duplicate) {
-			Err(InvalidQualifiedCalendarValue(DuplicateScope(Whole))) => {}
-			_ => crash "Persisted duplicate qualifier scope accepted"
+		match QualifiedCalendarValue.new(fractional, [{ scope: Whole, qualifier: Uncertain }, { scope: Whole, qualifier: Approximate }]) {
+			Err(DuplicateScope(Whole)) => {}
+			_ => crash "duplicate native qualification accepted"
 		}
-		unsupplied = calendar_envelope("qualified-calendar-value", "native-qualified-calendar-value-v1", "${name};year;1970|day=uncertain")
-		match Persistence.parse(unsupplied) {
-			Err(InvalidQualifiedCalendarValue(UnsuppliedComponent(Day))) => {}
-			_ => crash "Persistence invented unsupplied qualified component"
+		year = CalendarValue.year(calendar, 1970) ?? crash "valid year"
+		match QualifiedCalendarValue.new(year, [{ scope: Day, qualifier: Uncertain }]) {
+			Err(UnsuppliedComponent(Day)) => {}
+			_ => crash "qualification invented unsupplied day"
 		}
 	}
 }
@@ -610,25 +556,5 @@ check_explanation = |value, calendar, input, h, m, s, fraction| {
 	match Explanation.fact_at(source, U64.highest) {
 		End => {}
 		_ => crash "Out-of-range fact index must end without overflow"
-	}
-}
-
-calendar_envelope : Str, Str, Str -> Str
-calendar_envelope = |kind, profile, payload| Json.to_str({ format: "roc-time", version: "1", kind, profile, axis: "none", unit: "none", payload })
-
-check_calendar_envelope = |value, kind, profile, payload| {
-	native = match Persistence.new(value) {
-		Ok(found) => found
-		Err(_) => crash "Bounded native calendar persistence failed"
-	}
-	expected = calendar_envelope(kind, profile, payload)
-	if Persistence.to_text(native) != expected {
-		crash "Native calendar persistence differs from generated field oracle"
-	}
-	match Persistence.parse(expected) {
-		Ok(found) => if Persistence.value(found) != value or Persistence.to_text(found) != expected {
-			crash "Calendar persistence lost native identity or canonical text"
-		}
-		Err(_) => crash "Valid native calendar persistence rejected"
 	}
 }

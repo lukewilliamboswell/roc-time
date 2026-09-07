@@ -1,5 +1,4 @@
 import fuzz.Fuzz
-import time.Persistence
 import time.Coverage
 import time.PosixBoundary
 import time.PosixDelta
@@ -73,7 +72,7 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		if Coverage.union(complement, Coverage.intersection(a, Coverage.from_spans([window]))) != Coverage.from_spans([window]) {
 			return Ok(Bool.False)
 		}
-		check_persistence(a, window, input)
+		check_runs(a, input)
 		var $point = -9.I64
 		var $width = 0.I64
 		var $count = 0.U64
@@ -131,10 +130,8 @@ occupied = |specs, point| {
 	$found
 }
 
-# R04/R14: scan every unit cell in the bounded generated domain and emit maximal
-# runs from the raw predicate. This oracle never normalizes native spans or
-# consults Coverage.to_spans to derive the persisted canonical payload.
-check_persistence = |coverage, window, input| {
+# R04: enumerate unit cells independently and compare maximal native runs.
+check_runs = |coverage, input| {
 	var $point = -9.I64
 	var $previous = Bool.False
 	var $start = 0.I64
@@ -145,48 +142,13 @@ check_persistence = |coverage, window, input| {
 			$start = $point
 		}
 		if $previous and !current {
-			$runs = $runs.append("${$start.to_str()}/${$point.to_str()}")
+			$runs = $runs.append({ start: $start, end: $point })
 		}
 		$previous = current
 		$point = $point + 1
 	}
-	expected_payload = Str.join_with($runs, ";")
-	check_envelope(Coverage(coverage), "coverage", "posix-canonical-coverage-v1", expected_payload)
-	end = input.window.lo + input.window.width.to_i64()
-	check_envelope(PosixSpan(window), "posix-span", "posix-half-open-span-v1", "${input.window.lo.to_str()}/${end.to_str()}")
-	# Different invalid representations must not be silently normalized during
-	# restore: touching, overlapping, duplicated, and out-of-order members.
-	lo = input.window.lo
-	middle = lo + 1
-	hi = lo + 2
-	for payload in ["${lo.to_str()}/${middle.to_str()};${middle.to_str()}/${hi.to_str()}", "${lo.to_str()}/${hi.to_str()};${middle.to_str()}/${(hi + 1).to_str()}", "${lo.to_str()}/${middle.to_str()};${lo.to_str()}/${middle.to_str()}", "${hi.to_str()}/${(hi + 1).to_str()};${lo.to_str()}/${middle.to_str()}"] {
-		text = Json.to_str({ format: "roc-time", version: "1", kind: "coverage", profile: "posix-canonical-coverage-v1", axis: "posix-1970", unit: "microsecond", payload })
-		match Persistence.parse(text) {
-			Err(NonCanonicalCoverage) => {}
-			_ => crash "Noncanonical persisted coverage was silently normalized"
-		}
-	}
-}
-
-check_envelope = |value, kind, profile, payload| {
-	envelope = match Persistence.new(value) {
-		Ok(found) => found
-		Err(_) => crash "Small native coverage persistence failed"
-	}
-	text = Persistence.to_text(envelope)
-	record : Try({ format : Str, version : Str, kind : Str, profile : Str, axis : Str, unit : Str, payload : Str }, [InvalidJson(Str), MissingRequiredField(Str)])
-	record = Json.parse(text)
-	match record {
-		Ok(fields) => if fields != { format: "roc-time", version: "1", kind, profile, axis: "posix-1970", unit: "microsecond", payload } {
-			crash "Persisted coverage differs from independent unit-cell run model"
-		}
-		Err(_) => crash "Persisted coverage envelope is not seven JSON strings"
-	}
-	restored = match Persistence.parse(text) {
-		Ok(found) => found
-		Err(_) => crash "Canonical coverage persistence rejected"
-	}
-	if Persistence.value(restored) != value or Persistence.to_text(restored) != text {
-		crash "Coverage persistence changed native value or canonical text"
+	observed = Coverage.to_spans(coverage).map(|span| { start: PosixBoundary.to_microseconds(PosixSpan.start(span)), end: PosixBoundary.to_microseconds(PosixSpan.end(span)) })
+	if observed != $runs {
+		crash "Coverage differs from independent maximal unit-cell runs"
 	}
 }

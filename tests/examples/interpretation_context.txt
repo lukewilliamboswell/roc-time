@@ -1,0 +1,6 @@
+Recording interpretation contexts
+Rule labels reused: Synthetic/Archive / example-v1
+Original: offset 3600 seconds; provenance synthetic-original
+Retained snapshot: offset 3600 seconds; provenance synthetic-original
+Explicit re-resolution: offset 7200 seconds; provenance synthetic-updated
+Preferred calendar hebrew is retained; presentation is unsupported

@@ -32,8 +32,8 @@ import ClockTime
 ## actual rules. No lazy/budgeted interpretation claim is made. Snapshots expose
 ## stored results without resolving again. Non-Gregorian presentation errors.
 ## Numeric zone -00:00 denotes a fixed zero offset, serialized as +00:00.
-## Persistence supports this strict snapshot through an explicit versioned
-## profile with its complete immutable context. No complete ISO or broader-calendar claim.
+## Canonical IXDTF text preserves the declaration; snapshots remain in-memory
+## results with explicit context. No complete ISO or broader-calendar claim.
 Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }.{
 	ZoneId : [Named(Str), Numeric(FixedOffset)]
 	Zone : { critical : Bool, identifier : ZoneId }

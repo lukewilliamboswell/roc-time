@@ -18,12 +18,12 @@ APIs where a realistic caller otherwise has to reproduce temporal logic.
    text/display, civil reporting and named-zone applications with compatible compiler and immutable
    package URLs. Publication is separate from implementation acceptance; users
    of the current release cannot yet use these development APIs.
-2. **Finish schedule interchange (R11–R12/R14).** Follow
-   [recurrence execution](recurrence.md) to widen import from sourced calendar
-   workflows, starting with UTC cancellations for zoned meetings. Carry each
-   extension through canonical export, save/load and bounded evaluation while
-   preserving series state across windows and resumptions. Full ICS ingestion
-   remains a separate scope from extracted recurrence properties.
+2. **Prepare the coherent release (R14–R16).** Follow
+   [release preparation](release-preparation.md) for support-compiler validation,
+   standard serialization guidance, schedule interchange examples and the
+   documentation-asset migration. Broader recurrence profiles remain in
+   [recurrence execution](recurrence.md) and are not required to publish the
+   currently supported use cases.
 
 Release and resource evidence applies throughout this sequence. Keep public
 examples runnable with their declared compiler and immutable package URLs,
@@ -49,8 +49,8 @@ libraries is not sufficient justification.
   beyond the Gregorian/Julian shape; preserve unsupported presentation requests.
 - Extend remaining bounded explanations, styled rendering and broader reasoning
   (R12–R14) after the ordinary workflows and schedule interchange are usable.
-  Use shared typed facts and immutable interpretation snapshots; keep native
-  persistence separate from interchange. Full localization and relative-language
+  Use shared typed facts and immutable interpretation snapshots; persist only
+  values faithfully representable in supported external standards. Full localization and relative-language
   formatting require a selected caller and explicit data/rendering scope.
 - Complete the remaining public examples and provider/resource/backend evidence
   across all requirements (R15–R16), including the obligations below. This does
@@ -66,7 +66,7 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 ## Outstanding evidence and external inputs
 
 - Full ISO normative clauses are needed for clause-level conformance claims; catalogue summaries and Tempo support claims are insufficient. Independently specified foundations can proceed without them.
-- Select exact RFC adapter, persistence and reasoning profiles before exposing those APIs. Unsupported scopes must remain explicit.
+- Select exact external serialization and reasoning profiles before exposing those APIs. Unsupported scopes must remain explicit.
 - Verify scheduled fuzz execution from actual workflow runs. Establish supported Wasm execution separately.
 - Measure complexity, allocations, final layouts and retained slices on the pinned compiler. Current functional evidence does not establish those resource claims.
 - Extend hosted resource gates with coordinate-extent-independent span operations; member-count scaling for coverage and events; bounded zone selection and inspection. Separate construction from consumption, include early-stop/resume and failing controls in dev/speed builds, and instrument live/peak requested bytes before making retained-memory claims.
@@ -75,6 +75,6 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
   `tests/compiler_repro/structural_duration_hash/` when upgrading the compiler
   or simplifying the corresponding declaration codecs/hash implementation.
   Their passing controls preserve semantic fields; native resource and
-  saved-definition dictionary gates must continue to pass.
+  checked-definition dictionary gates must continue to pass.
 
 Completion requires executable evidence for every acceptance requirement, usable public examples and the declared platform/resource evidence. Remove this plan when those deliverables are complete.

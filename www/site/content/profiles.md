@@ -14,7 +14,7 @@ A format name is not a promise to implement its entire standard. Match the exact
 | IXDTF | Declared annotations/assertions and explicit interpretation | Unknown critical extensions fail; zone and offset assertions remain distinct |
 | Recurrence | Declared extracted RFC 5545 DATE/DATE-TIME profiles | No general ICS reader; RFC rules differ from repeated clamped arithmetic |
 | Explanation | Bounded semantic facts and supported contextual explanations | Inspection text and prose are not persistence formats |
-| Persistence | Supported exact values, descriptions, coverage and interpretation snapshots | Versioned kind/profile/axis/unit; unknown metadata fails; no rc3 schedule-definition archive |
+| Standard text storage | Store supported timestamp and date-description text using its parser and serializer | A standard declaration does not embed every native interpretation choice or immutable zone table |
 
 For precise accepted grammar, field limits and error types, follow the version-specific [API map](api.html). There is deliberately no single “ISO compliant” badge.
 
@@ -26,7 +26,7 @@ The core never reads the clock, consults a machine timezone, fetches a database 
 
 ## What requires development APIs?
 
-Civil text/display helpers, Gregorian reporting queries, `ICal` adapter names, canonical recurrence export and reusable `ScheduleDefinition` are ahead of rc3. Work on durable schedule archives is being validated separately. [Development examples](versions.html) use a newer compiler and local package paths.
+Civil text/display helpers, Gregorian reporting queries, `ICal` adapter names, canonical recurrence export and reusable `ScheduleDefinition` are ahead of rc3. [Development examples](versions.html) use a newer compiler and local package paths.
 
 ## What is outside these guides?
 

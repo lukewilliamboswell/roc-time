@@ -209,6 +209,7 @@ render = |fact| match SemanticFact.kind(fact) {
 		clipped: False,
 	}
 	RecurrenceSelector(selector) => { text: "Selector: ${recurrence_selector(selector)}.", clipped: False }
+	RecurrenceBoundaryExclusion(boundary) => { text: "Exclusion: selected POSIX boundary ${PosixBoundary.to_microseconds(boundary).to_str()} microseconds since 1970-01-01; removes every matching occurrence after COUNT and positional selection, including explicit inclusions.", clipped: False }
 	RecurrenceException(data) => { text: "${Str.inspect(data.kind)}: ${recurrence_source(data.source)}; matched by source position, not resolved coverage.", clipped: False }
 	RecurrencePolicy(data) => {
 		text: "Interpretation: ${

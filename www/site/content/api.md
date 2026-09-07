@@ -29,7 +29,7 @@ Choose a module by the job you need to do. Links below open the generated **0.1.
 | Generate identified timed appointments | [TimedRecurrence](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/TimedRecurrence/), [TimedSchedule](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/TimedSchedule/) |
 | Import extracted iCalendar values | [RfcDateRule](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/RfcDateRule/), [RfcTimedRule](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/RfcTimedRule/) |
 | Preserve imported descriptions | [EdtfDate](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/EdtfDate/), [Ixdtf](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Ixdtf/) |
-| Explain or save a supported value | [Explanation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Explanation/), [Persistence](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Persistence/) |
+| Explain a supported value | [Explanation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/Explanation/) |
 
 [Browse every released module →](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/)
 

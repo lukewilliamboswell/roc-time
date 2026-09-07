@@ -17,13 +17,13 @@ roc version
 roc examples/booking_exchange/main.roc
 ```
 
-The version command should identify `nightly-2026-09-05-b195f5b`. The application prints available UTC windows after subtracting two bookings, including one supplied with a different offset. It also saves and restores the result.
+The version command should identify `nightly-2026-09-05-b195f5b`. The application prints available UTC windows after subtracting two bookings, including one supplied with a different offset.
 
 **No Python runner is required to run an example.** On first use Roc downloads the content-addressed package dependencies declared in the header.
 
 ## 3. Change an input
 
-Open `examples/booking_exchange/main.roc`. Change one booking while keeping an explicit `Z` or numeric offset. Run the same command again. The companion `BookingExchange.roc` performs parsing, coverage subtraction and persistence through public library APIs.
+Open `examples/booking_exchange/main.roc`. Change one booking while keeping an explicit `Z` or numeric offset. Run the same command again. The companion `BookingExchange.roc` performs parsing and coverage subtraction through public library APIs.
 
 Keep both files together. The root file’s `import BookingExchange` resolves its neighboring module; copying only `main.roc` loses the application’s implementation.
 

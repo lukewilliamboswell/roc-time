@@ -20,9 +20,10 @@ import ZoneRules
 ## COUNT includes chosen source occurrences before the query window; UNTIL is
 ## inclusive in local position. Daily through yearly periods use Gregorian
 ## selectors via new; new_subdaily supplies hourly, minutely or secondly
-## periods. Source exclusions are applied after interpretation and COUNT;
+## periods. Source and boundary exclusions apply after interpretation and COUNT;
 ## they do not bypass gap/fold validation. Inclusions do not consume COUNT and merge by source position; durations
-## are supplied by TimedSchedule.
+## are supplied by TimedSchedule. Boundary exclusions match every selected
+## occurrence at that coordinate, without projecting back to a source label.
 ## Clock candidates are ordered by source label. BYSETPOS indexes that full
 ## period after explicit interpretation, without deduplicating equal boundaries.
 ## Construction retains at most 4096 positions and bounded field selectors.
@@ -31,7 +32,7 @@ import ZoneRules
 ## Without positions, buffering holds one occurrence. With positions it holds
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
-TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime), inclusions : List(LocalDateTime) }.{
+TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary), inclusions : List(LocalDateTime) }.{
 
 	## Until is inclusive in source-label order. UntilBoundary is inclusive
 	## on the POSIX axis after full-period BYSETPOS selection. Explicit inclusions
@@ -39,7 +40,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## rule occurrences; it cannot be compared to the unresolved anchor at new.
 	Termination : [Forever, Count(U64), Until(LocalDateTime), UntilBoundary(PosixBoundary)]
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
-	Definition : { anchor : LocalDateTime, pattern : [Calendar(CalendarPattern.Spec), Subdaily({ frequency : SubdailyPattern.Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec })], clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16), inclusions : List(LocalDateTime), exclusions : List(LocalDateTime) }
+	Definition : { anchor : LocalDateTime, pattern : [Calendar(CalendarPattern.Spec), Subdaily({ frequency : SubdailyPattern.Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec })], clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16), inclusions : List(LocalDateTime), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary) }
 
 	## Effective field selectors and source labels, without clock products,
 	## occurrence enumeration or interpretation. Immutable lists may be shared.
@@ -55,15 +56,16 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 			}
 		}
 		clock = ClockPattern.definition(rule.clocks)
-		{ anchor: rule.anchor, pattern, clocks: { hours: clock.hours, minutes: clock.minutes, seconds: clock.seconds }, termination: rule.termination, by_set_pos: rule.positions, inclusions: rule.inclusions, exclusions: rule.exclusions }
+		{ anchor: rule.anchor, pattern, clocks: { hours: clock.hours, minutes: clock.minutes, seconds: clock.seconds }, termination: rule.termination, by_set_pos: rule.positions, inclusions: rule.inclusions, exclusions: rule.exclusions, boundary_exclusions: rule.boundary_exclusions }
 	}
 
 	## Rebuild an edited declaration through the same checked constructors.
 	## Anchor and inclusions must retain Gregorian labels. Exclusions and UNTIL
 	## retain native local-position semantics and their calendar descriptions.
+	## Boundary exclusions preserve their distinct POSIX domain.
 	from_definition : Definition -> Try(TimedRecurrence, [UnsupportedCalendar(Calendar), InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	from_definition = |value| {
-		if value.inclusions.len() > 4096 or value.exclusions.len() > 4096 {
+		if value.inclusions.len() > 4096 or value.boundary_exclusions.len() > 4096 or value.exclusions.len() > 4096 - value.boundary_exclusions.len() {
 			return Err(TooManySelectors)
 		}
 		date = CalendarDate.as_gregorian(LocalDateTime.date(value.anchor))?
@@ -76,7 +78,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		for label in value.inclusions {
 			$starts = $starts.append({ date: CalendarDate.as_gregorian(LocalDateTime.date(label))?, clock: LocalDateTime.clock(label) })
 		}
-		with_exclusions(with_inclusions(base, $starts)?, value.exclusions)
+		with_boundary_exclusions(with_exclusions(with_inclusions(base, $starts)?, value.exclusions)?, value.boundary_exclusions)
 	}
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new = |start, spec| {
@@ -87,7 +89,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if !CalendarPattern.matches(calendar, 0, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], inclusions: [] })
+		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], boundary_exclusions: [], inclusions: [] })
 	}
 	SubdailySpec : { pattern : SubdailyPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
@@ -100,21 +102,35 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if !SubdailyPattern.matches_date(pattern, start.date)? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
-		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], inclusions: [] })
+		Ok({ anchor, schedule: Subdaily(pattern), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], boundary_exclusions: [], inclusions: [] })
 	}
 
 	## Replace the source-position exclusion set; an empty list clears it.
 	## Equal local positions match across supported calendar descriptions.
 	## Do not confuse source equality with equal resolved boundaries in a gap.
-	## At most 4096 inputs; O(n log n) normalization, O(log n) membership.
+	## Inputs plus existing boundary exclusions total at most 4096.
+	## O(n log n) normalization, O(log n) membership.
 	## Existing cursors retain their original immutable rule and exclusion set.
 	with_exclusions : TimedRecurrence, List(LocalDateTime) -> Try(TimedRecurrence, [TooManySelectors, ..])
 	with_exclusions = |rule, labels| {
-		if labels.len() > 4096 {
+		if labels.len() > 4096 - rule.boundary_exclusions.len() {
 			return Err(TooManySelectors)
 		}
 		exclusions = sorted_positions(labels)
 		Ok({ ..rule, exclusions })
+	}
+
+	## Replace resolved-boundary exclusions without interpreting source labels.
+	## All occurrences selected at a matching boundary are excluded, after COUNT
+	## and BYSETPOS, including explicit inclusions. Local exclusions stay distinct.
+	## Supplied inputs plus existing local exclusions must total at most 4096.
+	## O(n log n) sorting/deduplication; O(log n) membership per occurrence.
+	with_boundary_exclusions : TimedRecurrence, List(PosixBoundary) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	with_boundary_exclusions = |rule, boundaries| {
+		if boundaries.len() > 4096 - rule.exclusions.len() {
+			return Err(TooManySelectors)
+		}
+		Ok({ ..rule, boundary_exclusions: sorted_boundaries(boundaries) })
 	}
 
 	## Replace at most 4096 explicit Gregorian starts, normalized by position.
@@ -147,7 +163,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	fact_count : TimedRecurrence -> U64
 	fact_count = |rule| {
 		data = fact_pattern(rule.schedule)
-		3 + RecurrenceFacts.count(data.calendar, Some(rule.clocks), rule.positions) + rule.inclusions.len() + rule.exclusions.len()
+		3 + RecurrenceFacts.count(data.calendar, Some(rule.clocks), rule.positions) + rule.inclusions.len() + rule.exclusions.len() + rule.boundary_exclusions.len()
 	}
 	fact_at : TimedRecurrence, U64 -> [End, Item(SemanticFact)]
 	fact_at = |rule, index| {
@@ -157,7 +173,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		data = fact_pattern(rule.schedule)
 		selectors = RecurrenceFacts.count(data.calendar, Some(rule.clocks), rule.positions)
 		if index == 0 {
-			return Item(SemanticFact.new(RecurrenceDescription({ kind: TimedRecurrence, anchor: Local(rule.anchor), frequency: data.frequency, interval: data.interval, week_start: data.week_start, selector_count: selectors, inclusion_count: rule.inclusions.len(), exclusion_count: rule.exclusions.len() })))
+			return Item(SemanticFact.new(RecurrenceDescription({ kind: TimedRecurrence, anchor: Local(rule.anchor), frequency: data.frequency, interval: data.interval, week_start: data.week_start, selector_count: selectors, inclusion_count: rule.inclusions.len(), exclusion_count: rule.exclusions.len() + rule.boundary_exclusions.len() })))
 		}
 		if index == 1 {
 			termination = match rule.termination {
@@ -179,7 +195,11 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if exception < rule.inclusions.len() {
 			return Item(SemanticFact.new(RecurrenceException({ kind: Inclusion, source: Local(fact_local(rule.inclusions, exception)) })))
 		}
-		Item(SemanticFact.new(RecurrenceException({ kind: Exclusion, source: Local(fact_local(rule.exclusions, exception - rule.inclusions.len())) })))
+		local_index = exception - rule.inclusions.len()
+		if local_index < rule.exclusions.len() {
+			return Item(SemanticFact.new(RecurrenceException({ kind: Exclusion, source: Local(fact_local(rule.exclusions, local_index)) })))
+		}
+		Item(SemanticFact.new(RecurrenceBoundaryExclusion(label_at(rule.boundary_exclusions, local_index - rule.exclusions.len()))))
 	}
 	to_inspect : TimedRecurrence -> Str
 	to_inspect = |rule| {
@@ -305,7 +325,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 								occurrence : Occurrence
 								occurrence = { source: pending.source, choice, rules: $state.context.rules }
 								$state = { ..$state, inclusion_pending: None, inclusion_index: $state.inclusion_index + 1, zone_buffered: 0 }
-								if !excluded($state.rule.exclusions, pending.source) {
+								if !excluded($state.rule.exclusions, pending.source) and !boundary_excluded($state.rule.boundary_exclusions, choice.boundary) {
 									return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: 0, status: Item({ occurrence, cursor: $state }) })
 								}
 							}
@@ -571,7 +591,9 @@ test_gap_series = |positions, budget| test_series(positions, budget, 3600, First
 
 test_series = |positions, budget, offset, policy| test_series_with_pauses(positions, budget, offset, policy, [], [])
 
-test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions| {
+test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions| test_boundary_series(positions, budget, offset, policy, pauses, exclusions, [])
+
+test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, boundaries| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
 	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
@@ -585,7 +607,7 @@ test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions
 			by_set_pos: positions,
 		},
 	)?
-	rule = TimedRecurrence.with_exclusions(base_rule, exclusions)?
+	rule = TimedRecurrence.with_boundary_exclusions(TimedRecurrence.with_exclusions(base_rule, exclusions)?, boundaries)?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
 	rules = ZoneRules.new_bounded(
 		"Synthetic/Forward",
@@ -1161,7 +1183,7 @@ next_rule = |initial, limits| {
 						}
 						if within_cutoff {
 							$state = { ..$state, count: $state.count + 1 }
-							if !before(occurrence.source, $state.window.start) and !excluded($state.rule.exclusions, occurrence.source) {
+							if !before(occurrence.source, $state.window.start) and !excluded($state.rule.exclusions, occurrence.source) and !boundary_excluded($state.rule.boundary_exclusions, occurrence.choice.boundary) {
 								return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
 							}
 						}
@@ -1279,13 +1301,15 @@ sorted_positions = |labels| {
 
 # R11/R12: explicit starts precede DTSTART and outlive COUNT; duplicates and
 # exclusions operate on the merged positions, and one-unit resumes agree.
-test_inclusion_cursor = |_| {
+test_inclusion_cursor = |_| test_inclusion_boundary_cursor([])
+
+test_inclusion_boundary_cursor = |boundaries| {
 	clock = clock_from_number(0)
 	start = |day| Ok({ date: GregorianDate.from_fields({ year: 1970, month: 1, day })?, clock })
 	anchor = start(2)?
 	raw = TimedRecurrence.new(anchor, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
 	included = TimedRecurrence.with_inclusions(raw, [start(4)?, start(2)?, start(1)?, start(4)?, start(5)?])?
-	rule = TimedRecurrence.with_exclusions(included, [local_at(1, clock)?])?
+	rule = TimedRecurrence.with_boundary_exclusions(TimedRecurrence.with_exclusions(included, [local_at(1, clock)?])?, boundaries)?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(518400000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 	TimedRecurrence.cursor(rule, { start: local_at(0, clock)?, end: local_at(4, clock)? }, { rules, occurrence: RequireUnique, gap: RejectGap })
@@ -1452,4 +1476,93 @@ expect {
 	boundary = PosixBoundary.from_microseconds(I64.highest)
 	absolute = TimedRecurrence.new({ date, clock }, { ..base, termination: UntilBoundary(boundary) })?
 	TimedRecurrence.fact_count(rule) == 7 and TimedRecurrence.fact_at(rule, 1) == Item(SemanticFact.new(RecurrenceTermination(UntilLocal(local)))) and TimedRecurrence.fact_at(absolute, 1) == Item(SemanticFact.new(RecurrenceTermination(UntilBoundary(boundary)))) and TimedRecurrence.fact_at(rule, 3) == Item(SemanticFact.new(RecurrenceSelector(Hour(9)))) and TimedRecurrence.fact_at(rule, 4) == Item(SemanticFact.new(RecurrenceSelector(Minute(30)))) and TimedRecurrence.fact_at(rule, 6) == Item(SemanticFact.new(RecurrenceSelector(Microsecond(120000)))) and TimedRecurrence.fact_at(rule, 7) == End and TimedRecurrence.fact_at(rule, U64.highest) == End and TimedRecurrence.to_inspect(rule).count_utf8_bytes() <= 256 and TimedRecurrence.to_inspect(absolute).count_utf8_bytes() <= 256
+}
+
+boundary_excluded : List(PosixBoundary), PosixBoundary -> Bool
+boundary_excluded = |boundaries, boundary| {
+	var $lower = 0.U64
+	var $upper = boundaries.len()
+	while $lower < $upper {
+		middle = $lower + U64.div_trunc_by($upper - $lower, 2)
+		if label_at(boundaries, middle) < boundary {
+			$lower = middle + 1
+		} else {
+			$upper = middle
+		}
+	}
+	$lower < boundaries.len() and label_at(boundaries, $lower) == boundary
+}
+
+sorted_boundaries : List(PosixBoundary) -> List(PosixBoundary)
+sorted_boundaries = |boundaries| {
+	sorted = boundaries.sort_with(
+		|a, b| if a < b {
+			Before
+		} else if a > b {
+			After
+		} else {
+			Same
+		},
+	)
+	var $result = []
+	var $previous = None
+	for boundary in sorted {
+		if $previous != Some(boundary) {
+			$result = $result.append(boundary)
+		}
+		$previous = Some(boundary)
+	}
+	$result
+}
+
+# Independent piecewise-offset fixture: at 01:00Z the offset changes from zero
+# to +01:00. Sources 01:00 (gap) and 02:00 (exact) both select 01:00Z.
+# Excluding that boundary removes both identities, without replenishing COUNT.
+# Fieldwise comparison avoids the compiler defect reproduced by
+# tests/compiler_repro/nested_record_equality while checking every result field.
+expect {
+	budget = { max_steps: 1.U64, max_buffered: 3.U64, max_zone_segments: 1.U64, max_zone_candidates: 2.U64 }
+	excluded_boundary = PosixBoundary.from_microseconds(3600000000)
+	resumed = test_boundary_series([], budget, 3600, First, [], [], [excluded_boundary, excluded_boundary])?
+	whole = test_boundary_series([], { ..budget, max_steps: 100, max_zone_segments: 100 }, 3600, First, [], [], [excluded_boundary])?
+	positioned = test_boundary_series([1, -1], budget, 3600, First, [], [], [excluded_boundary])?
+	resumed.valid == whole.valid and resumed.boundaries == whole.boundaries and resumed.sources == whole.sources and resumed.adjusted == whole.adjusted and resumed.valid and resumed.boundaries == [PosixBoundary.from_microseconds(0)] and positioned.valid and positioned.boundaries == resumed.boundaries
+}
+
+# The backward transition repeats 00:00: its first boundary is zero and its
+# last boundary is 01:00Z. An exclusion of the unchosen alternative must not
+# remove the first occurrence just because projection gives the same label.
+expect {
+	budget = { max_steps: 1.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 2.U64 }
+	first = test_boundary_series([], budget, -3600, First, [], [], [PosixBoundary.from_microseconds(3600000000)])?
+	last = test_boundary_series([], budget, -3600, Last, [], [], [PosixBoundary.from_microseconds(3600000000)])?
+	first.valid and last.valid and first.boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(7200000000), PosixBoundary.from_microseconds(10800000000)] and last.boundaries == [PosixBoundary.from_microseconds(7200000000), PosixBoundary.from_microseconds(10800000000)]
+}
+
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
+	low = PosixBoundary.from_microseconds(-9223372036854775808)
+	high = PosixBoundary.from_microseconds(9223372036854775807)
+	edited = TimedRecurrence.with_boundary_exclusions(rule, [high, low, high])?
+	data = TimedRecurrence.definition(edited)
+	rebuilt = TimedRecurrence.from_definition(data)?
+	local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	too_many = match TimedRecurrence.with_exclusions(edited, List.repeat(local, 4095)) {
+		Err(TooManySelectors) => True
+		_ => False
+	}
+	data.boundary_exclusions == [low, high] and TimedRecurrence.definition(rebuilt) == data and too_many and boundary_excluded(data.boundary_exclusions, low) and boundary_excluded(data.boundary_exclusions, high) and !boundary_excluded(data.boundary_exclusions, PosixBoundary.from_microseconds(0))
+}
+
+# COUNT(2) selects January 2 and 3 before exclusions. Explicit January 1 and 4
+# are also filtered by their selected boundaries. No January 5 refills COUNT.
+expect {
+	cursor = test_inclusion_boundary_cursor([PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(172800000000), PosixBoundary.from_microseconds(259200000000)])?
+	batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 100, max_zone_candidates: 1 }, max_occurrences: 10 })?
+	batch.occurrences.is_empty() and match batch.status {
+		Complete => True
+		_ => False
+	}
 }

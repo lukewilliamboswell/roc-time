@@ -62,29 +62,14 @@ snapshot retains its result and both keep the same instant. Unsupported calendar
 presentation and critical tags fail explicitly; fixed RFC module fixtures cover
 annotation grammar, critical duplicates and alias provenance separately.
 
-Persistence checks use the same generator and independently decode envelope
-metadata with builtin JSON. They cover the nine declaration/scalar kinds, compare
-stored boundaries with the existing Gregorian day-count oracle, and preserve
-qualifiers, fractional width and offset assertions. Fixed I64 endpoints and
-positive/negative 9007199254740993 exercise decimal string payloads beyond the
-common JSON floating-point integer range. Unknown versions and incompatible units
-must fail. Round trips supplement these independent field/coordinate checks;
-they do not establish snapshot persistence or support for other value kinds.
+The coverage target compares native spans with an independent unit-cell scan
+of generated raw inputs. The scan derives maximal runs without calling native
+coverage normalization, retaining every gap between members.
 
-The coverage target also persists native spans and coverage. An independent
-unit-cell scan of the generated raw inputs derives the expected maximal runs and
-their decimal endpoint payloads, without calling native coverage normalization.
-It checks that gaps survive restoration and that touching, overlapping, duplicate
-and out-of-order persisted members return `NonCanonicalCoverage`. Separate fixed
-fixtures cover empty coverage, signed endpoint limits and the 1,024-member cap.
-
-The descriptions target persists Gregorian and Julian values at every native
-resolution. Expected payload fields come from generated input fields, including
-the unscaled fractional integer and its supplied digit count. Checks preserve
-calendar identity and both provider year limits, retain each qualifier's scope
-and flags, canonicalize reordered qualifications, and reject duplicates or
-qualifiers on omitted components. This tests native persistence, not additional
-EDTF grammar or uncertainty interpretation.
+The descriptions target checks Gregorian and Julian native identity, fractional
+resolution and provider year limits. Generated qualification flags are supplied
+in reverse scope order and compared with an independently ordered list.
+Duplicate scopes and qualifiers on omitted components must fail.
 
 Description explanation checks compare typed facts with generated calendar,
 clock and fractional-resolution fields, and require scoped qualifications and
@@ -99,20 +84,17 @@ days and coordinate seconds; PERIOD facts do not infer a zone or expand a
 recurrence. These checks do not parse diagnostic prose to establish temporal
 meaning or establish allocation bounds.
 
-Snapshot persistence properties compare restored positions and offsets with
-the existing independent integer model and preserve source/presentation facts.
-A separate five-microsecond synthetic rule table changes its offset one
-microsecond after the saved point. Another table reuses the same name, version
-and current result but has a different later offset; persistence must retain
-both tables distinctly and answer the later query with its declared offset.
-These generated fixtures use supplied provenance; database provenance and
-malformed payloads have deterministic native fixtures.
+Snapshot properties compare positions and offsets with the independent integer
+model and retain source/presentation facts. A five-microsecond synthetic rule
+table changes its offset one microsecond after the queried point. Another table
+reuses the same name, version and current result with a different later offset.
+The snapshots retain both tables distinctly and answer the later query with the
+modeled offset; equality and dictionary lookup preserve the distinction.
 
-Civil snapshot persistence extends that target with independent two-second
-fold and gap models. Generated shifts preserve First/Last/MatchingOffset policy,
-modeled boundary positions, empty/disconnected coverage and mixed Gregorian/Julian
-endpoint identities. The expected preimages come from the declared piecewise
-integer offset function; persistence round trips supplement that model.
+Civil snapshot checks use independent two-second fold and gap models. Generated
+shifts preserve First/Last/MatchingOffset policy, modeled boundary positions,
+empty/disconnected coverage and mixed Gregorian/Julian endpoint identities. The
+expected preimages come from the declared piecewise integer offset function.
 
 The recurrence target also compares `next`, stopped/resumed scalar folds and
 Roc `Iter` chunks with its independent calendar set and ordered weighted sum.

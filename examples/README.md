@@ -23,16 +23,16 @@ without changing the development package compiler.
 | Application | Demonstrates |
 | --- | --- |
 | [Room availability](coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
-| [Booking exchange](booking_exchange/main.roc) | Read bookings with different offsets, persist computed availability and serialize restored free windows in UTC |
+| [Booking exchange](booking_exchange/main.roc) | Read bookings with different offsets and serialize computed free windows in UTC |
 | [Clock deadline](clock_deadline/main.roc) | Read the platform clock, check an expiry boundary and emit a typed JSON record with exact UTC microseconds |
 | [Annotation review](annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Explain event terms](explain_event_terms/main.roc) | Review calendar-day versus clock-duration terms, local/UTC PERIOD inputs and an exact interval with different endpoint offsets |
 | [Explain annotations](explain_annotations/main.roc) | Explain a declaration's context requirement and its stored interpretation with unsupported calendar presentation |
 | [Review a recurrence](explain_recurrence/main.roc) | Explain COUNT and exclusions, an additional date, and an unbounded zoned meeting before choosing evaluation context |
 | [Explain a civil selection](explain_selection/main.roc) | Explain a later fold appointment and a disconnected selection across bounded evaluation and resumption |
-| [Civil snapshot archive](civil_snapshot_archive/main.roc) | Restore explicit fold choices and both windows of a repeated local range |
-| [Snapshot archive](snapshot_persistence/main.roc) | Restore an interpretation with its original rules, then explicitly reinterpret it under changed data |
-| [Archive persistence](archive_persistence/main.roc) | Save and restore an uncertain catalogue date, a recording declaration and its exact POSIX boundary |
+| [Repeated local time](repeated_local_time/main.roc) | Compare explicit fold choices with both windows of a repeated local range |
+| [Interpretation context](interpretation_context/main.roc) | Retain an in-memory interpretation with its original rules, then explicitly reinterpret it under changed data |
+| [Catalogue storage](catalogue_storage/main.roc) | Store an uncertain date as EDTF and a recording timestamp as RFC 3339 |
 | [Archive date](calendar_conversion/main.roc) | Convert an explicitly identified calendar while retaining the source description |
 | [Invoice terms](invoice/main.roc) | Calculate a civil due date with explicit month-end clamping |
 | [Overnight staffing](staffing/main.roc) | Budget a local overnight shift across a clock change using the optional zone database |

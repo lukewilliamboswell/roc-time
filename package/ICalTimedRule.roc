@@ -1,6 +1,7 @@
 import SemanticFact
 import TimedOccurrence
 import PosixSpan
+import PosixBoundary
 import PosixDelta
 import ZoneRules
 import FixedOffset
@@ -18,7 +19,7 @@ import CalendarPattern
 import ICalRuleText
 import ScheduleEndings
 
-## Extracted RFC 5545 timed recurrence values, profile timed-values-v1.
+## Extracted RFC 5545 timed recurrence values, profile timed-values.
 ## UTC, floating and zoned DTSTART modes are explicit. UTC starts require Z;
 ## floating/zoned starts require local labels. UNTIL must be local for floating
 ## starts and UTC for UTC/zoned starts. Native UntilBoundary handles UTC cutoffs.
@@ -27,8 +28,11 @@ import ScheduleEndings
 ## DATE adapter's RRULE grammar. Disputed omitted YEARLY defaults remain explicit
 ## unsupported cases. BYSECOND=60 remains unsupported on the POSIX profile.
 ## RDATE/EXDATE entries are extracted values and may contain comma lists. PERIOD
-## entries use ICalPeriod. All inclusions/exclusions must match DTSTART's form;
-## mixed UTC/local exception matching is explicitly unsupported. Zoned values
+## entries use ICalPeriod. RDATE/PERIOD values must match DTSTART's form.
+## UTC EXDATE values are accepted for zoned DTSTART. Local
+## exclusions match source labels; UTC exclusions match selected boundaries,
+## including every colliding source and explicit inclusion, after COUNT and
+## BYSETPOS. Floating/UTC mixtures remain unsupported. Zoned values
 ## assume one property TZID mapped by the caller to the supplied immutable rules.
 ## This does not parse content lines, folded ICS, property parameters or TZIDs.
 ##
@@ -36,7 +40,7 @@ import ScheduleEndings
 ## and 4096 expanded values per kind. Native combined inclusion capacity also
 ## applies when PERIOD values are added. Parsing constructs native definitions
 ## without enumerating occurrences or consulting rules. Source spelling and
-## versioned persistence are outside this profile.
+## application storage envelopes are outside this profile.
 ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : List(ICalPeriod), mode : Mode }.{
 	Mode : [Utc, Floating, Zoned]
 	Parts : { start : Str, rule : Str, duration : Str, inclusions : List(Str), exclusions : List(Str), periods : List(Str), mode : Mode }
@@ -116,6 +120,16 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 		for local in data.exclusions {
 			$exclusions = $exclusions.append(local_text(local, form, "EXDATE")?)
 		}
+		if !data.boundary_exclusions.is_empty() and value.mode != Zoned {
+			return Err(Unsupported("boundary exclusions require zoned DTSTART"))
+		}
+		for boundary in data.boundary_exclusions {
+			local = match FixedOffset.project(FixedOffset.from_seconds(0), boundary, Gregorian) {
+				Ok(label) => label
+				Err(_) => return Err(OutOfRange("EXDATE"))
+			}
+			$exclusions = $exclusions.append(local_text(local, Utc, "EXDATE")?)
+		}
 		var $periods = []
 		for period in value.periods {
 			if ICalDateTime.form(ICalPeriod.start(period)) != form {
@@ -133,8 +147,11 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 		}
 		Ok(parts)
 	}
+
+	## Supported extracted RFC 5545 property-value profile.
 	profile : Str
-	profile = "rfc5545-timed-values-v1"
+	profile = "rfc5545-timed-values"
+
 	parse : Parts -> Try(ICalTimedRule, Error)
 	parse = |parts| {
 		if parts.inclusions.len() > 4096 or parts.exclusions.len() > 4096 or parts.periods.len() > 4096 {
@@ -197,12 +214,16 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 			Err(error) => return Err(InvalidRule(error))
 		}
 		inclusions = timestamps(parts.inclusions, "RDATE", expected_form)?
-		exclusions = timestamps(parts.exclusions, "EXDATE", expected_form)?
+		exclusions = exclusion_values(parts.exclusions, expected_form, parts.mode)?
 		included = match TimedRecurrence.with_inclusions(rule, inclusions.map(ICalDateTime.source)) {
 			Ok(value) => value
 			Err(_) => return Err(TooLarge)
 		}
-		filtered = match TimedRecurrence.with_exclusions(included, exclusions.map(ICalDateTime.local_label)) {
+		filtered = match TimedRecurrence.with_exclusions(included, exclusions.local.map(ICalDateTime.local_label)) {
+			Ok(value) => value
+			Err(_) => return Err(TooLarge)
+		}
+		boundary_filtered = match TimedRecurrence.with_boundary_exclusions(filtered, exclusions.boundaries) {
 			Ok(value) => value
 			Err(_) => return Err(TooLarge)
 		}
@@ -222,7 +243,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 				$periods = $periods.append(period)
 			}
 		}
-		Ok({ rule: filtered, duration, periods: $periods, mode: parts.mode })
+		Ok({ rule: boundary_filtered, duration, periods: $periods, mode: parts.mode })
 	}
 
 	## Explicit context for the selected mode. Floating values are bound by the
@@ -350,6 +371,35 @@ timestamps = |entries, part, form| {
 	Ok($values)
 }
 
+# Keep UTC exclusions in their resolved domain. In particular, projecting a
+# gap-adjusted start would lose its original source label.
+exclusion_values = |entries, form, mode| {
+	var $local = []
+	var $boundaries = []
+	var $count = 0.U64
+	for entry in entries {
+		for text in entry.split_on(",") {
+			if $count == 4096 {
+				return Err(TooLarge)
+			}
+			$count = $count + 1
+			value = timestamp(text, "EXDATE")?
+			if ICalDateTime.form(value) == form {
+				$local = $local.append(value)
+			} else if mode == Zoned and ICalDateTime.form(value) == Utc {
+				boundary = match ICalDateTime.utc_boundary(value) {
+					Ok(point) => point
+					Err(_) => crash "validated UTC timestamp within year profile"
+				}
+				$boundaries = $boundaries.append(boundary)
+			} else {
+				return Err(Unsupported("mixed EXDATE and DTSTART forms"))
+			}
+		}
+	}
+	Ok({ local: $local, boundaries: $boundaries })
+}
+
 test_parts = |start, rule, mode| { start, rule, mode, duration: "P1D", inclusions: [], exclusions: [], periods: [] }
 
 # Effective subdaily high fields must remain filters, while lower fields
@@ -448,10 +498,14 @@ expect {
 }
 expect {
 	parts = { ..test_parts("20070311T023000", "FREQ=HOURLY;COUNT=2", Zoned), exclusions: ["20070311T073000Z"] }
-	match ICalTimedRule.parse(parts) {
+	parsed = ICalTimedRule.parse(parts)?
+	data = TimedRecurrence.definition(ICalTimedRule.definition(parsed).rule)
+	floating = match ICalTimedRule.parse({ ..parts, mode: Floating }) {
 		Err(Unsupported("mixed EXDATE and DTSTART forms")) => Bool.True
 		_ => Bool.False
 	}
+	boundary = PosixBoundary.from_microseconds(1173598200000000)
+	data.exclusions.is_empty() and data.boundary_exclusions == [boundary] and ICalTimedRule.profile == "rfc5545-timed-values" and ICalTimedRule.to_parts(parsed)?.exclusions == parts.exclusions and ICalTimedRule.fact_at(parsed, ICalTimedRule.fact_count(parsed) - 1) == Item(SemanticFact.new(RecurrenceBoundaryExclusion(boundary))) and floating
 }
 expect {
 	parts = test_parts("20250101T090000Z", "FREQ=DAILY;BYSECOND=60", Utc)

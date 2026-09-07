@@ -51,7 +51,7 @@ SemanticFact :: { value : Kind }.{
 	RecurrenceExceptionData : { kind : [Inclusion, Exclusion], source : RecurrenceAnchor }
 	RecurrencePolicyData : { context : [Required, FixedUtc], occurrence : [CallerSupplied, First], gap : [CallerSupplied, UseOffsetBeforeGap] }
 	ICalTimedRuleData : { mode : [Utc, Floating, Zoned], period_count : U64 }
-	Kind : [RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
+	Kind : [RecurrenceBoundaryExclusion(PosixBoundary), RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
 	new : Kind -> SemanticFact
 	new = |kind| { value: kind }
 	kind : SemanticFact -> Kind
@@ -75,6 +75,7 @@ SemanticFact :: { value : Kind }.{
 		}
 		RecurrenceSelector(selector) => "Selector(${Str.inspect(selector)})"
 		RecurrenceException(_) => "Recurrence exception"
+		RecurrenceBoundaryExclusion(boundary) => "Boundary exclusion(${PosixBoundary.to_microseconds(boundary).to_str()} POSIX microseconds)"
 		RecurrencePolicy(_) => "Recurrence interpretation policy"
 		ICalTimedRuleDescription(data) => "ICalTimedRule(mode=${Str.inspect(data.mode)}, periods=${data.period_count.to_str()}, unresolved)"
 		CoverageDescription(data) => "Coverage(members=${data.member_count.to_str()})"

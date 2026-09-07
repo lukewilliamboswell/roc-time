@@ -4,14 +4,14 @@ import QualifiedCalendarValue
 import CalendarDate
 import LocalDateTime
 
-## EDTF date-only profile edtf-gregorian-date-v2: Gregorian dates with scoped qualifiers.
+## Gregorian EDTF dates with scoped qualifiers.
 ## Four ASCII year digits use Gregorian astronomical years 0000..9999.
 ## Each omitted component preserves reduced resolution. Prefix qualifiers apply
 ## to one component; internal suffixes apply to that component and those left of
 ## it. A terminal qualifier applies to Whole. Scopes remain independent and do
 ## not supply a tolerance or resolve a timezone. Duplicate scopes are malformed.
 ## This subset is not EDTF Level 0 conformance, which also requires timestamps
-## and intervals. No source spelling or native persistence format is promised.
+## and intervals. Source spelling is not preserved.
 ##
 ## Source: Library of Congress EDTF published specification, February 4, 2019,
 ## https://www.loc.gov/standards/datetime/ (accessed 2026-09-07), Level 0 Date,
@@ -78,7 +78,7 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 	}
 
 	profile : Str
-	profile = "edtf-gregorian-date-v2"
+	profile = "edtf-gregorian-date"
 	parse : Str -> Try(EdtfDate, Error)
 	parse = |text| {
 		if text.count_utf8_bytes() > 64 {
@@ -116,9 +116,9 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 			while $count < width {
 				match at(bytes, $position) {
 					Err(_) => {
-						# Reuse the legacy calendar/prefix validator, including impossible
+						# Validate the unqualified calendar fields and prefixes, including impossible
 						# partial months and day tens. No second calendar interpretation.
-						return parse_v1(Str.from_utf8_lossy($plain))
+						return parse_calendar_fields(Str.from_utf8_lossy($plain))
 					}
 					Ok(byte) => {
 						if !digit(byte) {
@@ -159,7 +159,7 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 			$position = $position + 1
 			$component = $component + 1
 		}
-		base = match parse_v1(Str.from_utf8_lossy($plain)) {
+		base = match parse_calendar_fields(Str.from_utf8_lossy($plain)) {
 			Ok(v) => v
 			Err(e) => return Err(e)
 		}
@@ -170,106 +170,6 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		Ok({ raw: raw })
 	}
 
-	## Legacy persistence decoder: exactly the original v1 grammar and errors.
-	parse_v1 : Str -> Try(EdtfDate, Error)
-	parse_v1 = |text| {
-		if text.count_utf8_bytes() > 64 {
-			return Err(TooLarge)
-		}
-		bytes = text.to_utf8()
-		if excluded(bytes) {
-			return Err(UnsupportedForm)
-		}
-		qualifier = match bytes.last() {
-			Ok(63) => [{ scope: Whole, qualifier: Uncertain }]
-			Ok(126) => [{ scope: Whole, qualifier: Approximate }]
-			Ok(37) => [{ scope: Whole, qualifier: UncertainApproximate }]
-			_ => []
-		}
-		size = bytes.len() - (
-			if qualifier.is_empty() {
-				0
-			} else {
-				1
-			}
-		)
-		core = bytes.sublist({ start: 0, len: size })
-		var $index = 0.U64
-		for byte in core {
-			valid = if $index == 4 or $index == 7 {
-				byte == 45
-			} else {
-				$index < 10 and digit(byte)
-			}
-			if !valid {
-				return Err(Malformed)
-			}
-			$index = $index + 1
-		}
-		# Incomplete means a prefix can still become a valid accepted date.
-		# Validate complete higher fields and partial digit feasibility first.
-		if size == 6 and digits(core, 5, 1) > 1 {
-			return Err(Malformed)
-		}
-		if size >= 7 {
-			prefix_year = digits(core, 0, 4).to_i64()
-			prefix_month = digits(core, 5, 2).to_u8_wrap()
-			match CalendarValue.month(Gregorian, prefix_year, prefix_month) {
-				Ok(_) => {}
-				Err(_) => return Err(Malformed)
-			}
-			if size == 9 {
-				tens = digits(core, 8, 1).to_u8_wrap() * 10
-				var $possible = Bool.False
-				var $digit_value = 0.U8
-				while $digit_value < 10 {
-					match CalendarDate.from_fields(Gregorian, { year: prefix_year, month: prefix_month, day: tens + $digit_value }) {
-						Ok(_) => {
-							$possible = True
-						}
-						Err(_) => {}
-					}
-					$digit_value = $digit_value + 1
-				}
-				if !$possible {
-					return Err(Malformed)
-				}
-			}
-		}
-		if size != 4 and size != 7 and size != 10 {
-			return if qualifier.is_empty() and size < 10 {
-				Err(Incomplete)
-			} else {
-				Err(Malformed)
-			}
-		}
-		year = digits(core, 0, 4).to_i64()
-		value = if size == 4 {
-			match CalendarValue.year(Gregorian, year) {
-				Ok(v) => v
-				Err(_) => return Err(OutOfRange)
-			}
-		} else {
-			month = digits(core, 5, 2).to_u8_wrap()
-			if size == 7 {
-				match CalendarValue.month(Gregorian, year, month) {
-					Ok(v) => v
-					Err(_) => return Err(Malformed)
-				}
-			} else {
-				date = match CalendarDate.from_fields(Gregorian, { year, month, day: digits(core, 8, 2).to_u8_wrap() }) {
-					Ok(v) => v
-					Err(_) => return Err(Malformed)
-				}
-				CalendarValue.day(date)
-			}
-		}
-		raw = match QualifiedCalendarValue.new(value, qualifier) {
-			Ok(v) => v
-			Err(_) => crash "Parser constructs at most one Whole qualification"
-		}
-		Ok({ raw: raw })
-	}
 	from_description : QualifiedCalendarValue -> Try(EdtfDate, Error)
 	from_description = |raw| {
 		value = QualifiedCalendarValue.described_value(raw)
@@ -341,6 +241,108 @@ EdtfDate :: { raw : QualifiedCalendarValue }.{
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "EdtfDate always has a summary at index zero"
 	}
+}
+
+# Validate YYYY[-MM[-DD]][?~%] and incomplete calendar prefixes.
+# Scoped parsing removes its markers before invoking this field validator.
+parse_calendar_fields : Str -> Try(EdtfDate, EdtfDate.Error)
+parse_calendar_fields = |text| {
+	if text.count_utf8_bytes() > 64 {
+		return Err(TooLarge)
+	}
+	bytes = text.to_utf8()
+	if excluded(bytes) {
+		return Err(UnsupportedForm)
+	}
+	qualifier = match bytes.last() {
+		Ok(63) => [{ scope: Whole, qualifier: Uncertain }]
+		Ok(126) => [{ scope: Whole, qualifier: Approximate }]
+		Ok(37) => [{ scope: Whole, qualifier: UncertainApproximate }]
+		_ => []
+	}
+	size = bytes.len() - (
+		if qualifier.is_empty() {
+			0
+		} else {
+			1
+		}
+	)
+	core = bytes.sublist({ start: 0, len: size })
+	var $index = 0.U64
+	for byte in core {
+		valid = if $index == 4 or $index == 7 {
+			byte == 45
+		} else {
+			$index < 10 and digit(byte)
+		}
+		if !valid {
+			return Err(Malformed)
+		}
+		$index = $index + 1
+	}
+	# Incomplete means a prefix can still become a valid accepted date.
+	# Validate complete higher fields and partial digit feasibility first.
+	if size == 6 and digits(core, 5, 1) > 1 {
+		return Err(Malformed)
+	}
+	if size >= 7 {
+		prefix_year = digits(core, 0, 4).to_i64()
+		prefix_month = digits(core, 5, 2).to_u8_wrap()
+		match CalendarValue.month(Gregorian, prefix_year, prefix_month) {
+			Ok(_) => {}
+			Err(_) => return Err(Malformed)
+		}
+		if size == 9 {
+			tens = digits(core, 8, 1).to_u8_wrap() * 10
+			var $possible = Bool.False
+			var $digit_value = 0.U8
+			while $digit_value < 10 {
+				match CalendarDate.from_fields(Gregorian, { year: prefix_year, month: prefix_month, day: tens + $digit_value }) {
+					Ok(_) => {
+						$possible = True
+					}
+					Err(_) => {}
+				}
+				$digit_value = $digit_value + 1
+			}
+			if !$possible {
+				return Err(Malformed)
+			}
+		}
+	}
+	if size != 4 and size != 7 and size != 10 {
+		return if qualifier.is_empty() and size < 10 {
+			Err(Incomplete)
+		} else {
+			Err(Malformed)
+		}
+	}
+	year = digits(core, 0, 4).to_i64()
+	value = if size == 4 {
+		match CalendarValue.year(Gregorian, year) {
+			Ok(v) => v
+			Err(_) => return Err(OutOfRange)
+		}
+	} else {
+		month = digits(core, 5, 2).to_u8_wrap()
+		if size == 7 {
+			match CalendarValue.month(Gregorian, year, month) {
+				Ok(v) => v
+				Err(_) => return Err(Malformed)
+			}
+		} else {
+			date = match CalendarDate.from_fields(Gregorian, { year, month, day: digits(core, 8, 2).to_u8_wrap() }) {
+				Ok(v) => v
+				Err(_) => return Err(Malformed)
+			}
+			CalendarValue.day(date)
+		}
+	}
+	raw = match QualifiedCalendarValue.new(value, qualifier) {
+		Ok(v) => v
+		Err(_) => crash "Parser constructs at most one Whole qualification"
+	}
+	Ok({ raw: raw })
 }
 
 digit = |byte| byte >= 48 and byte <= 57
@@ -460,8 +462,8 @@ expect {
 						EdtfDate.parse("2004-?0") == Err(Incomplete) and
 							EdtfDate.parse("2004-02-?3") == Err(Malformed) and
 								EdtfDate.parse("2004-02-?2") == Err(Incomplete) and
-									EdtfDate.parse_v1("?2004") == Err(Malformed) and
-										EdtfDate.parse_v1("2004-06~-11") == Err(Malformed)
+									parse_calendar_fields("?2004") == Err(Malformed) and
+										parse_calendar_fields("2004-06~-11") == Err(Malformed)
 }
 expect {
 	value = CalendarValue.month(Gregorian, 2004, 6)?

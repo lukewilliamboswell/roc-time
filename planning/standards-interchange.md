@@ -24,8 +24,9 @@ priority as described in the [implementation plan](implement-design.md).
    result kinds, including recurrence evaluation state. Preserve distinct
    unresolved, unsupported, empty and limited outcomes without re-resolution.
    Add explicit styled rendering over the same facts.
-   Extend versioned persistence alongside each additional archive form and
-   calendar provider, preserving new qualifiers and native calendar distinctions.
+   Extend checked standard serialization alongside each supported description.
+   Preserve qualifiers and calendar distinctions where the standard can represent
+   them; otherwise return an explicit unsupported result.
 3. **Calendar presentation:** choose the first additional provider from a sourced
    Tempo scenario and independent equal-day fixtures. Hebrew presentation is a
    candidate requiring stable leap-month identity and declared capabilities.

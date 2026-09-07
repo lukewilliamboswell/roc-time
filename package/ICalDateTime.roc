@@ -21,7 +21,7 @@ import PosixBoundary
 ##
 ## Parsing and formatting have constant work and bounded output. A syntactically
 ## valid truncated prefix returns Incomplete; malformed prefixes return Malformed.
-## No source spelling, full ICS or versioned persistence claim is made.
+## Source spelling and full ICS documents are outside this value profile.
 ##
 ## ```roc
 ## import time.ICalDateTime
