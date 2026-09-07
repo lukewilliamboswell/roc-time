@@ -37,6 +37,7 @@ third-party Python dependencies.
 | `measure_zone_package.py` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
 | `fixture_platform.py` | Build the instrumented test host and verify resource assertions/trace effects |
 | `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
+| `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
@@ -499,6 +500,12 @@ remain unsupported by this fixture host. Provenance and licenses
 are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 ## Comparative benchmarks
+
+The [cross-language benchmark guide](benchmarks/comparison/README.md) adds
+Go, Python, Jiff and Tempo adapters, dependency pins, upstream workload references
+and explicit compatibility profiles. Run its opt-in setup with
+`ROC=/path/to/pinned/roc python3 scripts/benchmark_comparison.py --fetch --smoke`.
+Docker and the additional language runtimes are not required by the normal gate.
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
