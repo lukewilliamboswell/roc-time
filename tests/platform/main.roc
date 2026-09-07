@@ -6,6 +6,7 @@ platform ""
 	packages {}
 	provides { "roc_main": main_for_host! }
 	hosted {
+		"fixture_opaque_u64": Host.opaque_u64!,
 		"fixture_allocation_count": Host.allocation_count!,
 		"fixture_allocated_bytes": Host.allocated_bytes!,
 		"fixture_deallocation_count": Host.deallocation_count!,

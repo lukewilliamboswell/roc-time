@@ -22,7 +22,8 @@ import PosixBoundary
 ## excluded annotations without validating their grammar.
 ## Leap seconds, fractions beyond six digits and IXDTF annotations are explicitly
 ## unsupported. No rounding, zone lookup, implicit clock or full ISO claim.
-## Parsing checks a 256-byte limit before copying; construction, conversion and
+## Parsing checks a 256-byte limit before streaming into scalar fields, without
+## materializing a byte list. Construction, conversion and
 ## formatting have constant bounded work. Canonical standard text can be stored directly.
 OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }.{
 	Offset : [UnassertedUtc, Asserted(FixedOffset)]
@@ -137,122 +138,167 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		if text.count_utf8_bytes() > 256 {
 			return Err(TooLarge)
 		}
-		bytes = text.to_utf8()
-		length = bytes.len()
-		# Validate every available fixed-field byte before classifying a prefix.
+		length = text.count_utf8_bytes()
+		# Accumulate eight date digits and six clock digits separately in U32;
+		# the existing date/time separator resets the accumulator.
+		# Suffix syntax facts are deferred until fixed field and clock checks,
+		# retaining the established error precedence even for incomplete input.
+		# Defer malformed errors until after scanning so loop state stays scalar.
+		var $bad = Bool.False
 		var $index = 0.U64
-		while $index < length and $index < 19 {
-			byte = at(bytes, $index)
-			valid = if $index == 4 or $index == 7 {
-				byte == 45
-			}
-				else if $index == 10 {
-					byte == 84 or byte == 116
-				}
-					else if $index == 13 or $index == 16 {
-						byte == 58
+		var $packed = 0.U32
+		var $date_digits = 0.U32
+		var $fraction_seen = Bool.False
+		var $fractional = 0.U32
+		var $count = 0.U8
+		var $marker = None
+		var $offset_count = 0.U8
+		var $hours = 0.U32
+		var $minutes = 0.U32
+		var $offset_malformed = Bool.False
+		var $trailing = None
+		for byte in text.iter_utf8() {
+			if $index < 19 {
+				if $index == 4 or $index == 7 {
+					if byte != 45 {
+						$bad = Bool.True
+						break
 					}
-						else {
-							digit(byte)
+				} else if $index == 10 {
+					if byte != 84 and byte != 116 {
+						$bad = Bool.True
+						break
+					}
+					$date_digits = $packed
+					$packed = 0
+				} else if $index == 13 or $index == 16 {
+					if byte != 58 {
+						$bad = Bool.True
+						break
+					}
+				} else {
+					if !digit(byte) {
+						$bad = Bool.True
+						break
+					}
+					$packed = $packed * 10 + (byte - 48).to_u32()
+				}
+			} else {
+				match $marker {
+					None => {
+						if $index == 19 and byte == 46 {
+							$fraction_seen = Bool.True
+						} else if $fraction_seen and digit(byte) {
+							if $count < 6 {
+								$fractional = $fractional * 10 + (byte - 48).to_u32()
+							}
+							if $count < 7 {
+								$count = $count + 1
+							}
+						} else {
+							$marker = Some(byte)
+							$offset_count = 1
 						}
-			if !valid {
-				return Err(Malformed)
+					}
+					Some(marker) => {
+						if (marker == 43 or marker == 45) and $offset_count < 6 {
+							if $offset_count == 3 {
+								$offset_malformed = $offset_malformed or byte != 58
+							}
+								else if digit(byte) {
+									if $offset_count < 3 {
+										$hours = $hours * 10 + (byte - 48).to_u32()
+									}
+										else {
+											$minutes = $minutes * 10 + (byte - 48).to_u32()
+										}
+								} else {
+									$offset_malformed = Bool.True
+								}
+							$offset_count = $offset_count + 1
+						} else {
+							$trailing = Some(byte)
+							break
+						}
+					}
+				}
 			}
 			$index = $index + 1
 		}
-		if length >= 7 {
-			month = digits(bytes, 5, 2)
-			if month < 1 or month > 12 {
-				return Err(InvalidDate)
-			}
+		if $bad {
+			return Err(Malformed)
 		}
-		if length >= 13 and digits(bytes, 11, 2) > 23 {
+		# Right-pad only incomplete prefixes, so complete earlier fields decode
+		# identically. Punctuation positions do not contribute decimal digits.
+		while $index < 19 {
+			if $index == 10 {
+				$date_digits = $packed
+				$packed = 0
+			} else if $index != 4 and $index != 7 and $index != 13 and $index != 16 {
+				$packed = $packed * 10
+			}
+			$index = $index + 1
+		}
+		fields = { year: $date_digits // 10000, month: ($date_digits // 100) % 100, day: $date_digits % 100, hour: ($packed // 10000) % 100, minute: ($packed // 100) % 100, second: $packed % 100 }
+		tail = { fraction_seen: $fraction_seen, fractional: $fractional, count: $count, marker: $marker, offset_count: $offset_count, hours: $hours, minutes: $minutes, offset_malformed: $offset_malformed, trailing: $trailing }
+		if length >= 7 and (fields.month < 1 or fields.month > 12) {
+			return Err(InvalidDate)
+		}
+		if length >= 13 and fields.hour > 23 {
 			return Err(InvalidTime)
 		}
-		if length >= 16 and digits(bytes, 14, 2) > 59 {
+		if length >= 16 and fields.minute > 59 {
 			return Err(InvalidTime)
 		}
-		if length < 19 {
-			if length >= 10 {
-				match GregorianDate.from_fields({ year: digits(bytes, 0, 4).to_i64(), month: digits(bytes, 5, 2).to_u8_wrap(), day: digits(bytes, 8, 2).to_u8_wrap() }) {
-					Ok(_) => {}
-					Err(_) => return Err(InvalidDate)
-				}
-			}
+		if length < 10 {
 			return Err(Incomplete)
 		}
-		date = match GregorianDate.from_fields({ year: digits(bytes, 0, 4).to_i64(), month: digits(bytes, 5, 2).to_u8_wrap(), day: digits(bytes, 8, 2).to_u8_wrap() }) {
+		date = match GregorianDate.from_fields({ year: fields.year.to_i64(), month: fields.month.to_u8_wrap(), day: fields.day.to_u8_wrap() }) {
 			Ok(value) => value
 			Err(_) => return Err(InvalidDate)
 		}
-		var $fractional = 0.U32
-		var $count = 0.U8
-		$index = 19
-		if $index < length and at(bytes, $index) == 46 {
-			$index = $index + 1
-			start = $index
-			while $index < length and digit(at(bytes, $index)) {
-				if $count < 6 {
-					$fractional = $fractional * 10 + (at(bytes, $index) - 48).to_u32()
-				}
-				if $count < 7 {
-					$count = $count + 1
-				}
-				$index = $index + 1
-			}
-			if $index == start {
-				if $index == length {
-					return Err(Incomplete)
-				}
-				return Err(Malformed)
+		if length < 19 {
+			return Err(Incomplete)
+		}
+
+		if tail.fraction_seen and tail.count == 0 {
+			return if tail.marker == None {
+				Err(Incomplete)
+			} else {
+				Err(Malformed)
 			}
 		}
-		# Preserve only a safe placeholder while validating the remaining grammar.
-		# Inputs over six digits cannot reach construction.
-		clock_count = if $count > 6 {
+		clock_count = if tail.count > 6 {
 			6.U8
 		} else {
-			$count
+			tail.count
 		}
-		clock = match ClockTime.from_fields({ hour: digits(bytes, 11, 2).to_u8_wrap(), minute: digits(bytes, 14, 2).to_u8_wrap(), second: digits(bytes, 17, 2).to_u8_wrap(), microsecond: $fractional * fraction_unit(clock_count) }) {
+		clock = match ClockTime.from_fields({ hour: fields.hour.to_u8_wrap(), minute: fields.minute.to_u8_wrap(), second: fields.second.to_u8_wrap(), microsecond: tail.fractional * fraction_unit(clock_count) }) {
 			Ok(value) => value
 			Err(UnsupportedLeapSecond) => return Err(UnsupportedLeapSecond)
 			Err(_) => return Err(InvalidTime)
 		}
-		if $index == length {
-			return Err(Incomplete)
+		marker = match tail.marker {
+			None => return Err(Incomplete)
+			Some(value) => value
 		}
 		var $offset = UnassertedUtc
-		marker = at(bytes, $index)
 		if marker == 90 or marker == 122 {
-			$index = $index + 1
+			# UTC has no numeric fields.
 		} else if marker == 43 or marker == 45 {
-			start = $index
-			$index = $index + 1
-			while $index < length and $index < start + 6 {
-				byte = at(bytes, $index)
-				valid = if $index == start + 3 {
-					byte == 58
-				} else {
-					digit(byte)
-				}
-				if !valid {
-					return Err(Malformed)
-				}
-				$index = $index + 1
+			if tail.offset_malformed {
+				return Err(Malformed)
 			}
-			if $index >= start + 3 and digits(bytes, start + 1, 2) > 23 {
+			if tail.offset_count >= 3 and tail.hours > 23 {
 				return Err(InvalidOffset)
 			}
-			if $index < start + 6 {
+			if tail.offset_count < 6 {
 				return Err(Incomplete)
 			}
-			hours = digits(bytes, start + 1, 2)
-			minutes = digits(bytes, start + 4, 2)
-			if hours > 23 or minutes > 59 {
+			if tail.minutes > 59 {
 				return Err(InvalidOffset)
 			}
-			seconds = (hours * 3600 + minutes * 60).to_i32_wrap()
+			seconds = (tail.hours * 3600 + tail.minutes * 60).to_i32_wrap()
 			if marker == 43 or seconds != 0 {
 				$offset = Asserted(
 					FixedOffset.from_seconds(
@@ -267,21 +313,21 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		} else {
 			return Err(Malformed)
 		}
-		if $index < length {
-			if at(bytes, $index) == 91 {
-				return Err(UnsupportedAnnotations)
-			}
-			return Err(Malformed)
+		match tail.trailing {
+			Some(91) => return Err(UnsupportedAnnotations)
+			Some(_) => return Err(Malformed)
+			None => {}
 		}
-		if $count > 6 {
+		if tail.count > 6 {
 			return Err(UnsupportedPrecision)
 		}
+
 		# The parser has already established every new invariant: four year
 		# digits give 0..9999, nominal constructors validate date/clock, the
 		# fraction is scaled to its supplied width (at most six), and numeric
 		# offsets contain bounded hours/minutes, hence whole minutes within
 		# +/-23:59. Preserve the validated fields without checking them twice.
-		Ok({ date, clock, fraction_digits: $count, offset: $offset })
+		Ok({ date, clock, fraction_digits: tail.count, offset: $offset })
 	}
 
 	## Validated fields need at most 32 ASCII bytes: 19 fixed, 7 fractional,
@@ -371,21 +417,6 @@ effective_offset = |offset| match offset {
 }
 
 digit = |byte| byte >= 48 and byte <= 57
-
-at = |bytes, index| match bytes.get(index) {
-	Ok(byte) => byte
-	Err(_) => crash "Offset timestamp byte index checked against input length"
-}
-
-digits = |bytes, start, count| {
-	var $value = 0.U32
-	var $index = start
-	while $index < start + count {
-		$value = $value * 10 + (at(bytes, $index) - 48).to_u32()
-		$index = $index + 1
-	}
-	$value
-}
 
 # All calls use a positive power-of-ten divisor and at most its decimal width.
 # The last division may yield zero only after emitting the final digit. Every
@@ -502,4 +533,26 @@ expect {
 	}
 	facts_match and OffsetTimestamp.fact_count(shorter) == 1 and OffsetTimestamp.fact_at(shorter, 1) == End and
 		OffsetTimestamp.fact_at(longer, U64.highest) == End and OffsetTimestamp.to_inspect(longer).count_utf8_bytes() <= 256
+}
+
+# R01/R14: precedence is part of the public parser contract. A malformed
+# available fixed byte wins over earlier range errors; later offset syntax
+# cannot hide clock errors, and precision rejection follows trailing syntax.
+expect {
+	var $valid = Bool.True
+	for case in [
+		{ text: "2000-99-01T00:00:0xZ", error: Malformed },
+		{ text: "2000-99-01T99:99:99Z", error: InvalidDate },
+		{ text: "2000-01-01T00:00:60.Z", error: Malformed },
+		{ text: "2000-01-01T00:00:60.1garbage", error: UnsupportedLeapSecond },
+		{ text: "2000-01-01T00:00:00.1234567+24:x0", error: Malformed },
+		{ text: "2000-01-01T00:00:00.1234567+24:00[", error: InvalidOffset },
+		{ text: "2000-01-01T00:00:00.1234567+00:00[", error: UnsupportedAnnotations },
+		{ text: "2000-01-01T00:00:00.1234567+00:00", error: UnsupportedPrecision },
+		{ text: "2000-01-01T00:00:00.12", error: Incomplete },
+		{ text: "2000-01-01T00:00:00Zé", error: Malformed },
+	] {
+		$valid = $valid and OffsetTimestamp.parse(case.text) == Err(case.error)
+	}
+	$valid
 }
