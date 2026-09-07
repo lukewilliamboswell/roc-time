@@ -1,17 +1,126 @@
-name: Update Roc nightly
+name: Probe bot-created workflow approval
+
 on:
-  schedule:
-    - cron: '19 13 * * *'
   workflow_dispatch:
-permissions: {}
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+
 concurrency:
-  group: roc-nightly-update
+  group: probe-bot-workflow-approval-pr12
   cancel-in-progress: false
+
 jobs:
-  update:
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-      statuses: write
-    uses: lukewilliamboswell/roc-automation/.github/workflows/update-roc-nightly.yml@5e6663c1436f038a35cc076a1b2921983e9b954c
+  probe:
+    if: github.repository == 'lukewilliamboswell/roc-time' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/probe/bot-workflow-approval'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout immutable trusted controller source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: b459e4c6e3108210038cb0d5ffaebfcc8ffec35a
+          persist-credentials: false
+
+      - name: Verify exact bot PR and probe workflow-start approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          sys.dont_write_bytecode = True
+          sys.path.insert(0, 'scripts')
+          from validate_followup import api, validate_pr, validate_commit
+
+          REPO = 'lukewilliamboswell/roc-time'
+          BASE = 'b459e4c6e3108210038cb0d5ffaebfcc8ffec35a'
+          HEAD = '932a859f1c04fa3d4547930d948e08026682837f'
+          BRANCH = 'release-followup/0.1.0-rc3'
+          NUMBER = 12
+          WORKFLOWS = ('tests.yaml', 'release.yml', 'nightly-config.yml')
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          def current():
+              pr = api(REPO, f'pulls/{NUMBER}')
+              validate_pr(pr, REPO, BRANCH, HEAD, 'main')
+              require(pr['base']['sha'] == BASE, 'PR base changed')
+              require(api(REPO, 'git/ref/heads/main')['object']['sha'] == BASE, 'Main advanced')
+              require(api(REPO, f'git/ref/heads/{BRANCH}')['object']['sha'] == HEAD, 'Candidate branch advanced')
+              return pr
+
+          def checked_run(run, workflow, pr):
+              require(type(run.get('id')) is int and run['id'] > 0, 'Missing run identity')
+              require(run.get('event') == 'pull_request', 'Unexpected workflow event')
+              require(run.get('path') == f'.github/workflows/{workflow}', 'Unexpected workflow path')
+              require(run.get('head_sha') == HEAD and run.get('head_branch') == BRANCH, 'Wrong run head')
+              require(run.get('repository', {}).get('full_name') == REPO, 'Wrong run repository')
+              require(run.get('head_repository', {}).get('full_name') == REPO, 'Wrong source repository')
+              require(run.get('status') == 'completed' and run.get('conclusion') == 'action_required', 'Run no longer awaits approval')
+              associations = run.get('pull_requests', [])
+              require(len(associations) == 1, 'Missing or ambiguous PR association')
+              link = associations[0]
+              require(link.get('number') == NUMBER and link.get('url') == f'https://api.github.com/repos/{REPO}/pulls/{NUMBER}', 'Wrong associated PR')
+              require(link.get('head', {}).get('sha') == HEAD and link.get('head', {}).get('ref') == BRANCH, 'Wrong associated PR head')
+              require(link.get('base', {}).get('sha') == BASE and link.get('base', {}).get('ref') == 'main', 'Wrong associated PR base')
+              require(link['head'].get('repo', {}).get('id') == pr['head']['repo']['id'], 'Wrong associated head repository')
+              require(link['base'].get('repo', {}).get('id') == pr['base']['repo']['id'], 'Wrong associated base repository')
+
+          checkout = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          require(checkout == BASE, 'Controller checkout is not the trusted immutable main')
+          pr = current()
+          commit = api(REPO, f'commits/{HEAD}?per_page=100&page=1')
+          require(commit.get('sha') == HEAD, 'Wrong commit evidence')
+          for page in range(2, 31):
+              if len(commit.get('files', [])) >= pr.get('changed_files', 0):
+                  break
+              more = api(REPO, f'commits/{HEAD}?per_page=100&page={page}')
+              require(more.get('sha') == HEAD and more.get('files'), 'Incomplete commit evidence')
+              commit['files'].extend(more['files'])
+          validate_commit(commit, pr)
+          # The verified single-parent diff permits only www/examples/README.
+          # Explicitly confirm the three workflow definitions are unchanged too.
+          for workflow in WORKFLOWS:
+              path = f'.github/workflows/{workflow}'
+              old = api(REPO, f'contents/{path}?ref={BASE}')
+              new = api(REPO, f'contents/{path}?ref={HEAD}')
+              require(old.get('type') == 'file' and new.get('type') == 'file' and old.get('sha') == new.get('sha'), 'Workflow definition changed')
+
+          pending = []
+          for workflow in WORKFLOWS:
+              result = api(REPO, f'actions/workflows/{workflow}/runs?event=pull_request&head_sha={HEAD}&per_page=100')
+              runs = result.get('workflow_runs', [])
+              require(result.get('total_count') == len(runs) == 1, 'Missing, duplicate, or incomplete PR runs')
+              checked_run(runs[0], workflow, pr)
+              pending.append((workflow, runs[0]['id']))
+          require(len({run_id for _, run_id in pending}) == len(WORKFLOWS), 'Duplicate run IDs')
+          print('Verified signed bot PR, sole immutable main parent, allowed complete diff, unchanged workflows and exact pending PR runs.', flush=True)
+
+          for workflow, run_id in pending:
+              pr = current()
+              checked_run(api(REPO, f'actions/runs/{run_id}'), workflow, pr)
+              result = subprocess.run([
+                  'gh', 'api', '--include', '--method', 'POST',
+                  '-H', 'X-GitHub-Api-Version: 2026-03-10',
+                  f'repos/{REPO}/actions/runs/{run_id}/approve',
+              ], text=True, capture_output=True, timeout=60)
+              codes = re.findall(r'^HTTP/\S+\s+(\d{3})', result.stdout, re.MULTILINE)
+              code = codes[-1] if codes else 'unavailable'
+              report = f'{workflow} run {run_id}: HTTP {code}, gh exit {result.returncode}'
+              print(report, flush=True)
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                  summary.write(report + '\n\n')
+              if result.returncode != 0 or code != '201':
+                  print(result.stdout, flush=True)
+                  print(result.stderr, file=sys.stderr, flush=True)
+                  raise RuntimeError('Workflow-start approval was rejected; no alternative credential or endpoint will be attempted')
+          print('All three workflow-start approval requests accepted; this is not PR review or merge approval.', flush=True)
+          PY
