@@ -1,11 +1,51 @@
 # roc-time
 
-Dates, booking availability and schedules for [Roc](https://www.roc-lang.org),
+A date and time library for [Roc](https://www.roc-lang.org). Parse timestamps,
+find free booking windows, calculate calendar dates and generate schedules,
 with explicit calendar and time-zone choices.
 
 **[0.1.0-rc3 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3).** This is a release candidate, not a stable API. You can build
 working booking and calendar applications with it now. APIs may change, and the
 compiler is pinned. Broader standards support is still being built.
+
+## Why intervals?
+
+A booking occupies time. To find availability, you need to subtract that occupied
+time from an opening window and keep every gap that remains. `roc-time` represents
+this with spans and `Coverage`: a collection that merges overlapping or touching
+spans and supports union, intersection and difference.
+
+Spans include their start and exclude their end: `[09:00, 10:00)` and
+`[10:00, 11:00)` meet without overlapping. Adjacent bookings can share a boundary
+without inventing an “end of hour” timestamp.
+
+Calendar meaning matters too. An archive value such as `2026-06` retains month
+precision; turning it into midnight on June 1 would lose that meaning. A local
+day needs explicit zone rules before it can be placed on a timeline, and a clock
+change can alter its coverage. Exact timestamps still represent instants, and
+events retain their identity even when they occupy the same time.
+
+## What it looks like
+
+Find the free time around a booking supplied with a different UTC offset:
+
+```roc
+import time.ExactInterval
+import time.Coverage
+
+free_windows = || {
+    opening = ExactInterval.parse("2026-06-15T09:00:00Z/2026-06-15T17:00:00Z")?
+    booking = ExactInterval.parse("2026-06-15T12:00:00+02:00/2026-06-15T14:00:00+02:00")?
+    busy = Coverage.from_spans([ExactInterval.span(booking)])
+    Ok(Coverage.complement_within(busy, ExactInterval.span(opening)))
+}
+```
+
+The result covers **09:00–10:00 and 12:00–17:00 UTC** on June 15. Parsing returns
+structured errors for invalid or unsupported input. The complete
+[booking exchange application](examples/booking_exchange/main.roc) also handles
+multiple bookings, saves/restores availability and writes canonical timestamp
+text. [Try it below](#try-it) with the published package.
 
 ## Will this help me?
 
@@ -75,11 +115,10 @@ roc version
 roc examples/booking_exchange/main.roc
 ```
 
-For this workflow pilot, the examples use
+The examples require
 [`nightly-2026-09-05-b195f5b`](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b)
-as a stand-in for a future supported stable compiler. Development uses a separate
-package-header pin; it can advance without changing the public examples.
-No versioned stable Roc release is implied by this experiment.
+until a versioned stable Roc release is available. Use the compiler declared in
+the example's header; the development package can require a newer compiler.
 
 The [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-starter.zip)
 also contains complete applications. Follow the compiler requirements shipped
@@ -94,27 +133,26 @@ contains the complete applications; [CONTRIBUTING.md](CONTRIBUTING.md) covers to
 setup and verification. Other targets, including Wasm, need separate validation;
 see the [native verification scope](CONTRIBUTING.md#instrumented-fixture-platform).
 
-To use the checkout from your own application, add a `time` dependency pointing
-to `package/main.roc`. For example, with your app beside a `roc-time` checkout:
-
-```roc
-app [main!] {
-    time: "./roc-time/package/main.roc",
-}
-```
-
-Import modules as `time.Coverage`, `time.EdtfDate`, and so on. Interchange value
+For your own application, copy the `time` dependency URL and compiler requirement
+from a released example's app header. Import modules as `time.Coverage`,
+`time.EdtfDate`, and so on. Interchange value
 types such as `EdtfDate` and `OffsetTimestamp` provide checked `parse` and canonical
 `to_text` operations, validated quoted
 literals and generic string codecs. Use `parse` for runtime interpolated text so
 validation errors can be handled. Named-zone applications also need explicit
 rules, such as those supplied by the [optional zone package](tzdb/README.md).
 
-## Acknowledgements
+## Prior art
 
 Inspired by [Kip Cole's Tempo](https://github.com/elixir-tempo/tempo), especially
 calendar values at meaningful resolutions, calendar-aware durations and temporal
 set algebra. Credit to Kip and Tempo's contributors for that foundation.
+
+`roc-time` develops those ideas through distinct Roc types for calendar
+descriptions, exact boundaries, coverage and events. It is an independent
+implementation with its own supported profiles, not an API-compatible Tempo port.
+Tempo's [documentation](https://hexdocs.pm/ex_tempo/) is a useful introduction to
+the broader interval-oriented approach.
 
 ## Contributing
 
