@@ -495,7 +495,20 @@ are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
-Run these opt-in benchmarks without concurrent builds or tests. They compare
+The normal `all_tests.py` gate compiles both benchmark executables and runs
+`benchmark_chrono.py --smoke --fetch`: 1,000 iterations, one warmup and three
+samples per kernel, checked against the independent corpus and checksums.
+Use the Rust version in `benchmarks/chrono/rust-version` and install the matching
+`x86_64-unknown-linux-musl` target on Linux, or `aarch64-apple-darwin` on Apple
+Silicon. For example, run `rustup toolchain install "$(cat benchmarks/chrono/rust-version)" --profile minimal --target x86_64-unknown-linux-musl`,
+then select it with `RUSTUP_TOOLCHAIN` when running the gate. CI installs and
+selects this exact version.
+
+Missing toolchains, failed dependency acquisition and mismatches fail the gate.
+Cargo dependencies use the checked-in lockfile; builds run offline after the
+locked fetch. Smoke timings are correctness evidence, not performance claims.
+
+Run longer opt-in benchmarks without concurrent builds or tests. They compare
 selected date and timestamp operations, not overall library capability; their
 in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 

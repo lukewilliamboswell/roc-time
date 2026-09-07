@@ -25,10 +25,16 @@ NAMES = ("Australia/Melbourne", "US/Eastern", "Pacific/Apia", "Etc/UTC")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--package', type=Path, action='append', required=True)
+    parser.add_argument('--package', type=Path, action='append')
     parser.add_argument('--samples', type=int, default=3)
     parser.add_argument('--opt', choices=('dev', 'speed'), default='dev')
+    parser.add_argument('--smoke', action='store_true', help='one build per lookup form, preserving hosted assertions')
     args = parser.parse_args()
+    if args.smoke:
+        args.samples = 1
+        args.package = args.package or [ROOT / 'tzdb/package']
+    if not args.package:
+        parser.error('--package is required outside smoke mode')
     if not 1 <= args.samples <= 10:
         parser.error('--samples must be between 1 and 10')
     roc = os.environ.get('ROC', 'roc')
@@ -44,8 +50,9 @@ def main() -> None:
     fixture = (ROOT / 'tests/zone_database/resource/main.roc').read_text()
     # Compare historical providers too: measure their allocation counts without
     # imposing the current implementation's regression budget on them.
-    fixture = '\n'.join(line for line in fixture.splitlines() if 'Host.assert!' not in line) + '\n'
-    report = dict(compiler=version, target=target, backend='native', optimize=args.opt,
+    if not args.smoke:
+        fixture = '\n'.join(line for line in fixture.splitlines() if 'Host.assert!' not in line) + '\n'
+    report = dict(smoke=args.smoke, compiler=version, target=target, backend='native', optimize=args.opt,
                   host=platform.platform(), samples=args.samples,
                   script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   limits='Uncached builds, no warmup; OS caches may be warm. Compiler wall time/RSS and '

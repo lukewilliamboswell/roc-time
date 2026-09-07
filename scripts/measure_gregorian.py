@@ -20,7 +20,10 @@ def main() -> None:
     parser.add_argument('--iterations', type=int, default=1_000_000)
     parser.add_argument('--runs', type=int, default=15)
     parser.add_argument('--warmups', type=int, default=3)
+    parser.add_argument('--smoke', action='store_true', help='bounded wrapper/compiler/checksum check, not performance evidence')
     args = parser.parse_args()
+    if args.smoke:
+        args.iterations, args.runs, args.warmups = 1000, 2, 0
     if not 1 <= args.iterations <= 100_000_000 or args.runs < 2 or args.warmups < 0:
         parser.error('iterations must be 1..100000000, runs >= 2, warmups >= 0')
     roc = os.environ.get('ROC', 'roc')
@@ -31,11 +34,11 @@ def main() -> None:
     output.mkdir(parents=True, exist_ok=True)
     binary = output / 'date-bench'
     subprocess.run([roc, 'build', '--opt=speed', f'--output={binary}',
-                    'tests/gregorian_performance/main.roc'], cwd=ROOT, check=True)
+                    'tests/gregorian_performance/main.roc'], cwd=ROOT, check=True, timeout=180)
     # Independent expected fields; no conversion formula in the timing harness.
     expected = str(sum(1970 + (i * 37) % 8030 + (i * 17) % 12 + 1
                        + (i * 13) % 28 + 1 for i in range(args.iterations)))
-    result = {'compiler': version, 'backend': 'LLVM speed',
+    result = {'smoke': args.smoke, 'compiler': version, 'backend': 'LLVM speed',
               'machine': platform.machine(), 'platform': platform.platform(),
               'iterations': args.iterations, 'warmups': args.warmups,
               'runs': args.runs, 'checksum': expected,

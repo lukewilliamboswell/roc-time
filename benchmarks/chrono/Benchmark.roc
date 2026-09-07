@@ -1,4 +1,6 @@
 import time.GregorianDate
+import time.ClockTime
+import time.FixedOffset
 import time.CivilDay
 import time.OffsetTimestamp
 import time.PosixBoundary
@@ -18,17 +20,17 @@ Benchmark := [].{
 	)
 	run : List(a), U64, (a -> U64) -> U64
 	run = |data, iterations, operation| {
-		var sum = 0.U64
-		var i = 0.U64
-		while i < iterations {
-			v = match data.get(U64.rem_by(i, data.len())) {
+		var $sum = 0.U64
+		var $i = 0.U64
+		while $i < iterations {
+			v = match data.get(U64.rem_by($i, data.len())) {
 				Ok(value) => value
 				Err(_) => crash "nonempty benchmark corpus"
 			}
-			sum = sum + operation(v)
-			i = i + 1
+			$sum = $sum + operation(v)
+			$i = $i + 1
 		}
-		sum
+		$sum
 	}
 	date_control : GregorianDate -> U64
 	date_control = |v| date_sum(v)
@@ -59,6 +61,23 @@ Benchmark := [].{
 			Err(_) => crash "bounded date addition"
 		},
 	)
+
+	# Observe the local declaration without requesting a resolved boundary.
+	# The six-digit corpus preserves microseconds exactly. The checksum and
+	# its maximum campaign sum fit U64 throughout the runner's input domain.
+	parse_only : Str -> U64
+	parse_only = |text| {
+		value = match OffsetTimestamp.parse(text) {
+			Ok(parsed) => parsed
+			Err(_) => crash "valid local declaration"
+		}
+		fields = OffsetTimestamp.parts(value)
+		offset = match fields.offset {
+			Asserted(fixed) => FixedOffset.to_seconds(fixed).to_i64()
+			UnassertedUtc => 0.I64
+		}
+		date_sum(fields.date) + ClockTime.to_microseconds_since_midnight(fields.clock).to_u64_wrap() + (offset + 86400).to_u64_wrap() * 101
+	}
 
 	parse : Str -> U64
 	parse = |v| {
@@ -114,9 +133,9 @@ date_sum = |date| {
 }
 
 text_sum = |text| {
-	var sum = 0.U64
+	var $sum = 0.U64
 	for byte in text.to_utf8() {
-		sum = sum + byte.to_u64()
+		$sum = $sum + byte.to_u64()
 	}
-	sum
+	$sum
 }

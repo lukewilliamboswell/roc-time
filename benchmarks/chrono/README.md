@@ -11,9 +11,22 @@ ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py
 ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --roc-opt dev --smoke
 ```
 
+For source-level hotspots, the profiling mode builds optimized Roc code with
+`--debug`, verifies every output, and records user-space CPU samples:
+
+```sh
+ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile parse --iterations 10000000 --samples 15
+ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile add_days --iterations 10000000 --samples 15
+```
+
+This requires Linux `perf` and permission to sample user-space events. Recordings
+and source-line reports stay under `.roc-time-tmp/chrono-benchmark/`. Profiling
+runs do not emit comparative timing results: sampling overhead is diagnostic.
+`perf annotate` on the printed recording can show instruction-level costs.
+
 The scoped `.cargo/config.toml` also directs editor/Cargo builds started in this crate to ignored temporary output.
 
-Requires the repository-pinned Roc compiler, Zig 0.16.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler version is recorded, not silently assumed equal to another run.
+Requires the repository-pinned Roc compiler, Zig 0.16.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler must match [rust-version](rust-version); a matching compiler selected through `RUSTC` or PATH is accepted without requiring a named rustup alias. Its full revision is recorded.
 
 ## Workloads
 
@@ -26,6 +39,7 @@ The checked-in 32-row corpus spans Gregorian 1900–2100, century/leap boundarie
 | `construct` | checked `GregorianDate.from_fields` | `NaiveDate::from_ymd_opt` | year/month/day checksum |
 | `roundtrip` | Gregorian → civil-day → Gregorian | date → days-from-CE → date | year/month/day checksum |
 | `add_days` | civil-day coordinate +17 → Gregorian | `checked_add_days(Days::new(17))` | year/month/day checksum |
+| `parse_only` | parse → declared local date/clock/offset checksum; no `boundary` call | parse → local date/clock/offset checksum; Chrono internally resolves during parsing and projects fields for observation | date fields, microseconds since midnight and shifted offset seconds |
 | `parse` | `OffsetTimestamp.parse` + `boundary` | `DateTime::parse_from_rfc3339` + `timestamp_micros` | bounded microsecond checksum |
 | `resolve` | stored `OffsetTimestamp.boundary` | stored `DateTime::timestamp_micros` | bounded microsecond checksum |
 | `format` | stored `OffsetTimestamp.to_text` | stored `to_rfc3339_opts(Micros,false)` | all output bytes summed |

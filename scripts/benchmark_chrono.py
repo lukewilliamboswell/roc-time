@@ -20,7 +20,7 @@ import fixture_platform
 
 BASE = ROOT / "benchmarks/chrono"
 BUILD = ROOT / ".roc-time-tmp/chrono-benchmark"
-MODES = ("date_control", "date_to_day", "construct", "roundtrip", "add_days", "parse", "resolve", "format", "end_to_end")
+MODES = ("date_control", "date_to_day", "construct", "roundtrip", "add_days", "parse", "resolve", "format", "end_to_end", "parse_only")
 
 
 def run(command, **kwargs):
@@ -48,6 +48,15 @@ def expected_sum(corpus, mode, iterations):
             if not 0 <= shifted_day < 2**64:
                 raise ValueError("day-coordinate checksum outside unsigned range")
             values.append(shifted_day)
+        elif mode == "parse_only":
+            local = dt.datetime.fromisoformat(case["text"])
+            clock = ((local.hour * 60 + local.minute) * 60 + local.second) * 1000000 + local.microsecond
+            offset = local.utcoffset()
+            if offset is None or offset.microseconds:
+                raise ValueError("parser-only corpus requires whole-second offsets")
+            offset_seconds = offset.days * 86400 + offset.seconds
+            values.append(date.year * 10000 + date.month * 100 + date.day
+                          + clock + (offset_seconds + 86400) * 101)
         elif mode in ("parse", "resolve"):
             values.append(case["microseconds"] % 1000000007)
         elif mode in ("format", "end_to_end"):
@@ -79,6 +88,8 @@ def main():
     parser.add_argument("--warmups", type=int, default=3)
     parser.add_argument("--samples", type=int, default=9)
     parser.add_argument("--roc-opt", choices=("dev", "speed"), default="speed")
+    parser.add_argument("--debug", action="store_true", help="retain optimized Roc debug information")
+    parser.add_argument("--profile", choices=MODES, help="record a Roc kernel with Linux perf; no comparative timings")
     options = parser.parse_args()
     if options.smoke:
         options.iterations, options.warmups, options.samples = 1000, 1, 3
@@ -88,8 +99,19 @@ def main():
     roc_version = subprocess.check_output([roc, "version"], text=True).strip()
     if package_pin(ROOT) not in roc_version:
         raise RuntimeError(f"compiler does not match the package header: {roc_version}")
+    rust_pin = (BASE / "rust-version").read_text().strip()
+    rustc = os.environ.get("RUSTC", "rustc")
+    rustc_version = subprocess.check_output([rustc, "-Vv"], text=True)
+    rust_release = next((line.removeprefix("release: ") for line in rustc_version.splitlines()
+                         if line.startswith("release: ")), None)
+    if rust_release != rust_pin:
+        raise RuntimeError(f"Rust compiler must match benchmarks/chrono/rust-version ({rust_pin}); "
+                           f"selected {rustc!r} reports {rust_release!r}")
+    cargo_version = subprocess.check_output(["cargo", "--version"], text=True).strip()
+    if options.profile:
+        options.debug = True
     BUILD.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "CARGO_HOME": str(ROOT / ".roc-time-tmp/chrono-cargo"),
+    env = {**os.environ, "RUSTC": rustc, "CARGO_HOME": str(ROOT / ".roc-time-tmp/chrono-cargo"),
            "CARGO_TARGET_DIR": str(BUILD / "cargo-target")}
     if options.fetch:
         run(["cargo", "fetch", "--locked", "--manifest-path", str(BASE / "Cargo.toml")], env=env)
@@ -111,9 +133,9 @@ def main():
     shutil.copyfile(BUILD / "host/lib/libhost.a", destination / "libhost.a")
     rust_target = {"x64musl": "x86_64-unknown-linux-musl", "arm64mac": "aarch64-apple-darwin"}[target]
     run([roc, "check", str(BASE / "main.roc")])
-    roc_binary = BUILD / f"roc-{options.roc_opt}"
+    roc_binary = BUILD / f"roc-{options.roc_opt}{'-debug' if options.debug else ''}"
     run([roc, "build", str(BASE / "main.roc"), f"--opt={options.roc_opt}",
-         f"--target={target}", f"--output={roc_binary}", "--no-cache"])
+         f"--target={target}", f"--output={roc_binary}", "--no-cache", *(["--debug"] if options.debug else [])])
     run(["cargo", "build", "--offline", "--locked", "--release", "--target", rust_target,
          "--manifest-path", str(BASE / "Cargo.toml")], env=env)
     rust_binary = BUILD / "cargo-target" / rust_target / "release/roc-time-chrono-benchmark"
@@ -135,6 +157,23 @@ def main():
         pass
     else:
         raise AssertionError("checksum negative control failed")
+    if options.profile:
+        if platform.system() != "Linux" or shutil.which("perf") is None:
+            raise RuntimeError("profiling requires Linux perf with user-space sampling permission")
+        stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
+        recording = BUILD / f"perf-{options.profile}-{stamp}.data"
+        output = run(["perf", "record", "-e", "cycles:u", "-F", "999", "--call-graph", "dwarf",
+                      "-o", str(recording), "--", str(roc_binary), options.profile,
+                      str(options.iterations), str(options.warmups), str(options.samples), *inputs],
+                     capture_output=True, text=True)
+        parse_samples(output.stdout, options.samples, expected_sum(corpus, options.profile, options.iterations))
+        recording.with_suffix(".run.txt").write_text(output.stdout + output.stderr)
+        report = run(["perf", "report", "--stdio", "--no-children", "--sort", "symbol,srcline",
+                      "-i", str(recording)], capture_output=True, text=True)
+        recording.with_suffix(".report.txt").write_text(report.stdout)
+        print(f"Validated profiled outputs; recording: {recording}")
+        print(f"Source hotspots: {recording.with_suffix('.report.txt')}")
+        return
     results = []
     # Alternate language order between workloads; never run timed jobs in parallel.
     for index, mode in enumerate(MODES):
@@ -148,8 +187,8 @@ def main():
             print(f'{name:8s} {mode:12s} median {row["median_ns_per_operation"]:.2f} ns/op')
     report = {"scope": "microsecond Gregorian fixed-offset intersection; no general library ranking",
               "options": vars(options), "roc_version": roc_version,
-              "rustc": subprocess.check_output(["rustc", "-Vv"], text=True),
-              "cargo": subprocess.check_output(["cargo", "--version"], text=True).strip(),
+              "rustc": rustc_version, "rust_pin": rust_pin,
+              "cargo": cargo_version,
               "zig": subprocess.check_output([os.environ.get("ZIG", "zig"), "version"], text=True).strip(),
               "machine": platform.platform(), "processor": platform.processor(),
               "roc_target": target, "rust_target": rust_target,
