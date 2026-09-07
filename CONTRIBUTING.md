@@ -545,6 +545,13 @@ against the default branch, and publishes docs to GitHub Pages. Released example
 are validated in an isolated checkout of the tag using their release compiler
 and published URLs; the reviewed follow-up promotes that complete public example
 collection without changing development package pins.
+The follow-up uses a GitHub-signed commit and explicitly dispatches the test and
+release-validation workflows, since a PR created with `GITHUB_TOKEN` does not
+automatically trigger ordinary PR workflows. The separate controller reports
+`Release follow-up validation` only after both workflows and their required jobs
+pass for the exact generated commit. It does not approve or merge the PR. If the
+base or generated branch moves, regenerate and validate against the current base;
+the creator refuses to overwrite unrelated or unsigned branch work.
 Merge the previous docs follow-up before publishing another version: site
 assembly refuses missing earlier release documentation. The highest stable package version remains the public documentation default;
 each release tag and starter manifest records its own compiler pin.
