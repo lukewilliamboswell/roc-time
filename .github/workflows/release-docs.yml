@@ -161,7 +161,14 @@ jobs:
           nightly-tag: ${{ steps.site-compiler.outputs.pin }}
 
       - name: Assemble authored guides and versioned API documentation
-        run: python3 .roc-time-tmp/workflow-source/scripts/assemble_docs_site.py --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
+        env:
+          SITE_COMPILER_PIN: ${{ steps.site-compiler.outputs.pin }}
+        run: |
+          # setup-roc can select the first extracted directory when used twice.
+          # This Ubuntu job selects the requested installation explicitly.
+          site_roc="$GITHUB_WORKSPACE/roc_nightly-linux_x86_64-${SITE_COMPILER_PIN#nightly-}/roc"
+          test "$("$site_roc" version)" = "Roc compiler version $SITE_COMPILER_PIN"
+          python3 .roc-time-tmp/workflow-source/scripts/assemble_docs_site.py --roc "$site_roc" --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
 
       - name: Promote the verified public applications
         if: steps.roc-version.outputs.authority == 'header'
