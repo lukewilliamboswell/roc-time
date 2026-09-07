@@ -88,9 +88,13 @@ def main():
     parser.add_argument("--warmups", type=int, default=3)
     parser.add_argument("--samples", type=int, default=9)
     parser.add_argument("--roc-opt", choices=("dev", "speed"), default="speed")
-    parser.add_argument("--debug", action="store_true", help="retain optimized Roc debug information")
+    parser.add_argument("--debug", action="store_true", help="retain Roc debug information for --profile only")
     parser.add_argument("--profile", choices=MODES, help="record a Roc kernel with Linux perf; no comparative timings")
     options = parser.parse_args()
+    if options.debug and not options.profile:
+        parser.error("--debug requires --profile; comparative timings use non-debug builds")
+    if options.roc_opt != "speed" and not (options.smoke or options.profile):
+        parser.error("comparative timings require --roc-opt speed; use --smoke for build checks")
     if options.smoke:
         options.iterations, options.warmups, options.samples = 1000, 1, 3
     if not (1 <= options.iterations <= 10000000 and 1 <= options.samples <= 50 and 0 <= options.warmups <= 10):
@@ -108,8 +112,6 @@ def main():
         raise RuntimeError(f"Rust compiler must match benchmarks/chrono/rust-version ({rust_pin}); "
                            f"selected {rustc!r} reports {rust_release!r}")
     cargo_version = subprocess.check_output(["cargo", "--version"], text=True).strip()
-    if options.profile:
-        options.debug = True
     BUILD.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "RUSTC": rustc, "CARGO_HOME": str(ROOT / ".roc-time-tmp/chrono-cargo"),
            "CARGO_TARGET_DIR": str(BUILD / "cargo-target")}
