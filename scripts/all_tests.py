@@ -117,6 +117,8 @@ def main() -> None:
     run([sys.executable, "scripts/test_published_examples.py", "--self-test"])
     run([sys.executable, "scripts/release_bundles.py", "self-test"])
     run([sys.executable, "scripts/release_starter.py", "self-test"])
+    run([sys.executable, "scripts/test_create_release_followup.py"])
+    run([sys.executable, "scripts/test_validate_followup.py"])
     run([sys.executable, "scripts/check_docs_history.py", "--self-test"])
     run([sys.executable, "scripts/test_docs.py"])
     run([sys.executable, "scripts/test_local_examples.py"])

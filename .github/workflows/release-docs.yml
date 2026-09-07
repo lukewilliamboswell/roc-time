@@ -27,12 +27,22 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      followup_changed: ${{ steps.followup.outputs.changed }}
+      followup_branch: ${{ steps.followup.outputs.branch }}
+      followup_sha: ${{ steps.followup.outputs.commit_sha }}
+      followup_pr: ${{ steps.followup.outputs.pull_request_number }}
 
     steps:
       - name: Checkout documentation history from main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Record documentation base commit
+        id: docs-base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout trusted workflow tooling
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -126,21 +136,48 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: python3 .roc-time-tmp/workflow-source/scripts/update_release_links.py --version "$RELEASE_VERSION" --readme README.md
 
-      - name: Open release follow-up PR
-        uses: roc-lang/release-package/actions/create-followup-pr@f963105a8e6200565dcfc7c732ecf10ed2e0aee0
-        with:
-          release_version: ${{ inputs.release_version }}
-          paths: ${{ steps.roc-version.outputs.authority == 'header' && 'www examples README.md' || 'www' }}
-          branch_prefix: release-followup
-          base_branch: ${{ github.event.repository.default_branch }}
-          commit_message: Update docs and published examples for ${{ inputs.release_version }}
-          pr_title: Update docs and published examples for ${{ inputs.release_version }}
-          github_token: ${{ github.token }}
+      - name: Open signed release follow-up PR
+        id: followup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          EXPECTED_BASE: ${{ steps.docs-base.outputs.sha }}
+          FOLLOWUP_PATHS: ${{ steps.roc-version.outputs.authority == 'header' && 'www examples README.md' || 'www' }}
+        run: |
+          read -r -a followup_paths <<< "$FOLLOWUP_PATHS"
+          python3 .roc-time-tmp/workflow-source/scripts/create_release_followup.py --expected-base "$EXPECTED_BASE" --paths "${followup_paths[@]}"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: www
+
+  validate-followup:
+    name: Validate generated release follow-up
+    needs: publish-docs
+    if: needs.publish-docs.outputs.followup_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+      statuses: write
+    steps:
+      - name: Checkout trusted validation controller
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Dispatch and verify exact follow-up checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FOLLOWUP_BRANCH: ${{ needs.publish-docs.outputs.followup_branch }}
+          FOLLOWUP_SHA: ${{ needs.publish-docs.outputs.followup_sha }}
+          FOLLOWUP_PR: ${{ needs.publish-docs.outputs.followup_pr }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 scripts/validate_followup.py --repo "$GITHUB_REPOSITORY" --branch "$FOLLOWUP_BRANCH" --sha "$FOLLOWUP_SHA" --pr "$FOLLOWUP_PR" --default-branch "$DEFAULT_BRANCH"
 
   deploy-pages:
     name: Deploy versioned docs

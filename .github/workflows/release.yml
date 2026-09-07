@@ -288,6 +288,8 @@ jobs:
       pull-requests: write
       pages: write
       id-token: write
+      actions: write
+      statuses: write
     uses: ./.github/workflows/release-docs.yml
     with:
       release_version: ${{ needs.build.outputs.release_version }}
