@@ -1,5 +1,5 @@
 import time.CalendarPattern
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.GregorianDate
 import time.LocalDateTime
@@ -21,7 +21,7 @@ DispatchDeadlines :: [].{
 			},
 		)?
 		# Waiving January does not add a replacement deadline in May.
-		rule = TimedRecurrence.with_exclusions(base_rule, [LocalDateTime.new(CalendarDate.from_gregorian(date), clock)])?
+		rule = TimedRecurrence.with_exclusions(base_rule, [LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)])?
 		cursor = TimedRecurrence.cursor(rule, window, { rules, occurrence: RequireUnique, gap: RejectGap })?
 		batch = TimedRecurrence.Cursor.collect(
 			cursor,
@@ -43,12 +43,12 @@ DispatchDeadlines :: [].{
 	midnight = |year, month, day| {
 		date = GregorianDate.from_fields({ year, month, day })?
 		clock = ClockTime.from_microseconds_since_midnight(0)?
-		Ok(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
+		Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
 	}
 }
 
 display = |value| {
-	date = CalendarDate.to_fields(LocalDateTime.date(value))
+	date = Calendar.Date.to_fields(LocalDateTime.date(value))
 	clock = ClockTime.to_fields(LocalDateTime.clock(value))
 	"${date.year.to_str()}-${pad(date.month)}-${pad(date.day)} ${pad(clock.hour)}:${pad(clock.minute)}"
 }

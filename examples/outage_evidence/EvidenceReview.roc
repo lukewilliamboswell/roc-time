@@ -1,4 +1,4 @@
-import time.RfcDateTime
+import time.ICalDateTime
 import time.PosixSpan
 import time.IntervalEvidence
 
@@ -29,11 +29,11 @@ EvidenceReview :: [].{
 }
 
 boundary = |text| {
-	timestamp = match RfcDateTime.parse(text) {
+	timestamp = match ICalDateTime.parse(text) {
 		Ok(value) => value
 		Err(error) => return Err(Timestamp(error))
 	}
-	RfcDateTime.utc_boundary(timestamp)
+	ICalDateTime.utc_boundary(timestamp)
 }
 
 report_truth = |truth| match truth {
