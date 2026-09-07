@@ -131,7 +131,7 @@ jobs:
         run: python3 scripts/release_starter.py prepare --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
 
       - name: Upload starter kit
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-starter
           path: .release/starter/roc-time-starter.zip
@@ -139,7 +139,7 @@ jobs:
           retention-days: 7
 
       - name: Upload release bundles
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-bundles
           path: .release/bundles/*
@@ -147,7 +147,7 @@ jobs:
           retention-days: 7
 
       - name: Upload release metadata
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-metadata
           path: |
