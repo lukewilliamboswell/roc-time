@@ -51,7 +51,9 @@ The checked-in 32-row corpus spans Gregorian 1900–2100, century/leap boundarie
 | `format` | stored `OffsetTimestamp.to_text` | stored `to_rfc3339_opts(Micros,false)` | all output bytes summed |
 | `end_to_end` | parse + canonical text | parse + canonical text | all output bytes summed |
 
-The `resolve` workload compares public representation operations on narrow arrays of stored timestamps. Chrono already stores the resolved coordinate; roc-time preserves the declared local fields and offset and computes the coordinate when requested. The checksum matches `parse`. Do not subtract `resolve` measurements from `parse` to infer parser-only latency: the representations, optimization opportunities and combined operation paths differ.
+The `resolve` workload compares public representation operations on narrow arrays of stored timestamps. Chrono stores a resolved UTC date/time and converts its packed year/ordinal and clock to microseconds; roc-time preserves the declared local year/month/day and offset, so this operation also performs Gregorian field conversion and offset subtraction. Neither side is merely reading a cached integer timestamp. The checksum matches `parse`. Do not subtract `resolve` measurements from `parse` to infer parser-only latency: the representations, optimization opportunities and combined operation paths differ.
+
+Chrono can usually add these 17 days directly to its stored ordinal within the same year. The roc-time kernel explicitly converts year/month/day to a civil-day coordinate and back, including full Gregorian era decomposition. This difference in representation and execution path matters when interpreting the ratio.
 
 The day calculation is exact calendar-day addition on date-only values. It is not duration arithmetic on a zoned timestamp. All chosen dates and their +17-day results fit both providers. The parse workload explicitly includes resolution of the supplied fixed offset to the shared POSIX microsecond coordinate; formatting starts from preconstructed values. End-to-end means the text adapter pipeline, not process startup or corpus loading.
 
