@@ -3,6 +3,7 @@ import time.Explanation
 import time.SemanticFact
 import time.TimedSchedule
 import time.ScheduleDefinition
+import time.Persistence
 import time.TimedOccurrence
 import time.CalendarDelta
 import time.TimedRecurrence
@@ -802,7 +803,7 @@ check_subdaily = |input| {
 	fractional_context = { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }
 	fractional_window = { start: window_start, end }
 	fractional_duration = Coordinate(PosixDelta.from_microseconds(1))
-	fractional_definition = ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation"
+	fractional_definition = archive_definition(ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation")
 	fractional_cursor = ScheduleDefinition.cursor(73.U64, fractional_definition, fractional_window) ?? crash "fractional prepared cursor"
 	check_fractional_schedule(fractional_cursor, input.work.to_u64(), $expected)
 	fractional_direct = TimedSchedule.new(73.U64, rebuilt, fractional_window, fractional_duration, fractional_context) ?? crash "fractional direct cursor"
@@ -834,6 +835,32 @@ check_subdaily = |input| {
 		$calls = $calls + 1
 	}
 	crash "subdaily grid resumption did not terminate"
+}
+
+# R09/R14/R16: archive the complete immutable declaration before evaluating
+# against the independent grids. Equal canonical archives must share hash-key
+# behavior, while the returned schedule still creates fresh query cursors.
+archive_definition = |definition| {
+	stored = Persistence.new(ScheduleDefinition(definition)) ?? crash "generated schedule archive rejected"
+	text = Persistence.to_text(stored)
+	restored = Persistence.parse(text) ?? crash "generated schedule archive cannot load"
+	if stored != restored or Persistence.to_text(restored) != text {
+		crash "schedule archive canonical equality"
+	}
+	# Preserve generic public Value key behavior when adding the new variant.
+	source_value = Persistence.value(stored)
+	restored_value = Persistence.value(restored)
+	if source_value != restored_value or Dict.get(Dict.insert(Dict.empty(), source_value, 73.U8), restored_value) != Ok(73) {
+		crash "native schedule declaration equality/hash changed on load"
+	}
+	keyed = Dict.insert(Dict.empty(), stored, 71.U8)
+	if Dict.get(keyed, restored) != Ok(71) {
+		crash "schedule archive hash equality"
+	}
+	match Persistence.value(restored) {
+		ScheduleDefinition(value) => value
+		_ => crash "schedule archive changed kind"
+	}
 }
 
 check_fractional_schedule = |initial, work, expected| {
@@ -1006,7 +1033,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	(direct, prepared) = if exclude_anchor {
 		default_duration = Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
 		context = { rules, occurrence: RequireUnique, gap: RejectGap }
-		declaration = ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition"
+		declaration = archive_definition(ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition")
 		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "native definition cursor"
 		direct_cursor = match TimedSchedule.new_with_endings(42.U64, rule, window, default_duration, overrides, context) {
 			Ok(value) => value
@@ -1042,7 +1069,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		# Preserve PERIOD ending intent and duplicate definitions across exchange;
 		# the existing independent grid below checks restored identities/widths.
 		restored = export_wrapper(parsed)
-		declaration = ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition"
+		declaration = archive_definition(ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition")
 		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "iCalendar definition cursor"
 		direct_cursor = match ICalTimedRule.schedule(42.U64, restored, window, Local(rules)) {
 			Ok(value) => value

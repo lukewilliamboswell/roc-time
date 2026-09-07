@@ -13,11 +13,14 @@ query APIs, promote these staged applications into the public example collection
 - [Invoice report](../tests/invoice_report/main.roc), with the core dependency.
 - [Schedule exchange](../tests/schedule_exchange/main.roc), with the core dependency and DATE export APIs.
 - [Meeting exchange](../tests/meeting_exchange/main.roc), with both dependencies, timed export and schedule-definition APIs.
+- [Schedule archive](../tests/schedule_archive/main.roc), with the core dependency and versioned schedule-definition persistence.
 
 Pin each compiler and immutable package URL. Include the applications in the
 starter kit and preserve their independent fixtures, scenario checks and exact
 output gates. When moving the invoice module, update the scenario-check staging
 to copy the same application implementation from its new path.
+Preserve the schedule archive checks' use of the same `ScheduleArchive.roc`
+module when promoting that application.
 
 Verify compiler compatibility before choosing the release source: development
 currently uses a newer compiler than public examples. Keep existing published

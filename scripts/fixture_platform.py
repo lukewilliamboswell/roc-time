@@ -621,6 +621,41 @@ def verify_schedule_definition(target: str) -> None:
         print(f"PASS schedule definition {mode}: allocation failure control")
 
 
+def verify_schedule_persistence(target: str) -> None:
+    """Native archives preserve declarations without enumerating their domains."""
+    roc = os.environ.get("ROC", "roc")
+    source = "tests/schedule_persistence_resource/main.roc"
+    subprocess.run([roc, "check", source], cwd=ROOT, check=True, timeout=120)
+    for mode in ("dev", "speed"):
+        binary = BUILD / f"schedule-persistence-{mode}"
+        subprocess.run([roc, "build", source, f"--opt={mode}", f"--target={target}",
+                        f"--output={binary}", "--no-cache"], cwd=ROOT, check=True, timeout=120)
+        for ownership in ("owned", "shared", "sliced"):
+            for count in (0, 1, 64, 256):
+                observations = []
+                for horizon in (2001, 200000):
+                    # A linear envelope over these bounded fixture sizes also
+                    # rejects copying the accumulated prefix for each ending.
+                    ceiling = 131072 + count * 4096
+                    result = subprocess.run([binary, str(count), ownership, str(horizon), str(ceiling)], capture_output=True, timeout=5)
+                    if result.returncode or result.stdout != b"schedule-persistence":
+                        raise RuntimeError(f"{mode}/{count}/{ownership}/{horizon}: definition failed: {result.stderr!r}")
+                    match = re.search(rb" work=((?:\d+,){8}\d+)\n$", result.stderr)
+                    if match is None:
+                        raise RuntimeError("missing schedule persistence allocation observations")
+                    traffic = tuple(int(value) for value in match[1].split(b","))
+                    if any(traffic[i] > ceiling for i in (1, 3, 4, 5)) or traffic[2] != 0 or any(value > 16384 for value in traffic[6:]):
+                        raise RuntimeError(f"schedule persistence resource bounds exceeded: {traffic}")
+                    observations.append(traffic)
+                if observations[0] != observations[1]:
+                    raise RuntimeError(f"definition work depends on query horizon: {observations}")
+                print(f"PASS schedule persistence {mode}/{count}/{ownership}: input/prepare/access/archive/text/load/cursor/first/resume requested bytes {observations[0]}")
+        failed = subprocess.run([binary, "64", "shared", "200000", "0"], capture_output=True, timeout=5)
+        if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
+            raise RuntimeError(f"{mode}: schedule persistence allocation failure control failed")
+        print(f"PASS schedule persistence {mode}: allocation failure control")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", action="store_true", help="build and run instrumented temporal probes")
@@ -644,5 +679,6 @@ if __name__ == "__main__":
         verify_date_export(selected_target)
         verify_timed_export(selected_target)
         verify_schedule_definition(selected_target)
+        verify_schedule_persistence(selected_target)
     else:
         print(selected_target)

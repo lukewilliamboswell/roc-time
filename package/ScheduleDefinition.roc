@@ -1,3 +1,4 @@
+import ZoneRules
 import TimedRecurrence
 import TimedOccurrence
 import TimedSchedule
@@ -14,7 +15,6 @@ import PosixDelta
 import PosixBoundary
 import PosixSpan
 import FixedOffset
-import ZoneRules
 
 ## A checked appointment declaration with immutable interpretation context.
 ## No series identifier, query window or evaluation progress is stored here.
@@ -51,6 +51,51 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : S
 	## checked results of TimedSchedule consumption under its normal budgets.
 	cursor : id, ScheduleDefinition, TimedRecurrence.Window -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange, ..])
 	cursor = |series, value, window| TimedSchedule.from_prepared(series, value.rule, window, value.endings, value.context)
+
+	## Declaration equality includes origin, retained selectors/exception labels,
+	## ending intent and complete immutable context. It does not establish that
+	## different recurrence declarations enumerate the same occurrence set.
+	## Cost follows finite definition fields and transitions, never query extent.
+	is_eq : ScheduleDefinition, ScheduleDefinition -> Bool
+	is_eq = |a, b| {
+		if a.context.occurrence != b.context.occurrence or a.context.gap != b.context.gap or ZoneRules.definition(a.context.rules) != ZoneRules.definition(b.context.rules) {
+			return Bool.False
+		}
+		match (a.origin, b.origin) {
+			(Native(left), Native(right)) => TimedRecurrence.definition(left.rule) == TimedRecurrence.definition(right.rule) and a.endings == b.endings
+			(ICal(left), ICal(right)) => {
+				x = ICalTimedRule.definition(left.rule)
+				y = ICalTimedRule.definition(right.rule)
+				x.mode == y.mode and x.duration == y.duration and x.periods == y.periods and TimedRecurrence.definition(x.rule) == TimedRecurrence.definition(y.rule) and (match (left.context, right.context) {
+					(Utc, Utc) | (Local(_), Local(_)) => Bool.True
+					_ => Bool.False
+				})
+			}
+			_ => Bool.False
+		}
+	}
+	to_hash : ScheduleDefinition, Hasher -> Hasher
+	to_hash = |value, hasher| {
+		context = { rules: ZoneRules.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
+		hash = context.to_hash(hasher)
+		match value.origin {
+			Native(spec) => value.endings.to_hash(TimedRecurrence.definition(spec.rule).to_hash((0.U8).to_hash(hash)))
+			ICal(spec) => {
+				data = ICalTimedRule.definition(spec.rule)
+				key = {
+					rule: TimedRecurrence.definition(data.rule),
+					duration: data.duration,
+					periods: data.periods,
+					mode: data.mode,
+					utc: match spec.context {
+						Utc => Bool.True
+						Local(_) => Bool.False
+					},
+				}
+				key.to_hash((1.U8).to_hash(hash))
+			}
+		}
+	}
 	to_inspect : ScheduleDefinition -> Str
 	to_inspect = |value| match value.origin {
 		Native(_) => "ScheduleDefinition(native; explicit immutable context)"

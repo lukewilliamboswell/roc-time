@@ -19,11 +19,11 @@ APIs where a realistic caller otherwise has to reproduce temporal logic.
    package URLs. Publication is separate from implementation acceptance; users
    of the current release cannot yet use these development APIs.
 2. **Finish schedule interchange (R11–R12/R14).** Follow
-   [recurrence execution](recurrence.md) to carry the existing profile through
-   parse/construct, canonical export, save/load and bounded evaluation. Preserve
-   series state across windows and resumptions. Widen import from sourced calendar
-   workflows, including mixed-form exceptions where required; full ICS ingestion
-   is a separate scope from extracted recurrence properties.
+   [recurrence execution](recurrence.md) to widen import from sourced calendar
+   workflows, starting with UTC cancellations for zoned meetings. Carry each
+   extension through canonical export, save/load and bounded evaluation while
+   preserving series state across windows and resumptions. Full ICS ingestion
+   remains a separate scope from extracted recurrence properties.
 
 Release and resource evidence applies throughout this sequence. Keep public
 examples runnable with their declared compiler and immutable package URLs,
@@ -71,5 +71,10 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 - Measure complexity, allocations, final layouts and retained slices on the pinned compiler. Current functional evidence does not establish those resource claims.
 - Extend hosted resource gates with coordinate-extent-independent span operations; member-count scaling for coverage and events; bounded zone selection and inspection. Separate construction from consumption, include early-stop/resume and failing controls in dev/speed builds, and instrument live/peak requested bytes before making retained-memory claims.
 - Retain the compiler reproduction under `tests/compiler_repro/result_widening/` until the pinned interpreter supports the affected error propagation; validate before removing the explicit mapping in calendar arithmetic.
+- Recheck `tests/compiler_repro/list_append_match_concat/` and
+  `tests/compiler_repro/structural_duration_hash/` when upgrading the compiler
+  or simplifying the corresponding declaration codecs/hash implementation.
+  Their passing controls preserve semantic fields; native resource and
+  saved-definition dictionary gates must continue to pass.
 
 Completion requires executable evidence for every acceptance requirement, usable public examples and the declared platform/resource evidence. Remove this plan when those deliverables are complete.
