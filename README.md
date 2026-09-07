@@ -3,7 +3,7 @@
 Dates, booking availability and schedules for [Roc](https://www.roc-lang.org),
 with explicit calendar and time-zone choices.
 
-**[0.1.0-rc2 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc2).** This is a release candidate, not a stable API. You can build
+**[0.1.0-rc3 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3).** This is a release candidate, not a stable API. You can build
 working booking and calendar applications with it now. APIs may change, and the
 compiler is pinned. Broader standards support is still being built.
 
@@ -36,7 +36,7 @@ These features work, but check that your input fits their scope.
 | Calendar and zone data | Gregorian and Julian; optional IANA 2025b data for 1800–2200 | Additional calendars are planned; zone data is a separate package dependency |
 | Explanation and persistence | Bounded plain-text explanations; versioned storage for supported descriptions, exact values, coverage and complete interpretation snapshots | No event/cursor persistence; snapshots have explicit size limits |
 
-See [API documentation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc2/),
+See [API documentation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/),
 [text profiles](package/EdtfDate.roc), [timestamp profiles](package/OffsetTimestamp.roc),
 [recurrence profiles](package/RfcTimedRule.roc), [persistence limits](package/Persistence.roc)
 and [zone-data scope](tzdb/README.md) for exact contracts.
@@ -81,10 +81,10 @@ as a stand-in for a future supported stable compiler. Development uses a separat
 package-header pin; it can advance without changing the public examples.
 No versioned stable Roc release is implied by this experiment.
 
-The [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc2/roc-time-starter.zip)
+The [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-starter.zip)
 also contains complete applications. Follow the compiler requirements shipped
 with that release, then run `roc examples/booking_exchange/main.roc` from the
-extracted kit folder. The [release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc2)
+extracted kit folder. The [release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3)
 include both package URLs and an import example. No Python runner is required.
 
 That example reads bookings, computes available windows, saves/restores the result
