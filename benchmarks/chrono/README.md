@@ -57,6 +57,16 @@ The day calculation is exact calendar-day addition on date-only values. It is no
 
 ## Measurement and validation
 
+Both programs receive the same fixed executable name, `benchmark`, in `argv[0]`.
+This prevents checkout paths from changing startup allocations: allocator group
+reuse can materially change formatting costs even when generated instructions,
+allocation counts and output are identical. `--argv0` allows deliberate sensitivity
+checks; its value is recorded with the results. A stable name controls this input,
+but does not establish performance independent of an application's heap state.
+Profiling uses a small Python launcher to set the same name before replacing
+itself with the Roc executable; ignore launcher startup samples when reading
+kernel hotspots.
+
 Each process loads the same runtime argv corpus and constructs its stored dates/timestamps before sampling. Kernels cycle over retained immutable inputs; outputs are transient, with no mutation or cursor sharing. Before sampling, both implementations project narrow input arrays: dates for date/control/conversion kernels, fields for construction, strings for parsing/end-to-end and timestamps for formatting. Date iterations therefore do not copy or retain unrelated strings from verification records. Input preparation is excluded from measurements; the separate `construct` workload measures checked date construction itself. Each sample contains the requested number of operations, including indexing, checked API calls, checksum accumulation and formatting output disposal. Workload selection occurs before warmups and timestamp reads; each branch calls the shared sampling loop with a fixed operation. No per-item string dispatch occurs. Rust uses generic closures and `black_box` on kernel inputs and its result. Roc brackets each kernel with opaque external hosted identity calls on the iteration count and checksum, preventing reuse across samples or moving computation outside the timestamps. These two calls per sample are included in measured time; they do not allocate. Both implementations also publish checksums through observable output. No checksum is discarded by the runner.
 
 The reported ns/op is therefore whole-loop cost per item, not isolated API latency; harness overhead matters particularly for tiny date kernels. `date_control` exposes the cost of stored-date field extraction and the surrounding loop, while `date_to_day` observes forward conversion without inverse conversion. The fixed day-checksum shift is nonnegative throughout the checked corpus. These are contextual controls: do not subtract their timings to claim isolated API latency. Representation and compiler optimization can differ between workloads.

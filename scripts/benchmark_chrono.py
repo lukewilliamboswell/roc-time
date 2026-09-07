@@ -90,6 +90,7 @@ def main():
     parser.add_argument("--roc-opt", choices=("dev", "speed"), default="speed")
     parser.add_argument("--debug", action="store_true", help="retain Roc debug information for --profile only")
     parser.add_argument("--profile", choices=MODES, help="record a Roc kernel with Linux perf; no comparative timings")
+    parser.add_argument("--argv0", default="benchmark", help="fixed executable name seen by both programs; vary only to diagnose startup heap sensitivity")
     options = parser.parse_args()
     if options.debug and not options.profile:
         parser.error("--debug requires --profile; comparative timings use non-debug builds")
@@ -149,7 +150,7 @@ def main():
     expected = "".join(f'{case["day"]}|{case["microseconds"]}|{case["canonical"]}\n' for case in corpus)
     binaries = [("roc-time", roc_binary), ("chrono", rust_binary)]
     for name, binary in binaries:
-        observed = run([str(binary), "verify", "1", "0", "0", *inputs], capture_output=True, text=True)
+        observed = run([options.argv0, "verify", "1", "0", "0", *inputs], executable=str(binary), capture_output=True, text=True)
         if observed.stdout != expected:
             raise ValueError(f"{name} differs from independent per-case oracle")
     # Always exercise rejection: matching output count alone is insufficient.
@@ -165,7 +166,9 @@ def main():
         stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
         recording = BUILD / f"perf-{options.profile}-{stamp}.data"
         output = run(["perf", "record", "-e", "cycles:u", "-F", "999", "--call-graph", "dwarf",
-                      "-o", str(recording), "--", str(roc_binary), options.profile,
+                      "-o", str(recording), "--", sys.executable, "-c",
+                      "import os,sys; os.execv(sys.argv[1], sys.argv[2:])",
+                      str(roc_binary), options.argv0, options.profile,
                       str(options.iterations), str(options.warmups), str(options.samples), *inputs],
                      capture_output=True, text=True)
         parse_samples(output.stdout, options.samples, expected_sum(corpus, options.profile, options.iterations))
@@ -180,8 +183,8 @@ def main():
     # Alternate language order between workloads; never run timed jobs in parallel.
     for index, mode in enumerate(MODES):
         for name, binary in (binaries if index % 2 == 0 else binaries[::-1]):
-            output = run([str(binary), mode, str(options.iterations), str(options.warmups),
-                          str(options.samples), *inputs], capture_output=True, text=True)
+            output = run([options.argv0, mode, str(options.iterations), str(options.warmups),
+                          str(options.samples), *inputs], executable=str(binary), capture_output=True, text=True)
             elapsed = parse_samples(output.stdout, options.samples, expected_sum(corpus, mode, options.iterations))
             row = {"library": name, "workload": mode, "nanoseconds": elapsed,
                    "median_ns_per_operation": statistics.median(elapsed) / options.iterations}
