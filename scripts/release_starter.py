@@ -281,7 +281,7 @@ def main() -> None:
             core = manifest["bundles"]["core"]
             zones = manifest["bundles"]["zones"]
             link = f"https://github.com/{args.repo}/releases/download/{quote(args.version, safe='')}/roc-time-starter.zip"
-            header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, archive search and staffing examples. "
+            header = (f"## Try roc-time\n\n[Download the starter kit]({link}) for booking, archive search, staffing and clock deadline examples. "
                       f"Use [Roc {compiler}](https://github.com/roc-lang/nightlies/releases/tag/{compiler}); "
                       "each application declares its compiler in its header. Unzip the kit, enter "
                       "`examples/booking_exchange`, and run `roc main.roc`. Python is not required.\n\n")

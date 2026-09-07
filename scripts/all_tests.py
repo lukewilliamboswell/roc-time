@@ -130,6 +130,7 @@ def main() -> None:
     run([sys.executable, "scripts/test_validate_followup.py"])
     run([sys.executable, "scripts/check_docs_history.py", "--self-test"])
     run([sys.executable, "scripts/test_docs.py"])
+    run([sys.executable, "scripts/test_clock_output.py"])
     run([sys.executable, "scripts/test_local_examples.py"])
 
     heading("Generating package docs...")
