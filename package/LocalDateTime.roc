@@ -2,6 +2,7 @@ import Calendar
 import CalendarDate
 import CivilDay
 import ClockTime
+import GregorianDate
 
 ## A dated local label. A zone occurrence has not been selected or resolved.
 ##
@@ -29,8 +30,69 @@ import ClockTime
 ## }
 ## ```
 ##
+## An explicitly Gregorian form field can also be read directly. A local label
+## still needs separately supplied rules and an occurrence policy to resolve it.
+## This text profile rejects offsets and preserves microseconds, but does not
+## retain supplied-field resolution or serialize non-Gregorian calendars.
+##
+## ```roc
+## import time.LocalDateTime
+##
+## expect {
+##     appointment = LocalDateTime.parse_gregorian("2026-09-07T09:30")?
+##     LocalDateTime.to_gregorian_text(appointment) == Ok("2026-09-07T09:30:00")
+## }
+## ```
+##
 ## Examples assume a package dependency named `time`.
 LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
+	TextError : [TooLarge, Incomplete, Malformed, InvalidDate(GregorianDate.Error), InvalidTime(ClockTime.Error)]
+
+	## Parse an explicitly Gregorian local label: date, uppercase T, then clock.
+	## The date and clock use GregorianDate.parse and ClockTime.parse profiles.
+	## At most 64 UTF-8 bytes; omitted clock seconds become zero. No offset,
+	## zone, occurrence or supplied-field resolution is inferred. This native
+	## profile does not claim all ISO 8601 forms. Julian values require explicit
+	## construction; their fields are never silently treated as Gregorian.
+	parse_gregorian : Str -> Try(LocalDateTime, TextError)
+	parse_gregorian = |text| {
+		if text.count_utf8_bytes() > 64 {
+			return Err(TooLarge)
+		}
+		(date_text, clock_text) = match text.split_on("T") {
+			[a, b] => (a, b)
+			[a] => {
+				return match GregorianDate.parse(a) {
+					Ok(_) => Err(Incomplete)
+					Err(Incomplete) => Err(Incomplete)
+					Err(error) => Err(InvalidDate(error))
+				}
+			}
+			_ => return Err(Malformed)
+		}
+		day = match GregorianDate.parse(date_text) {
+			Ok(value) => value
+			# A separator after a partial date cannot become valid by appending.
+			Err(Incomplete) => return Err(InvalidDate(Malformed))
+			Err(error) => return Err(InvalidDate(error))
+		}
+		time = match ClockTime.parse(clock_text) {
+			Ok(value) => value
+			Err(Incomplete) => return Err(Incomplete)
+			Err(error) => return Err(InvalidTime(error))
+		}
+		Ok(new(CalendarDate.from_gregorian(day), time))
+	}
+
+	## Canonical Gregorian date/clock text preserves the local position. It is
+	## neither a resolved timestamp nor a persistence format for every calendar.
+	## Reject other calendars; callers can explicitly convert with in_calendar.
+	to_gregorian_text : LocalDateTime -> Try(Str, [UnsupportedCalendar(Calendar), ..])
+	to_gregorian_text = |value| {
+		day = CalendarDate.as_gregorian(value.date)?
+		Ok("${GregorianDate.to_text(day)}T${ClockTime.to_text(value.clock)}")
+	}
+
 	new : CalendarDate, ClockTime -> LocalDateTime
 	new = |date, clock| { date, clock }
 
@@ -71,6 +133,45 @@ LocalDateTime :: { date : CalendarDate, clock : ClockTime }.{
 	to_hash = |value, hasher| value.clock.to_hash(value.date.to_hash(hasher))
 	to_inspect : LocalDateTime -> Str
 	to_inspect = |value| "LocalDateTime(${Str.inspect(value.date)}, ${Str.inspect(value.clock)})"
+
+	expect {
+		# Ordinary form input is a local position, not a resolved instant.
+		value = parse_gregorian("2026-09-07T09:30")?
+		CalendarDate.to_fields(date(value)) == { year: 2026, month: 9, day: 7 } and
+			ClockTime.to_microseconds_since_midnight(clock(value)) == 34200000000 and
+				to_gregorian_text(value) == Ok("2026-09-07T09:30:00") and
+					parse_gregorian("2026-09-07T09:30:00.120") == parse_gregorian("2026-09-07T09:30:00.12")
+	}
+
+	expect {
+		# Explicit profiles cannot silently relabel the Julian leap date.
+		julian = CalendarDate.from_fields(Julian, { year: 1900, month: 2, day: 29 })?
+		local = new(julian, ClockTime.from_microseconds_since_midnight(0)?)
+		to_gregorian_text(local) == Err(UnsupportedCalendar(Julian)) and
+			parse_gregorian("1900-02-29T00:00") == Err(InvalidDate(InvalidDay))
+	}
+
+	expect {
+		# Local labels retain the full provider range before timeline lowering.
+		first = parse_gregorian("-2147483648-01-01T00:00")?
+		last = parse_gregorian("+2147483647-12-31T23:59:59.999999")?
+		to_gregorian_text(first) == Ok("-2147483648-01-01T00:00:00") and
+			to_gregorian_text(last) == Ok("+2147483647-12-31T23:59:59.999999")
+	}
+
+	expect {
+		parse_gregorian("2026-09-07") == Err(Incomplete) and
+			parse_gregorian("2026-09-07T") == Err(Incomplete) and
+				parse_gregorian("T09:30") == Err(InvalidDate(Malformed)) and
+					parse_gregorian("2026-09T09:30") == Err(InvalidDate(Malformed)) and
+						parse_gregorian("2026-13-") == Err(InvalidDate(InvalidMonth)) and
+							parse_gregorian("2026-09-07TT09:30") == Err(Malformed) and
+								parse_gregorian("x".repeat(65)) == Err(TooLarge)
+	}
+
+	expect parse_gregorian("2026-09-07T9") == Err(InvalidTime(InvalidHour))
+	expect parse_gregorian("2026-09-07T09:7") == Err(InvalidTime(InvalidMinute))
+	expect parse_gregorian("2026-09-07T09:30:6") == Err(InvalidTime(InvalidSecond))
 
 	expect {
 		# Hinnant's independently sourced equal-day anchor, also exercised by

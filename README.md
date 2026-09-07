@@ -70,6 +70,7 @@ These features work, but check that your input fits their scope.
 | Feature | Supported now | Main boundary |
 | --- | --- | --- |
 | Timestamp and booking text | Complete RFC offset timestamps, up to six fractional digits; exact start/end windows; canonical serialization | No leap-second or sub-microsecond input; this is not every ISO 8601 form |
+| Native civil text (development source) | Gregorian date, clock and explicitly Gregorian local-datetime parsing and canonical output; date/clock literals and generic string codecs | Not in rc3; local labels have no zone or supplied-field resolution; at most six fractional digits |
 | EDTF archive dates | Gregorian year, year-month or date, with whole-value `?`, `~` or `%`; development source also supports individual and year/month group qualifications | No EDTF interval endpoints, masks or sets yet; no invented uncertainty tolerance |
 | IXDTF annotations | Zone/calendar annotations, critical flags and explicit offset/rule consistency checks | Calendar preferences are retained; presentation currently supports Gregorian only |
 | RFC recurrence import | Extracted DTSTART, RRULE, RDATE, EXDATE, DURATION and PERIOD values in declared date/timed profiles | No complete ICS files, mixed UTC/local exceptions, or recurrence export/persistence yet |
@@ -83,16 +84,16 @@ and [zone-data scope](tzdb/README.md) for exact contracts.
 
 ### Tier 3: Next, in user-impact order
 
-1. **Fill archive input/output gaps.** Mixed-resolution interval endpoints,
-   unknown/open bounds, then masks and sets.
-   Each supported form needs faithful serialization and useful failure messages.
+1. **Finish everyday date/time workflows.** Common form input, ordinary display,
+   named-zone appointments, clock/expiry integration and application records.
+   Add weekday, ordinal-day and ISO-week queries for reporting.
 2. **Complete schedule interchange.** Recurrence export and persistence, followed
    by broader import where real calendar workflows need it. Complete ICS ingestion
    is not available today.
-3. **Add calendars for concrete needs.** Choose providers from sourced caller
-   scenarios, with independently verified conversions and explicit capabilities.
-4. **Extend advanced interpretation and presentation.** Broader uncertainty
-   reasoning, explanation of remaining evaluation results and styled rendering.
+3. **Expand specialist support as callers need it.** Faithful archive interval
+   endpoints, masks and sets; additional calendars; broader uncertainty reasoning
+   and styled explanations. Each slice needs complete input/output and verified
+   interpretation within its declared scope.
 
 The ordering follows blocked user workflows. Additional internal refinements
 should support one of those workflows or fix demonstrated correctness/performance
@@ -141,6 +142,16 @@ types such as `EdtfDate` and `OffsetTimestamp` provide checked `parse` and canon
 literals and generic string codecs. Use `parse` for runtime interpolated text so
 validation errors can be handled. Named-zone applications also need explicit
 rules, such as those supplied by the [optional zone package](tzdb/README.md).
+
+For development-source callers, [GregorianDate](package/GregorianDate.roc) and
+[ClockTime](package/ClockTime.roc) accept inputs such as `2026-09-07` and `09:30`.
+[LocalDateTime.parse_gregorian](package/LocalDateTime.roc) accepts
+`2026-09-07T09:30`; `to_gregorian_text` writes `2026-09-07T09:30:00`.
+These are local boundary labels. Resolve them with explicit zone rules when you
+need a timeline position; use description types when supplied resolution matters.
+The module examples and [application-record test](tests/codecs/CodecChecks.roc)
+show these APIs using the development package. Published rc3 examples require
+their released APIs until a new release includes this slice.
 
 ## Prior art
 

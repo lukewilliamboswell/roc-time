@@ -13,6 +13,14 @@ CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 	from_julian : JulianDate -> CalendarDate
 	from_julian = |date| Julian(date)
 
+	## Access a stored Gregorian date without converting another calendar.
+	## Use in_calendar when conversion, rather than access, is intended.
+	as_gregorian : CalendarDate -> Try(GregorianDate, [UnsupportedCalendar(Calendar), ..])
+	as_gregorian = |date| match date {
+		Gregorian(value) => Ok(value)
+		Julian(_) => Err(UnsupportedCalendar(Julian))
+	}
+
 	from_fields : Calendar, Fields -> Try(CalendarDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
 	from_fields = |calendar, fields| match calendar {
 		Gregorian => match GregorianDate.from_fields(fields) {

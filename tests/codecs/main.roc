@@ -6,6 +6,10 @@ main! = |_| {
 	CodecChecks.run({
 		source: "{\"date\":\"1984?\",\"dates\":[\"2020-02-29\",\"2022-06~\"],\"exact\":\"2026-06-15T09:00:00Z/2026-06-15T10:00:00Z\",\"ixdtf\":\"2022-07-08T00:14:07Z[Europe/Paris][u-ca=hebrew]\",\"rfc_date\":\"19970902T090000Z\",\"rfc_duration\":\"PT1H\",\"rfc_period\":\"19970902T090000Z/PT1H\",\"stamp\":\"2026-06-15T10:30:00.120-00:00\",\"tail\":\"kept\"}",
 		canonical: "{\"date\":\"1984?\",\"dates\":[\"2020-02-29\",\"2022-06~\"],\"exact\":\"2026-06-15T09:00:00Z/2026-06-15T10:00:00Z\",\"ixdtf\":\"2022-07-08T00:14:07Z[Europe/Paris][u-ca=hebrew]\",\"rfc_date\":\"19970902T090000Z\",\"rfc_duration\":\"PT3600S\",\"rfc_period\":\"19970902T090000Z/PT3600S\",\"stamp\":\"2026-06-15T10:30:00.120Z\",\"tail\":\"kept\"}",
+		civil: "{\"date\":\"2026-09-07\",\"clock\":\"09:30\",\"tail\":\"kept\"}",
+		civil_invalid_date: "\"1900-02-29\"",
+		civil_invalid_clock: "\"23:59:60\"",
+		civil_tokens: ["2026-09-07", "09:30", "tail"],
 		invalid_date: "\"2020-02-30\"",
 		invalid_stamp: "\"2020-02-30T00:00:00Z\"",
 		invalid_exact: "\"2026-06-15T09:00:00Z/2026-06-15T09:00:00Z\"",

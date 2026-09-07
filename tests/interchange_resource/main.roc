@@ -7,6 +7,7 @@ import time.PosixBoundary
 import time.PosixSpan
 import time.LocalDateTime
 import time.ClockTime
+import time.GregorianDate
 import time.FixedOffset
 import time.ZoneRules
 import time.EdtfDate
@@ -129,5 +130,75 @@ main! = |args| {
 	edtf_rejected = Host.allocated_bytes!({})
 	Host.assert!(edtf_invalid == Err(TooLarge) and edtf_rejected == edtf_invalid_before)
 	Host.mark!(4)
-	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, persistence_encoded - persistence_before, persistence_decoded - persistence_encoded, invalid_large - invalid_before, invalid_deep - invalid_large, edtf_parsed - edtf_before, edtf_serialized - edtf_parsed, edtf_explained - edtf_serialized, edtf_rejected - edtf_invalid_before] }
+	# Native text operations consume caller-owned runtime strings. Each operation
+	# has its own traffic scope; oversized buffers are constructed beforehand.
+	date_text = args.get(7) ?? "-2147483648-01-01"
+	clock_text = args.get(8) ?? "23:59:59.999999"
+	local_text = args.get(9) ?? "-2147483648-01-01T23:59:59.999999"
+	civil_ceiling = U64.from_str(args.get(10) ?? "4096") ?? 4096
+	control = U64.from_str(args.get(11) ?? "0") ?? 0
+	date_large = date_text.repeat(128)
+	clock_large = clock_text.repeat(128)
+	local_large = local_text.repeat(128)
+	Host.mark!(5)
+	d0 = Host.allocated_bytes!({})
+	date = match GregorianDate.parse(date_text) {
+		Ok(value) => value
+		Err(_) => crash "civil date parse"
+	}
+	inject!(control, 1, date_text)
+	d1 = Host.allocated_bytes!({})
+	Host.assert!(d1 - d0 <= civil_ceiling)
+	Host.mark!(6)
+	date_output = GregorianDate.to_text(date)
+	inject!(control, 2, date_text)
+	d2 = Host.allocated_bytes!({})
+	Host.assert!(date_output == date_text and d2 - d1 <= civil_ceiling)
+	Host.mark!(7)
+	clock = match ClockTime.parse(clock_text) {
+		Ok(value) => value
+		Err(_) => crash "civil clock parse"
+	}
+	inject!(control, 3, clock_text)
+	d3 = Host.allocated_bytes!({})
+	Host.assert!(d3 - d2 <= civil_ceiling)
+	Host.mark!(8)
+	clock_output = ClockTime.to_text(clock)
+	inject!(control, 4, clock_text)
+	d4 = Host.allocated_bytes!({})
+	Host.assert!(clock_output == clock_text and d4 - d3 <= civil_ceiling)
+	Host.mark!(9)
+	local = match LocalDateTime.parse_gregorian(local_text) {
+		Ok(value) => value
+		Err(_) => crash "civil local parse"
+	}
+	inject!(control, 5, local_text)
+	d5 = Host.allocated_bytes!({})
+	Host.assert!(d5 - d4 <= civil_ceiling and LocalDateTime.clock(local) == clock)
+	Host.mark!(10)
+	local_output = match LocalDateTime.to_gregorian_text(local) {
+		Ok(value) => value
+		Err(_) => crash "civil local output"
+	}
+	inject!(control, 6, local_text)
+	d6 = Host.allocated_bytes!({})
+	Host.assert!(local_output == local_text and d6 - d5 <= civil_ceiling)
+	Host.mark!(11)
+	date_invalid = GregorianDate.parse(date_large)
+	d7 = Host.allocated_bytes!({})
+	clock_invalid = ClockTime.parse(clock_large)
+	d8 = Host.allocated_bytes!({})
+	local_invalid = LocalDateTime.parse_gregorian(local_large)
+	d9 = Host.allocated_bytes!({})
+	Host.assert!(date_invalid == Err(TooLarge) and clock_invalid == Err(TooLarge) and local_invalid == Err(TooLarge) and d7 == d6 and d8 == d7 and d9 == d8)
+	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, persistence_encoded - persistence_before, persistence_decoded - persistence_encoded, invalid_large - invalid_before, invalid_deep - invalid_large, edtf_parsed - edtf_before, edtf_serialized - edtf_parsed, edtf_explained - edtf_serialized, edtf_rejected - edtf_invalid_before, d1 - d0, d2 - d1, d3 - d2, d4 - d3, d5 - d4, d6 - d5, d7 - d6, d8 - d7, d9 - d8] }
+}
+
+# Deliberately inject excessive allocation in one named scope to prove its
+# always-active ceiling survives optimization even when normal traffic is zero.
+inject! = |selected, scope, text| {
+	if selected == scope {
+		large = text.repeat(8192)
+		Host.assert!(large.count_utf8_bytes() > 4096)
+	}
 }

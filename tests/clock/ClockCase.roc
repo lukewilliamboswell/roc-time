@@ -23,6 +23,52 @@ ClockCase := { number : I64 }.{
 				ClockTime.from_fields(ClockTime.to_fields(value)) != Ok(value) {
 				crash "clock round trip"
 			}
+			# Independent text oracle: decimal digit positions from the numeric
+			# coordinate, assembled as ASCII bytes without production field/output
+			# helpers. R01/R14: exact full-day domain, shortest decimal precision.
+			h = I64.div_trunc_by(input.number, 3600000000)
+			m = I64.rem_by(I64.div_trunc_by(input.number, 60000000), 60)
+			s = I64.rem_by(I64.div_trunc_by(input.number, 1000000), 60)
+			var $bytes = [
+				(48 + I64.div_trunc_by(h, 10)).to_u8_wrap(),
+				(48 + I64.rem_by(h, 10)).to_u8_wrap(),
+				58,
+				(48 + I64.div_trunc_by(m, 10)).to_u8_wrap(),
+				(48 + I64.rem_by(m, 10)).to_u8_wrap(),
+				58,
+				(48 + I64.div_trunc_by(s, 10)).to_u8_wrap(),
+				(48 + I64.rem_by(s, 10)).to_u8_wrap(),
+			]
+			var $remainder = I64.rem_by(input.number, 1000000)
+			if $remainder != 0 {
+				$bytes = $bytes.append(46)
+				var $divisor = 100000.I64
+				while $remainder != 0 {
+					$bytes = $bytes.append((48 + I64.div_trunc_by($remainder, $divisor)).to_u8_wrap())
+					$remainder = I64.rem_by($remainder, $divisor)
+					$divisor = I64.div_trunc_by($divisor, 10)
+				}
+			}
+			expected_text = Str.from_utf8_lossy($bytes)
+			shared_text = [expected_text, expected_text]
+			if ClockTime.to_text(value) != expected_text or ClockTime.parse(expected_text) != Ok(value) {
+				crash "clock text differs from decimal coordinate model"
+			}
+			for text in shared_text {
+				if ClockTime.parse(text) != Ok(value) {
+					crash "shared clock text differs"
+				}
+				if ClockTime.parse("${text}Z") != Err(Malformed) {
+					crash "clock accepted offset tail"
+				}
+			}
+			minute_text = Str.from_utf8_lossy($bytes.take_first(5))
+			match ClockTime.parse(minute_text) {
+				Ok(parsed) => if ClockTime.to_microseconds_since_midnight(parsed) != input.number - I64.rem_by(input.number, 60000000) {
+					crash "omitted seconds meaning"
+				}
+				Err(_) => crash "native minute label rejected"
+			}
 			if input.number < 86399999999 {
 				next = match ClockTime.from_microseconds_since_midnight(input.number + 1) {
 					Ok(clock) => clock

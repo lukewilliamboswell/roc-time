@@ -22,9 +22,199 @@ import CivilDay
 ## }
 ## ```
 ##
+## Parse a form field or validate a typed literal. Canonical output keeps the
+## calendar date; use a description type when supplied resolution matters.
+##
+## ```roc
+## import time.GregorianDate
+##
+## expect {
+##     due : GregorianDate
+##     due = "2026-09-07"
+##     GregorianDate.parse("2026-09-07") == Ok(due) and
+##         GregorianDate.to_text(due) == "2026-09-07"
+## }
+## ```
+##
 ## Examples assume a package dependency named `time`.
 GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	Fields : { year : I64, month : U8, day : U8 }
+	Error : [Malformed, Incomplete, OutOfRange, InvalidMonth, InvalidDay, TooLarge]
+
+	## Native Gregorian full-date text, with no timezone or reduced resolution.
+	## Years 0..9999 have four digits; negative years have a minus and at least
+	## four magnitude digits; larger positive years have a plus and no padding.
+	## Signed expanded years are a library extension, not an RFC 3339 claim.
+	## Parsing checks a 64-byte input limit before copying and has bounded work.
+	## Incomplete means a valid unfinished prefix. Completed invalid fields and
+	## impossible day prefixes (such as 1900-02-3) retain constructor errors.
+	profile : Str
+	profile = "native-gregorian-full-date-v1"
+
+	parser_for : encoding -> (state -> Try({ value : GregorianDate, rest : state }, [InvalidGregorianDate(Error), Encoding(err), ..]))
+		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
+	parser_for = |encoding| {
+		Encoding : encoding
+		|state| {
+			parsed = match Encoding.parse_str(encoding, state) {
+				Ok(value) => value
+				Err(error) => return Err(Encoding(error))
+			}
+			match parse(parsed.value) {
+				Ok(value) => Ok({ value, rest: parsed.rest })
+				Err(error) => Err(InvalidGregorianDate(error))
+			}
+		}
+	}
+
+	encoder_for : encoding -> (GregorianDate, state -> Try(state, err))
+		where [encoding.encode_str : Str, state -> Try(state, err)]
+	encoder_for = |_encoding| {
+		Encoding : encoding
+		|value, state| Encoding.encode_str(to_text(value), state)
+	}
+
+	from_quote : Str -> Try(GregorianDate, [BadQuotedBytes(Str)])
+	from_quote = |text| match parse(text) {
+		Ok(value) => Ok(value)
+		Err(error) => Err(BadQuotedBytes("Invalid GregorianDate literal: ${Str.inspect(error)}"))
+	}
+
+	parse : Str -> Try(GregorianDate, Error)
+	parse = |text| {
+		if text.count_utf8_bytes() > 64 {
+			return Err(TooLarge)
+		}
+		bytes = text.to_utf8()
+		size = bytes.len()
+		if size == 0 {
+			return Err(Incomplete)
+		}
+		first = byte_at(bytes, 0)
+		negative = first == 45
+		signed = negative or first == 43
+		start = if signed {
+			1.U64
+		} else {
+			0.U64
+		}
+		var $end = start
+		var $magnitude = 0.I64
+		while $end < size and byte_at(bytes, $end) >= 48 and byte_at(bytes, $end) <= 57 {
+			# At most ten digits are accumulated, so multiplication fits I64.
+			if $end - start < 10 {
+				$magnitude = $magnitude * 10 + U8.to_i64(byte_at(bytes, $end) - 48)
+			}
+			$end = $end + 1
+		}
+		digits = $end - start
+		if digits == 0 {
+			return if $end == size {
+				Err(Incomplete)
+			} else {
+				Err(Malformed)
+			}
+		}
+		if !signed and digits > 4 {
+			return Err(Malformed)
+		}
+		if signed and byte_at(bytes, start) == 48 and (first == 43 or digits > 4) {
+			return Err(Malformed)
+		}
+		if digits > 10 {
+			return Err(OutOfRange)
+		}
+		year = if negative {
+			-($magnitude)
+		} else {
+			$magnitude
+		}
+		if year < -2147483648 or year > 2147483647 {
+			return Err(OutOfRange)
+		}
+		minimum = if first == 43 {
+			5.U64
+		} else {
+			4.U64
+		}
+		if digits < minimum {
+			return if $end == size {
+				Err(Incomplete)
+			} else {
+				Err(Malformed)
+			}
+		}
+		if negative and $magnitude == 0 {
+			return Err(Malformed)
+		}
+		if $end == size {
+			return Err(Incomplete)
+		}
+		if byte_at(bytes, $end) != 45 {
+			return Err(Malformed)
+		}
+		month_start = $end + 1
+		if month_start == size {
+			return Err(Incomplete)
+		}
+		month_first = byte_at(bytes, month_start)
+		if month_first < 48 or month_first > 57 {
+			return Err(Malformed)
+		}
+		if month_start + 1 == size {
+			return if month_first <= 49 {
+				Err(Incomplete)
+			} else {
+				Err(InvalidMonth)
+			}
+		}
+		month_last = byte_at(bytes, month_start + 1)
+		if month_last < 48 or month_last > 57 {
+			return Err(Malformed)
+		}
+		month = (month_first - 48) * 10 + month_last - 48
+		length = days_in_month(year, month)?
+		separator = month_start + 2
+		if separator == size {
+			return Err(Incomplete)
+		}
+		if byte_at(bytes, separator) != 45 {
+			return Err(Malformed)
+		}
+		day_start = separator + 1
+		if day_start == size {
+			return Err(Incomplete)
+		}
+		day_first = byte_at(bytes, day_start)
+		if day_first < 48 or day_first > 57 {
+			return Err(Malformed)
+		}
+		if day_start + 1 == size {
+			return if (day_first - 48) * 10 <= length {
+				Err(Incomplete)
+			} else {
+				Err(InvalidDay)
+			}
+		}
+		day_last = byte_at(bytes, day_start + 1)
+		if day_last < 48 or day_last > 57 or day_start + 2 != size {
+			return Err(Malformed)
+		}
+		from_fields({ year, month, day: (day_first - 48) * 10 + day_last - 48 })
+	}
+
+	## Total canonical output across this provider's full signed-year range.
+	to_text : GregorianDate -> Str
+	to_text = |Date(fields)| {
+		year = if fields.year < 0 {
+			"-${pad_year((-fields.year).to_str())}"
+		} else if fields.year > 9999 {
+			"+${fields.year.to_str()}"
+		} else {
+			pad_year(fields.year.to_str())
+		}
+		"${year}-${pad_two(fields.month)}-${pad_two(fields.day)}"
+	}
 
 	from_fields : Fields -> Try(GregorianDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
 	from_fields = |fields| {
@@ -145,6 +335,41 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	is_eq = |Date(a), Date(b)| a.year == b.year and a.month == b.month and a.day == b.day
 
 	expect from_civil_day(CivilDay.from_day_number(I64.lowest)) == Err(OutOfRange)
+	# RFC 3339 (July 2002), sections 5.6-5.8: full-date grammar and
+	# Gregorian month/leap-day restrictions. Signed fixtures are explicitly
+	# native-profile extensions, not RFC examples.
+	# https://www.rfc-editor.org/rfc/rfc3339.html#section-5.6
+	expect {
+		var $valid = Bool.True
+		for fixture in [
+			{ text: "1985-04-12", fields: { year: 1985.I64, month: 4.U8, day: 12.U8 } },
+			{ text: "2000-02-29", fields: { year: 2000, month: 2, day: 29 } },
+			{ text: "0000-02-29", fields: { year: 0, month: 2, day: 29 } },
+			{ text: "-0001-12-31", fields: { year: -1, month: 12, day: 31 } },
+			{ text: "+10000-01-01", fields: { year: 10000, month: 1, day: 1 } },
+			{ text: "-2147483648-01-01", fields: { year: -2147483648, month: 1, day: 1 } },
+			{ text: "+2147483647-12-31", fields: { year: 2147483647, month: 12, day: 31 } },
+		] {
+			$valid = $valid and parse(fixture.text) == from_fields(fixture.fields)
+			$valid = $valid and match from_fields(fixture.fields) {
+				Ok(value) => to_text(value) == fixture.text
+				Err(_) => Bool.False
+			}
+		}
+		$valid
+	}
+	expect parse("1900-02-29") == Err(InvalidDay)
+	expect parse("1900-02-2") == Err(Incomplete)
+	expect parse("1900-02-3") == Err(InvalidDay)
+	expect parse("2026-13-") == Err(InvalidMonth)
+	expect parse("2026") == Err(Incomplete)
+	expect parse("-0000-01-01") == Err(Malformed)
+	expect parse("+2026-01-01") == Err(Malformed)
+	expect parse("-00001-01-01") == Err(Malformed)
+	expect parse("+2147483648-01-01") == Err(OutOfRange)
+	expect parse("-2147483649-01-01") == Err(OutOfRange)
+	expect parse("2026-01-01Z") == Err(Malformed)
+	expect parse("é".repeat(33)) == Err(TooLarge)
 	expect from_civil_day(CivilDay.from_day_number(I64.highest)) == Err(OutOfRange)
 	expect from_fields({ year: 1900, month: 2, day: 29 }) == Err(InvalidDay)
 	expect from_fields({ year: 2000, month: 0, day: 1 }) == Err(InvalidMonth)
@@ -171,6 +396,24 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		}
 		$valid
 	}
+}
+
+# Every caller checks the bounded input index before access.
+byte_at = |bytes, index| match List.get(bytes, index) {
+	Ok(value) => value
+	Err(_) => crash "Gregorian text index invariant"
+}
+
+pad_year = |text| if text.count_utf8_bytes() < 4 {
+	"${"0".repeat(4 - text.count_utf8_bytes())}${text}"
+} else {
+	text
+}
+
+pad_two = |value| if value < 10 {
+	"0${value.to_str()}"
+} else {
+	value.to_str()
 }
 
 # Counts complete years before January 1 relative to Gregorian 1970-01-01.

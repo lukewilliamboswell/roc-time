@@ -39,9 +39,8 @@ Executable acceptance:
   bundles. Update recursive discovery, example index and release handling if a
   new example folder is introduced.
 
-Dependency: the direct native text APIs must pass their integration gate before
-the example advertises them. Published examples must retain working immutable
-dependencies until a release containing those APIs can be used.
+Published examples must retain working immutable dependencies until a release
+containing the direct native text APIs can be used.
 
 ## Application deadline and record
 

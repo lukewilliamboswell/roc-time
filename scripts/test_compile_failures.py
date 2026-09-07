@@ -26,6 +26,8 @@ def main() -> None:
     cases = {
         "persistence_backing_codec": ["missing method", "encoder_for", "Persistence"],
         "invalid_date_literal": ["from_quote", "rejected it", "Invalid EdtfDate literal: Malformed"],
+        "invalid_gregorian_literal": ["from_quote", "rejected it", "Invalid GregorianDate literal: InvalidDay"],
+        "invalid_clock_literal": ["from_quote", "rejected it", "Invalid ClockTime literal: UnsupportedLeapSecond"],
         "read_ixdtf_snapshot": ["not a record", "Snapshot", "source field"],
         "timestamp_as_selection": ["first argument", "OffsetTimestamp", "CalendarValue"],
         "interval_evidence_as_coverage": ["first argument", "IntervalEvidence", "Coverage"],
