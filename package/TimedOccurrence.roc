@@ -2,9 +2,7 @@ import TimedRecurrence
 import CalendarPattern
 import ClockTime
 import FixedOffset
-import CalendarArithmetic
-import CalendarDelta
-import CalendarDate
+import Calendar
 import GregorianDate
 import LocalDateTime
 import PosixBoundary
@@ -30,7 +28,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	Ending : [After(Duration), AtBoundary(PosixBoundary), AtLocal(LocalEnd)]
 	LocalEnd : { source : LocalDateTime, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Duration : [Coordinate(PosixDelta), Calendar(CalendarDuration)]
-	CalendarDuration : { delta : CalendarDelta, invalid_date : CalendarArithmetic.Policy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
+	CalendarDuration : { delta : Calendar.Delta, invalid_date : Calendar.Arithmetic.Policy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })] }
 
 	## Validate the duration's component domain without interpreting an anchor.
@@ -42,7 +40,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			Err(InvalidDuration)
 		}
 		Calendar(spec) => {
-			parts = CalendarDelta.to_components(spec.delta)
+			parts = Calendar.Delta.to_components(spec.delta)
 			tail = PosixDelta.to_microseconds(spec.tail)
 			if parts.years < 0 or parts.months < 0 or parts.days < 0 or tail < 0 or (parts.years == 0 and parts.months == 0 and parts.days == 0 and tail == 0) {
 				Err(InvalidDuration)
@@ -67,7 +65,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			Ok(Ready(value))
 		}
 		Calendar(spec) => {
-			parts = CalendarDelta.to_components(spec.delta)
+			parts = Calendar.Delta.to_components(spec.delta)
 			validate_duration(duration)?
 			source = TimedRecurrence.Occurrence.source(start)
 			if parts.years == 0 and parts.months == 0 and parts.days == 0 {
@@ -83,12 +81,12 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			}
 			# TimedRecurrence constructs Gregorian sources. Conversion through
 			# the common day coordinate preserves that established invariant.
-			date = match GregorianDate.from_civil_day(CalendarDate.to_civil_day(LocalDateTime.date(source))) {
+			date = match GregorianDate.from_civil_day(Calendar.Date.to_civil_day(LocalDateTime.date(source))) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
 			}
-			shifted = CalendarArithmetic.shift_day(date, spec.delta, spec.invalid_date)?
-			end_source = LocalDateTime.new(CalendarDate.from_gregorian(shifted), LocalDateTime.clock(source))
+			shifted = Calendar.Arithmetic.shift_day(date, spec.delta, spec.invalid_date)?
+			end_source = LocalDateTime.new(Calendar.Date.from_gregorian(shifted), LocalDateTime.clock(source))
 			pending = match ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start), end_source) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
@@ -201,8 +199,8 @@ test_start = |rules, policy| test_start_at(rules, policy, GregorianDate.from_fie
 
 test_start_at = |rules, policy, date| {
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	source = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(CalendarArithmetic.shift_day(date, CalendarDelta.days(1), Reject)?), clock)
+	source = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(Calendar.Arithmetic.shift_day(date, Calendar.Delta.days(1), Reject)?), clock)
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	cursor = TimedRecurrence.cursor(rule, { start: source, end }, { rules, occurrence: policy, gap: RejectGap })?
 	batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 10, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 2 })?
@@ -243,7 +241,7 @@ expect {
 		Complete(value) => value
 		Limited(_) => crash "coordinate duration needs no zone work"
 	}
-	calendar = TimedOccurrence.cursor("calendar", start, Calendar({ delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }))?
+	calendar = TimedOccurrence.cursor("calendar", start, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }))?
 	paused = TimedOccurrence.Cursor.collect(calendar, { max_segments: 1, max_candidates: 1 })?
 	pending = match paused.status {
 		Limited(progress) => progress.cursor
@@ -262,7 +260,7 @@ expect {
 	# movement plus a tail preserves the selected start despite RequireUnique
 	# in the unused end policy, and performs no classification.
 	start = test_start(test_rules(-3600, 3600000000)?, Last)?
-	cursor = TimedOccurrence.cursor(7.U64, start, Calendar({ delta: CalendarDelta.days(0), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }))?
+	cursor = TimedOccurrence.cursor(7.U64, start, Calendar({ delta: Calendar.Delta.days(0), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }))?
 	result = TimedOccurrence.Cursor.collect(cursor, { max_segments: 0, max_candidates: 0 })?
 	match result.status {
 		Complete(value) => result.segments == 0 and PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(3600000000))
@@ -274,7 +272,7 @@ expect {
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(6000000000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 	start = test_start_at(rules, RequireUnique, GregorianDate.from_fields({ year: 1970, month: 1, day: 31 })?)?
-	spec = { delta: CalendarDelta.months(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
+	spec = { delta: Calendar.Delta.months(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
 	rejected = match TimedOccurrence.cursor("loan", start, Calendar(spec)) {
 		Err(InvalidDestination(fields)) => fields == { year: 1970, month: 2, day: 31 }
 		_ => Bool.False
@@ -293,7 +291,7 @@ expect {
 		Err(InvalidDuration) => Bool.True
 		_ => Bool.False
 	}
-	negative = match TimedOccurrence.cursor({}, start, Calendar({ delta: CalendarDelta.days(-1), invalid_date: Reject, tail: PosixDelta.from_microseconds(172800000000), occurrence: RequireUnique, gap: RejectGap })) {
+	negative = match TimedOccurrence.cursor({}, start, Calendar({ delta: Calendar.Delta.days(-1), invalid_date: Reject, tail: PosixDelta.from_microseconds(172800000000), occurrence: RequireUnique, gap: RejectGap })) {
 		Err(InvalidDuration) => Bool.True
 		_ => Bool.False
 	}
@@ -306,7 +304,7 @@ expect {
 		Err(OutOfRange) => Bool.True
 		_ => Bool.False
 	}
-	calendar_overflow = match TimedOccurrence.cursor(1.U64, start, Calendar({ delta: CalendarDelta.years(I64.highest), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })) {
+	calendar_overflow = match TimedOccurrence.cursor(1.U64, start, Calendar({ delta: Calendar.Delta.years(I64.highest), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })) {
 		Err(OutOfRange) => Bool.True
 		_ => Bool.False
 	}
@@ -315,7 +313,7 @@ expect {
 
 expect {
 	start = test_start(test_rules(0, 43200000000)?, RequireUnique)?
-	missing_end = match TimedOccurrence.cursor(1.U64, start, Calendar({ delta: CalendarDelta.days(3), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })) {
+	missing_end = match TimedOccurrence.cursor(1.U64, start, Calendar({ delta: Calendar.Delta.days(3), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })) {
 		Err(OutsideValidity) => Bool.True
 		_ => Bool.False
 	}
@@ -330,7 +328,7 @@ expect {
 
 expect {
 	start = test_start(test_rules(-3600, 90000000000)?, RequireUnique)?
-	spec = { delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
+	spec = { delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
 	strict = TimedOccurrence.cursor("fold", start, Calendar(spec))?
 	ambiguous = match TimedOccurrence.Cursor.collect(strict, { max_segments: 2, max_candidates: 2 }) {
 		Err(Ambiguous) => Bool.True
@@ -355,7 +353,7 @@ expect {
 
 expect {
 	start = test_start(test_rules(3600, 86400000000)?, RequireUnique)?
-	spec = { delta: CalendarDelta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
+	spec = { delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
 	strict = TimedOccurrence.cursor("gap", start, Calendar(spec))?
 	rejected = match TimedOccurrence.Cursor.collect(strict, { max_segments: 2, max_candidates: 1 }) {
 		Err(Gap) => Bool.True
@@ -382,7 +380,7 @@ expect {
 # width under the independent two-segment offset model used above.
 expect {
 	start = test_start(test_rules(3600, 43200000000)?, RequireUnique)?
-	source = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), ClockTime.from_microseconds_since_midnight(0)?)
+	source = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), ClockTime.from_microseconds_since_midnight(0)?)
 	ending = AtLocal({ source, occurrence: RequireUnique, gap: RejectGap })
 	cursor = TimedOccurrence.cursor_with_ending("explicit", start, ending)?
 	paused = TimedOccurrence.Cursor.collect(cursor, { max_segments: 1, max_candidates: 1 })?
@@ -452,8 +450,8 @@ expect {
 	rules = test_rules(3600, 0)?
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(1800000123)?
-	original = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(CalendarArithmetic.shift_day(date, CalendarDelta.days(1), Reject)?), clock)
+	original = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(Calendar.Arithmetic.shift_day(date, Calendar.Delta.days(1), Reject)?), clock)
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	cursor = TimedRecurrence.cursor(rule, { start: original, end }, { rules, occurrence: RequireUnique, gap: UseOffsetBeforeGap })?
 	batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 10, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 2 })?
@@ -467,7 +465,7 @@ expect {
 		Complete(value) => {
 			boundary = PosixSpan.start(TimedOccurrence.span(value))
 			projected = FixedOffset.project(FixedOffset.from_seconds(3600), boundary, Gregorian)?
-			expected_projection = LocalDateTime.new(CalendarDate.from_gregorian(date), ClockTime.from_microseconds_since_midnight(5400000123)?)
+			expected_projection = LocalDateTime.new(Calendar.Date.from_gregorian(date), ClockTime.from_microseconds_since_midnight(5400000123)?)
 			TimedOccurrence.source(value) == original and projected == expected_projection and projected != TimedOccurrence.source(value) and boundary == PosixBoundary.from_microseconds(1800000123) and TimedOccurrence.id(value) == 17
 		}
 		Limited(_) => Bool.False

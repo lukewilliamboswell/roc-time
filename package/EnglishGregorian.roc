@@ -1,5 +1,4 @@
 import Calendar
-import CalendarDate
 import GregorianDate
 import ClockTime
 import LocalDateTime
@@ -78,7 +77,7 @@ EnglishGregorian :: [].{
 	## never converted, resolved or rounded as part of presentation.
 	local_datetime : LocalDateTime, Precision -> Try(Str, Error)
 	local_datetime = |value, precision| {
-		day = CalendarDate.as_gregorian(LocalDateTime.date(value))?
+		day = Calendar.Date.as_gregorian(LocalDateTime.date(value))?
 		time = match clock(LocalDateTime.clock(value), precision) {
 			Ok(rendered) => rendered
 			Err(PrecisionLoss(requested)) => return Err(PrecisionLoss(requested))
@@ -160,7 +159,7 @@ EnglishGregorian :: [].{
 	}
 
 	expect {
-		julian = CalendarDate.from_fields(Julian, { year: 2026, month: 9, day: 7 })?
+		julian = Calendar.Date.from_fields(Julian, { year: 2026, month: 9, day: 7 })?
 		value = LocalDateTime.new(julian, ClockTime.parse("09:30:00.000001")?)
 		local_datetime(value, Exact) == Err(UnsupportedCalendar(Julian)) and
 			local_datetime(value, Minute) == Err(UnsupportedCalendar(Julian))

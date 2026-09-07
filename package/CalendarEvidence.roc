@@ -1,6 +1,5 @@
-import CalendarValue
+import Calendar
 import QualifiedCalendarValue
-import CalendarDate
 import ClockTime
 import LocalDateTime
 import ZoneRules
@@ -22,11 +21,11 @@ import PosixSpan
 ## At most 4096 input alternatives, before deduplication. Construction validates
 ## fields and exclusive civil bounds once, then sorts/deduplicates in O(n log n), without zone interpretation or
 ## enumeration. Canonical order is local position, not resolved timeline order.
-CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List({ value : CalendarValue, end : LocalDateTime }) }.{
+CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List({ value : Calendar.Value, end : LocalDateTime }) }.{
 	Truth : [Definite, Possible, Impossible]
 	profile : Str
 	profile = "finite-calendar-alternatives-v1"
-	new : QualifiedCalendarValue, List(CalendarValue) -> Try(CalendarEvidence, [InconsistentEvidence, TooManyAlternatives, CalendarMismatch(U64), ResolutionMismatch(U64), UnqualifiedComponent({ index : U64, scope : QualifiedCalendarValue.Scope }), CandidateOutOfRange(U64), ..])
+	new : QualifiedCalendarValue, List(Calendar.Value) -> Try(CalendarEvidence, [InconsistentEvidence, TooManyAlternatives, CalendarMismatch(U64), ResolutionMismatch(U64), UnqualifiedComponent({ index : U64, scope : QualifiedCalendarValue.Scope }), CandidateOutOfRange(U64), ..])
 	new = |description, alternatives| {
 		if alternatives.is_empty() {
 			return Err(InconsistentEvidence)
@@ -39,10 +38,10 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 		var $validated = []
 		var $index = 0.U64
 		for candidate in alternatives {
-			if CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(base))) != CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(candidate))) {
+			if Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(base))) != Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(candidate))) {
 				return Err(CalendarMismatch($index))
 			}
-			if CalendarValue.resolution(base) != CalendarValue.resolution(candidate) {
+			if Calendar.Value.resolution(base) != Calendar.Value.resolution(candidate) {
 				return Err(ResolutionMismatch($index))
 			}
 			if !allowed.contains(Whole) {
@@ -63,7 +62,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 					}
 				}
 			}
-			bounds = match CalendarValue.local_bounds(candidate) {
+			bounds = match LocalDateTime.calendar_value_bounds(candidate) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(CandidateOutOfRange($index))
 			}
@@ -71,7 +70,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 			$index = $index + 1
 		}
 		sorted = $validated.sort_with(
-			|a, b| match LocalDateTime.compare_position(CalendarValue.start_label(a.value), CalendarValue.start_label(b.value)) {
+			|a, b| match LocalDateTime.compare_position(LocalDateTime.from_calendar_value(a.value), LocalDateTime.from_calendar_value(b.value)) {
 				LT => Before
 				EQ => Same
 				GT => After
@@ -90,7 +89,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	description = |evidence| evidence.description
 
 	## Materialize the canonical alternatives as a caller-owned list, O(n).
-	alternatives : CalendarEvidence -> List(CalendarValue)
+	alternatives : CalendarEvidence -> List(Calendar.Value)
 	alternatives = |evidence| evidence.alternatives.map(|item| item.value)
 
 	## Is this one POSIX instant inside the unknown actual selection? Only the
@@ -103,7 +102,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	query : CalendarEvidence, ZoneRules, PosixBoundary -> Try(Query, [OutsideValidity, OutOfRange, ..])
 	query = |evidence, rules, point| {
 		offset = ZoneRules.offset_at(rules, point)?
-		calendar = CalendarDate.calendar(LocalDateTime.date(CalendarValue.start_label(QualifiedCalendarValue.described_value(evidence.description))))
+		calendar = Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(QualifiedCalendarValue.described_value(evidence.description))))
 		local = FixedOffset.project(offset, point, calendar)?
 		Ok({ evidence, rules, point, local, index: 0, yes: Bool.False, no: Bool.False })
 	}
@@ -132,7 +131,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 					Ok(value) => value
 					Err(_) => crash "Validated evidence cursor index"
 				}
-				bounds = { start: CalendarValue.start_label(candidate.value), end: candidate.end }
+				bounds = { start: LocalDateTime.from_calendar_value(candidate.value), end: candidate.end }
 				inside = LocalDateTime.compare_position(bounds.start, $state.local) != GT and LocalDateTime.compare_position($state.local, bounds.end) == LT
 				$state = { ..$state, index: $state.index + 1, yes: $state.yes or inside, no: $state.no or !inside }
 				$examined = $examined + 1
@@ -157,17 +156,17 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 }
 
 components = |value| {
-	start = CalendarValue.start_label(value)
-	{ date: CalendarDate.to_fields(LocalDateTime.date(start)), clock: ClockTime.to_fields(LocalDateTime.clock(start)) }
+	start = LocalDateTime.from_calendar_value(value)
+	{ date: Calendar.Date.to_fields(LocalDateTime.date(start)), clock: ClockTime.to_fields(LocalDateTime.clock(start)) }
 }
 
 expect {
 	# LOC EDTF Level 2 group qualification: 2004-06~-11 qualifies year/month.
 	# https://www.loc.gov/standards/datetime/ (published February 4, 2019).
 	# Candidate dates below are an explicit caller model, not a sourced tolerance.
-	base = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?)
-	alternative = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 2005, month: 7, day: 11 })?)
-	changed_day = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 2005, month: 7, day: 12 })?)
+	base = Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?)
+	alternative = Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 2005, month: 7, day: 11 })?)
+	changed_day = Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 2005, month: 7, day: 12 })?)
 	description = QualifiedCalendarValue.new(base, [{ scope: YearMonth, qualifier: Approximate }])?
 	evidence = CalendarEvidence.new(description, [alternative, base, alternative])?
 	CalendarEvidence.alternatives(evidence) == [base, alternative] and
@@ -175,29 +174,29 @@ expect {
 }
 
 expect {
-	base = CalendarValue.month(Gregorian, 2004, 6)?
+	base = Calendar.Value.month(Gregorian, 2004, 6)?
 	description = QualifiedCalendarValue.new(base, [{ scope: Month, qualifier: Approximate }])?
-	july = CalendarValue.month(Gregorian, 2004, 7)?
+	july = Calendar.Value.month(Gregorian, 2004, 7)?
 	a = CalendarEvidence.new(description, [base, july, base])?
 	b = CalendarEvidence.new(description, [july, base])?
 	a == b and CalendarEvidence.alternatives(a) == [base, july] and
 		CalendarEvidence.new(description, []) == Err(InconsistentEvidence) and
 			CalendarEvidence.new(description, List.repeat(base, 4097)) == Err(TooManyAlternatives) and
-				CalendarEvidence.new(description, [CalendarValue.month(Gregorian, 2005, 6)?]) == Err(UnqualifiedComponent({ index: 0, scope: Year })) and
-					CalendarEvidence.new(description, [CalendarValue.month(Julian, 2004, 6)?]) == Err(CalendarMismatch(0)) and
-						CalendarEvidence.new(description, [CalendarValue.year(Gregorian, 2004)?]) == Err(ResolutionMismatch(0))
+				CalendarEvidence.new(description, [Calendar.Value.month(Gregorian, 2005, 6)?]) == Err(UnqualifiedComponent({ index: 0, scope: Year })) and
+					CalendarEvidence.new(description, [Calendar.Value.month(Julian, 2004, 6)?]) == Err(CalendarMismatch(0)) and
+						CalendarEvidence.new(description, [Calendar.Value.year(Gregorian, 2004)?]) == Err(ResolutionMismatch(0))
 }
 expect {
-	base = CalendarValue.year(Gregorian, 2000)?
+	base = Calendar.Value.year(Gregorian, 2000)?
 	description = QualifiedCalendarValue.new(base, [{ scope: Whole, qualifier: Uncertain }])?
 	# The third candidate cannot be hidden by early Possible witnesses.
-	CalendarEvidence.new(description, [base, CalendarValue.year(Gregorian, 2001)?, CalendarValue.year(Gregorian, 2147483647)?]) == Err(CandidateOutOfRange(2))
+	CalendarEvidence.new(description, [base, Calendar.Value.year(Gregorian, 2001)?, Calendar.Value.year(Gregorian, 2147483647)?]) == Err(CandidateOutOfRange(2))
 }
 
 expect {
 	# Independent epoch fixtures: one of Jan 1/Jan 2 is not their certain union.
-	first = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?)
-	second = CalendarValue.day(CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?)
+	first = Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?)
+	second = Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?)
 	description = QualifiedCalendarValue.new(first, [{ scope: Day, qualifier: Uncertain }])?
 	alternatives = CalendarEvidence.new(description, [first, second])?
 	singleton = CalendarEvidence.new(description, [first])?
@@ -211,7 +210,7 @@ expect {
 	}
 }
 expect {
-	value = CalendarValue.year(Gregorian, 1970)?
+	value = Calendar.Value.year(Gregorian, 1970)?
 	description = QualifiedCalendarValue.new(value, [])?
 	evidence = CalendarEvidence.new(description, [value])?
 	match CalendarEvidence.query(evidence, test_rules()?, PosixBoundary.from_microseconds(I64.highest)) {

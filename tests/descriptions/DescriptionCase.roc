@@ -2,11 +2,10 @@ import fuzz.Fuzz
 import time.LocalDateTime
 import time.Explanation
 import time.SemanticFact
-import time.CalendarValue
+import time.Calendar
 import time.IntervalEvidence
 import time.CalendarEvidence
 import time.QualifiedCalendarValue
-import time.CalendarDate
 import time.FixedOffset
 import time.PosixBoundary
 import time.PosixSpan
@@ -15,7 +14,7 @@ import time.ZoneRules
 
 # R02/R07/R13–R14: bounded decimal grids, full-day carries and synthetic preimages.
 # The oracle uses integer grid widths and two explicitly known offset segments;
-# it neither calls CalendarValue.local_bounds nor the resolver to form expectations.
+# it neither calls LocalDateTime.calendar_value_bounds nor the resolver to form expectations.
 DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(DescriptionCase)
 	generator_for = |_| { number: Fuzz.u64_in(0, 86399999999), digits: Fuzz.u8_in(1, 6), gap: Fuzz.map(Fuzz.u8_in(0, 1), |n| n == 1) }.Fuzz
@@ -36,30 +35,30 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			$index = $index + 1
 		}
 		fraction = (I64.mod_by(number, 1000000) // $width).to_u32_wrap()
-		value = match CalendarValue.fractional_second(date, { hour: h, minute: m, second: s }, { value: fraction, digits: input.digits }) {
+		value = match Calendar.Value.fractional_second(date, { hour: h, minute: m, second: s }, { value: fraction, digits: input.digits }) {
 			Ok(found) => found
 			Err(_) => crash "Valid decimal grid rejected"
 		}
 		check_calendar_description(input, h, m, s, fraction)
 		start = (number // $width) * $width
 		check_bounds(value, start, $width)
-		hour = match CalendarValue.hour(date, h) {
+		hour = match Calendar.Value.hour(date, h) {
 			Ok(found) => found
 			Err(_) => crash "Valid hour"
 		}
-		minute = match CalendarValue.minute(date, h, m) {
+		minute = match Calendar.Value.minute(date, h, m) {
 			Ok(found) => found
 			Err(_) => crash "Valid minute"
 		}
-		second = match CalendarValue.second(date, h, m, s) {
+		second = match Calendar.Value.second(date, h, m, s) {
 			Ok(found) => found
 			Err(_) => crash "Valid second"
 		}
 		check_bounds(hour, (number // 3600000000) * 3600000000, 3600000000)
 		check_bounds(minute, (number // 60000000) * 60000000, 60000000)
 		check_bounds(second, (number // 1000000) * 1000000, 1000000)
-		check_bounds(CalendarValue.day(date), 0, 86400000000)
-		if CalendarValue.resolution(value) != Fraction(input.digits) or CalendarValue.resolution(second) != Second {
+		check_bounds(Calendar.Value.day(date), 0, 86400000000)
+		if Calendar.Value.resolution(value) != Fraction(input.digits) or Calendar.Value.resolution(second) != Second {
 			crash "Description lost resolution"
 		}
 		# Two-second jump around the entire decimal cell. A fold has exactly
@@ -123,7 +122,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 }
 
 check_bounds = |value, start, width| {
-	bounds = match CalendarValue.local_bounds(value) {
+	bounds = match LocalDateTime.calendar_value_bounds(value) {
 		Ok(found) => found
 		Err(_) => crash "Valid civil bounds"
 	}
@@ -140,7 +139,7 @@ span = |start, end| match PosixSpan.new(point(start), point(end)) {
 	Err(_) => crash "Nonempty oracle span"
 }
 
-epoch_date = |_digits| CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })
+epoch_date = |_digits| Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })
 
 # Independent set model: qualifier order is irrelevant, but scopes and flags
 # remain distinct. Every listed fractional component exists; seconds were not
@@ -261,8 +260,8 @@ check_group_evidence = |number| {
 	}
 }
 
-group_day = |year, month, day| match CalendarDate.from_fields(Gregorian, { year, month, day }) {
-	Ok(date) => CalendarValue.day(date)
+group_day = |year, month, day| match Calendar.Date.from_fields(Gregorian, { year, month, day }) {
+	Ok(date) => Calendar.Value.day(date)
 	Err(_) => crash "Generated interior day is valid"
 }
 
@@ -288,7 +287,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 			chosen = minute_start + chosen_second * 1000000 + fraction
 			h = (chosen // 3600000000).to_u8_wrap()
 			m = I64.mod_by(chosen // 60000000, 60).to_u8_wrap()
-			candidate = match CalendarValue.fractional_second(date, { hour: h, minute: m, second: chosen_second.to_u8_wrap() }, { value: (fraction // width).to_u32_wrap(), digits: input.digits }) {
+			candidate = match Calendar.Value.fractional_second(date, { hour: h, minute: m, second: chosen_second.to_u8_wrap() }, { value: (fraction // width).to_u32_wrap(), digits: input.digits }) {
 				Ok(found) => found
 				Err(_) => crash "Valid evidence candidate"
 			}
@@ -472,13 +471,13 @@ check_interval_truth = |evidence, intervals, points| {
 # ordered qualification scopes remain observable without coordinate lowering.
 check_calendar_description = |input, h, m, s, fraction| {
 	for calendar in [Gregorian, Julian] {
-		date = CalendarDate.from_fields(calendar, { year: 1970, month: 1, day: 1 }) ?? crash "valid description date"
-		fractional = CalendarValue.fractional_second(date, { hour: h, minute: m, second: s }, { digits: input.digits, value: fraction }) ?? crash "valid fractional description"
+		date = Calendar.Date.from_fields(calendar, { year: 1970, month: 1, day: 1 }) ?? crash "valid description date"
+		fractional = Calendar.Value.fractional_second(date, { hour: h, minute: m, second: s }, { digits: input.digits, value: fraction }) ?? crash "valid fractional description"
 		check_explanation(fractional, calendar, input, h, m, s, fraction)
 		for limit in [-2147483648.I64, 2147483647] {
-			value = CalendarValue.year(calendar, limit) ?? crash "provider year limit rejected"
-			label = LocalDateTime.date(CalendarValue.start_label(value))
-			if CalendarDate.calendar(label) != calendar or CalendarDate.to_fields(label).year != limit or CalendarValue.resolution(value) != Year {
+			value = Calendar.Value.year(calendar, limit) ?? crash "provider year limit rejected"
+			label = LocalDateTime.date(LocalDateTime.from_calendar_value(value))
+			if Calendar.Date.calendar(label) != calendar or Calendar.Date.to_fields(label).year != limit or Calendar.Value.resolution(value) != Year {
 				crash "native provider limit lost identity or resolution"
 			}
 		}
@@ -508,7 +507,7 @@ check_calendar_description = |input, h, m, s, fraction| {
 			Err(DuplicateScope(Whole)) => {}
 			_ => crash "duplicate native qualification accepted"
 		}
-		year = CalendarValue.year(calendar, 1970) ?? crash "valid year"
+		year = Calendar.Value.year(calendar, 1970) ?? crash "valid year"
 		match QualifiedCalendarValue.new(year, [{ scope: Day, qualifier: Uncertain }]) {
 			Err(UnsuppliedComponent(Day)) => {}
 			_ => crash "qualification invented unsupplied day"
@@ -526,7 +525,7 @@ check_explanation = |value, calendar, input, h, m, s, fraction| {
 		$width = $width * 10
 		$remaining = $remaining - 1
 	}
-	first = match CalendarValue.fact_at(value, 0) {
+	first = match SemanticFact.calendar_value_fact_at(value, 0) {
 		Item(fact) => SemanticFact.kind(fact)
 		End => crash "Calendar explanation omitted its source"
 	}

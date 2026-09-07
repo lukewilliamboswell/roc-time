@@ -4,7 +4,7 @@ import time.TimedSchedule
 import time.TimedOccurrence
 import time.TimedRecurrence
 import time.LocalDateTime
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.PosixSpan
 import time.PosixDelta
@@ -148,7 +148,7 @@ observe_timed = |input| {
 		}
 		for value in batch.occurrences {
 			source = TimedOccurrence.source(value)
-			fields = CalendarDate.to_fields(LocalDateTime.date(source))
+			fields = Calendar.Date.to_fields(LocalDateTime.date(source))
 			if ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(source)) != 0 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(86400000000)) {
 				crash "Timed midnight lifting changed clock or width"
 			}

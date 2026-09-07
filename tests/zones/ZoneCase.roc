@@ -1,6 +1,6 @@
 import fuzz.Fuzz
 import time.AllDayOccurrence
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.Coverage
 import time.FixedOffset
@@ -25,7 +25,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		} else {
 			{ year: 1970.I64, month: 1.U8, day: 1.U8 }
 		}
-		date = match CalendarDate.from_fields(Gregorian, date_fields) {
+		date = match Calendar.Date.from_fields(Gregorian, date_fields) {
 			Ok(value) => value
 			Err(_) => crash "fixture date rejected"
 		}
@@ -170,7 +170,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		} else {
 			{ year: 1970.I64, month: 1.U8, day: 1.U8 }
 		}
-		end_date = match CalendarDate.from_fields(Gregorian, end_fields) {
+		end_date = match Calendar.Date.from_fields(Gregorian, end_fields) {
 			Ok(value) => value
 			Err(_) => crash "fixture end date rejected"
 		}
@@ -239,7 +239,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					Ok(value) => value
 					Err(_) => crash "valid generated projection rejected"
 				}
-				fields = CalendarDate.to_fields(LocalDateTime.date(projected.local))
+				fields = Calendar.Date.to_fields(LocalDateTime.date(projected.local))
 				expected_day = if label < 0 {
 					31
 				} else {
@@ -318,7 +318,7 @@ make_rules = |first, second, lower, upper| match ZoneRules.from_database({
 	Err(_) => crash "fixture database import rejected"
 }
 
-epoch_date = |year| match CalendarDate.from_fields(Gregorian, { year, month: 1, day: 1 }) {
+epoch_date = |year| match Calendar.Date.from_fields(Gregorian, { year, month: 1, day: 1 }) {
 	Ok(value) => value
 	Err(_) => crash "epoch fixture"
 }

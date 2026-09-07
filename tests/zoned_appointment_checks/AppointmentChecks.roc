@@ -1,9 +1,7 @@
 import zones.Database
 import time.ZoneRules
 import time.LocalDateTime
-import time.CalendarDate
-import time.CalendarArithmetic
-import time.CalendarDelta
+import time.Calendar
 import time.PosixBoundary
 import time.PosixDelta
 import time.PosixSpan
@@ -21,9 +19,9 @@ AppointmentChecks :: [].{
 			{ text: "2026-10-24T09:30", next: "2026-10-25T09:30:00", first: 1792827000000000, second: 1792917000000000, width: 90000000000, ny_first: "2026-10-24T03:30:00", ny_second: "2026-10-25T04:30:00" },
 		] {
 			local = parse_fixture(fixture.text)
-			date = CalendarDate.as_gregorian(LocalDateTime.date(local))?
-			next_date = CalendarArithmetic.shift_day(date, CalendarDelta.days(1), Reject)?
-			next = LocalDateTime.new(CalendarDate.from_gregorian(next_date), LocalDateTime.clock(local))
+			date = Calendar.Date.as_gregorian(LocalDateTime.date(local))?
+			next_date = Calendar.Arithmetic.shift_day(date, Calendar.Delta.days(1), Reject)?
+			next = LocalDateTime.new(Calendar.Date.from_gregorian(next_date), LocalDateTime.clock(local))
 			if LocalDateTime.to_gregorian_text(next) != Ok(fixture.next) {
 				crash "calendar day drift"
 			}

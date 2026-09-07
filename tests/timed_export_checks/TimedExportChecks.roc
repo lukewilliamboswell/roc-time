@@ -9,7 +9,7 @@ import time.ZoneRules
 import time.FixedOffset
 import time.LocalDateTime
 import time.GregorianDate
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.ICalDuration
 import time.ScheduleDefinition
@@ -122,20 +122,20 @@ native = |name| {
 			32400000000
 		},
 	) ?? crash "Native clock"
-	anchor = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	anchor = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	var $exceptions = []
 	if name == "native-size" {
 		var $second = 0.I64
 		while $second < 4096 {
 			item_clock = ClockTime.from_microseconds_since_midnight($second * 1000000) ?? crash "Exception clock"
-			$exceptions = $exceptions.append(LocalDateTime.new(CalendarDate.from_gregorian(date), item_clock))
+			$exceptions = $exceptions.append(LocalDateTime.new(Calendar.Date.from_gregorian(date), item_clock))
 			$second = $second + 1
 		}
 	} else if name == "native-rdate-fraction" or name == "native-exdate-fraction" {
 		item_clock = ClockTime.from_microseconds_since_midnight(1) ?? crash "Fractional exception clock"
-		$exceptions = [LocalDateTime.new(CalendarDate.from_gregorian(date), item_clock)]
+		$exceptions = [LocalDateTime.new(Calendar.Date.from_gregorian(date), item_clock)]
 	} else if name == "native-julian-exdate" {
-		julian = CalendarDate.from_fields(Julian, { year: 1969, month: 12, day: 19 }) ?? crash "Julian fixture"
+		julian = Calendar.Date.from_fields(Julian, { year: 1969, month: 12, day: 19 }) ?? crash "Julian fixture"
 		julian_label = LocalDateTime.new(julian, clock)
 		if !LocalDateTime.same_position(julian_label, anchor) or julian_label == anchor {
 			crash "Julian fixture distinction"

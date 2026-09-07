@@ -6,7 +6,7 @@ import time.DateRecurrence
 import time.TimedRecurrence
 import time.ICalTimedRule
 import time.GregorianDate
-import time.CalendarDate
+import time.Calendar
 import time.LocalDateTime
 import time.CivilDay
 import time.ClockTime
@@ -55,7 +55,7 @@ main! = |args| {
 				match SemanticFact.kind(fact) {
 					RecurrenceException(data) => data.kind == Inclusion and (match data.source {
 						Date(date) => CivilDay.to_day_number(GregorianDate.to_civil_day(date)) == count.to_i64() - 1
-						Local(local) => CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(local))) == count.to_i64() - 1
+						Local(local) => CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(local))) == count.to_i64() - 1
 					})
 					_ => False
 				},

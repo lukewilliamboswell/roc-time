@@ -2,7 +2,7 @@ import FixedOffset
 import PosixBoundary
 import PosixDelta
 import PosixSpan
-import CalendarDate
+import Calendar
 import CivilDay
 import ClockTime
 import Coverage
@@ -13,21 +13,21 @@ import ZoneRules
 ## An identified civil-day selection, including occurrences with empty coverage.
 ## Pair an application series ID with the original date for recurrence identity.
 ## Duration counts civil days, never fixed 24-hour elapsed quantities.
-AllDayOccurrence(id) :: { id : id, date : CalendarDate, days : U64, selection : ResolvedSelection }.{
+AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection : ResolvedSelection }.{
 
 	## Constant calendar work; zone interpretation is deferred to the cursor.
 	## Both the source and exclusive end must fit the source calendar and rules.
-	cursor : id, CalendarDate, U64, ZoneRules -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, ..])
+	cursor : id, Calendar.Date, U64, ZoneRules -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, ..])
 	cursor = |id, date, days, rules| {
 		if days == 0 {
 			return Err(InvalidDuration)
 		}
-		start_number = CivilDay.to_day_number(CalendarDate.to_civil_day(date))
+		start_number = CivilDay.to_day_number(Calendar.Date.to_civil_day(date))
 		end_number = match I128.to_i64_try(start_number.to_i128() + days.to_i128()) {
 			Ok(value) => value
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
-		end = match CalendarDate.from_civil_day(CalendarDate.calendar(date), CivilDay.from_day_number(end_number)) {
+		end = match Calendar.Date.from_civil_day(Calendar.Date.calendar(date), CivilDay.from_day_number(end_number)) {
 			Ok(value) => value
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
@@ -47,7 +47,7 @@ AllDayOccurrence(id) :: { id : id, date : CalendarDate, days : U64, selection : 
 		buffered : U64,
 		status : [Complete(AllDayOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })],
 	}
-	Cursor(id) :: { id : id, date : CalendarDate, days : U64, pending : ZoneRules.SelectionCursor }.{
+	Cursor(id) :: { id : id, date : Calendar.Date, days : U64, pending : ZoneRules.SelectionCursor }.{
 		collect : Cursor(id), ZoneRules.SelectionLimits -> Try(Batch(id), [OutOfRange, ..])
 		collect = |state, limits| {
 			batch = ResolvedSelection.collect(state.pending, limits)?
@@ -62,7 +62,7 @@ AllDayOccurrence(id) :: { id : id, date : CalendarDate, days : U64, selection : 
 	}
 	id : AllDayOccurrence(id) -> id
 	id = |occurrence| occurrence.id
-	date : AllDayOccurrence(id) -> CalendarDate
+	date : AllDayOccurrence(id) -> Calendar.Date
 	date = |occurrence| occurrence.date
 	days : AllDayOccurrence(id) -> U64
 	days = |occurrence| occurrence.days
@@ -81,7 +81,7 @@ midnight_clock = |number| match ClockTime.from_microseconds_since_midnight(numbe
 
 test_alldayoccurrence_point = PosixBoundary.from_microseconds
 
-test_alldayoccurrence_day = |number| CalendarDate.from_fields(Gregorian, { year: 1970, month: 1, day: number })
+test_alldayoccurrence_day = |number| Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: number })
 
 # Independent constant-offset segment arithmetic: changing at epoch+2h makes
 # the first civil date 23h, 25h, or unchanged. A +24h jump at epoch skips it.
@@ -132,7 +132,7 @@ expect {
 		Err(OutsideValidity) => True
 		_ => False
 	}
-	julian = CalendarDate.in_calendar(date, Julian)?
+	julian = Calendar.Date.in_calendar(date, Julian)?
 	initial = AllDayOccurrence.cursor("two-test_alldayoccurrence_day-visit", julian, 2, rules)?
 	limited = AllDayOccurrence.Cursor.collect(initial, { max_segments: 0, max_members: 1 })?
 	resumed = match limited.status {

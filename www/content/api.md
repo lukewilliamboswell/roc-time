@@ -23,10 +23,16 @@ Convert to a `PosixBoundary` when you need timeline computation.
 
 ## Calendar meaning and interpretation
 
-For invoice dates, start with `GregorianDate` and use `CalendarArithmetic` when
+Import `Calendar` for its related types: `Calendar.Date` is a validated civil
+date, `Calendar.Delta` is a calendar displacement, and `Calendar.Value` preserves
+supplied resolution. These remain distinct types with their own constructors and
+operations. A month description cannot accidentally become a month displacement.
+`Calendar.Arithmetic` applies calendar components with an explicit destination policy.
+
+For invoice dates, start with `GregorianDate` and use `Calendar.Arithmetic` when
 advancing a month. Choose the invalid-date policy explicitly: January 31 with
 clamping and January 31 with rejection answer different business questions.
-Use `CalendarValue` when supplied precision, such as a whole month, is part of
+Use `Calendar.Value` when supplied precision, such as a whole month, is part of
 the meaning rather than an exact date.
 
 A `LocalDateTime` is a label awaiting interpretation. Use `FixedOffset` for a
@@ -36,9 +42,9 @@ its timeline coverage can be empty or disconnected.
 
 | Task | Modules |
 | --- | --- |
-| Construct and convert civil dates | `GregorianDate`, `JulianDate`, `CalendarDate` |
-| Preserve supplied precision | `CalendarValue`, `QualifiedCalendarValue` |
-| Advance with an explicit calendar policy | `CalendarArithmetic`, `CalendarDelta` |
+| Construct and convert civil dates | `GregorianDate`, `JulianDate`, `Calendar.Date` |
+| Preserve supplied precision | `Calendar.Value`, `QualifiedCalendarValue` |
+| Advance with an explicit calendar policy | `Calendar.Arithmetic`, `Calendar.Delta` |
 | Express clock labels and resolve them | `ClockTime`, `LocalDateTime`, `FixedOffset`, `ZoneRules` |
 
 ## Recurrence, import and storage
@@ -52,6 +58,12 @@ complete list of appointments. See [scheduling](schedules.md) for the query mode
 Start with `DateRecurrence` for date-only rules. The lower-level patterns and
 `TimedRecurrence` are useful when composing selectors or working with starts
 without appointment endings; ordinary scheduling need not begin there.
+
+For advanced construction, `TimedSchedule.Endings` validates reusable ending
+definitions before queries. The iCalendar adapters' `prepare` operations and
+`TimedSchedule.from_prepared` expose this path explicitly. Prepared execution
+inputs are not a storage format; use `ScheduleDefinition` when retaining the
+original declaration and its interpretation context matters.
 
 | Task | Modules |
 | --- | --- |

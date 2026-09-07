@@ -346,7 +346,7 @@ forward progress.
 [structural_duration_hash](tests/compiler_repro/structural_duration_hash/README.md)
 isolates a compiler crash when deriving a structural hash key containing a
 nominal duration tail. Its scalar control checks and executes in interpreter,
-dev and speed modes. `ScheduleEndings` hashes the complete declaration fields
+dev and speed modes. `TimedSchedule.Endings` hashes the complete declaration fields
 explicitly; the schedule definition checks exercise dictionary lookup for
 checked native definitions. Recheck
 the failing root and its control when upgrading the compiler.

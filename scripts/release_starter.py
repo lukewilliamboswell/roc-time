@@ -166,7 +166,7 @@ class BumpSummaryTests(unittest.TestCase):
 class PromotionTests(unittest.TestCase):
     def test_release_copy_preserves_staged_sources_and_binds_roles(self):
         import shutil
-        from promote_examples import PROMOTED, ZONE_STARTERS, promote
+        from promote_examples import PROMOTED, PROMOTION_SOURCES, ZONE_STARTERS, application_source, promote
         from roc_version import package_pin, read_pin, replace_pin
         with tempfile.TemporaryDirectory(dir=ROOT / ".roc-time-tmp") as directory:
             root = Path(directory)
@@ -174,11 +174,11 @@ class PromotionTests(unittest.TestCase):
                 (root / role).mkdir(parents=True)
                 shutil.copyfile(ROOT / role / "main.roc", root / role / "main.roc")
             for name in PROMOTED:
-                shutil.copytree(ROOT / "tests" / name, root / "tests" / name)
-            staged_main = root / "tests" / PROMOTED[0] / "main.roc"
+                shutil.copytree(ROOT / "tests" / PROMOTION_SOURCES[name], root / "tests" / PROMOTION_SOURCES[name])
+            staged_main = root / "tests" / PROMOTION_SOURCES[PROMOTED[0]] / "main.roc"
             other_pin = "nightly-2026-09-05-b195f5b" if package_pin(ROOT) != "nightly-2026-09-05-b195f5b" else "nightly-2026-09-06-d85e877"
             staged_main.write_text(replace_pin(staged_main.read_text(), other_pin))
-            nested = root / "tests" / PROMOTED[0] / "nested" / "Data.roc"
+            nested = root / "tests" / PROMOTION_SOURCES[PROMOTED[0]] / "nested" / "Data.roc"
             nested.parent.mkdir()
             nested.write_text("Data :: []\n")
             original = {p: p.read_bytes() for p in (root / "tests").rglob("*.roc")}
@@ -186,8 +186,22 @@ class PromotionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "compiler"):
                 promote(root, "wrong", core, zones)
             self.assertFalse((root / "examples").exists())
+            # Old public apps retain immutable URLs until explicit promotion.
+            for name in ("invoice", "staffing"):
+                shutil.copytree(ROOT / "examples" / name, root / "examples" / name)
+                self.assertEqual(application_source(root, name), root / "tests" / PROMOTION_SOURCES[name])
+            stale = root / "examples/invoice/Obsolete.roc"
+            stale.write_text("Obsolete :: []\n")
+            companion_note = root / "examples/invoice/README.md"
+            companion_note.write_text("Application-specific guidance\n")
+            published_before = {p: p.read_bytes() for p in (root / "examples").rglob("*.roc")}
+            self.assertTrue(all(b"https://github.com/" in value for path, value in published_before.items() if path.name == "main.roc"))
             paths = promote(root, package_pin(ROOT), core, zones)
-            self.assertEqual(len(paths), 5)
+            self.assertFalse(stale.exists())
+            self.assertEqual(companion_note.read_text(), "Application-specific guidance\n")
+            self.assertEqual(starter_kit.STARTERS.count("staffing"), 1)
+            self.assertIn("upcoming_meetings", starter_kit.STARTERS)
+            self.assertEqual(len(paths), len(PROMOTED))
             for path in paths:
                 self.assertEqual(read_pin(path), package_pin(ROOT))
                 self.assertIn(core, path.read_text())
@@ -196,7 +210,7 @@ class PromotionTests(unittest.TestCase):
             self.assertEqual(original, {p: p.read_bytes() for p in original})
             before = {p: p.read_bytes() for p in (root / "examples").rglob("*.roc")}
             promote(root, package_pin(ROOT), core, zones)
-            self.assertEqual(before, {p: p.read_bytes() for p in before})
+            self.assertEqual(before, {p: p.read_bytes() for p in (root / "examples").rglob("*.roc")})
 
 
 class StarterReleaseTests(unittest.TestCase):

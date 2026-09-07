@@ -1,5 +1,5 @@
 import CalendarPattern
-import CalendarDate
+import Calendar
 import GregorianDate
 import CivilDay
 import ClockTime
@@ -83,7 +83,7 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 			Ok(value) => value
 			Err(_) => crash "subdaily clock remainder"
 		}
-		Ok({ date, start_index: lower_bound(pattern.clocks, start_microsecond), end_index: lower_bound(pattern.clocks, end_microsecond), end: LocalDateTime.new(CalendarDate.from_gregorian(end_date), end_clock) })
+		Ok({ date, start_index: lower_bound(pattern.clocks, start_microsecond), end_index: lower_bound(pattern.clocks, end_microsecond), end: LocalDateTime.new(Calendar.Date.from_gregorian(end_date), end_clock) })
 	}
 
 	## Compare the next whole-period start without requiring that far-future
@@ -92,7 +92,7 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 	starts_before = |pattern, index, boundary| {
 		start = pattern.anchor_second + index.to_i128() * pattern.interval * pattern.unit
 		micros = ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(boundary))
-		second = CivilDay.to_day_number(CalendarDate.to_civil_day(LocalDateTime.date(boundary))).to_i128() * 86400 + I64.div_trunc_by(micros, 1000000).to_i128()
+		second = CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(boundary))).to_i128() * 86400 + I64.div_trunc_by(micros, 1000000).to_i128()
 		start < second or (start == second and I64.rem_by(micros, 1000000) > 0)
 	}
 
@@ -174,7 +174,7 @@ expect {
 	date = GregorianDate.from_fields({ year: 2147483647, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
 	pattern = SubdailyPattern.new({ date, clock }, { frequency: Hourly, interval: 2147483647, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } })?
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 2147483647, month: 1, day: 2 })?), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 2147483647, month: 1, day: 2 })?), clock)
 	!SubdailyPattern.starts_before(pattern, 1, end) and match SubdailyPattern.period(pattern, 1) {
 		Err(OutOfRange) => Bool.True
 		_ => Bool.False

@@ -1,3 +1,6 @@
+import CivilDay
+import SemanticFact
+import ClockTime
 import Coverage
 import Calendar
 import FixedOffset
@@ -25,7 +28,7 @@ import PosixSpan
 ## import time.PosixSpan
 ## import time.PosixBoundary
 ## import time.GregorianDate
-## import time.CalendarDate
+## import time.Calendar.Date
 ## import time.ClockTime
 ## import time.LocalDateTime
 ##
@@ -38,7 +41,7 @@ import PosixSpan
 ##     )?
 ##     date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 ##     clock = ClockTime.from_microseconds_since_midnight(0)?
-##     local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+##     local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 ##     resolved = ZoneRules.resolve_occurrence(rules, local, RequireUnique)
 ##     resolved == Ok(PosixBoundary.from_microseconds(0))
 ## }
@@ -56,6 +59,16 @@ ZoneRules :: {
 	provenance : Provenance,
 	transitions : List(Transition),
 }.{
+
+	## Resolve a complete calendar selection through the shared bounded cursor.
+	## Construction does not scan transitions; collect applies explicit limits.
+	## Fold components remain disconnected and gaps may contribute no coverage.
+	calendar_selection_cursor : ZoneRules, Calendar.Value -> Try(SelectionCursor, [OutOfRange, EmptySelection, ReversedSelection, OutsideValidity, ..])
+	calendar_selection_cursor = |rules, value| {
+		bounds = LocalDateTime.calendar_value_bounds(value)?
+		selection_cursor(rules, bounds.start, bounds.end)
+	}
+
 	Database : {
 		schema : U16,
 		axis : Str,
@@ -840,4 +853,78 @@ expect {
 			julian.local != last.local and LocalDateTime.same_position(julian.local, last.local) and
 				ZoneRules.project(rules, PosixBoundary.from_microseconds(3600000000), Gregorian) == Err(OutsideValidity) and
 					ZoneRules.project(rules, PosixBoundary.from_microseconds(-3600000001), Gregorian) == Err(OutsideValidity)
+}
+
+expect {
+	date = Calendar.Date.from_fields(Gregorian, { year: 2024, month: 2, day: 29 })?
+	minute = Calendar.Value.minute(date, 12, 30)?
+	second = Calendar.Value.second(date, 12, 30, 0)?
+	a = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 12, digits: 2 })?
+	b = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 120, digits: 3 })?
+	minute != second and a != b and LocalDateTime.from_calendar_value(minute) == LocalDateTime.from_calendar_value(second) and
+		LocalDateTime.from_calendar_value(a) == LocalDateTime.from_calendar_value(b) and
+			LocalDateTime.calendar_value_bounds(a)?.end != LocalDateTime.calendar_value_bounds(b)?.end
+}
+expect {
+	# Independent calendar fact: Gregorian 1900 is common, Julian 1900 leap.
+	gregorian = LocalDateTime.calendar_value_bounds(Calendar.Value.month(Gregorian, 1900, 2)?)?
+	julian = LocalDateTime.calendar_value_bounds(Calendar.Value.month(Julian, 1900, 2)?)?
+	calendar_value_test_days(gregorian) == 28 and calendar_value_test_days(julian) == 29
+}
+expect {
+	last = Calendar.Date.from_fields(Gregorian, { year: 2147483647, month: 12, day: 31 })?
+	tiny = Calendar.Value.fractional_second(last, { hour: 23, minute: 59, second: 59 }, { value: 999999, digits: 6 })?
+	LocalDateTime.calendar_value_bounds(tiny) == Err(OutOfRange) and
+		LocalDateTime.calendar_value_bounds(Calendar.Value.year(Gregorian, 2147483647)?) == Err(OutOfRange) and
+			LocalDateTime.calendar_value_bounds(Calendar.Value.month(Gregorian, 2147483647, 12)?) == Err(OutOfRange)
+}
+expect {
+	date = Calendar.Date.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?
+	fields = { hour: 0, minute: 0, second: 0 }
+	Calendar.Value.fractional_second(date, fields, { value: 1200000, digits: 7 }) == Err(UnsupportedPrecision) and
+		Calendar.Value.fractional_second(date, fields, { value: 0, digits: 0 }) == Err(InvalidFraction) and
+			Calendar.Value.fractional_second(date, fields, { value: 100, digits: 2 }) == Err(InvalidFraction) and
+				Calendar.Value.minute(date, 24, 0) == Err(InvalidHour) and
+					Calendar.Value.second(date, 23, 59, 60) == Err(UnsupportedLeapSecond) and
+						Calendar.Value.month(Gregorian, 2024, 13) == Err(InvalidMonth) and
+							Calendar.Value.year(Gregorian, I64.highest) == Err(OutOfRange)
+}
+calendar_value_test_days = |bounds| CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(bounds.end))) - CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(bounds.start)))
+
+expect {
+	date = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
+	value = Calendar.Value.fractional_second(date, { hour: 0, minute: 0, second: 0 }, { value: 12, digits: 2 })?
+	rules = ZoneRules.new_bounded("Synthetic/FractionFold", "v1", calendar_value_test_span(-4000000, 4000000)?, FixedOffset.from_seconds(2), [{ at: PosixBoundary.from_microseconds(-1000000), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 2 })?
+	cursor = ZoneRules.calendar_selection_cursor(rules, value)?
+	batch = ZoneRules.SelectionCursor.collect(cursor, { max_segments: 2, max_members: 2 })?
+	match batch.status {
+		Complete(coverage) => coverage == Coverage.from_spans([calendar_value_test_span(-1880000, -1870000)?, calendar_value_test_span(120000, 130000)?])
+		Limited(_) => False
+	}
+}
+expect {
+	zero = FixedOffset.from_seconds(0)
+	last = FixedOffset.project(zero, PosixBoundary.from_microseconds(I64.highest), Gregorian)?
+	fields = ClockTime.to_fields(LocalDateTime.clock(last))
+	value = Calendar.Value.fractional_second(LocalDateTime.date(last), { hour: fields.hour, minute: fields.minute, second: fields.second }, { value: fields.microsecond, digits: 6 })?
+	rules = ZoneRules.new_bounded("UTC", "v1", calendar_value_test_span(I64.lowest, I64.highest)?, zero, [], { minimum: 0, maximum: 0 })?
+	# The civil successor fits, but its POSIX upper boundary does not.
+	_ = LocalDateTime.calendar_value_bounds(value)?
+	match ZoneRules.calendar_selection_cursor(rules, value) {
+		Err(OutOfRange) => True
+		_ => False
+	}
+}
+calendar_value_test_span = |start, end| PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end))
+
+expect {
+	date = Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
+	minute = Calendar.Value.minute(date, 12, 30)?
+	second = Calendar.Value.second(date, 12, 30, 0)?
+	short = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { digits: 2, value: 12 })?
+	long = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { digits: 3, value: 120 })?
+	SemanticFact.calendar_value_fact_at(minute, 0) != SemanticFact.calendar_value_fact_at(second, 0) and
+		SemanticFact.calendar_value_fact_at(short, 0) != SemanticFact.calendar_value_fact_at(long, 0) and
+			Str.inspect(short).contains(".12,") and Str.inspect(long).contains(".120,") and
+				SemanticFact.calendar_value_fact_count(minute) == 2 and SemanticFact.calendar_value_fact_at(minute, 2) == End and SemanticFact.calendar_value_fact_at(minute, U64.highest) == End
 }

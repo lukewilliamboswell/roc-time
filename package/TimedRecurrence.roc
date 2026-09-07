@@ -1,6 +1,5 @@
 import SemanticFact
 import RecurrenceFacts
-import CalendarDate
 import Calendar
 import CalendarPattern
 import SubdailyPattern
@@ -68,7 +67,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if value.inclusions.len() > 4096 or value.boundary_exclusions.len() > 4096 or value.exclusions.len() > 4096 - value.boundary_exclusions.len() {
 			return Err(TooManySelectors)
 		}
-		date = CalendarDate.as_gregorian(LocalDateTime.date(value.anchor))?
+		date = Calendar.Date.as_gregorian(LocalDateTime.date(value.anchor))?
 		start = { date, clock: LocalDateTime.clock(value.anchor) }
 		base = match value.pattern {
 			Calendar(calendar) => new(start, { calendar, clocks: value.clocks, termination: value.termination, by_set_pos: value.by_set_pos })?
@@ -76,13 +75,13 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		}
 		var $starts = []
 		for label in value.inclusions {
-			$starts = $starts.append({ date: CalendarDate.as_gregorian(LocalDateTime.date(label))?, clock: LocalDateTime.clock(label) })
+			$starts = $starts.append({ date: Calendar.Date.as_gregorian(LocalDateTime.date(label))?, clock: LocalDateTime.clock(label) })
 		}
 		with_boundary_exclusions(with_exclusions(with_inclusions(base, $starts)?, value.exclusions)?, value.boundary_exclusions)
 	}
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new = |start, spec| {
-		anchor = LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock)
+		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
 		validate_options(anchor, spec.termination, spec.by_set_pos)?
 		calendar = CalendarPattern.new(start.date, spec.calendar)?
 		clocks = ClockPattern.new(start.clock, spec.clocks)?
@@ -94,7 +93,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	SubdailySpec : { pattern : SubdailyPattern.Spec, termination : Termination, by_set_pos : List(I16) }
 	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new_subdaily = |start, spec| {
-		anchor = LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock)
+		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
 		validate_options(anchor, spec.termination, spec.by_set_pos)?
 		pattern = SubdailyPattern.new(start, spec.pattern)?
 		_ = SubdailyPattern.period(pattern, 0)?
@@ -142,7 +141,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if starts.len() > 4096 {
 			return Err(TooManySelectors)
 		}
-		labels = starts.map(|start| LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock))
+		labels = starts.map(|start| LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock))
 		Ok({ ..rule, inclusions: sorted_positions(labels) })
 	}
 
@@ -154,7 +153,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if starts.len() > 4096 - rule.inclusions.len() {
 			return Err(TooManySelectors)
 		}
-		labels = starts.map(|start| LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock))
+		labels = starts.map(|start| LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock))
 		Ok({ ..rule, inclusions: sorted_positions(rule.inclusions.concat(labels)) })
 	}
 
@@ -467,7 +466,7 @@ day_number = |date| CivilDay.to_day_number(GregorianDate.to_civil_day(date))
 
 local_at = |day, clock| {
 	date = GregorianDate.from_civil_day(CivilDay.from_day_number(day))?
-	Ok(LocalDateTime.new(CalendarDate.from_gregorian(date), clock))
+	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
 }
 
 clock_at = |pattern, index| match ClockPattern.at(pattern, index) {
@@ -538,8 +537,8 @@ next_day = |state| { ..state, day: state.day + 1, day_selected: Unknown, clock_i
 test_stopping_boundary = |termination, end_microseconds| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(date), ClockTime.from_microseconds_since_midnight(end_microseconds)?)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(date), ClockTime.from_microseconds_since_midnight(end_microseconds)?)
 	rule = TimedRecurrence.new(
 		{ date, clock },
 		{
@@ -582,7 +581,7 @@ expect test_stopping_boundary(Forever, 3600000000) == Ok(True)
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	test_stopping_boundary(Until(LocalDateTime.new(CalendarDate.from_gregorian(date), clock)), 7200000000)?
+	test_stopping_boundary(Until(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)), 7200000000)?
 }
 
 # A one-hour forward jump maps 01:00 (using the pre-gap offset) and
@@ -596,8 +595,8 @@ test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions
 test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, boundaries| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
 	base_rule = TimedRecurrence.new(
 		{ date, clock },
 		{
@@ -733,8 +732,8 @@ test_stream_cursor = |count| test_stream_cursor_with_validity(count, 17280000000
 test_stream_cursor_with_validity = |count, validity_end| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(count), by_set_pos: [] })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(validity_end))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
@@ -878,7 +877,7 @@ matches_day = |rule, index, date| match rule.schedule {
 test_subdaily = |clock_fields, pattern, positions, count| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_fields(clock_fields)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	end = local_at(3, midnight({}))?
 	rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern, termination: Count(count), by_set_pos: positions })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(432000000000))?
@@ -983,7 +982,7 @@ expect {
 	# SubdailyPattern without requiring a resolved axis of that larger range.
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	end = local_at(1, clock)?
 	rule = TimedRecurrence.new_subdaily(
 		{ date, clock },
@@ -1060,7 +1059,7 @@ expect {
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	end = local_at(1, clock)?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(86400000000))?
@@ -1374,8 +1373,8 @@ expect {
 	with_extra = TimedRecurrence.with_inclusions(rule, [{ date, clock: four }])?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC-cutoff", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
 	var $cursor = TimedRecurrence.cursor(with_extra, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
 	var $boundaries = []
 	var $hours = []
@@ -1409,8 +1408,8 @@ expect {
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: UntilBoundary(cutoff), by_set_pos: [-1] })?
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(259200000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
 	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
 	batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 3, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 })?
 	match batch.status {
@@ -1426,9 +1425,9 @@ expect {
 expect {
 	date = GregorianDate.from_fields({ year: 1997, month: 9, day: 2 })?
 	clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond: 0 })?
-	start = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
-	end = LocalDateTime.new(CalendarDate.from_gregorian(GregorianDate.from_fields({ year: 1997, month: 9, day: 3 })?), clock)
-	midnight_label = LocalDateTime.new(CalendarDate.from_gregorian(date), midnight({}))
+	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1997, month: 9, day: 3 })?), clock)
+	midnight_label = LocalDateTime.new(Calendar.Date.from_gregorian(date), midnight({}))
 	base = PosixBoundary.to_microseconds(FixedOffset.resolve(FixedOffset.from_seconds(0), midnight_label)?)
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(base - 86400000000), PosixBoundary.from_microseconds(base + 172800000000))?
 	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
@@ -1470,7 +1469,7 @@ fact_local = |labels, index| match labels.get(index) {
 expect {
 	date = GregorianDate.from_fields({ year: 2025, month: 1, day: 1 })?
 	clock = ClockTime.from_fields({ hour: 9, minute: 30, second: 0, microsecond: 120000 })?
-	local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	base = { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Until(local), by_set_pos: [] }
 	rule = TimedRecurrence.new({ date, clock }, base)?
 	boundary = PosixBoundary.from_microseconds(I64.highest)
@@ -1548,7 +1547,7 @@ expect {
 	edited = TimedRecurrence.with_boundary_exclusions(rule, [high, low, high])?
 	data = TimedRecurrence.definition(edited)
 	rebuilt = TimedRecurrence.from_definition(data)?
-	local = LocalDateTime.new(CalendarDate.from_gregorian(date), clock)
+	local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	too_many = match TimedRecurrence.with_exclusions(edited, List.repeat(local, 4095)) {
 		Err(TooManySelectors) => True
 		_ => False

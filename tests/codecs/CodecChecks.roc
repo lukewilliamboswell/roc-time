@@ -8,8 +8,7 @@ import time.ICalPeriod
 import time.GregorianDate
 import time.ClockTime
 import time.LocalDateTime
-import time.CalendarDate
-
+import time.Calendar
 # Real builtin JSON exercises derived record/list composition and format-level
 # state handling. The second encoding below proves the hooks are format-generic.
 # Strings are canonical standards declarations, never opaque native records.
@@ -133,7 +132,7 @@ check_civil = |source, invalid_date, invalid_clock| {
 		Json.to_str(value) != "{\"clock\":\"09:30:00\",\"date\":\"2026-09-07\",\"tail\":\"kept\"}" {
 		crash "Civil record text changed date/clock meaning or exposed backing fields"
 	}
-	local = LocalDateTime.new(CalendarDate.from_gregorian(value.date), value.clock)
+	local = LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
 	if LocalDateTime.parse_gregorian("2026-09-07T09:30") != Ok(local) or
 		LocalDateTime.to_gregorian_text(local) != Ok("2026-09-07T09:30:00") {
 		crash "Civil record did not compose into an unzoned local appointment"

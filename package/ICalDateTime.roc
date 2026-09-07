@@ -1,6 +1,6 @@
 import SemanticFact
 import GregorianDate
-import CalendarDate
+import Calendar
 import ClockTime
 import LocalDateTime
 import FixedOffset
@@ -131,7 +131,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 
 	## A field label only; callers must preserve form when interpreting it.
 	local_label : ICalDateTime -> LocalDateTime
-	local_label = |value| LocalDateTime.new(CalendarDate.from_gregorian(value.date), value.clock)
+	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
 
 	## Only explicit Z permits context-free POSIX conversion. A local value
 	## requires the caller's interpretation context, even if the fields are zero.

@@ -8,7 +8,7 @@ import time.LocalDateTime
 import time.ClockTime
 import time.GregorianDate
 import time.EnglishGregorian
-import time.CalendarDate
+import time.Calendar
 import time.FixedOffset
 import time.ZoneRules
 import time.EdtfDate
@@ -177,7 +177,7 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "precision fixture"
 	}
-	julian_date = match CalendarDate.from_fields(Julian, GregorianDate.to_fields(date)) {
+	julian_date = match Calendar.Date.from_fields(Julian, GregorianDate.to_fields(date)) {
 		Ok(value) => value
 		Err(_) => crash "calendar fixture"
 	}
