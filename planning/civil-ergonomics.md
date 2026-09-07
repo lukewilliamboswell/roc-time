@@ -1,17 +1,15 @@
-# Everyday civil presentation and queries
+# Everyday civil queries
 
-Objective: let an invoice or appointment application display a checked local date
-and time, group dates by weekday or ISO week, and obtain an ordinal day without
-implementing padding or recurrence selectors. Follow R02, R05, R14–R16 in
+Objective: let an invoice or appointment application group dates by weekday or
+ISO week and obtain an ordinal day without implementing recurrence selectors.
+Follow R02, R05, R14–R16 in
 [design.md](../design.md). This is a bounded caller project, not a general locale
 or calendar expansion.
 
 ## Dependencies and scope
 
-The native GregorianDate, ClockTime and LocalDateTime text codecs provide
-machine-readable native text;
-this project adds ordinary presentation without changing those grammars or
-claiming that display text is persistence.
+Use native text codecs for input and EnglishGregorian for ordinary display in
+the reporting example. These interfaces do not change the calendar-query laws.
 
 Use validated date/clock fields and existing civil-day conversion. CalendarPattern
 already has private weekday, year-day and generalized week-position calculations;
@@ -21,36 +19,29 @@ dates, so it cannot simply become a full-range public accessor at provider limit
 
 ## Deliverables and API decisions
 
-1. Provide a small explicitly selected English Gregorian display profile for
-   date-only and local date/time values: `7 Sep 2026` and `7 Sep 2026, 09:30`.
-   These are desired outputs, not executable API sketches. Choose the public
-   module and typed options before implementation. Prefer named presets and an
-   explicit precision option over an unbounded strftime-compatible mini-language.
-   Decide whether a request hiding nonzero seconds or microseconds rejects the
-   value or requires a named truncation policy; never silently lose precision.
-   Preserve negative/expanded year meaning. Julian or other calendar input must
-   retain an explicit calendar label or return unsupported presentation, never
-   silently convert to Gregorian. Locale datasets, translated relative phrases,
-   terminal styling and arbitrary user format strings are outside this slice.
-2. Add Gregorian weekday, ordinal-day and ISO week-date accessors. Proposed names
+1. Add Gregorian weekday, ordinal-day and ISO week-date accessors. Proposed names
    are `weekday`, `ordinal_day` and `iso_week_date`; settle their signatures and
    nominal weekday representation against existing CalendarPattern.Weekday and
    Roc static dispatch before exposing them. Ordinal days are 1..365/366. ISO
    weeks start Monday, and week 1 contains January 4; return the week-numbering
    year separately from the calendar year and document weekday numbering.
    Keep ISO week meaning distinct from recurrence's configurable week start.
-3. Set the range contract explicitly. Weekday and ordinal access should cover the
+2. Set the range contract explicitly. Weekday and ordinal access should cover the
    whole Gregorian provider range. An ISO week-numbering year can lie immediately
    outside that range: prefer an I64 year field that represents this result
    without constructing an out-of-provider date, or document a checked boundary
    error before implementation. Do not clip or silently switch the week year.
    Reuse or extract verified helpers only where this preserves dependency
    direction and existing recurrence semantics.
-4. Add one realistic invoice/report or appointment-display example using these
+3. Add one realistic invoice/report or appointment-display example using these
    public operations. A resolved appointment must be projected through explicitly
    selected zone rules before display; the formatter itself performs no zone
    lookup, clock read or resolution. Pure logic remains in a type module and the
    app entrypoint handles presentation.
+4. Promote the staged [appointment-display application](../tests/appointment_display/main.roc)
+   into the public example collection when a compatible release includes the
+   required APIs. Pin its compiler and immutable package URL; include it in the
+   released starter kit and preserve the local/bundle output checks.
 
 ## Independent evidence and completion
 

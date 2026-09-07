@@ -1,6 +1,7 @@
 import fuzz.Fuzz
 import time.ClockTime
 import time.ClockPattern
+import time.EnglishGregorian
 
 # R01/R07/R08: local microsecond positions and malformed numeric positions.
 ClockCase := { number : I64 }.{
@@ -63,6 +64,39 @@ ClockCase := { number : I64 }.{
 				}
 			}
 			minute_text = Str.from_utf8_lossy($bytes.take_first(5))
+			second_text = Str.from_utf8_lossy($bytes.take_first(8))
+			# R01/R14/R16: precision is exact iff the coordinate is aligned to
+			# its selected unit. Independent integer divisibility decides errors;
+			# successful output uses the decimal digit oracle above.
+			expected_minute = if I64.rem_by(input.number, 60000000) == 0 {
+				Ok(minute_text)
+			} else {
+				Err(PrecisionLoss(Minute))
+			}
+			expected_second = if I64.rem_by(input.number, 1000000) == 0 {
+				Ok(second_text)
+			} else {
+				Err(PrecisionLoss(Second))
+			}
+			if EnglishGregorian.clock(value, Exact) != Ok(expected_text) or
+				EnglishGregorian.clock(value, Minute) != expected_minute or
+					EnglishGregorian.clock(value, Second) != expected_second {
+				crash "English clock display hid precision or changed exact digits"
+			}
+			# Deliberately cover successful alignment in every case; a uniformly
+			# generated microsecond coordinate almost never lands on whole minutes.
+			whole_minute = match ClockTime.from_microseconds_since_midnight(input.number - I64.rem_by(input.number, 60000000)) {
+				Ok(clock) => clock
+				Err(_) => crash "aligned minute outside clock domain"
+			}
+			whole_second = match ClockTime.from_microseconds_since_midnight(input.number - I64.rem_by(input.number, 1000000)) {
+				Ok(clock) => clock
+				Err(_) => crash "aligned second outside clock domain"
+			}
+			if EnglishGregorian.clock(whole_minute, Minute) != Ok(minute_text) or
+				EnglishGregorian.clock(whole_second, Second) != Ok(second_text) {
+				crash "English clock display rejected aligned precision"
+			}
 			match ClockTime.parse(minute_text) {
 				Ok(parsed) => if ClockTime.to_microseconds_since_midnight(parsed) != input.number - I64.rem_by(input.number, 60000000) {
 					crash "omitted seconds meaning"

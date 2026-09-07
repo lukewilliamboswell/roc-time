@@ -8,6 +8,8 @@ import time.PosixSpan
 import time.LocalDateTime
 import time.ClockTime
 import time.GregorianDate
+import time.EnglishGregorian
+import time.CalendarDate
 import time.FixedOffset
 import time.ZoneRules
 import time.EdtfDate
@@ -191,7 +193,49 @@ main! = |args| {
 	local_invalid = LocalDateTime.parse_gregorian(local_large)
 	d9 = Host.allocated_bytes!({})
 	Host.assert!(date_invalid == Err(TooLarge) and clock_invalid == Err(TooLarge) and local_invalid == Err(TooLarge) and d7 == d6 and d8 == d7 and d9 == d8)
-	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, persistence_encoded - persistence_before, persistence_decoded - persistence_encoded, invalid_large - invalid_before, invalid_deep - invalid_large, edtf_parsed - edtf_before, edtf_serialized - edtf_parsed, edtf_explained - edtf_serialized, edtf_rejected - edtf_invalid_before, d1 - d0, d2 - d1, d3 - d2, d4 - d3, d5 - d4, d6 - d5, d7 - d6, d8 - d7, d9 - d8] }
+	# Explicit presentation is measured independently from canonical text codecs.
+	# Expected English date text is supplied by the external fixture table.
+	expected_date = args.get(12) ?? "1 Jan -2147483648"
+	expected_local = "${expected_date}, ${clock_text}"
+	precision_number = I64.from_str(args.get(13) ?? "1") ?? 1
+	Host.assert!(precision_number == 1)
+	precision_clock = match ClockTime.from_microseconds_since_midnight(precision_number) {
+		Ok(value) => value
+		Err(_) => crash "precision fixture"
+	}
+	julian_date = match CalendarDate.from_fields(Julian, GregorianDate.to_fields(date)) {
+		Ok(value) => value
+		Err(_) => crash "calendar fixture"
+	}
+	julian_local = LocalDateTime.new(julian_date, clock)
+	Host.mark!(12)
+	e0 = Host.allocated_bytes!({})
+	english_date = EnglishGregorian.date(date)
+	inject!(control, 7, date_text)
+	e1 = Host.allocated_bytes!({})
+	Host.assert!(english_date == expected_date and e1 - e0 <= civil_ceiling)
+	Host.mark!(13)
+	english_clock = EnglishGregorian.clock(clock, Exact)
+	inject!(control, 8, clock_text)
+	e2 = Host.allocated_bytes!({})
+	Host.assert!(english_clock == Ok(clock_text) and e2 - e1 <= civil_ceiling)
+	Host.mark!(14)
+	english_local = EnglishGregorian.local_datetime(local, Exact)
+	inject!(control, 9, local_text)
+	e3 = Host.allocated_bytes!({})
+	Host.assert!(english_local == Ok(expected_local) and e3 - e2 <= civil_ceiling)
+	Host.mark!(15)
+	minute_rejected = EnglishGregorian.clock(precision_clock, Minute)
+	e4 = Host.allocated_bytes!({})
+	second_rejected = EnglishGregorian.clock(precision_clock, Second)
+	e5 = Host.allocated_bytes!({})
+	calendar_rejected = EnglishGregorian.local_datetime(julian_local, Exact)
+	e6 = Host.allocated_bytes!({})
+	Host.assert!(minute_rejected == Err(PrecisionLoss(Minute)))
+	Host.assert!(second_rejected == Err(PrecisionLoss(Second)))
+	Host.assert!(calendar_rejected == Err(UnsupportedCalendar(Julian)))
+	Host.assert!(e4 - e3 <= civil_ceiling and e5 - e4 <= civil_ceiling and e6 - e5 <= civil_ceiling)
+	{ bytes: "instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n".to_utf8(), work: [parsed - before, serialized - parsed, resolved - serialized, queried - resolved, inspected - queried, exact_parsed - exact_before, exact_serialized - exact_parsed, persistence_encoded - persistence_before, persistence_decoded - persistence_encoded, invalid_large - invalid_before, invalid_deep - invalid_large, edtf_parsed - edtf_before, edtf_serialized - edtf_parsed, edtf_explained - edtf_serialized, edtf_rejected - edtf_invalid_before, d1 - d0, d2 - d1, d3 - d2, d4 - d3, d5 - d4, d6 - d5, d7 - d6, d8 - d7, d9 - d8, e1 - e0, e2 - e1, e3 - e2, e4 - e3, e5 - e4, e6 - e5] }
 }
 
 # Deliberately inject excessive allocation in one named scope to prove its
