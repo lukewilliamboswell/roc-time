@@ -97,6 +97,9 @@ def main() -> None:
         run([ROC, "build", codecs, f"--opt={mode}", f"--output={codec_binary}"])
         run([str(codec_binary)])
 
+    heading("Checking the Roc/Chrono benchmark harness (bounded correctness smoke)...")
+    run([sys.executable, "scripts/benchmark_chrono.py", "--smoke", "--fetch"])
+
     heading("Checking independent Gregorian query expectations...")
     run([sys.executable, "scripts/test_civil_queries.py"])
     heading("Checking DATE recurrence export against independent expectations...")
@@ -127,6 +130,14 @@ def main() -> None:
 
     heading("Verifying the optional zone database...")
     run([sys.executable, "scripts/test_zone_database.py"])
+
+    heading("Checking retained measurement tools with bounded real workloads...")
+    run([sys.executable, "scripts/measure_gregorian.py", "--smoke"])
+    run([sys.executable, "scripts/measure_zone_data.py", "--smoke"])
+    generator_python = os.environ.get("ROC_TIME_GENERATOR_PYTHON", sys.executable)
+    for encoding in ("columns", "tzif"):
+        run([generator_python, "scripts/measure_zone_roc.py", "--smoke", "--encoding", encoding])
+    run([sys.executable, "scripts/measure_zone_package.py", "--smoke"])
 
     heading("Checking scripts and examples...")
     run([sys.executable, "scripts/update_example_urls.py", "--self-test"])

@@ -43,6 +43,17 @@ jobs:
 
       - run: roc version
 
+      - name: Install pinned Python for generator smoke
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version-file: benchmarks/python-version
+
+      - name: Install pinned Rust for benchmark correctness smoke
+        run: |
+          rust_version=$(cat benchmarks/chrono/rust-version)
+          rustup toolchain install "$rust_version" --profile minimal --target x86_64-unknown-linux-musl
+          echo "RUSTUP_TOOLCHAIN=$rust_version" >> "$GITHUB_ENV"
+
       - run: python3 scripts/all_tests.py
 
       - name: Preserve fuzz smoke evidence and reproducers

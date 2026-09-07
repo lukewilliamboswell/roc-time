@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Days, FixedOffset, NaiveDate, SecondsFormat};
+use chrono::{DateTime, Datelike, Days, FixedOffset, NaiveDate, SecondsFormat, Timelike};
 use std::{hint::black_box, time::Instant};
 struct Input {
     text: String,
@@ -90,6 +90,14 @@ fn main() {
         }),
         "add_days" => sample(&dates, iterations, warmups, samples, |v| {
             date_sum(v.checked_add_days(Days::new(17)).unwrap())
+        }),
+        "parse_only" => sample(&texts, iterations, warmups, samples, |v| {
+            let parsed = DateTime::parse_from_rfc3339(v).unwrap();
+            let local = parsed.naive_local();
+            let clock = u64::from(local.num_seconds_from_midnight()) * 1_000_000
+                + u64::from(local.nanosecond() / 1_000);
+            let offset = i64::from(parsed.offset().local_minus_utc()) + 86_400;
+            date_sum(local.date()) + clock + offset as u64 * 101
         }),
         "parse" => sample(&texts, iterations, warmups, samples, |v| {
             DateTime::parse_from_rfc3339(v)

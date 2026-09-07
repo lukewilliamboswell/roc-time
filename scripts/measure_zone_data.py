@@ -9,7 +9,26 @@ import sys
 
 sys.dont_write_bytecode = True
 
-from generate_zone_oracle import WHEEL_SHA256
+from generate_zone_oracle import WHEEL_SHA256, WHEEL_URL
+
+ROOT = Path(__file__).resolve().parents[1]
+
+def smoke_wheel() -> Path:
+    """Acquire the existing integrity-pinned fixture, with a bounded download."""
+    from urllib.request import urlopen
+    destination = ROOT / ".roc-time-tmp/measurement-smoke/tzdata.whl"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        if hashlib.sha256(destination.read_bytes()).hexdigest() != WHEEL_SHA256:
+            raise SystemExit("Cached measurement wheel integrity mismatch")
+        return destination
+    with urlopen(WHEEL_URL, timeout=30) as response:
+        data = response.read(1024 * 1024 + 1)
+    if len(data) > 1024 * 1024 or hashlib.sha256(data).hexdigest() != WHEEL_SHA256:
+        raise SystemExit("Downloaded measurement wheel integrity mismatch")
+    destination.write_bytes(data)
+    return destination
+
 
 
 def measure(path: Path) -> dict:
@@ -41,5 +60,12 @@ def measure(path: Path) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wheel", type=Path)
-    print(json.dumps(measure(parser.parse_args().wheel), indent=2))
+    parser.add_argument("wheel", type=Path, nargs="?")
+    parser.add_argument("--smoke", action="store_true")
+    args = parser.parse_args()
+    if args.wheel is None and not args.smoke:
+        parser.error("wheel is required outside smoke mode")
+    result = measure(args.wheel or smoke_wheel())
+    if args.smoke and not (result["tzif_entry_count"] >= 4 and result["byte_distinct_payload_count"] <= result["tzif_entry_count"] and all(result["selected_tzif_bytes"].values())):
+        raise SystemExit("Zone data report invariants failed")
+    print(json.dumps(result, indent=2))

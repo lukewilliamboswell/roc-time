@@ -19,6 +19,7 @@ main! = |args| {
 		"construct" => sample!(data.map(|v| v.fields), iterations, warmups, samples, Benchmark.construct)
 		"roundtrip" => sample!(data.map(|v| v.date), iterations, warmups, samples, Benchmark.roundtrip)
 		"add_days" => sample!(data.map(|v| v.date), iterations, warmups, samples, Benchmark.add_days)
+		"parse_only" => sample!(data.map(|v| v.text), iterations, warmups, samples, Benchmark.parse_only)
 		"parse" => sample!(data.map(|v| v.text), iterations, warmups, samples, Benchmark.parse)
 		"resolve" => sample!(data.map(|v| v.timestamp), iterations, warmups, samples, Benchmark.resolve)
 		"format" => sample!(data.map(|v| v.timestamp), iterations, warmups, samples, Benchmark.format)
@@ -33,22 +34,22 @@ sample! = |data, iterations, warmups, samples, operation| {
 	clock_start = Host.monotonic_ns!({})
 	clock_end = Host.monotonic_ns!({})
 	Host.assert!(clock_end >= clock_start and Host.allocated_bytes!({}) == clock_alloc)
-	var i = 0.U64
-	var checksum = 0.U64
-	while i < warmups {
-		checksum = Host.opaque_u64!(Benchmark.run(data, Host.opaque_u64!(iterations), operation))
-		Host.assert!(checksum > 0)
-		i = i + 1
+	var $i = 0.U64
+	var $checksum = 0.U64
+	while $i < warmups {
+		$checksum = Host.opaque_u64!(Benchmark.run(data, Host.opaque_u64!(iterations), operation))
+		Host.assert!($checksum > 0)
+		$i = $i + 1
 	}
-	var output = []
-	i = 0
-	while i < samples {
+	var $output = []
+	$i = 0
+	while $i < samples {
 		start = Host.monotonic_ns!({})
-		checksum = Host.opaque_u64!(Benchmark.run(data, Host.opaque_u64!(iterations), operation))
+		$checksum = Host.opaque_u64!(Benchmark.run(data, Host.opaque_u64!(iterations), operation))
 		end = Host.monotonic_ns!({})
 		Host.assert!(end >= start)
-		output = output.append("${(end - start).to_str()},${checksum.to_str()}")
-		i = i + 1
+		$output = $output.append("${(end - start).to_str()},${$checksum.to_str()}")
+		$i = $i + 1
 	}
-	{ bytes: "${Str.join_with(output, "\n")}\n".to_utf8(), work: [] }
+	{ bytes: "${Str.join_with($output, "\n")}\n".to_utf8(), work: [] }
 }

@@ -58,9 +58,10 @@ def export(destination, entries, encoding):
     return names
 
 
-def main(wheel, samples, encoding):
-    if platform.python_implementation() != "CPython" or platform.python_version() != "3.14.3":
-        raise SystemExit("Requires pinned CPython 3.14.3 TZif decoder")
+def main(wheel, samples, encoding, smoke=False):
+    python_pin = (ROOT / "benchmarks/python-version").read_text().strip()
+    if platform.python_implementation() != "CPython" or platform.python_version() != python_pin:
+        raise SystemExit(f"Requires pinned CPython {python_pin} TZif decoder")
     if hashlib.sha256(wheel.read_bytes()).hexdigest() != WHEEL_SHA256:
         raise SystemExit("Wrong tzdata wheel")
     roc = str(Path(os.environ["ROC"]).resolve())
@@ -77,10 +78,15 @@ def main(wheel, samples, encoding):
                 raw = archive.read(info)
                 if raw.startswith(b"TZif"):
                     entries[info.filename.removeprefix("tzdata/zoneinfo/")] = raw
+    if smoke:
+        entries = {name: entries[name] for name in SELECTED}
+        entries["Fixture/MelbourneAlias"] = entries["Australia/Melbourne"]
     global_names = export(work / "global", entries, encoding)
+    if smoke and global_names["Fixture/MelbourneAlias"][0] != global_names["Australia/Melbourne"][0]:
+        raise RuntimeError("Identical zone payloads were not deduplicated")
     subset_names = export(work / "subset", {name: entries[name] for name in SELECTED}, encoding)
     report = {"compiler": version.stdout.strip(), "host": platform.platform(), "wheel_sha256": WHEEL_SHA256,
-              "samples": samples, "encoding": encoding, "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "representation": "one module per byte-distinct TZif; columns use times I64, indices U8, offsets I32, footer Str; tzif uses original bytes U8; dynamic match lookup with aliases",
+              "samples": samples, "smoke": smoke, "encoding": encoding, "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "representation": "one module per byte-distinct TZif; columns use times I64, indices U8, offsets I32, footer Str; tzif uses original bytes U8; dynamic match lookup with aliases",
               "limits": "Prototype storage only, not a full provider or TZif adapter. TZif bytes include fields omitted by columns; no runtime parsing cost measured. No footer expansion, schema import, construction allocation or retained-memory measurement. OS/compiler caches may be warm; --no-cache disables Roc cache for uncached builds. Native default backend only.",
               "packages": {}, "applications": {}}
     for kind in ["global", "subset"]:
@@ -154,9 +160,13 @@ def main(wheel, samples, encoding):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wheel", type=Path)
+    parser.add_argument("wheel", type=Path, nargs="?")
+    parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--samples", type=int, default=3)
     parser.add_argument("--encoding", choices=["columns", "tzif"], default="columns")
     args = parser.parse_args()
     if not 1 <= args.samples <= 10: parser.error("samples must be 1..10")
-    main(args.wheel, args.samples, args.encoding)
+    if args.wheel is None and not args.smoke:
+        parser.error("wheel is required outside smoke mode")
+    from measure_zone_data import smoke_wheel
+    main(args.wheel or smoke_wheel(), 1 if args.smoke else args.samples, args.encoding, args.smoke)
