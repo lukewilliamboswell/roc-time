@@ -514,6 +514,10 @@ To release:
    applications on `main`. These updates must preserve development package pins.
    Retain previous versioned docs before deploying the next site.
 
+Configure the `github-pages` environment to allow the explicit supported
+compiler branches that publish documentation, as well as `main`. Keep that
+allowlist narrow; adding a release workflow does not update environment policy.
+
 For a rehearsal, select `nightly_validation: true`. Supplying `release_version`
 also exercises the branch/package-version guard; omit it for ordinary compiler
 candidate validation. Neither validation mode publishes packages or deploys docs.
@@ -547,6 +551,12 @@ each release tag and starter manifest records its own compiler pin.
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. It reads published
 role metadata and does not recreate the release or tag.
+If publication fails after creating the tag, preserve its commit. Recover using
+the original successful run's bundle, role-metadata and starter artifacts; verify
+their digests and starter contents before creating the release with
+`gh release create --verify-tag`. Never move the tag or substitute rebuilt
+archives. Keep API-comparison diagnostics in the workflow artifact and include
+only a bounded summary in release notes; a failed comparison must remain explicit.
 The additional `roc-time-bundles.json` asset records the two roles and archive
 digests for later core-version comparisons. Published filenames use
 `roc-time-<hash>.tar.zst` and `roc-time-tzdb-<hash>.tar.zst`: Roc uses the

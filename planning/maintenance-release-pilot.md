@@ -18,23 +18,14 @@ Pilot inputs:
 
 Remaining deliverables:
 
-- Create and push `roc-0.1.x` from the verified pilot changes with the September 5
-  package pins; preserve September 6 on the development branch. Obtain actual
-  GitHub validation evidence for both workflows before publication.
-- Exercise the new `0.1.0-rc2` candidate release from `roc-0.1.x`, then verify its
-  actual published URLs, notes, direct `roc main.roc` multi-file applications,
-  documentation deployment and follow-up PR.
-- Review/integrate the pilot PRs and the release follow-up without downgrading
-  development package pins. Close the superseded rc1 follow-up after its docs
-  are preserved. Public examples currently reference rc1, whose unprefixed
-  mutable bindings warn under the September 5 compiler: promote the verified
-  new release URLs before claiming that public path works on the pilot compiler.
+- Finish documentation deployment and verify its public URLs; integrate the
+  pilot PR and close superseded follow-ups after preserving their complete docs
+  and published example snapshots.
+- Complete explicit automatic validation for bot-created release follow-up PRs,
+  then exercise it against the exact generated commit.
 - Verify a nightly update edits only the configured development headers while
   leaving example pins unchanged, including success/no-op/failure evidence.
   Keep automatic merging disabled and respect repository protection/review.
-- Resolve or explicitly report `roc bump` limitations: these compilers reject
-  prerelease values for `--expect`, and extracting the rc1 public API reports
-  its unexposed `PersistenceEnvelope.Error`. Do not call this a passing API diff.
 - Finish reusable guidance with live acceptance and the transition to actual
   upstream stable releases. Remove the explicit simulated-compiler mapping at
   that transition.
