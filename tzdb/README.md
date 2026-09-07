@@ -34,8 +34,14 @@ the content-addressed package archive, so applications need no separate files.
 This layout does not promise that a one-zone application eliminates all other
 zones from its binary.
 
-There is no published companion release yet. Repository examples use local
-package paths; bundle checks exercise separate URL dependencies. See the
+To add the published companion, copy the `zones` dependency URL from the
+[staffing application's header](../examples/staffing/main.roc), alongside its
+`time` dependency and compiler requirement. Import `zones.Database` to select
+data and `time.ZoneRules` to validate it. The [release notes and starter kit](../README.md#try-it)
+provide both package archives and complete applications. Run an application
+directly with its declared Roc compiler; no data-generation script is needed.
+
+For contributors, see the
 [contributor guide](../CONTRIBUTING.md#zone-data-representation-measurements)
 for generation, review and verification. Generated files and source notices are
 under `package/`. Maintain the decoder in `Database.roc` and regenerate the
