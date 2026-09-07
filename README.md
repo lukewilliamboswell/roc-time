@@ -1,8 +1,20 @@
 # roc-time
 
-A date and time library for [Roc](https://www.roc-lang.org). Parse timestamps,
-find free booking windows, calculate calendar dates and generate schedules,
-with explicit calendar and time-zone choices.
+A meeting occupies an hour. A date in an archive might identify only a year.
+A working day can lose an hour when the clocks change. Treating each of these as
+a timestamp leaves your application to recover what the time actually means.
+
+**roc-time is a [Roc](https://www.roc-lang.org) library for working with time at
+its intended precision.** Describe calendar dates and local times, resolve them
+with explicit calendar and zone rules, and work with the spans they occupy.
+Combine those spans to find availability, compare schedules or account for time,
+while keeping the identities of individual events.
+
+This makes everyday questions easier to express: *When are we both free? Which
+bookings overlap? How much of this shift falls inside opening hours? What does
+“June” mean when no particular day was supplied?* Clear boundaries and explicit
+interpretation help avoid invented midnight timestamps, ambiguous “end of day”
+values and assumptions that every local day lasts 24 hours.
 
 ## Will this help me?
 
