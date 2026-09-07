@@ -5,6 +5,10 @@ import time.Ixdtf
 import time.RfcDateTime
 import time.RfcDuration
 import time.RfcPeriod
+import time.GregorianDate
+import time.ClockTime
+import time.LocalDateTime
+import time.CalendarDate
 
 # Real builtin JSON exercises derived record/list composition and format-level
 # state handling. The second encoding below proves the hooks are format-generic.
@@ -13,6 +17,8 @@ CodecChecks := [].{
 	Errors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidRfcDateTime(RfcDateTime.Error), InvalidRfcDuration(RfcDuration.Error), InvalidRfcPeriod(RfcPeriod.Error)]
 	Document : { date : EdtfDate, dates : List(EdtfDate), exact : ExactInterval, ixdtf : Ixdtf, rfc_date : RfcDateTime, rfc_duration : RfcDuration, rfc_period : RfcPeriod, stamp : OffsetTimestamp, tail : Str }
 	run = |input| {
+		check_civil(input.civil, input.civil_invalid_date, input.civil_invalid_clock)
+		check_civil_tokens(input.civil_tokens)
 		result : Try(Document, Errors)
 		result = Json.parse(input.source)
 		document = match result {
@@ -108,6 +114,39 @@ CodecChecks := [].{
 	}
 }
 
+CivilErrors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidGregorianDate(GregorianDate.Error), InvalidClockTime(ClockTime.Error)]
+
+CivilDocument : { date : GregorianDate, clock : ClockTime, tail : Str }
+
+check_civil = |source, invalid_date, invalid_clock| {
+	parsed : Try(CivilDocument, CivilErrors)
+	parsed = Json.parse(source)
+	value = match parsed {
+		Ok(record) => record
+		Err(_) => crash "Civil appointment record rejected"
+	}
+	date : GregorianDate
+	date = "2026-09-07"
+	clock : ClockTime
+	clock = "09:30"
+	if value != { date, clock, tail: "kept" } or
+		Json.to_str(value) != "{\"clock\":\"09:30:00\",\"date\":\"2026-09-07\",\"tail\":\"kept\"}" {
+		crash "Civil record text changed date/clock meaning or exposed backing fields"
+	}
+	local = LocalDateTime.new(CalendarDate.from_gregorian(value.date), value.clock)
+	if LocalDateTime.parse_gregorian("2026-09-07T09:30") != Ok(local) or
+		LocalDateTime.to_gregorian_text(local) != Ok("2026-09-07T09:30:00") {
+		crash "Civil record did not compose into an unzoned local appointment"
+	}
+	bad_date : Try(GregorianDate, CivilErrors)
+	bad_date = Json.parse(invalid_date)
+	bad_clock : Try(ClockTime, CivilErrors)
+	bad_clock = Json.parse(invalid_clock)
+	if bad_date != Err(InvalidGregorianDate(InvalidDay)) or bad_clock != Err(InvalidClockTime(UnsupportedLeapSecond)) {
+		crash "Civil JSON codecs lost native validation errors"
+	}
+}
+
 TokenEncoding := [Default].{
 	parse_str : TokenEncoding, List(Str) -> Try({ value : Str, rest : List(Str) }, [NoToken])
 	parse_str = |_, state| match state.first() {
@@ -119,6 +158,39 @@ TokenEncoding := [Default].{
 		Err(WriteBlocked)
 	} else {
 		Ok(state.append(text))
+	}
+}
+
+check_civil_tokens = |tokens| {
+	parse_date = GregorianDate.parser_for(TokenEncoding.Default)
+	first = match parse_date(tokens) {
+		Ok(value) => value
+		Err(_) => crash "Civil date token rejected"
+	}
+	parse_clock = ClockTime.parser_for(TokenEncoding.Default)
+	second = match parse_clock(first.rest) {
+		Ok(value) => value
+		Err(_) => crash "Civil clock token rejected"
+	}
+	if GregorianDate.to_text(first.value) != "2026-09-07" or
+		ClockTime.to_text(second.value) != "09:30:00" or second.rest != ["tail"] {
+		crash "Civil parser changed semantic values or unconsumed state"
+	}
+	match parse_date([]) {
+		Err(Encoding(NoToken)) => {}
+		_ => crash "Civil date parser lost encoding failure"
+	}
+	match parse_clock([]) {
+		Err(Encoding(NoToken)) => {}
+		_ => crash "Civil clock parser lost encoding failure"
+	}
+	encode_date = GregorianDate.encoder_for(TokenEncoding.Default)
+	encode_clock = ClockTime.encoder_for(TokenEncoding.Default)
+	if encode_date(first.value, ["prefix"]) != Ok(["prefix", "2026-09-07"]) or
+		encode_date(first.value, ["full", "buffer"]) != Err(WriteBlocked) or
+			encode_clock(second.value, ["prefix"]) != Ok(["prefix", "09:30:00"]) or
+				encode_clock(second.value, ["full", "buffer"]) != Err(WriteBlocked) {
+		crash "Civil encoder changed state or lost encoding failure"
 	}
 }
 

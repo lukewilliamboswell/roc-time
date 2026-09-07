@@ -186,17 +186,18 @@ def verify_interchange(target: str) -> None:
                                         capture_output=True, timeout=5)
                 if result.returncode or result.stdout != b"instant=1000000,presentation=1000000,exact=0..2000000,edtf=scopes-preserved\n":
                     raise RuntimeError(f"{mode}/{tags}/{transitions}: interchange probe failed: {result.stderr!r}")
-                match = re.search(rb" work=((?:\d+,){14}\d+)\n$", result.stderr)
+                match = re.search(rb" work=((?:\d+,){23}\d+)\n$", result.stderr)
                 if match is None:
                     raise RuntimeError(f"{mode}: missing interchange resource observations")
                 counts = tuple(int(value) for value in match[1].split(b","))
-                if counts[3] != 0 or counts[9] != 0 or counts[14] != 0:
+                if counts[3] != 0 or counts[9] != 0 or counts[14] != 0 or any(counts[21:]):
                     raise RuntimeError(f"{mode}: stored snapshot reads or oversized rejection allocated: {counts}")
                 observations.append(counts)
             if observations[0] != observations[1]:
                 raise RuntimeError(f"{mode}: interchange traffic varies with retained rule size: {observations}")
             print(f"PASS interchange {mode}/{tags} tags: 2/16384 transitions requested bytes {observations[0]}; 100000 stored reads")
-            print(f"PASS EDTF {mode}: cumulative requested bytes parse/serialize/bounded explanation/oversized rejection {observations[0][11:]}; 16384-byte ceiling per operation")
+            print(f"PASS EDTF {mode}: cumulative requested bytes parse/serialize/bounded explanation/oversized rejection {observations[0][11:15]}; 16384-byte ceiling per operation")
+            print(f"PASS civil text {mode}: requested bytes date parse/output, clock parse/output, local parse/output, three oversized rejections {observations[0][15:]}; 4096-byte ceiling per operation")
         failed = subprocess.run([binary, "16384", "32", "0"], capture_output=True, timeout=5)
         if failed.returncode == 0 or b"ROC_ASSERT_FAILED" not in failed.stderr:
             raise RuntimeError(f"{mode}: interchange negative control failed")
@@ -210,6 +211,31 @@ def verify_interchange(target: str) -> None:
         if failed_edtf.returncode == 0 or not (0 <= start < assertion < end):
             raise RuntimeError(f"{mode}: EDTF-specific allocation negative control failed")
         print(f"PASS EDTF {mode}: zero-ceiling control reaches EDTF scope and fails hosted assertion")
+        # Distinct runtime inputs cover ordinary, signed-range and fractional
+        # extrema. Allocation traffic is not retained memory or a timing bound.
+        for date, clock in (("0000-01-01", "00:00:00"),
+                            ("2026-09-07", "09:30:00.0012"),
+                            ("+2147483647-12-31", "23:59:59.999999")):
+            command = [binary, "2", "1", "4194304", exact_text, edtf_text, "16384",
+                       date, clock, f"{date}T{clock}", "4096"]
+            result = subprocess.run(command, capture_output=True, timeout=5)
+            match = re.search(rb" work=((?:\d+,){23}\d+)\n$", result.stderr)
+            if result.returncode or match is None:
+                raise RuntimeError(f"{mode}/{date}/{clock}: civil text probe failed: {result.stderr!r}")
+            counts = tuple(int(value) for value in match[1].split(b","))
+            if any(counts[21:]) or any(value > 4096 for value in counts[15:21]):
+                raise RuntimeError(f"{mode}: civil text allocation ceiling failed: {counts}")
+            print(f"PASS civil text {mode}/{date}/{clock}: requested bytes {counts[15:]}")
+        # Inject excessive runtime allocation separately into each measured
+        # operation; zero-cost successful paths must still have live ceilings.
+        for scope in range(1, 7):
+            failed_civil = subprocess.run(command + [str(scope)], capture_output=True, timeout=5)
+            start = failed_civil.stderr.find(f"mark={scope + 4} ".encode())
+            end = failed_civil.stderr.find(f"mark={scope + 5} ".encode())
+            assertion = failed_civil.stderr.find(b"ROC_ASSERT_FAILED")
+            if failed_civil.returncode == 0 or not (0 <= start < assertion < end):
+                raise RuntimeError(f"{mode}: civil text scope {scope} failing control failed: {failed_civil.stderr!r}")
+        print(f"PASS civil text {mode}: all six allocation scopes reject injected excess traffic")
 
 
 def verify_persistence(target: str) -> None:

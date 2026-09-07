@@ -66,6 +66,24 @@ CalendarCase := { number : I64 }.{
 			}
 			local = LocalDateTime.new(julian, clock)
 			other = LocalDateTime.new(gregorian, clock)
+			# R02/R06/R14: a calendar-specific text adapter cannot relabel Julian
+			# fields. Gregorian parsing composes the independently tested date and
+			# clock profiles into this already-constructed local position, without
+			# narrowing the full provider range to POSIX or selecting a timezone.
+			if LocalDateTime.to_gregorian_text(local) != Err(UnsupportedCalendar(Julian)) {
+				crash "Local text silently discarded the Julian calendar"
+			}
+			text = match LocalDateTime.to_gregorian_text(other) {
+				Ok(value) => value
+				Err(_) => crash "Gregorian local text rejected provider value"
+			}
+			if LocalDateTime.parse_gregorian(text) != Ok(other) {
+				crash "Local text changed the constructed calendar/clock position"
+			}
+			match LocalDateTime.parse_gregorian("${text}Z") {
+				Err(InvalidTime(Malformed)) => {}
+				_ => crash "Local text accepted an implicit UTC instant"
+			}
 			if !LocalDateTime.same_position(local, other) or local == other or
 				LocalDateTime.in_calendar(local, Gregorian) != Ok(other) or
 					LocalDateTime.clock(other) != clock {

@@ -34,6 +34,44 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 			crash "R05 civil coordinate round trip"
 		}
 		fields = GregorianDate.to_fields(date)
+		# R14: independently assemble the declared native grammar from fields.
+		# This does not use production formatting as the parser's oracle.
+		magnitude = if fields.year < 0 {
+			-fields.year
+		} else {
+			fields.year
+		}
+		raw_year = magnitude.to_str()
+		year_digits = if magnitude < 10 {
+			"000${raw_year}"
+		} else if magnitude < 100 {
+			"00${raw_year}"
+		} else if magnitude < 1000 {
+			"0${raw_year}"
+		} else {
+			raw_year
+		}
+		year_text = if fields.year < 0 {
+			"-${year_digits}"
+		} else if fields.year > 9999 {
+			"+${year_digits}"
+		} else {
+			year_digits
+		}
+		month_text = if fields.month < 10 {
+			"0${fields.month.to_str()}"
+		} else {
+			fields.month.to_str()
+		}
+		day_text = if fields.day < 10 {
+			"0${fields.day.to_str()}"
+		} else {
+			fields.day.to_str()
+		}
+		expected_text = "${year_text}-${month_text}-${day_text}"
+		if GregorianDate.parse(expected_text) != Ok(date) or GregorianDate.to_text(date) != expected_text {
+			crash "R14 full-range Gregorian native text differs from field model"
+		}
 		# Independent month walk checks every boundary at the generated full-range
 		# year. January's coordinate anchors the year; summing month lengths does
 		# not share the production prefix table or inverse decomposition.

@@ -8,11 +8,10 @@ or calendar expansion.
 
 ## Dependencies and scope
 
-The native GregorianDate, ClockTime and LocalDateTime text codecs are an in-flight
-prerequisite. Their canonical output provides machine-readable native text;
+The native GregorianDate, ClockTime and LocalDateTime text codecs provide
+machine-readable native text;
 this project adds ordinary presentation without changing those grammars or
-claiming that display text is persistence. Finish their existing acceptance gate
-before building on them.
+claiming that display text is persistence.
 
 Use validated date/clock fields and existing civil-day conversion. CalendarPattern
 already has private weekday, year-day and generalized week-position calculations;
