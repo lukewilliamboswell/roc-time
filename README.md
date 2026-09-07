@@ -4,20 +4,16 @@ A date and time library for [Roc](https://www.roc-lang.org). Parse timestamps,
 find free booking windows, calculate calendar dates and generate schedules,
 with explicit calendar and time-zone choices.
 
-**[0.1.0-rc3 is available](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3).**
-You can build working booking and calendar applications with it now. This is a
-release candidate: APIs may change, and applications pin their Roc compiler.
-
 ## Will this help me?
 
 | I want to… | What works | Try it |
 | --- | --- | --- |
-| Find free booking windows | Parse offset timestamps, subtract occupied time and save availability | [Booking exchange](examples/booking_exchange/main.roc) |
+| Find free booking windows | Parse offset timestamps, subtract occupied time and serialize availability | [Booking exchange](examples/booking_exchange/main.roc) |
 | Check an expiry | Compare a platform-clock reading with an expiry and write a typed JSON record | [Clock deadline](examples/clock_deadline/main.roc) |
 | Calculate dates | Gregorian/Julian conversion and calendar arithmetic with explicit month-end policies | [Invoice terms](examples/invoice/main.roc) |
 | Handle clock changes | Resolve repeated/skipped local times and overnight selections using explicit zone rules | [Overnight staffing](examples/staffing/main.roc) |
 | Generate schedules | Date and timed recurrence, additions/exclusions and bounded, resumable queries | [Equipment reservations](examples/reservations/main.roc) |
-| Retain imported date meaning | Preserve date precision and uncertainty; explain and save supported interpretations | [Archive search](examples/archive_search/main.roc) |
+| Retain imported date meaning | Preserve date precision and uncertainty; explain supported interpretations | [Archive search](examples/archive_search/main.roc) |
 
 ## Why intervals, not just instants?
 
@@ -53,13 +49,12 @@ interval types from usage and evaluates these top-level definitions at compile
 time, rejecting invalid literals. For runtime input, `ExactInterval.parse` returns
 structured errors. The complete
 [booking exchange application](examples/booking_exchange/main.roc) handles
-multiple bookings, saves/restores availability and writes canonical timestamps.
+multiple bookings and writes the free windows as canonical timestamps.
 
 ## Try it
 
-Download the [released starter kit](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-starter.zip)
-and install the compiler declared in its application headers:
-[`nightly-2026-09-05-b195f5b`](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b).
+Download the starter kit from [Releases](https://github.com/lukewilliamboswell/roc-time/releases)
+and install the Roc compiler declared in its application headers.
 From the extracted kit folder, run:
 
 ```sh
@@ -75,39 +70,22 @@ from a repository checkout using their pinned compiler and published packages.
 For your own application, copy the `time` dependency and `roc` compiler fields
 from a released example's header. Named-zone applications also use the
 [optional zone-data package](tzdb/README.md). The
-[release notes](https://github.com/lukewilliamboswell/roc-time/releases/tag/0.1.0-rc3)
-include both package URLs, and the
-[released API documentation](https://lukewilliamboswell.github.io/roc-time/0.1.0-rc3/)
-describes their supported operations.
+[release notes](https://github.com/lukewilliamboswell/roc-time/releases)
+include both package URLs. See the
+[documentation](https://lukewilliamboswell.github.io/roc-time/) for guides,
+API reference and supported format profiles.
 
-## Supported scope
+## What to expect
 
-Exact calculations use signed 64-bit microseconds. Invalid inputs and exhausted
-work limits are explicit results. The core does not choose your zone, read the
-clock or fetch data on your behalf.
+Exact calculations use integer microseconds. Calendar quantities, elapsed time,
+events and coverage are distinct types. Invalid inputs and exhausted work limits
+are explicit results; the core does not choose your zone, read the clock or fetch
+data on your behalf.
 
-- **Text:** offset timestamps and exact intervals with canonical output; declared
-  EDTF date and IXDTF annotation profiles. No leap-second or sub-microsecond input,
-  and no claim to every ISO 8601 form.
-- **Calendars and zones:** Gregorian and Julian calendars; optional IANA 2025b
-  zone data for 1800–2200.
-- **Schedules:** declared RFC 5545 DATE and DATE-TIME property import profiles.
-  Complete ICS files, timed-rule export and durable schedule definitions are
-  still future work.
-- **Explanation:** bounded descriptions of temporal meaning and interpretation
-  requirements. Standard text formats support storing representable values.
-
-The development branch is ahead of rc3, including everyday civil text/display,
-reporting queries and date/time schedule export. Use the released documentation
-for rc3; development APIs may require a newer compiler.
-
-## What comes next?
-
-First, make the everyday date and appointment improvements available in a
-compatible release with standard serialization and reusable schedule definitions.
-The next release removes the private archive API; storage uses supported external
-formats, with explicit limits on what they preserve. Broader standards, calendars
-and reasoning follow concrete caller needs.
+Parsing and serialization support explicit profiles of date/time standards.
+A supported spelling does not imply support for every feature in that standard.
+Store standard representations directly, and supply interpretation context when
+needed. See the documentation for precision, range and format limits.
 
 ## Prior art
 

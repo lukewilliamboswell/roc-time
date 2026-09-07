@@ -1,7 +1,8 @@
 # Optional zone database
 
-This companion supplies IANA 2025b offsets for 598 zone identifiers, including
-compatibility aliases, over `[1800-01-01, 2200-01-01)` on the POSIX timeline.
+This companion supplies IANA time-zone offsets and compatibility aliases over
+an explicit finite horizon on the POSIX timeline. The [package manifest](package/manifest.json)
+records the source release, covered identifiers, validity bounds and integrity hashes.
 It is a separate dependency: interval-only and fixed-offset applications need
 only roc-time. No host database, filesystem access or network lookup is needed
 when using the compiled data.
@@ -14,7 +15,7 @@ outside the supplied horizon; local resolution can need additional data around
 its endpoints to prove completeness.
 
 The pack preserves requested aliases and canonical identities. Its source is the
-pinned Python tzdata 2025.2 distribution, including its historical coverage
+Python tzdata distribution pinned by that manifest, including its historical coverage
 choices. Pre-standardization offsets are source conventions, not a guarantee of
 historical local practice. Future transitions expand that release's rules; they
 are not predictions of future legislation. The pack provides offsets, without

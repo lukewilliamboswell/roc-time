@@ -4,9 +4,9 @@ Start with a released application and its compiler pin. Keep the complete exampl
 
 ## 1. Get the starter kit
 
-Download [roc-time-starter.zip for 0.1.0-rc3](https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-starter.zip) and extract it. The kit includes booking exchange, archive search and staffing applications.
+Choose a [package release](https://github.com/lukewilliamboswell/roc-time/releases), download its starter ZIP and extract it. The release notes identify the packages, compiler and included applications.
 
-Install the Roc compiler named by its application headers: [nightly-2026-09-05-b195f5b](https://github.com/roc-lang/nightlies/releases/tag/nightly-2026-09-05-b195f5b). Roc has no versioned stable release yet; this is the compiler selected for this package release.
+Install the compiler declared in the example's `roc` header. Keep the package URLs from the same kit.
 
 ## 2. Run the booking example
 
@@ -17,7 +17,7 @@ roc version
 roc examples/booking_exchange/main.roc
 ```
 
-The version command should identify `nightly-2026-09-05-b195f5b`. The application prints available UTC windows after subtracting two bookings, including one supplied with a different offset.
+Check that the version command matches the application header. The application prints available UTC windows after subtracting two bookings, including one supplied with a different offset.
 
 **No Python runner is required to run an example.** On first use Roc downloads the content-addressed package dependencies declared in the header.
 
@@ -29,11 +29,7 @@ Keep both files together. The root file’s `import BookingExchange` resolves it
 
 ## Use the library in your own app
 
-Keep the platform declaration appropriate to your application, and copy the `roc` and `time` fields from `examples/booking_exchange/main.roc` in the downloaded rc3 starter kit. The release’s core package URL is:
-
-```text
-https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-9gC9GQxjZjAaAPGwaGwSYCGfTuN5ED4AstyM9vdCPe5o.tar.zst
-```
+Keep the platform declaration appropriate to your application, and copy the `roc` and `time` fields from the downloaded example. These headers are the source of truth for the compatible compiler and immutable package URL.
 
 Applications using named zones also add the `zones` dependency shown in `examples/staffing/main.roc` in the same starter kit. The core package does not bring the zone database with it.
 

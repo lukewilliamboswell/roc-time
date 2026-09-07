@@ -20,9 +20,9 @@ def main():
         raise ValueError('Assembly requires a fresh output directory')
     output.mkdir(parents=True)
     builder = output.parent / (output.name + '-builder')
-    subprocess.run([args.roc, 'build', str(ROOT / 'www/site/main.roc'), '--output=' + str(builder)], check=True)
-    subprocess.run([str(builder), str(ROOT / 'www/site/content'), str(output)], check=True)
-    subprocess.run([sys.executable, str(ROOT / 'www/site/verify.py'), str(output), '--api-root', str(args.api_root.resolve())], check=True)
+    subprocess.run([args.roc, 'build', str(ROOT / 'www/main.roc'), '--output=' + str(builder)], check=True)
+    subprocess.run([str(builder), str(ROOT / 'www/content'), str(output)], check=True)
+    subprocess.run([sys.executable, str(ROOT / 'www/verify.py'), str(output), '--api-root', str(args.api_root.resolve())], check=True)
     from docs import VERSION_RE
     for entry in args.api_root.iterdir():
         if entry.is_dir() and VERSION_RE.fullmatch(entry.name):

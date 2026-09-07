@@ -13,14 +13,15 @@ without tracking generated HTML in Git.
 - Verify the published asset digests and run the docs workflow. Confirm the
   authored root and existing version URLs, including retry behavior. Missing
   historical assets deliberately block deployment.
-- Bind guide release labels, API links and starter links to the selected public
-  release when promoting new applications. Keep development claims separate.
+- Verify durable guide links resolve to release metadata, the API navigation
+  and working pinned examples. Authored prose must not duplicate release pins.
 
 ## Acceptance
 
 The Pages artifact contains generated guides plus restored version directories,
 without authored source or compiler binaries. Prior API bytes are unchanged.
-Follow-up PRs contain public example and README updates, not generated pages.
+Follow-up PRs contain public example updates, not generated pages or copied
+release metadata in the README.
 Local assembly and tests use explicit restored docs roots. Publication succeeds
 with narrowly scoped permissions and pinned tool/action dependencies.
 
