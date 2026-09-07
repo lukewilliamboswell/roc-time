@@ -178,6 +178,20 @@ ownership and finite query horizons over an unbounded rule; allocation failure
 controls run in both dev and speed builds. Normal replay never regenerates
 expected output from the package under test.
 
+Timed recurrence export evidence runs with
+`ROC=/path/to/pinned/roc python3 scripts/test_timed_export.py`. Its
+[independent fixtures](tests/timed_export_checks/README.md) compare canonical
+properties and bounded execution across explicit UTC, floating and synthetic
+zone contexts. The recurrence fuzz target also checks rebuilt and reimported
+rules against finite calendar/clock models. The hosted timed export gate
+separates native construction, semantic access, checked wrapper construction,
+export and first/resumed consumption. Wrapper construction currently renders
+canonical properties to validate their byte cap; its allocation traffic is
+measured separately. These counters measure requested bytes, not retained
+memory. The staged [meeting exchange application](tests/meeting_exchange/main.roc)
+is checked against local sources and distributable bundles; public promotion
+waits for a compatible release.
+
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
 Howard Hinnant’s attributed public-domain March-based formulas, independent of

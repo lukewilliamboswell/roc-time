@@ -3,6 +3,7 @@ import ICalDateTime
 import CalendarPattern
 import DateRecurrence
 import GregorianDate
+import ICalRuleText
 
 ## RFC 5545 DATE recurrence value adapter, profile date-values-v1.
 ## Input fields are already extracted property values, not content lines or an
@@ -75,54 +76,21 @@ ICalDateRule :: [].{
 			Err(TooLarge) => return Err(TooLarge)
 		}
 		start = date_text(definition.anchor, "DTSTART")?
-		frequency = match pattern.frequency {
-			Daily => "DAILY"
-			Weekly => "WEEKLY"
-			Monthly => "MONTHLY"
-			Yearly => "YEARLY"
+		termination = match spec.termination {
+			Forever => Forever
+			Count(count) => Count(count)
+			Until(date) => Until(date_text(date, "UNTIL")?)
 		}
-		var $fields = ["FREQ=${frequency}", "INTERVAL=${pattern.interval.to_str()}"]
-		match spec.termination {
-			Forever => {}
-			Count(count) => {
-				if count > 2147483647 {
-					return Err(OutOfRange("COUNT"))
-				}
-				$fields = $fields.append("COUNT=${count.to_str()}")
-			}
-			Until(date) => {
-				$fields = $fields.append("UNTIL=${date_text(date, "UNTIL")?}")
-			}
+		text = match ICalRuleText.render({ pattern, clocks: { hours: [], minutes: [], seconds: [] }, subdaily: None, termination, positions: spec.by_set_pos }) {
+			Ok(rendered) => rendered
+			Err(Malformed(part)) => return Err(Malformed(part))
+			Err(Duplicate(part)) => return Err(Duplicate(part))
+			Err(Missing(part)) => return Err(Missing(part))
+			Err(Unsupported(part)) => return Err(Unsupported(part))
+			Err(OutOfRange(part)) => return Err(OutOfRange(part))
+			Err(Incompatible(part)) => return Err(Incompatible(part))
+			Err(TooLarge) => return Err(TooLarge)
 		}
-		for (name, values) in [
-			("BYMONTH", pattern.by_month.map(|n| n.to_i64())),
-			("BYWEEKNO", pattern.by_week_no.map(|n| n.to_i64())),
-			("BYYEARDAY", pattern.by_year_day.map(|n| n.to_i64())),
-			("BYMONTHDAY", pattern.by_month_day.map(|n| n.to_i64())),
-		] {
-			if !values.is_empty() {
-				$fields = $fields.append("${name}=${number_set(values)}")
-			}
-		}
-		if !pattern.by_day.is_empty() {
-			keys = pattern.by_day.map(|day| weekday_number(day.weekday) * 128 + day.ordinal.to_i64() + 53)
-			days = unique_numbers(keys).map(
-				|key| {
-					ordinal = I64.mod_by(key, 128) - 53
-					prefix = if ordinal == 0 {
-						""
-					} else {
-						ordinal.to_str()
-					}
-					"${prefix}${weekday_at(I64.div_trunc_by(key, 128))}"
-				},
-			)
-			$fields = $fields.append("BYDAY=${Str.join_with(days, ",")}")
-		}
-		if !spec.by_set_pos.is_empty() {
-			$fields = $fields.append("BYSETPOS=${number_set(spec.by_set_pos.map(|n| n.to_i64()))}")
-		}
-		$fields = $fields.append("WKST=${weekday_at(weekday_number(pattern.week_start))}")
 		var $inclusions = []
 		for date in spec.inclusions {
 			$inclusions = $inclusions.append(date_text(date, "RDATE")?)
@@ -131,7 +99,7 @@ ICalDateRule :: [].{
 		for date in spec.exclusions {
 			$exclusions = $exclusions.append(date_text(date, "EXDATE")?)
 		}
-		parts = { start, rule: Str.join_with($fields, ";"), inclusions: $inclusions, exclusions: $exclusions }
+		parts = { start, rule: text, inclusions: $inclusions, exclusions: $exclusions }
 		var $remaining = 65536.U64
 		for value in [parts.start, parts.rule].concat(parts.inclusions).concat(parts.exclusions) {
 			if value.count_utf8_bytes() > $remaining {
@@ -195,53 +163,6 @@ date_text = |date, part| {
 }
 
 pad = |text, width| Str.repeat("0", width - text.count_utf8_bytes()).concat(text)
-
-unique_numbers : List(I64) -> List(I64)
-unique_numbers = |values| {
-	ordered = values.sort_with(
-		|a, b| if a < b {
-			Before
-		} else if a > b {
-			After
-		} else {
-			Same
-		},
-	)
-	var $result = []
-	var $previous = None
-	for value in ordered {
-		if $previous != Some(value) {
-			$result = $result.append(value)
-		}
-		$previous = Some(value)
-	}
-	$result
-}
-
-number_set = |values| Str.join_with(unique_numbers(values).map(|n| n.to_str()), ",")
-
-weekday_number : CalendarPattern.Weekday -> I64
-weekday_number = |day| match day {
-	Monday => 0
-	Tuesday => 1
-	Wednesday => 2
-	Thursday => 3
-	Friday => 4
-	Saturday => 5
-	Sunday => 6
-}
-
-# Only called with the quotient of a validated weekday/ordinal encoding.
-weekday_at = |index| match index {
-	0 => "MO"
-	1 => "TU"
-	2 => "WE"
-	3 => "TH"
-	4 => "FR"
-	5 => "SA"
-	6 => "SU"
-	_ => crash "Validated weekday index"
-}
 
 parse_date : Str, Str -> Try(GregorianDate, ICalDateRule.Error)
 parse_date = |text, part| {

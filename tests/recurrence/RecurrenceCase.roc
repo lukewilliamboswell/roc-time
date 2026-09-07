@@ -263,6 +263,58 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 	}
 }
 
+# These semantic round trips are paired with independent models at callers.
+rebuild_native = |rule| {
+	definition = TimedRecurrence.definition(rule)
+	restored = match TimedRecurrence.from_definition(definition) {
+		Ok(value) => value
+		Err(_) => crash "valid native declaration rejected"
+	}
+	if TimedRecurrence.definition(restored) != definition {
+		crash "native declaration reconstruction lost fields"
+	}
+	restored
+}
+
+export_wrapper = |wrapper| {
+	definition = ICalTimedRule.definition(wrapper)
+	rebuilt = match ICalTimedRule.new({ ..definition, rule: rebuild_native(definition.rule) }) {
+		Ok(value) => value
+		Err(_) => crash "valid typed timed wrapper rejected"
+	}
+	parts = match ICalTimedRule.to_parts(rebuilt) {
+		Ok(value) => value
+		Err(_) => crash "supported timed export rejected"
+	}
+	restored = match ICalTimedRule.parse(parts) {
+		Ok(value) => value
+		Err(_) => crash "canonical timed text rejected"
+	}
+	if ICalTimedRule.to_parts(restored) != Ok(parts) {
+		crash "timed canonical output unstable"
+	}
+	restored
+}
+
+export_native = |rule, mode| {
+	duration : ICalDuration
+	duration = "PT1H"
+	wrapper = match ICalTimedRule.new({ rule, duration, periods: [], mode }) {
+		Ok(value) => value
+		Err(_) => crash "supported native timed rule rejected"
+	}
+	definition = TimedRecurrence.definition(rule)
+	large = match TimedRecurrence.from_definition({ ..definition, termination: Count(2147483648) }) {
+		Ok(value) => value
+		Err(_) => crash "native wide count rejected"
+	}
+	match ICalTimedRule.new({ rule: large, duration, periods: [], mode }) {
+		Err(OutOfRange("COUNT")) => {}
+		_ => crash "timed export narrowed COUNT"
+	}
+	ICalTimedRule.definition(export_wrapper(wrapper)).rule
+}
+
 check_consumers = |initial, limits, expected| {
 	var $current = initial
 	var $observed = []
@@ -516,6 +568,14 @@ check_timed = |input, anchor, pattern, window, dates| {
 		}
 	}
 	check_timed_batches($current, input.work.to_u64(), $expected_sources, $expected_boundaries)
+	# R11/R14: restored definitions are evaluated against the independently
+	# walked calendar/clock grid, not merely against their own serialization.
+	restored = export_native(rule, Utc)
+	restored_cursor = match TimedRecurrence.cursor(restored, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "restored timed window"
+	}
+	check_timed_batches(restored_cursor, input.work.to_u64(), $expected_sources, $expected_boundaries)
 	check_schedule(rule, { start, end }, rules, input.work.to_u64(), $expected_sources, $expected_boundaries, anchor, anchor_clock, input.exclude_anchor, input)
 
 	var $sources = []
@@ -662,12 +722,31 @@ check_subdaily = |input| {
 		Err(_) => crash "subdaily exclusions"
 	}
 	check_subdaily_explanation(rule, input, start, mode)
+	declaration = TimedRecurrence.definition(rule)
+	rebuilt = rebuild_native(rule)
+	duration = match ICalDuration.parse("PT${input.work.to_str()}H") {
+		Ok(value) => value
+		Err(_) => crash "fixed duration"
+	}
+	match ICalTimedRule.new({ rule: rebuilt, duration, periods: [], mode: Utc }) {
+		Err(PrecisionLoss("DTSTART")) => {}
+		_ => crash "subdaily export silently discarded generated microseconds"
+	}
+	whole_anchor = match ClockTime.from_microseconds_since_midnight(anchor_second * 1000000) {
+		Ok(value) => value
+		Err(_) => crash "whole second anchor"
+	}
+	whole_start = LocalDateTime.new(CalendarDate.from_gregorian(anchor), whole_anchor)
+	whole = match TimedRecurrence.from_definition({ ..declaration, anchor: whole_start, exclusions: [whole_start] }) {
+		Ok(value) => export_native(value, Utc)
+		Err(_) => crash "whole second edited declaration"
+	}
 	window_start = if input.exclude_anchor {
 		query
 	} else {
 		start
 	}
-	var $current = match TimedRecurrence.cursor(rule, { start: window_start, end }, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
+	var $current = match TimedRecurrence.cursor(rebuilt, { start: window_start, end }, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily grid cursor"
 	}
@@ -696,6 +775,26 @@ check_subdaily = |input| {
 	if $count != input.count.to_u64() {
 		crash "finite subdaily model too short"
 	}
+	whole_window = {
+		start: if input.exclude_anchor {
+			query
+		} else {
+			whole_start
+		},
+		end,
+	}
+	whole_cursor = match TimedRecurrence.cursor(whole, whole_window, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
+		Ok(value) => value
+		Err(_) => crash "restored whole-second subdaily cursor"
+	}
+	whole_boundaries = $expected.map(|micros| PosixBoundary.from_microseconds(micros - fraction))
+	whole_sources = whole_boundaries.map(
+		|boundary| match FixedOffset.project(FixedOffset.from_seconds(0), boundary, Gregorian) {
+			Ok(value) => value
+			Err(_) => crash "bounded expected source"
+		},
+	)
+	check_timed_batches(whole_cursor, input.work.to_u64(), whole_sources, whole_boundaries)
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 10000 {
@@ -891,7 +990,10 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 			Ok(value) => value
 			Err(_) => crash "generated timed RFC rule rejected"
 		}
-		match ICalTimedRule.schedule(42.U64, parsed, window, Local(rules)) {
+		# Preserve PERIOD ending intent and duplicate definitions across exchange;
+		# the existing independent grid below checks restored identities/widths.
+		restored = export_wrapper(parsed)
+		match ICalTimedRule.schedule(42.U64, restored, window, Local(rules)) {
 			Ok(value) => value
 			Err(_) => crash "timed RFC schedule adaptation"
 		}

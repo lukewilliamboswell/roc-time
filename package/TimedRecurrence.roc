@@ -1,6 +1,7 @@
 import SemanticFact
 import RecurrenceFacts
 import CalendarDate
+import Calendar
 import CalendarPattern
 import SubdailyPattern
 import CivilDay
@@ -38,6 +39,45 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## rule occurrences; it cannot be compared to the unresolved anchor at new.
 	Termination : [Forever, Count(U64), Until(LocalDateTime), UntilBoundary(PosixBoundary)]
 	Spec : { calendar : CalendarPattern.Spec, clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16) }
+	Definition : { anchor : LocalDateTime, pattern : [Calendar(CalendarPattern.Spec), Subdaily({ frequency : SubdailyPattern.Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec })], clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16), inclusions : List(LocalDateTime), exclusions : List(LocalDateTime) }
+
+	## Effective field selectors and source labels, without clock products,
+	## occurrence enumeration or interpretation. Immutable lists may be shared.
+	## Every candidate retains the microsecond field of the anchor clock.
+	## Subdaily calendar fields are filters, with no placeholder period defaults.
+	definition : TimedRecurrence -> Definition
+	definition = |rule| {
+		pattern = match rule.schedule {
+			Calendar(value) => Calendar(CalendarPattern.definition(value))
+			Subdaily(value) => {
+				data = SubdailyPattern.definition(value)
+				Subdaily({ frequency: data.frequency, interval: data.interval, calendar: { by_month: data.calendar.by_month, by_month_day: data.calendar.by_month_day, by_year_day: data.calendar.by_year_day, by_day: data.calendar.by_day.map(|day| day.weekday) } })
+			}
+		}
+		clock = ClockPattern.definition(rule.clocks)
+		{ anchor: rule.anchor, pattern, clocks: { hours: clock.hours, minutes: clock.minutes, seconds: clock.seconds }, termination: rule.termination, by_set_pos: rule.positions, inclusions: rule.inclusions, exclusions: rule.exclusions }
+	}
+
+	## Rebuild an edited declaration through the same checked constructors.
+	## Anchor and inclusions must retain Gregorian labels. Exclusions and UNTIL
+	## retain native local-position semantics and their calendar descriptions.
+	from_definition : Definition -> Try(TimedRecurrence, [UnsupportedCalendar(Calendar), InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
+	from_definition = |value| {
+		if value.inclusions.len() > 4096 or value.exclusions.len() > 4096 {
+			return Err(TooManySelectors)
+		}
+		date = CalendarDate.as_gregorian(LocalDateTime.date(value.anchor))?
+		start = { date, clock: LocalDateTime.clock(value.anchor) }
+		base = match value.pattern {
+			Calendar(calendar) => new(start, { calendar, clocks: value.clocks, termination: value.termination, by_set_pos: value.by_set_pos })?
+			Subdaily(pattern) => new_subdaily(start, { pattern: { frequency: pattern.frequency, interval: pattern.interval, calendar: pattern.calendar, clocks: value.clocks }, termination: value.termination, by_set_pos: value.by_set_pos })?
+		}
+		var $starts = []
+		for label in value.inclusions {
+			$starts = $starts.append({ date: CalendarDate.as_gregorian(LocalDateTime.date(label))?, clock: LocalDateTime.clock(label) })
+		}
+		with_exclusions(with_inclusions(base, $starts)?, value.exclusions)
+	}
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
 	new = |start, spec| {
 		anchor = LocalDateTime.new(CalendarDate.from_gregorian(start.date), start.clock)

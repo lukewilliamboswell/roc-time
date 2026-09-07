@@ -24,6 +24,7 @@ def main() -> None:
     if control.returncode != 0:
         raise SystemExit(f"Positive control failed:\n{control.stdout}")
     cases = {
+        "cursor_as_timed_definition": ["first argument", "TimedSchedule", "ICalTimedRule"],
         "cursor_as_date_definition": ["first argument", "Cursor", "DateRecurrence"],
         "julian_as_gregorian_query": ["first argument", "JulianDate", "GregorianDate"],
         "description_as_display": ["first argument", "CalendarValue", "GregorianDate"],
