@@ -1,4 +1,4 @@
-import time.RfcDateTime
+import time.ICalDateTime
 import time.ZoneRules
 import time.FixedOffset
 import time.PosixBoundary
@@ -11,14 +11,14 @@ import time.Explanation
 ## Explanation reads immutable results; resumption is an explicit separate step.
 SelectionReview :: [].{
 	review = |start, end| {
-		if RfcDateTime.form(start) != Local or RfcDateTime.form(end) != Local {
+		if ICalDateTime.form(start) != Local or ICalDateTime.form(end) != Local {
 			return Err(ExpectedLocalLabels)
 		}
 		validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(86400000000))?
 		rules = ZoneRules.new_bounded("Synthetic/Fallback", "example-v1", validity, FixedOffset.from_seconds(3600), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 3600 })?
-		local = RfcDateTime.local_label(start)
+		local = ICalDateTime.local_label(start)
 		appointment = ResolvedBoundary.resolve(rules, local, Last)?
-		cursor = ZoneRules.selection_cursor(rules, local, RfcDateTime.local_label(end))?
+		cursor = ZoneRules.selection_cursor(rules, local, ICalDateTime.local_label(end))?
 		paused = ResolvedSelection.collect(cursor, { max_segments: 1, max_members: 2 })?
 		remaining = match paused.status {
 			Limited(progress) => progress.cursor

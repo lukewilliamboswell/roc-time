@@ -1,5 +1,4 @@
-import time.CalendarDate
-import time.CalendarValue
+import time.Calendar
 import time.CalendarEvidence
 import time.QualifiedCalendarValue
 import time.OffsetTimestamp
@@ -38,9 +37,9 @@ ArchiveSearch :: [].{
 	}
 
 	find = |date_fields, recording_times, admissible_minutes| {
-		date = CalendarDate.from_fields(Gregorian, date_fields)?
-		minute = CalendarValue.minute(date, 9, 30)?
-		second = CalendarValue.second(date, 9, 30, 0)?
+		date = Calendar.Date.from_fields(Gregorian, date_fields)?
+		minute = Calendar.Value.minute(date, 9, 30)?
+		second = Calendar.Value.second(date, 9, 30, 0)?
 		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
 		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 		var $recordings = []
@@ -63,7 +62,7 @@ ArchiveSearch :: [].{
 		# three minutes of certain coverage and not an inferred approximation.
 		var $choices = []
 		for m in admissible_minutes {
-			$choices = $choices.append(CalendarValue.minute(date, 9, m)?)
+			$choices = $choices.append(Calendar.Value.minute(date, 9, m)?)
 		}
 		model = CalendarEvidence.new(approximate, $choices)?
 		var $possible = 0.U64

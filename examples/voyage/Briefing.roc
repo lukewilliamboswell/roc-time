@@ -2,7 +2,7 @@ import time.ResolvedBoundary
 import time.ZoneRules
 import time.FixedOffset
 import time.LocalDateTime
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 
 ## Compare a saved booking with an explicit interpretation of a revised itinerary.
@@ -25,7 +25,7 @@ Briefing :: { saved : ResolvedBoundary, revised : ResolvedBoundary }.{
 
 utc_label = |snapshot| {
 	local = FixedOffset.project(FixedOffset.from_seconds(0), ResolvedBoundary.boundary(snapshot), Gregorian)?
-	date = CalendarDate.to_fields(LocalDateTime.date(local))
+	date = Calendar.Date.to_fields(LocalDateTime.date(local))
 	clock = ClockTime.to_fields(LocalDateTime.clock(local))
 	Ok("${date.year.to_str()}-${pad(date.month)}-${pad(date.day)} ${pad(clock.hour)}:${pad(clock.minute)}")
 }
