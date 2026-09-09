@@ -1,16 +1,16 @@
 app [main!] {
 	roc: "nightly-2026-09-05-b195f5b",
-	time: "https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0-rc3/roc-time-9gC9GQxjZjAaAPGwaGwSYCGfTuN5ED4AstyM9vdCPe5o.tar.zst",
+	time: "https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0/roc-time-6gt2mALoAXMVKcQvCpdisfaAU3S9XVdV3vR2CNA7e43t.tar.zst",
 }
 
 import Availability
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.FixedOffset
 import time.LocalDateTime
 
 main! = |_args| {
-	date = CalendarDate.from_fields(Gregorian, { year: 2026, month: 6, day: 15 })?
+	date = Calendar.Date.from_fields(Gregorian, { year: 2026, month: 6, day: 15 })?
 	local = |hour, minute| {
 		clock = ClockTime.from_fields({ hour, minute, second: 0, microsecond: 0 })?
 		Ok(LocalDateTime.new(date, clock))

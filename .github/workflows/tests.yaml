@@ -44,7 +44,7 @@ jobs:
       - run: roc version
 
       - name: Install pinned Python for generator smoke
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version-file: benchmarks/python-version
 
@@ -58,7 +58,7 @@ jobs:
 
       - name: Preserve fuzz smoke evidence and reproducers
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: fuzz-smoke-${{ runner.os }}-${{ runner.arch }}
           path: .roc-time-tmp/fuzz/

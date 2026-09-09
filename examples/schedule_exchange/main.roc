@@ -2,13 +2,11 @@ app [main!] {
 	roc: "nightly-2026-09-05-b195f5b",
 	time: "https://github.com/lukewilliamboswell/roc-time/releases/download/0.1.0/roc-time-6gt2mALoAXMVKcQvCpdisfaAU3S9XVdV3vR2CNA7e43t.tar.zst",
 }
-import RepeatedLocalTime
-import time.ICalDateTime
+import ScheduleExchange
 
-main! = |_| {
-	start = "19700101T003000"
-	end = "19700101T004500"
-	report = RepeatedLocalTime.review(start, end)?
-	echo!(report)
+main! = |_args| {
+	for line in ScheduleExchange.render()? {
+		echo!("${line}\n")
+	}
 	Ok({})
 }
