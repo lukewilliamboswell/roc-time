@@ -114,6 +114,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## Date restrictions without a frequency's expansion defaults. Subdaily
 	## periods use these same selector predicates after choosing their date.
 	Filter :: { spec : CalendarPattern.Spec }.{
+		## Calendar predicates for filtering existing dates without recurrence expansion defaults.
 		Spec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
 
 		## Validate and normalize calendar predicates for filtering existing dates. This does not
