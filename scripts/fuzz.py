@@ -21,6 +21,7 @@ DATA = SOURCES / "fuzz"
 WORK = Path(os.environ.get("ROC_TIME_TMPDIR", ROOT / ".roc-time-tmp")).resolve() / "fuzz"
 SEMANTIC = ("precision", "spans", "coverage", "gregorian", "arithmetic", "calendars", "clock", "offsets", "zones", "events", "patterns", "recurrence", "descriptions", "interchange")
 ROC = os.environ.get("ROC", "roc")
+BUILD_TIMEOUT_SECONDS = 300
 if "/" in ROC or "\\" in ROC:
     ROC = str(Path(ROC).resolve())
 
@@ -82,7 +83,7 @@ def build(name: str, target: str) -> Path:
     root = SOURCES / name / "main.roc"
     command([ROC, "check", str(root)])
     command([ROC, "build", "--fuzz", "--opt=speed", f"--target={target}", str(root), f"--output={binary}"],
-            log=WORK / f"{name}-build.log")
+            timeout=BUILD_TIMEOUT_SECONDS, log=WORK / f"{name}-build.log")
     return binary
 
 
