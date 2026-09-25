@@ -41,4 +41,4 @@ package
 		Coverage,
 		EventCollection,
 	]
-	{ roc: "nightly-2026-09-19-d025939" }
+	{ roc: "nightly-2026-09-25-1ab6804" }
