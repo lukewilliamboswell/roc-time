@@ -1,0 +1,9 @@
+[package]
+name = "roc-time-jiff-benchmark"
+version = "0.1.0"
+edition = "2024"
+publish = false
+[dependencies]
+jiff = { version = "=0.2.35", default-features = false, features = ["std"] }
+[profile.release]
+codegen-units = 1

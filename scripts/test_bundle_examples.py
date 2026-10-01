@@ -110,7 +110,7 @@ def copy_examples_with_bundle_url(examples_dir: Path, bundle_url: str, zone_url:
 def copy_internal_examples(destination: Path, core: str, zones: str) -> list[Path]:
     """Stage unreleased caller evidence separately from published examples."""
     from roc_version import package_pin
-    from update_example_urls import copy_examples
+    from update_example_urls import copy_examples, migrate_compiler_api
     entries = []
     for name in ("invoice_terms", "overnight_staffing", "upcoming_meetings", "appointment_display", "zoned_appointment", "clock_deadline_checks", "invoice_report", "invoice_report_checks", "schedule_exchange", "meeting_exchange", "schedule_definition_checks", "utc_cancellations_checks"):
         entries.extend(copy_examples(destination / name, core, zones,
@@ -120,6 +120,8 @@ def copy_internal_examples(destination: Path, core: str, zones: str) -> list[Pat
     # clock application. Never maintain a test-local copy of its implementation.
     shutil.copy2(ROOT / "examples/clock_deadline/Deadline.roc",
                  destination / "clock_deadline_checks/Deadline.roc")
+    deadline = destination / "clock_deadline_checks/Deadline.roc"
+    deadline.write_text(migrate_compiler_api(deadline.read_text(), package_pin(ROOT)))
     shutil.copy2(ROOT / "tests/invoice_report/InvoiceReport.roc",
                  destination / "invoice_report_checks/InvoiceReport.roc")
     return entries

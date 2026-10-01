@@ -1,4 +1,4 @@
-import time.RfcDateRule
+import time.ICalDateRule
 import time.AllDayRecurrence
 import time.AllDayOccurrence
 import time.Coverage
@@ -8,7 +8,7 @@ import time.GregorianDate
 ## Review a contractor's date-only recurrence values within a planning window.
 MaintenanceDates :: [].{
 	upcoming = |contract, window, rules| {
-		rule = match RfcDateRule.parse(contract) {
+		rule = match ICalDateRule.parse(contract) {
 			Ok(value) => value
 			Err(error) => return Err(InvalidCalendar(error))
 		}

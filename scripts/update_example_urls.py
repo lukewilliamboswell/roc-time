@@ -33,6 +33,28 @@ def migrate_example_api(source: str) -> str:
     return migrate_calendar_names(ICAL_NAME_RE.sub(lambda match: ICAL_NAMES[match[0]], source))
 
 
+def migrate_compiler_api(source: str, compiler: str) -> str:
+    """Advance example signatures and the clock platform for implicit unions.
+
+    Published applications keep their old compiler and source. Only copies and
+    release follow-ups selecting a compiler with implicit output unions use
+    this migration. Input unions and named extensions remain explicit.
+    """
+    nightly = re.fullmatch(r"nightly-(\d{4}-\d{2}-\d{2})-[0-9a-f]+", compiler)
+    if nightly is None or nightly[1] < "2026-09-23":
+        return source
+    # The real-clock example needs a platform with implicit output unions too.
+    source = source.replace(
+        "https://github.com/roc-lang/basic-cli/releases/download/0.22.2/9zUBxb1LtXYVc4eR4hAtd1WQDwBYDhM6HQdZz1UFCm2m.tar.zst",
+        "https://github.com/roc-lang/basic-cli/releases/download/0.23.0/GNN5tt2gKdX4dhawg4915C4YB193woHFdcCkz31fhGxv.tar.zst",
+    )
+    signature = re.compile(r"(?m)^([ \t]*[A-Za-z_][A-Za-z_0-9!]*[ \t]*:[^\n]*(?:->|=>))([^\n]*)$")
+    return signature.sub(
+        lambda match: match[1] + re.sub(r",[ \t]*\.\.(?=[ \t]*\])", "", match[2]),
+        source,
+    )
+
+
 def migrate_calendar_names(source: str) -> str:
     """Rebind legacy public names only in explicitly migrated package copies."""
     moved = {
@@ -98,6 +120,8 @@ def update_examples(examples_dir: Path, bundle_url: str, zone_bundle_url: str | 
         for path in sorted(examples_dir.rglob("*.roc")):
             source = path.read_text(encoding="utf-8")
             rewritten = migrate_example_api(source)
+            if compiler is not None:
+                rewritten = migrate_compiler_api(rewritten, compiler)
             if rewritten != source:
                 path.write_text(rewritten, encoding="utf-8")
                 if path not in updated:
@@ -115,6 +139,18 @@ def copy_examples(destination: Path, core: str, zones: str, *, compiler: str, so
 
 def self_test() -> None:
     from roc_version import read_pin
+    signatures = (
+        'convert : [Input, ..], Str -> Try(Str, [Output, ..])\n'
+        'effect! : Str => Try({}, [Output, ..others])\n'
+        'text = "Try(Str, [Output, ..])"\n'
+    )
+    assert migrate_compiler_api(signatures, "nightly-2026-09-19-d025939") == signatures
+    assert migrate_compiler_api(signatures, "nightly-2026-09-27-a3ce7f1") == signatures.replace(
+        'Try(Str, [Output, ..])\n', 'Try(Str, [Output])\n'
+    )
+    legacy_platform = "https://github.com/roc-lang/basic-cli/releases/download/0.22.2/9zUBxb1LtXYVc4eR4hAtd1WQDwBYDhM6HQdZz1UFCm2m.tar.zst"
+    assert migrate_compiler_api(legacy_platform, "nightly-2026-09-19-d025939") == legacy_platform
+    assert "/0.23.0/" in migrate_compiler_api(legacy_platform, "nightly-2026-09-27-a3ce7f1")
     temporary = ROOT / ".roc-time-tmp"
     temporary.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="example-copy-test-", dir=temporary) as directory:

@@ -1,4 +1,4 @@
-import time.RfcDateTime
+import time.ICalDateTime
 import time.LocalDateTime
 import time.ZoneRules
 import time.FixedOffset
@@ -13,19 +13,19 @@ import time.Coverage
 ## Compare both appointment choices with the complete local selection.
 RepeatedLocalTime :: [].{
 	review = |start, end| {
-		if RfcDateTime.form(start) != Local or RfcDateTime.form(end) != Local {
+		if ICalDateTime.form(start) != Local or ICalDateTime.form(end) != Local {
 			return Err(ExpectedLocalLabels)
 		}
 		validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(86400000000))?
 		rules = ZoneRules.new_bounded("Synthetic/Fallback", "example-v1", validity, FixedOffset.from_seconds(3600), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 3600 })?
-		local = RfcDateTime.local_label(start)
+		local = ICalDateTime.local_label(start)
 		first = ResolvedBoundary.resolve(rules, local, First)?
 		last = ResolvedBoundary.resolve(rules, local, Last)?
-		selected = ResolvedSelection.resolve(rules, local, RfcDateTime.local_label(end))?
+		selected = ResolvedSelection.resolve(rules, local, ICalDateTime.local_label(end))?
 		coverage = ResolvedSelection.coverage(selected)
 		var $lines = [
 			"Synthetic fallback: interpret a repeated local time",
-			"Local range: ${RfcDateTime.to_text(start)}/${RfcDateTime.to_text(end)}",
+			"Local range: ${ICalDateTime.to_text(start)}/${ICalDateTime.to_text(end)}",
 			"First occurrence: ${utc(ResolvedBoundary.boundary(first))?}",
 			"Last occurrence: ${utc(ResolvedBoundary.boundary(last))?}",
 			"Selection contains ${Coverage.member_count(coverage).to_str()} separate windows:",

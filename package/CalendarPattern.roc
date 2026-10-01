@@ -41,7 +41,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 
 	## RFC date-selector domains and combinations; at most 4096 supplied values
 	## per selector. Duplicates have set meaning and do not duplicate candidates.
-	new : GregorianDate, Spec -> Try(CalendarPattern, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), ..])
+	new : GregorianDate, Spec -> Try(CalendarPattern, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str)])
 	new = |anchor, spec| {
 		validate(spec)?
 		Ok({ anchor, spec })
@@ -50,7 +50,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## A whole frequency period, including days before the anchor in period zero.
 	## Exclusive end must fit the Gregorian provider. No clamping or clipping.
 	## Fixed work independent of index; intermediate arithmetic uses I128.
-	period : CalendarPattern, U64 -> Try({ start : GregorianDate, end : GregorianDate }, [OutOfRange, ..])
+	period : CalendarPattern, U64 -> Try({ start : GregorianDate, end : GregorianDate }, [OutOfRange])
 	period = |pattern, index| {
 		fields = GregorianDate.to_fields(pattern.anchor)
 		step = index.to_i128() * pattern.spec.interval.to_i128()
@@ -84,7 +84,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## defaults retain month/day only in the absence of expanding date selectors
 	## (an explicit BYMONTH can select multiple copies of the anchor month-day).
 	## Standards adapters supply any additional format-specific defaults first.
-	matches : CalendarPattern, U64, GregorianDate -> Try(Bool, [OutOfRange, ..])
+	matches : CalendarPattern, U64, GregorianDate -> Try(Bool, [OutOfRange])
 	matches = |pattern, index, date| {
 		frame = period(pattern, index)?
 		if date < frame.start or date >= frame.end {
@@ -114,11 +114,12 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## Date restrictions without a frequency's expansion defaults. Subdaily
 	## periods use these same selector predicates after choosing their date.
 	Filter :: { spec : CalendarPattern.Spec }.{
+		## Calendar predicates for filtering existing dates without recurrence expansion defaults.
 		Spec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
 
 		## Validate and normalize calendar predicates for filtering existing dates. This does not
 		## create a recurrence period or inherit missing selectors from an anchor.
-		new : Spec -> Try(Filter, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), ..])
+		new : Spec -> Try(Filter, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str)])
 		new = |filters| {
 			if filters.by_month.len() > 4096 or filters.by_month_day.len() > 4096 or filters.by_year_day.len() > 4096 or filters.by_day.len() > 4096 {
 				return Err(TooManySelectors)
@@ -136,7 +137,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 
 		## Test a Gregorian date against the checked predicates. Provider-range failures remain
 		## errors rather than being treated as a non-match.
-		matches : Filter, GregorianDate -> Try(Bool, [OutOfRange, ..])
+		matches : Filter, GregorianDate -> Try(Bool, [OutOfRange])
 		matches = |filter, date| matches_filters(filter.spec, date)
 	}
 
@@ -387,7 +388,7 @@ validate = |spec| {
 	Ok({})
 }
 
-matches_filters : CalendarPattern.Spec, GregorianDate -> Try(Bool, [OutOfRange, ..])
+matches_filters : CalendarPattern.Spec, GregorianDate -> Try(Bool, [OutOfRange])
 matches_filters = |spec, date| {
 	fields = GregorianDate.to_fields(date)
 	day = number(date)

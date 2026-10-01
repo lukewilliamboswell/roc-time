@@ -40,7 +40,7 @@ FixedOffset :: [Seconds(I32)].{
 	## Interpret a local date-time using this fixed offset. Return OutOfRange
 	## if the resulting position cannot fit I64 microseconds. There are no gap or
 	## fold choices because the offset is constant.
-	resolve : FixedOffset, LocalDateTime -> Try(PosixBoundary, [OutOfRange, ..])
+	resolve : FixedOffset, LocalDateTime -> Try(PosixBoundary, [OutOfRange])
 	resolve = |Seconds(seconds), local| {
 		day = CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(local)))
 		clock = ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local))
@@ -56,7 +56,7 @@ FixedOffset :: [Seconds(I32)].{
 	## Express a POSIX position as a local date-time in the requested calendar
 	## under this offset. Return OutOfRange if the local date is unsupported;
 	## no named-zone lookup or calendar substitution is performed.
-	project : FixedOffset, PosixBoundary, Calendar -> Try(LocalDateTime, [OutOfRange, ..])
+	project : FixedOffset, PosixBoundary, Calendar -> Try(LocalDateTime, [OutOfRange])
 	project = |Seconds(seconds), boundary, calendar| {
 		number = PosixBoundary.to_microseconds(boundary).to_i128() + seconds.to_i128() * 1000000
 		day = I128.div_floor_by(number, 86400000000)

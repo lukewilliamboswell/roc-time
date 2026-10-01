@@ -47,7 +47,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ICalPeriod, rest : state }, [InvalidICalPeriod(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ICalPeriod, rest : state }, [InvalidICalPeriod(Error), Encoding(err)]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]
@@ -207,7 +207,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	## Construction is O(n log n), with bounded input buffers; not a full RRULE
 	## parser or an ICS property adapter. Existing duration overrides must be
 	## supplied together as periods rather than merged from another schedule.
-	schedule : id, TimedRecurrence, TimedRecurrence.Window, ICalDuration, List(ICalPeriod), Context -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	schedule : id, TimedRecurrence, TimedRecurrence.Window, ICalDuration, List(ICalPeriod), Context -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 	schedule = |series, rule, window, duration, periods, context| {
 		prepared = prepare(rule, duration, periods, context)?
 		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
@@ -217,7 +217,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	## Returns checked TimedSchedule.Endings for reuse with from_prepared.
 	## The calling wrapper retains original PERIOD declarations for export;
 	## this execution record alone is not a standard storage representation.
-	prepare : TimedRecurrence, ICalDuration, List(ICalPeriod), Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	prepare : TimedRecurrence, ICalDuration, List(ICalPeriod), Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 	prepare = |rule, duration, periods, context| {
 		if periods.len() > 4096 {
 			return Err(TooManyPeriods)

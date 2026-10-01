@@ -21,7 +21,7 @@ SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(SpanCase)
 	generator_for = |_| { a: endpoint, b: endpoint, c: endpoint, d: endpoint }.Fuzz
 
-	evaluate : SpanCase -> Try(Bool, [EmptySpan, ReversedBounds, ..])
+	evaluate : SpanCase -> Try(Bool, [EmptySpan, ReversedBounds])
 	evaluate = |input| {
 		for (a, b) in [(input.a, input.b), (input.c, input.d)] {
 			constructed = PosixSpan.new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b))

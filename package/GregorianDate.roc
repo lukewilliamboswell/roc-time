@@ -67,7 +67,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	## Build a decoder for one encoded string containing a Gregorian full date.
 	## Return the validated date and unconsumed encoding state; distinguish
 	## InvalidGregorianDate from failures of the outer Encoding.
-	parser_for : encoding -> (state -> Try({ value : GregorianDate, rest : state }, [InvalidGregorianDate(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : GregorianDate, rest : state }, [InvalidGregorianDate(Error), Encoding(err)]))
 		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
 	parser_for = |encoding| {
 		Encoding : encoding
@@ -243,7 +243,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	## Validate a proleptic Gregorian date with astronomical year numbering.
 	## Return OutOfRange outside the supported year range, InvalidMonth outside
 	## 1..12, or InvalidDay for a nonexistent day. No clamping is performed.
-	from_fields : Fields -> Try(GregorianDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
+	from_fields : Fields -> Try(GregorianDate, [OutOfRange, InvalidMonth, InvalidDay])
 	from_fields = |fields| {
 		length = days_in_month(fields.year, fields.month)?
 		if fields.day < 1 or fields.day > length {
@@ -254,7 +254,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	## Return the number of days in a Gregorian month, including its leap-year rule.
 	## Reject unsupported years with OutOfRange and months outside 1..12 with InvalidMonth.
-	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth, ..])
+	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth])
 	days_in_month = |year, month| {
 		if year < -2147483648 or year > 2147483647 {
 			return Err(OutOfRange)
@@ -341,7 +341,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	## Describe a shared civil-day coordinate in the Gregorian calendar.
 	## Return OutOfRange if that day lies outside the supported year range.
-	from_civil_day : CivilDay -> Try(GregorianDate, [OutOfRange, ..])
+	from_civil_day : CivilDay -> Try(GregorianDate, [OutOfRange])
 	from_civil_day = |day| {
 		number = CivilDay.to_day_number(day)
 		if number < first_supported_day or number >= after_last_supported_day {

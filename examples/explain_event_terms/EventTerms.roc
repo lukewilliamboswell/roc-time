@@ -1,6 +1,6 @@
 import time.Explanation
-import time.RfcDuration
-import time.RfcPeriod
+import time.ICalDuration
+import time.ICalPeriod
 import time.ExactInterval
 
 ## Review imported scheduling terms before selecting interpretation context.
@@ -9,18 +9,18 @@ EventTerms :: [].{
 		limits = { max_facts: 8, max_utf8_bytes: 4096 }
 		var $reports = []
 		for text in durations {
-			value = match RfcDuration.parse(text) {
+			value = match ICalDuration.parse(text) {
 				Ok(found) => found
 				Err(error) => return Err(Duration(error))
 			}
-			$reports = $reports.append({ label: text, report: Explanation.plain(Explanation.new(RfcDuration(value)), limits) })
+			$reports = $reports.append({ label: text, report: Explanation.plain(Explanation.new(ICalDuration(value)), limits) })
 		}
 		for text in periods {
-			value = match RfcPeriod.parse(text) {
+			value = match ICalPeriod.parse(text) {
 				Ok(found) => found
 				Err(error) => return Err(Period(error))
 			}
-			$reports = $reports.append({ label: text, report: Explanation.plain(Explanation.new(RfcPeriod(value)), limits) })
+			$reports = $reports.append({ label: text, report: Explanation.plain(Explanation.new(ICalPeriod(value)), limits) })
 		}
 		exact = match ExactInterval.parse(exact_text) {
 			Ok(found) => found

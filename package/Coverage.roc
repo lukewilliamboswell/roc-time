@@ -61,7 +61,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 	}
 
 	## Validate start ordering in O(n); merge overlap and touch.
-	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput, ..])
+	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput])
 	from_sorted_spans = |input| {
 		var $builder = SortedBuilder.empty
 		for span in input {
@@ -88,7 +88,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 
 		## Constant comparison work; owned append is amortized, shared append may
 		## copy retained output. Equal starts are valid; decreasing starts fail.
-		append : SortedBuilder, PosixSpan -> Try(SortedBuilder, [UnsortedInput, ..])
+		append : SortedBuilder, PosixSpan -> Try(SortedBuilder, [UnsortedInput])
 		append = |builder, span| match append_bounded(builder, span, U64.highest)? {
 			Added(updated) => Ok(updated)
 			Full => crash "Allocated span list cannot exhaust U64 member count"
@@ -97,7 +97,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 		## Full leaves the input builder unchanged and performs no output append.
 		## The limit counts canonical members, so touching/overlapping input can
 		## still merge at capacity. An already larger builder also returns Full.
-		append_bounded : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full], [UnsortedInput, ..])
+		append_bounded : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full], [UnsortedInput])
 		append_bounded = |builder, span, limit| match append_retaining(builder, span, limit)? {
 			Added(updated) => Ok(Added(updated))
 			Full(_) => Ok(Full)
@@ -109,7 +109,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 		## at capacity. Decreasing starts fail with UnsortedInput.
 		## append_bounded uses the same validation and merge, but discards the
 		## returned builder on Full. Retained snapshots may make later appends copy.
-		append_retaining : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full(SortedBuilder)], [UnsortedInput, ..])
+		append_retaining : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full(SortedBuilder)], [UnsortedInput])
 		append_retaining = |builder, span, limit| {
 			match builder.previous {
 				Some(previous) => if previous > PosixSpan.start(span) {
@@ -222,7 +222,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 
 	## Sum occupied span widths as a POSIX displacement, counting shared coverage
 	## once. Return OutOfRange if a member width or the total cannot fit I64.
-	coordinate_width : Coverage -> Try(PosixDelta, [OutOfRange, ..])
+	coordinate_width : Coverage -> Try(PosixDelta, [OutOfRange])
 	coordinate_width = |Spans(items)| {
 		var $total = 0.I64
 		for span in items {

@@ -12,7 +12,7 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(CoverageCase)
 	generator_for = |_| { left: Fuzz.list(spec, 16), right: Fuzz.list(spec, 16), window: spec }.Fuzz
 
-	evaluate : CoverageCase -> Try(Bool, [EmptySpan, ReversedBounds, OutOfRange, ..])
+	evaluate : CoverageCase -> Try(Bool, [EmptySpan, ReversedBounds, OutOfRange])
 	evaluate = |input| {
 		spans = make_spans(input.left)?
 		a = Coverage.from_spans(spans)

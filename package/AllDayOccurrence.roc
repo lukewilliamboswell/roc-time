@@ -17,7 +17,7 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 
 	## Constant calendar work; zone interpretation is deferred to the cursor.
 	## Both the source and exclusive end must fit the source calendar and rules.
-	cursor : id, Calendar.Date, U64, ZoneRules -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, ..])
+	cursor : id, Calendar.Date, U64, ZoneRules -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity])
 	cursor = |id, date, days, rules| {
 		if days == 0 {
 			return Err(InvalidDuration)
@@ -56,7 +56,7 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 
 		## Advance interpretation within the supplied zone segment/member limits. Resume Limited with
 		## its returned cursor; only Complete supplies a fully interpreted occurrence.
-		collect : Cursor(id), ZoneRules.SelectionLimits -> Try(Batch(id), [OutOfRange, ..])
+		collect : Cursor(id), ZoneRules.SelectionLimits -> Try(Batch(id), [OutOfRange])
 		collect = |state, limits| {
 			batch = ResolvedSelection.collect(state.pending, limits)?
 			status = match batch.status {

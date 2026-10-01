@@ -24,7 +24,7 @@ import PosixDelta
 PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## Construct a nonempty half-open span [start, end). Equal endpoints return
 	## EmptySpan; a start after the end returns ReversedBounds.
-	new : PosixBoundary, PosixBoundary -> Try(PosixSpan, [EmptySpan, ReversedBounds, ..])
+	new : PosixBoundary, PosixBoundary -> Try(PosixSpan, [EmptySpan, ReversedBounds])
 	new = |start, end| {
 		match PosixBoundary.compare(start, end) {
 			LT => Ok({ start, end })
@@ -36,7 +36,7 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## Interpret decimal seconds since the POSIX epoch with one rounding policy
 	## for both endpoints. Equal/reversed source bounds are rejected before
 	## conversion; rounding that collapses a nonempty span returns EmptySpan.
-	from_seconds : Dec, Dec, PosixBoundary.Rounding -> Try(PosixSpan, [EmptySpan, ReversedBounds, Submicrosecond, OutOfRange, ..])
+	from_seconds : Dec, Dec, PosixBoundary.Rounding -> Try(PosixSpan, [EmptySpan, ReversedBounds, Submicrosecond, OutOfRange])
 	from_seconds = |lo, hi, policy| {
 		if lo == hi {
 			return Err(EmptySpan)
@@ -59,12 +59,12 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 
 	## Return end minus start as a POSIX displacement. A valid span can still
 	## return OutOfRange when its width exceeds I64 microseconds.
-	coordinate_width : PosixSpan -> Try(PosixDelta, [OutOfRange, ..])
+	coordinate_width : PosixSpan -> Try(PosixDelta, [OutOfRange])
 	coordinate_width = |span| PosixBoundary.difference(span.end, span.start)
 
 	## Construct [point, point + one microsecond). The greatest representable
 	## position returns OutOfRange because its exclusive end cannot be represented.
-	microsecond_at : PosixBoundary -> Try(PosixSpan, [OutOfRange, ..])
+	microsecond_at : PosixBoundary -> Try(PosixSpan, [OutOfRange])
 	microsecond_at = |point| {
 		upper = PosixBoundary.shift(point, PosixDelta.from_microseconds(1))?
 		# Checked positive shift proves point < upper; no revalidation needed.

@@ -11,7 +11,7 @@ ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), micr
 
 	## O(s log s) construction, with at most 4096 supplied values per field.
 	## Retains at most 144 distinct field values, shared by its iterators.
-	new : ClockTime, Spec -> Try(ClockPattern, [TooManySelectors, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, ..])
+	new : ClockTime, Spec -> Try(ClockPattern, [TooManySelectors, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond])
 	new = |anchor, spec| {
 		if spec.hours.len() > 4096 or spec.minutes.len() > 4096 or spec.seconds.len() > 4096 {
 			return Err(TooManySelectors)
@@ -49,7 +49,7 @@ ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), micr
 
 	## Return the clock at a zero-based position in the checked clock product. An index outside
 	## its length returns OutOfRange; the anchor microsecond field is retained.
-	at : ClockPattern, U64 -> Try(ClockTime, [OutOfRange, ..])
+	at : ClockPattern, U64 -> Try(ClockTime, [OutOfRange])
 	at = |pattern, index| if index >= count(pattern) {
 		Err(OutOfRange)
 	} else {

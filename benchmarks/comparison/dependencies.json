@@ -1,0 +1,20 @@
+{
+  "jiff": "0.2.35",
+  "rust": "1.95.0",
+  "go": "go1.26.5",
+  "python": "3.12.3",
+  "ciso8601": {
+    "version": "2.3.3",
+    "sdist_url": "https://files.pythonhosted.org/packages/c1/8a/075724aea06c98626109bfd670c27c248c87b9ba33e637f069bf46e8c4c3/ciso8601-2.3.3.tar.gz",
+    "sha256": "db5d78d9fb0de8686fbad1c1c2d168ed52efb6e8bf8774ae26226e5034a46dae",
+    "wheel_url": "https://files.pythonhosted.org/packages/44/6b/dfc56a2a4e572a2a3f8c88a66dea6a9186a8e10da7c36cc84abc31bf795c/ciso8601-2.3.3-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl",
+    "wheel_sha256": "202ca99077577683e6a84d394ff2677ec19d9f406fbf35734f68be85d2bcd3f1",
+    "wheel_filename": "ciso8601-2.3.3-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl"
+  },
+  "tempo": {
+    "revision": "e8a074ed1efed6a0f78b87d900fc4cb0c4156278",
+    "version": "1.6.4",
+    "mix_lock_sha256": "b1399857c9cae25882fa6deaf76831a7216c82bba38776a352105ea28b71b06f",
+    "image": "elixir@sha256:d170fadffd75b36146ff40b6e8d5cc881c59d136ae5a2c34a1b394ec33b6cffa"
+  }
+}

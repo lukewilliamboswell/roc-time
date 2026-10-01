@@ -13,17 +13,7 @@ Keep the exact core, checked failures, explicit interpretation and microsecond
 contract. Prefer composition through existing public operations; add convenience
 APIs where a realistic caller otherwise has to reproduce temporal logic.
 
-1. **Publish the everyday workflows already implemented (R16).** Follow
-   [user time workflows](user-time-workflows.md) to deliver the staged civil
-   text/display, civil reporting and named-zone applications with compatible compiler and immutable
-   package URLs. Publication is separate from implementation acceptance; users
-   of the current release cannot yet use these development APIs.
-2. **Prepare the coherent release (R14–R16).** Follow
-   [release preparation](release-preparation.md) for support-compiler validation,
-   standard serialization guidance, schedule interchange examples and the
-   documentation-asset migration. Broader recurrence profiles remain in
-   [recurrence execution](recurrence.md) and are not required to publish the
-   currently supported use cases.
+Broader recurrence profiles remain in [recurrence execution](recurrence.md).
 
 Release and resource evidence applies throughout this sequence. Keep public
 examples runnable with their declared compiler and immutable package URLs,

@@ -37,6 +37,7 @@ third-party Python dependencies.
 | `measure_zone_package.py` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
 | `fixture_platform.py` | Build the instrumented test host and verify resource assertions/trace effects |
 | `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
+| `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
@@ -500,6 +501,12 @@ are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 ## Comparative benchmarks
 
+The [cross-language benchmark guide](benchmarks/comparison/README.md) adds
+Go, Python, Jiff and Tempo adapters, dependency pins, upstream workload references
+and explicit compatibility profiles. Run its opt-in setup with
+`ROC=/path/to/pinned/roc python3 scripts/benchmark_comparison.py --fetch --smoke`.
+Docker and the additional language runtimes are not required by the normal gate.
+
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
 The normal `all_tests.py` gate compiles both benchmark executables and runs
@@ -582,7 +589,7 @@ Automatic merging is disabled in this pilot. Bot PR creation and required checks
 are repository settings; installing workflows does not enable those settings.
 No bot approval or branch-protection bypass is part of this policy.
 
-The shared [maintainer guide](https://github.com/lukewilliamboswell/roc-automation/blob/ad3504508984be9817cfe8a05628e2ad3da8c4f3/docs/package-maintainer-guide.md)
+The shared [maintainer guide](https://github.com/lukewilliamboswell/roc-automation/blob/355f762079f676df4d0ae86416edf34216b488e0/docs/package-maintainer-guide.md)
 provides reusable guidance. OpenSSF evidence and support commitments remain each
 project's responsibility.
 

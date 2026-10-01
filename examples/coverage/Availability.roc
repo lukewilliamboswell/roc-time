@@ -1,6 +1,6 @@
 import time.EventCollection
 import time.Coverage
-import time.CalendarDate
+import time.Calendar
 import time.ClockTime
 import time.FixedOffset
 import time.LocalDateTime
@@ -51,7 +51,7 @@ resolve_booking = |booking| {
 
 # This application's minute-aligned display, not a general timestamp serializer.
 display = |local| {
-	date = CalendarDate.to_fields(LocalDateTime.date(local))
+	date = Calendar.Date.to_fields(LocalDateTime.date(local))
 	clock = ClockTime.to_fields(LocalDateTime.clock(local))
 	"${date.year.to_str()}-${pad(date.month)}-${pad(date.day)} ${pad(clock.hour)}:${pad(clock.minute)}"
 }

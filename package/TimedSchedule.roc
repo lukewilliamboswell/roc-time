@@ -34,7 +34,7 @@ import ZoneRules
 ## import time.TimedOccurrence
 ## import time.CalendarPattern
 ## import time.GregorianDate
-## import time.Calendar.Date
+## import time.Calendar
 ## import time.ClockTime
 ## import time.LocalDateTime
 ## import time.ZoneRules
@@ -102,12 +102,12 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 
 		## Check and normalize up to 4096 source-specific ending overrides. Duplicate equal endings
 		## collapse; conflicting endings for one source return ConflictingEnding.
-		normalize : List(Entry) -> Try(List(Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+		normalize : List(Entry) -> Try(List(Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 		normalize = schedule_endings_normalize_endings
 
 		## Validate the positive default duration and normalize ending overrides once for reuse
 		## across queries. Does not resolve zones or enumerate starts.
-		new : TimedOccurrence.Duration, List(Entry) -> Try(Endings, [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+		new : TimedOccurrence.Duration, List(Entry) -> Try(Endings, [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 		new = |duration, inputs| {
 			overrides = schedule_endings_normalize_endings(inputs)?
 			TimedOccurrence.validate_duration(duration)?
@@ -181,7 +181,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Start an identified appointment query with one default duration and explicit start
 	## context. The window selects source starts; endings may extend beyond it. Invalid
 	## duration/window errors are checked before consumption.
-	new : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, ..])
+	new : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange])
 	new = |series, rule, window, duration, context| {
 		TimedOccurrence.validate_duration(duration)?
 		starts = TimedRecurrence.cursor(rule, window, context)?
@@ -195,7 +195,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Identical definitions coalesce; conflicting definitions at one position
 	## return ConflictingDuration, even outside the query or at excluded starts.
 	## Calendar and coordinate definitions remain distinct despite equal widths.
-	new_with_overrides : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(Override), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingDuration(LocalDateTime), ..])
+	new_with_overrides : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(Override), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingDuration(LocalDateTime)])
 	new_with_overrides = |series, rule, window, duration, inputs, context| {
 		overrides = normalize_overrides(inputs)?
 		base = new(series, rule, window, duration, context)?
@@ -206,7 +206,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## The same 4096-entry limit and positional lookup apply. Equal definitions
 	## coalesce; different definitions at one position return ConflictingEnding.
 	## Endpoint order is checked after the start and end are interpreted.
-	new_with_endings : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(EndOverride), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	new_with_endings : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(EndOverride), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 	new_with_endings = |series, rule, window, duration, inputs, context| {
 		endings = TimedSchedule.Endings.new(duration, inputs)?
 		from_prepared(series, rule, window, endings, context)
@@ -216,7 +216,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## and override normalization are not repeated; query state is fresh.
 	## This carries no persistence semantics. Use ScheduleDefinition for ordinary
 	## reusable declarations that also retain their explicit context and origin.
-	from_prepared : id, TimedRecurrence, TimedRecurrence.Window, TimedSchedule.Endings, TimedRecurrence.Context -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange, ..])
+	from_prepared : id, TimedRecurrence, TimedRecurrence.Window, TimedSchedule.Endings, TimedRecurrence.Context -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
 	from_prepared = |series, rule, window, endings, context| {
 		{ duration, overrides } = TimedSchedule.Endings.definition(endings)
 		starts = TimedRecurrence.cursor(rule, window, context)?
@@ -460,7 +460,7 @@ expect {
 	}
 }
 
-normalize_overrides : List(TimedSchedule.Override) -> Try(List(TimedSchedule.EndOverride), [InvalidDuration, TooManyOverrides, ConflictingDuration(LocalDateTime), ..])
+normalize_overrides : List(TimedSchedule.Override) -> Try(List(TimedSchedule.EndOverride), [InvalidDuration, TooManyOverrides, ConflictingDuration(LocalDateTime)])
 normalize_overrides = |inputs| {
 	if inputs.len() > 4096 {
 		return Err(TooManyOverrides)
@@ -642,7 +642,7 @@ expect {
 	conflict and invalid and too_many and TimedSchedule.Endings.normalize([entry, entry])?.len() == 1
 }
 
-schedule_endings_normalize_endings : List(TimedSchedule.Endings.Entry) -> Try(List(TimedSchedule.Endings.Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+schedule_endings_normalize_endings : List(TimedSchedule.Endings.Entry) -> Try(List(TimedSchedule.Endings.Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 schedule_endings_normalize_endings = |inputs| {
 	if inputs.len() > 4096 {
 		return Err(TooManyOverrides)

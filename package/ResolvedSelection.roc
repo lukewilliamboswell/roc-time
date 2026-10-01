@@ -21,7 +21,7 @@ ResolvedSelection :: {
 	## coverage, including disconnected fold components. Reject empty/reversed
 	## labels and incomplete validity or numeric range; scan the finite rules.
 	## For explicit work and storage budgets, use a selection cursor with collect.
-	resolve : ZoneRules, LocalDateTime, LocalDateTime -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
+	resolve : ZoneRules, LocalDateTime, LocalDateTime -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
 	resolve = |rules, start, end| {
 		coverage = ZoneRules.select(rules, start, end)?
 		Ok({ start, end, rules, coverage })
@@ -38,7 +38,7 @@ ResolvedSelection :: {
 	## Continue a validated zone-selection cursor under explicit work/storage
 	## limits. Only complete interpretation becomes a snapshot. The cursor
 	## retains the exact rules and civil inputs across all resumptions.
-	collect : ZoneRules.SelectionCursor, ZoneRules.SelectionLimits -> Try(Batch, [OutOfRange, ..])
+	collect : ZoneRules.SelectionCursor, ZoneRules.SelectionLimits -> Try(Batch, [OutOfRange])
 	collect = |cursor, limits| {
 		batch = ZoneRules.SelectionCursor.collect(cursor, limits)?
 		status = match batch.status {
@@ -69,7 +69,7 @@ ResolvedSelection :: {
 
 	## Interpret the original civil range under another explicit rules snapshot.
 	## This can change the coverage or return a validity/range error.
-	reresolve : ResolvedSelection, ZoneRules -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
+	reresolve : ResolvedSelection, ZoneRules -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
 	reresolve = |snapshot, new_rules| resolve(new_rules, snapshot.start, snapshot.end)
 
 	## Compare only the resulting POSIX coverage, ignoring source labels and rule provenance.

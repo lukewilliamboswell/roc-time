@@ -18,7 +18,7 @@ Database :: [].{
 	## Look up an exact, case-sensitive IANA zone name or supported alias, such as
 	## Europe/Paris. UnknownZone retains an unrecognized name; no local zone or
 	## fallback is selected. The returned immutable record may share rule storage.
-	get : Str -> Try(Record, [UnknownZone(Str), ..])
+	get : Str -> Try(Record, [UnknownZone(Str)])
 	get = |name| {
 		index = match find_name(name) {
 			Found(value) => value
