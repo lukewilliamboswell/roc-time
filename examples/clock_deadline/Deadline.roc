@@ -13,7 +13,7 @@ Deadline :: [].{
 	## requires a positive current-epoch reading and rejects that ambiguous zero.
 	## The bridge cannot distinguish a genuine epoch from the platform fallback.
 	## Floor is explicit precision reduction; the core retains signed input APIs.
-	acquire_positive_nanoseconds : U128 -> Try(PosixBoundary, [UnavailableOrEpochClock, OutOfRange, Submicrosecond, ..])
+	acquire_positive_nanoseconds : U128 -> Try(PosixBoundary, [UnavailableOrEpochClock, OutOfRange, Submicrosecond])
 	acquire_positive_nanoseconds = |raw| {
 		if raw == 0 {
 			return Err(UnavailableOrEpochClock)
@@ -26,7 +26,7 @@ Deadline :: [].{
 	}
 
 	## Store both positions as UTC timestamps with six fractional digits.
-	evaluate : PosixBoundary, Str -> Try(Record, [Expiry(OffsetTimestamp.Error), Output(OffsetTimestamp.Error), OutOfRange, ..])
+	evaluate : PosixBoundary, Str -> Try(Record, [Expiry(OffsetTimestamp.Error), Output(OffsetTimestamp.Error), OutOfRange])
 	evaluate = |now, expiry_text| {
 		expiry = match OffsetTimestamp.parse(expiry_text) {
 			Ok(value) => value
