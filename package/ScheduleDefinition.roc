@@ -99,12 +99,28 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	to_hash = |value, hasher| {
 		context = { rules: ZoneRules.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
 		hash = context.to_hash(hasher)
+		# nightly-2026-09-27 crashes when deriving the hash of a recurrence
+		# definition's subdaily frequency here, so its fields are hashed explicitly.
+		hash_rule = |rule, state| {
+			data = TimedRecurrence.definition(rule)
+			pattern = match data.pattern {
+				Calendar(spec) => spec.to_hash((0.U8).to_hash(state))
+				Subdaily(spec) => {
+					frequency = match spec.frequency {
+						Hourly => 0.U8
+						Minutely => 1
+						Secondly => 2
+					}
+					spec.calendar.to_hash(spec.interval.to_hash(frequency.to_hash((1.U8).to_hash(state))))
+				}
+			}
+			data.boundary_exclusions.to_hash(data.exclusions.to_hash(data.inclusions.to_hash(data.by_set_pos.to_hash(data.termination.to_hash(data.clocks.to_hash(data.anchor.to_hash(pattern)))))))
+		}
 		match value.origin {
-			Native(spec) => value.endings.to_hash(TimedRecurrence.definition(spec.rule).to_hash((0.U8).to_hash(hash)))
+			Native(spec) => value.endings.to_hash(hash_rule(spec.rule, (0.U8).to_hash(hash)))
 			ICal(spec) => {
 				data = ICalTimedRule.definition(spec.rule)
 				key = {
-					rule: TimedRecurrence.definition(data.rule),
 					duration: data.duration,
 					periods: data.periods,
 					mode: data.mode,
@@ -113,7 +129,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 						Local(_) => Bool.False
 					},
 				}
-				key.to_hash((1.U8).to_hash(hash))
+				key.to_hash(hash_rule(data.rule, (1.U8).to_hash(hash)))
 			}
 		}
 	}
