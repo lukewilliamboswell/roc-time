@@ -19,7 +19,7 @@ import time.ICalTimedRule
 import time.Coverage
 
 DispatchChecks :: [].{
-	run : {} -> Try({}, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed, ..])
+	run : {} -> Try({}, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, OutOfRange, InvalidMonth, InvalidDay, EmptySpan, ReversedBounds, Submicrosecond, Failed])
 	run = |_| {
 		check_endings({})?
 		nested_date : Calendar.Date
@@ -199,19 +199,19 @@ parse_offset = |text| match OffsetTimestamp.parse(text) {
 	Err(_) => Err(Failed)
 }
 
-parse_duration : Str -> Try(ICalDuration, [Failed, ..])
+parse_duration : Str -> Try(ICalDuration, [Failed])
 parse_duration = |text| match ICalDuration.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }
 
-parse_datetime : Str -> Try(ICalDateTime, [Failed, ..])
+parse_datetime : Str -> Try(ICalDateTime, [Failed])
 parse_datetime = |text| match ICalDateTime.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)
 }
 
-parse_period : Str -> Try(ICalPeriod, [Failed, ..])
+parse_period : Str -> Try(ICalPeriod, [Failed])
 parse_period = |text| match ICalPeriod.parse(text) {
 	Ok(value) => Ok(value)
 	Err(_) => Err(Failed)

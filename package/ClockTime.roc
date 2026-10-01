@@ -111,7 +111,7 @@ ClockTime :: [Micros(I64)].{
 
 	## Build a decoder for one encoded clock-label string. Return the clock and
 	## unconsumed state; distinguish InvalidClockTime from outer Encoding errors.
-	parser_for : encoding -> (state -> Try({ value : ClockTime, rest : state }, [InvalidClockTime(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ClockTime, rest : state }, [InvalidClockTime(Error), Encoding(err)]))
 		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
 	parser_for = |encoding| {
 		Encoding : encoding
@@ -146,7 +146,7 @@ ClockTime :: [Micros(I64)].{
 	## Validate a local clock label: hours 0..23, minutes/seconds 0..59 and
 	## microseconds 0..999999. A second of 60 returns UnsupportedLeapSecond.
 	## No date or timezone is attached.
-	from_fields : Fields -> Try(ClockTime, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
+	from_fields : Fields -> Try(ClockTime, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
 	from_fields = |fields| {
 		if fields.hour > 23 {
 			return Err(InvalidHour)
@@ -168,7 +168,7 @@ ClockTime :: [Micros(I64)].{
 
 	## Construct a clock label from 0 through 86399999999 microseconds since
 	## nominal midnight. Other values return OutOfRange; the input does not wrap.
-	from_microseconds_since_midnight : I64 -> Try(ClockTime, [OutOfRange, ..])
+	from_microseconds_since_midnight : I64 -> Try(ClockTime, [OutOfRange])
 	from_microseconds_since_midnight = |number| {
 		if number < 0 or number >= 86400000000 {
 			Err(OutOfRange)

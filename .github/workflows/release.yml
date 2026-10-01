@@ -51,7 +51,7 @@ jobs:
           allow-nightly-bootstrap: 'false'
           compiler-root: package/main.roc
           # Explicit simulation until upstream publishes stable Roc.
-          simulated-stable-pin: nightly-2026-09-05-b195f5b
+          simulated-stable-pin: nightly-2026-09-27-a3ce7f1
           simulated-stable-line: '0.1'
 
       - name: Read Roc version
@@ -273,7 +273,7 @@ jobs:
           cat >> .release/release-notes.md <<'NOTE'
 
           This release pilots the `roc-0.1.x` support workflow with
-          `nightly-2026-09-05-b195f5b` standing in for a future stable Roc compiler.
+          `nightly-2026-09-27-a3ce7f1` standing in for a future stable Roc compiler.
           It does not claim compatibility with an upstream stable Roc 0.1 release.
           NOTE
 

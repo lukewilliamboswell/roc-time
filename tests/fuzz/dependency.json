@@ -1,7 +1,7 @@
 {
   "name": "roc-fuzz",
-  "version": "0.3.0",
-  "revision": "ec137edcf0fa2530e3dbb175fec4ddff5281cc6d",
-  "url": "https://github.com/lukewilliamboswell/roc-fuzz/releases/download/0.3.0/FTcKnkDxL1ZXfKsxeLmNKZ6XKnuKDd47Gv79ThxLYSfw.tar.zst",
-  "sha256": "f9be31a5d7f0ba2e7e13ec804e6827513af9e9e548137d780a904fdbb5793ee5"
+  "version": "0.4.2",
+  "revision": "b37bb7dc0b6aa44390d4bfa84978404e94cec885",
+  "url": "https://github.com/lukewilliamboswell/roc-fuzz/releases/download/0.4.2/9weENCAXVZV14WFpwHqP3rpn46EDJWQQknSLpa1Hg5nL.tar.zst",
+  "sha256": "60d45f07a51515f2a49eadcf2163fb9c2801df5341c8b8685f81581010c7dd2c"
 }

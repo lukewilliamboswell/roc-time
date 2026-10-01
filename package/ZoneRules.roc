@@ -28,7 +28,7 @@ import PosixSpan
 ## import time.PosixSpan
 ## import time.PosixBoundary
 ## import time.GregorianDate
-## import time.Calendar.Date
+## import time.Calendar
 ## import time.ClockTime
 ## import time.LocalDateTime
 ##
@@ -63,7 +63,7 @@ ZoneRules :: {
 	## Resolve a complete calendar selection through the shared bounded cursor.
 	## Construction does not scan transitions; collect applies explicit limits.
 	## Fold components remain disconnected and gaps may contribute no coverage.
-	calendar_selection_cursor : ZoneRules, Calendar.Value -> Try(SelectionCursor, [OutOfRange, EmptySelection, ReversedSelection, OutsideValidity, ..])
+	calendar_selection_cursor : ZoneRules, Calendar.Value -> Try(SelectionCursor, [OutOfRange, EmptySelection, ReversedSelection, OutsideValidity])
 	calendar_selection_cursor = |rules, value| {
 		bounds = LocalDateTime.calendar_value_bounds(value)?
 		selection_cursor(rules, bounds.start, bounds.end)
@@ -117,12 +117,12 @@ ZoneRules :: {
 	## Reject empty names/versions or transitions outside validity or out of order.
 	## Prefer new_bounded when the provider supplies tighter authoritative bounds:
 	## full-range bounds require wider validity for complete inverse queries.
-	new : Str, Str, PosixSpan, FixedOffset, List(Transition) -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, ..])
+	new : Str, Str, PosixSpan, FixedOffset, List(Transition) -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
 	new = |name, version, validity, initial, transitions| new_bounded(name, version, validity, initial, transitions, { minimum: I32.lowest, maximum: I32.highest })
 
 	## Bounds are a provider guarantee, including outside this finite table.
 	## Never infer global bounds merely from the offsets observed in the table.
-	new_bounded : Str, Str, PosixSpan, FixedOffset, List(Transition), OffsetBounds -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, ..])
+	new_bounded : Str, Str, PosixSpan, FixedOffset, List(Transition), OffsetBounds -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
 	new_bounded = |name, version, validity, initial, transitions, bounds| {
 		if bounds.minimum > bounds.maximum {
 			return Err(InvalidOffsetBounds)
@@ -170,7 +170,7 @@ ZoneRules :: {
 	## may remain shared. DatabaseSource requires second-aligned boundaries;
 	## Supplied accepts exact microseconds. No provider lookup or authentication
 	## of the declared database source or digest occurs.
-	from_definition : Definition -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment, ..])
+	from_definition : Definition -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment])
 	from_definition = |data| {
 		rules = new_bounded(data.name, data.version, data.validity, data.initial, data.transitions, data.bounds)?
 		match data.provenance {
@@ -199,7 +199,7 @@ ZoneRules :: {
 	## Validate structural zone-data input and retain its database provenance.
 	## Reject unsupported schema, axis or future handling rather than guessing
 	## their meaning; no provider lookup occurs.
-	from_database : Database -> Try(ZoneRules, [UnsupportedSchema(U16), UnsupportedAxis(Str), UnsupportedFutureHandling(Str), MissingProvenance, EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, EmptySpan, ReversedBounds, OutOfRange, ..])
+	from_database : Database -> Try(ZoneRules, [UnsupportedSchema(U16), UnsupportedAxis(Str), UnsupportedFutureHandling(Str), MissingProvenance, EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, EmptySpan, ReversedBounds, OutOfRange])
 	from_database = |data| {
 		if data.schema != 1 {
 			return Err(UnsupportedSchema(data.schema))
@@ -247,7 +247,7 @@ ZoneRules :: {
 	offset_bounds = |rules| rules.bounds
 
 	## A transition's new offset applies at its exact boundary.
-	offset_at : ZoneRules, PosixBoundary -> Try(FixedOffset, [OutsideValidity, ..])
+	offset_at : ZoneRules, PosixBoundary -> Try(FixedOffset, [OutsideValidity])
 	offset_at = |rules, boundary| {
 		if boundary < PosixSpan.start(rules.validity) or boundary >= PosixSpan.end(rules.validity) {
 			return Err(OutsideValidity)
@@ -266,7 +266,7 @@ ZoneRules :: {
 	## Returns its local label and actual offset with one offset lookup. A fold
 	## needs no occurrence policy here: the supplied boundary selects the instant.
 	## Cost is the existing linear transition lookup plus scalar projection.
-	project : ZoneRules, PosixBoundary, Calendar -> Try({ local : LocalDateTime, offset : FixedOffset }, [OutsideValidity, OutOfRange, ..])
+	project : ZoneRules, PosixBoundary, Calendar -> Try({ local : LocalDateTime, offset : FixedOffset }, [OutsideValidity, OutOfRange])
 	project = |rules, boundary, calendar| {
 		offset = offset_at(rules, boundary)?
 		local = FixedOffset.project(offset, boundary, calendar)?
@@ -274,7 +274,7 @@ ZoneRules :: {
 	}
 
 	## Complete classification only when every possible candidate is covered.
-	resolve : ZoneRules, LocalDateTime -> Try(Resolution, [OutsideValidity, OutOfRange, ..])
+	resolve : ZoneRules, LocalDateTime -> Try(Resolution, [OutsideValidity, OutOfRange])
 	resolve = |rules, local| {
 		cursor = classification_cursor(rules, local)?
 		batch = ClassificationCursor.collect(cursor, { max_segments: U64.highest, max_candidates: U64.highest })?
@@ -317,7 +317,7 @@ ZoneRules :: {
 		## First/last/gap choice is constant work; matching an asserted offset is
 		## O(log n) in fold occurrences. Gap adjustment retains its transition.
 		## MatchingOffset checks the pre-gap offset for an explicit gap adjustment.
-		choose : Classification, { occurrence : OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] } -> Try(BoundaryChoice, [Gap, Ambiguous, AmbiguousGap, OffsetConflict, OutOfRange, ..])
+		choose : Classification, { occurrence : OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] } -> Try(BoundaryChoice, [Gap, Ambiguous, AmbiguousGap, OffsetConflict, OutOfRange])
 		choose = |value, policy| {
 			match value.resolution {
 				Gap => {
@@ -405,7 +405,7 @@ ZoneRules :: {
 	## Bind a civil label to rules after proving the full inverse range fits
 	## validity. Construction does not scan transitions; collect performs bounded work.
 	## Return OutsideValidity or OutOfRange instead of an incomplete classification.
-	classification_cursor : ZoneRules, LocalDateTime -> Try(ClassificationCursor, [OutsideValidity, OutOfRange, ..])
+	classification_cursor : ZoneRules, LocalDateTime -> Try(ClassificationCursor, [OutsideValidity, OutOfRange])
 	classification_cursor = |rules, local| {
 		earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), local)?
 		latest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), local)?
@@ -431,7 +431,7 @@ ZoneRules :: {
 		## One work unit visits one constant-offset segment and its ending
 		## transition. Capacity includes matches and forward-gap evidence.
 		## Shared cursor snapshots may copy retained buffers on append.
-		collect : ClassificationCursor, ClassificationLimits -> Try(ClassificationBatch, [OutOfRange, ..])
+		collect : ClassificationCursor, ClassificationLimits -> Try(ClassificationBatch, [OutOfRange])
 		collect = |initial, limits| {
 			# Keep output buffers independently owned during the loop. Rebuilding
 			# a whole cursor on each append retains an alias to its old buffer.
@@ -501,7 +501,7 @@ ZoneRules :: {
 	}
 
 	## Choose explicitly; gaps never silently move to another local label.
-	resolve_occurrence : ZoneRules, LocalDateTime, OccurrencePolicy -> Try(PosixBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, ..])
+	resolve_occurrence : ZoneRules, LocalDateTime, OccurrencePolicy -> Try(PosixBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
 	resolve_occurrence = |rules, local, policy| {
 		cursor = classification_cursor(rules, local)?
 		batch = ClassificationCursor.collect(cursor, { max_segments: U64.highest, max_candidates: U64.highest })?
@@ -520,7 +520,7 @@ ZoneRules :: {
 	}
 
 	## Appointment between independently chosen occurrences, not a selection.
-	appointment : ZoneRules, LocalDateTime, OccurrencePolicy, LocalDateTime, OccurrencePolicy -> Try(PosixSpan, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, EmptySpan, ReversedBounds, ..])
+	appointment : ZoneRules, LocalDateTime, OccurrencePolicy, LocalDateTime, OccurrencePolicy -> Try(PosixSpan, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, EmptySpan, ReversedBounds])
 	appointment = |rules, start, start_policy, end, end_policy| {
 		lower = resolve_occurrence(rules, start, start_policy)?
 		upper = resolve_occurrence(rules, end, end_policy)?
@@ -528,7 +528,7 @@ ZoneRules :: {
 	}
 
 	## Preimage of the half-open local selection; never an endpoint hull.
-	select : ZoneRules, LocalDateTime, LocalDateTime -> Try(Coverage, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
+	select : ZoneRules, LocalDateTime, LocalDateTime -> Try(Coverage, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
 	select = |rules, start, end| {
 		cursor = selection_cursor(rules, start, end)?
 		batch = SelectionCursor.collect(cursor, { max_segments: U64.highest, max_members: U64.highest })?
@@ -552,7 +552,7 @@ ZoneRules :: {
 
 	## Prove the full inverse range is covered before any segment is evaluated.
 	## The opaque cursor binds the immutable rules and original local selection.
-	selection_cursor : ZoneRules, LocalDateTime, LocalDateTime -> Try(SelectionCursor, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange, ..])
+	selection_cursor : ZoneRules, LocalDateTime, LocalDateTime -> Try(SelectionCursor, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
 	selection_cursor = |rules, start, end| {
 		match LocalDateTime.compare_position(start, end) {
 			EQ => return Err(EmptySelection)
@@ -589,7 +589,7 @@ ZoneRules :: {
 		## builder append. Rejected/empty segments still consume work. Shared
 		## output appends can copy up to max_members retained spans. Zero budgets
 		## return Limited; no incomplete coverage is exposed as a complete value.
-		collect : SelectionCursor, SelectionLimits -> Try(SelectionBatch, [OutOfRange, ..])
+		collect : SelectionCursor, SelectionLimits -> Try(SelectionBatch, [OutOfRange])
 		collect = |initial, limits| {
 			rules = initial.rules
 			start = initial.start
@@ -721,7 +721,7 @@ selected_span = |lower, upper, offset, start, end| {
 }
 
 # Source units are seconds; do not narrow before scaling or wrap at I64 limits.
-database_boundary : I64 -> Try(PosixBoundary, [OutOfRange, ..])
+database_boundary : I64 -> Try(PosixBoundary, [OutOfRange])
 database_boundary = |seconds| match I128.to_i64_try(seconds.to_i128() * 1000000) {
 	Ok(micros) => Ok(PosixBoundary.from_microseconds(micros))
 	Err(_) => Err(OutOfRange)

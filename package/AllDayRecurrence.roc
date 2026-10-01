@@ -25,7 +25,7 @@ AllDayRecurrence(id) :: {
 	## Create a cursor for positive-duration all-day events within a source-date window.
 	## Empty/reversed windows and zero days fail; actual zone interpretation is deferred until
 	## consumption.
-	new : id, DateRecurrence, DateRecurrence.Window, U64, ZoneRules -> Try(AllDayRecurrence(id), [InvalidDuration, EmptyWindow, ReversedWindow, ..])
+	new : id, DateRecurrence, DateRecurrence.Window, U64, ZoneRules -> Try(AllDayRecurrence(id), [InvalidDuration, EmptyWindow, ReversedWindow])
 	new = |series, rule, window, days, rules| {
 		if days == 0 {
 			return Err(InvalidDuration)
@@ -54,7 +54,7 @@ AllDayRecurrence(id) :: {
 	## Materialize at most max_occurrences. Work budgets apply to the whole
 	## call, not separately to each emitted occurrence. Reaching output capacity
 	## returns Limited without looking ahead to prove End. Resume its cursor.
-	collect : AllDayRecurrence(id), { work : Limits, max_occurrences : U64 } -> Try(Batch(id), [OutOfRange, OutsideValidity, ..])
+	collect : AllDayRecurrence(id), { work : Limits, max_occurrences : U64 } -> Try(Batch(id), [OutOfRange, OutsideValidity])
 	collect = |initial, budget| {
 		var $state = initial
 		var $occurrences = []
@@ -89,7 +89,7 @@ AllDayRecurrence(id) :: {
 	## At most one date-cursor advance and one bounded zone-cursor advance.
 	## A pending occurrence resumes before any new date is consumed. Empty
 	## coverage still emits an occurrence; skipped civil days do not erase IDs.
-	next : AllDayRecurrence(id), Limits -> Try(Next(id), [OutOfRange, OutsideValidity, ..])
+	next : AllDayRecurrence(id), Limits -> Try(Next(id), [OutOfRange, OutsideValidity])
 	next = |initial, limits| {
 		var $state = initial
 		var $date_steps = 0.U64

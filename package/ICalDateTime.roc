@@ -40,7 +40,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ICalDateTime, rest : state }, [InvalidICalDateTime(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ICalDateTime, rest : state }, [InvalidICalDateTime(Error), Encoding(err)]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]
@@ -142,7 +142,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 
 	## Only explicit Z permits context-free POSIX conversion. A local value
 	## requires the caller's interpretation context, even if the fields are zero.
-	utc_boundary : ICalDateTime -> Try(PosixBoundary, [NeedsContext, OutOfRange, ..])
+	utc_boundary : ICalDateTime -> Try(PosixBoundary, [NeedsContext, OutOfRange])
 	utc_boundary = |value| match value.form {
 		Local => Err(NeedsContext)
 		Utc => FixedOffset.resolve(FixedOffset.from_seconds(0), local_label(value))

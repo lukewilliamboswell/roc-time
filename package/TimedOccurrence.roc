@@ -45,7 +45,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })] }
 
 	## Validate the duration's component domain without interpreting an anchor.
-	validate_duration : Duration -> Try({}, [InvalidDuration, ..])
+	validate_duration : Duration -> Try({}, [InvalidDuration])
 	validate_duration = |duration| match duration {
 		Coordinate(delta) => if PosixDelta.to_microseconds(delta) > 0 {
 			Ok({})
@@ -66,7 +66,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## Components must be nonnegative and at least one must be positive.
 	## Calendar work is bounded; zone interpretation resumes through collect.
 	## Existing start interpretation and its immutable rules are preserved.
-	cursor : id, TimedRecurrence.Occurrence, Duration -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields), ..])
+	cursor : id, TimedRecurrence.Occurrence, Duration -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields)])
 	cursor = |id, start, duration| match duration {
 		Coordinate(delta) => {
 			validate_duration(duration)?
@@ -114,7 +114,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## order does not establish timeline order across a fold/gap. Both explicit
 	## end forms validate the resolved span, returning InvalidDuration when its
 	## end is equal to or before the selected start. AtBoundary needs no rules.
-	cursor_with_ending : id, TimedRecurrence.Occurrence, Ending -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields), ..])
+	cursor_with_ending : id, TimedRecurrence.Occurrence, Ending -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields)])
 	cursor_with_ending = |id, start, ending| match ending {
 		After(duration) => cursor(id, start, duration)
 		AtBoundary(end) => {
@@ -134,7 +134,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 		## Resolve the pending ending within zone work/storage limits. Complete returns the nonempty
 		## span; Limited retains progress. Invalid endpoints or unsupported interpretation remain
 		## structured errors.
-		collect : Cursor(id), ZoneRules.ClassificationLimits -> Try(Batch(id), [InvalidDuration, OutOfRange, Gap, Ambiguous, AmbiguousGap, OffsetConflict, ..])
+		collect : Cursor(id), ZoneRules.ClassificationLimits -> Try(Batch(id), [InvalidDuration, OutOfRange, Gap, Ambiguous, AmbiguousGap, OffsetConflict])
 		collect = |state, limits| match state {
 			Ready(value) => Ok({ segments: 0, buffered: 0, status: Complete(value) })
 			Explicit(value) => {
@@ -219,10 +219,10 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	to_inspect = |value| "TimedOccurrence(${Str.inspect(value.span)})"
 }
 
-finish : id, TimedRecurrence.Occurrence, TimedOccurrence.Duration, PosixBoundary, [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] -> Try(TimedOccurrence(id), [InvalidDuration, ..])
+finish : id, TimedRecurrence.Occurrence, TimedOccurrence.Duration, PosixBoundary, [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] -> Try(TimedOccurrence(id), [InvalidDuration])
 finish = |id, start, duration, end, calendar_anchor| finish_ending(id, start, After(duration), end, calendar_anchor)
 
-finish_ending : id, TimedRecurrence.Occurrence, TimedOccurrence.Ending, PosixBoundary, [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] -> Try(TimedOccurrence(id), [InvalidDuration, ..])
+finish_ending : id, TimedRecurrence.Occurrence, TimedOccurrence.Ending, PosixBoundary, [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] -> Try(TimedOccurrence(id), [InvalidDuration])
 finish_ending = |id, start, ending, end, calendar_anchor| {
 	span = match PosixSpan.new(TimedRecurrence.Occurrence.boundary(start), end) {
 		Ok(value) => value

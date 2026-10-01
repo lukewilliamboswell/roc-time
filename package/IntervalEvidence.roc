@@ -29,7 +29,7 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 
 	## Construct evidence from 1 to 4096 correlated interval choices. Sort and
 	## deduplicate choices while preserving each interval as one alternative.
-	paired : List(PosixSpan) -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives, ..])
+	paired : List(PosixSpan) -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives])
 	paired = |choices| {
 		if choices.is_empty() {
 			return Err(InconsistentEvidence)
@@ -71,7 +71,7 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 	## Admit every strictly ordered start/end pair from the supplied lists without
 	## materializing their product. Reject empty lists, lists over 4096 entries,
 	## or inputs with no start strictly before any end.
-	independent : { starts : List(PosixBoundary), ends : List(PosixBoundary) } -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives, ..])
+	independent : { starts : List(PosixBoundary), ends : List(PosixBoundary) } -> Try(IntervalEvidence, [InconsistentEvidence, TooManyAlternatives])
 	independent = |choices| {
 		if choices.starts.is_empty() or choices.ends.is_empty() {
 			return Err(InconsistentEvidence)

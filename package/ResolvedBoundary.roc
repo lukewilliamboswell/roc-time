@@ -16,7 +16,7 @@ ResolvedBoundary :: {
 	## Choose an occurrence under explicit rules and policy, retaining the inputs
 	## and actual offset. Reject gaps, unresolved ambiguity, offset conflicts,
 	## and labels whose interpretation exceeds the rules or numeric range.
-	resolve : ZoneRules, LocalDateTime, ZoneRules.OccurrencePolicy -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, ..])
+	resolve : ZoneRules, LocalDateTime, ZoneRules.OccurrencePolicy -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
 	resolve = |rules, source, policy| {
 		boundary = ZoneRules.resolve_occurrence(rules, source, policy)?
 		offset = ZoneRules.offset_at(rules, boundary)?
@@ -44,7 +44,7 @@ ResolvedBoundary :: {
 	offset = |snapshot| snapshot.offset
 
 	## Explicitly interpret the original label/policy under another ruleset.
-	reresolve : ResolvedBoundary, ZoneRules -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange, ..])
+	reresolve : ResolvedBoundary, ZoneRules -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
 	reresolve = |snapshot, new_rules| resolve(new_rules, snapshot.source, snapshot.policy)
 
 	## Compare the stored POSIX position, independently of provenance.

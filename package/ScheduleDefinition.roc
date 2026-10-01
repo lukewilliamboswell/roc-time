@@ -67,7 +67,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## Fresh execution state for each window; COUNT remains anchored at DTSTART.
 	## Definition validation is not repeated. Interpretation errors remain lazy
 	## checked results of TimedSchedule consumption under its normal budgets.
-	cursor : id, ScheduleDefinition, TimedRecurrence.Window -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange, ..])
+	cursor : id, ScheduleDefinition, TimedRecurrence.Window -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
 	cursor = |series, value, window| TimedSchedule.from_prepared(series, value.rule, window, value.endings, value.context)
 
 	## Declaration equality includes origin, retained selectors/exception labels,

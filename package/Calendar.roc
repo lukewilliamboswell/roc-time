@@ -24,7 +24,7 @@ Calendar := [Gregorian, Julian].{
 		## Clamp or Carry for nonexistent intermediate destinations. Return
 		## InvalidDestination or OutOfRange rather than silently choosing a policy.
 		## Clamping is not invertible and must not be used to step RFC recurrence rules.
-		shift_day : GregorianDate, Calendar.Delta, Policy -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields), ..])
+		shift_day : GregorianDate, Calendar.Delta, Policy -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields)])
 		shift_day = |date, delta, policy| {
 			parts = Calendar.Delta.to_components(delta)
 			fields = GregorianDate.to_fields(date)
@@ -99,7 +99,7 @@ Calendar := [Gregorian, Julian].{
 	to_inspect = |calendar| "Calendar(${to_name(calendar)})"
 	## Select a supported profile from the exact name gregorian or julian.
 	## Other names return UnsupportedCalendar with the supplied name.
-	from_name : Str -> Try(Calendar, [UnsupportedCalendar(Str), ..])
+	from_name : Str -> Try(Calendar, [UnsupportedCalendar(Str)])
 	from_name = |name| {
 		match name {
 			"gregorian" => Ok(Gregorian)
@@ -129,7 +129,7 @@ Calendar := [Gregorian, Julian].{
 
 		## Access a stored Gregorian date without converting another calendar.
 		## Use in_calendar when conversion, rather than access, is intended.
-		as_gregorian : Date -> Try(GregorianDate, [UnsupportedCalendar(Calendar), ..])
+		as_gregorian : Date -> Try(GregorianDate, [UnsupportedCalendar(Calendar)])
 		as_gregorian = |date| match date {
 			Gregorian(value) => Ok(value)
 			Julian(_) => Err(UnsupportedCalendar(Julian))
@@ -138,7 +138,7 @@ Calendar := [Gregorian, Julian].{
 		## Validate { year, month, day } in the explicitly selected calendar. Year is
 		## astronomical (zero means 1 BCE); month and day are one-based. Invalid month/day
 		## combinations and unsupported provider years return structured errors.
-		from_fields : Calendar, Fields -> Try(Date, [OutOfRange, InvalidMonth, InvalidDay, ..])
+		from_fields : Calendar, Fields -> Try(Date, [OutOfRange, InvalidMonth, InvalidDay])
 		from_fields = |calendar, fields| match calendar {
 			Gregorian => match GregorianDate.from_fields(fields) {
 				Ok(date) => Ok(Gregorian(date))
@@ -152,7 +152,7 @@ Calendar := [Gregorian, Julian].{
 
 		## Describe a shared civil-day coordinate in the selected calendar. Return
 		## OutOfRange when the date is outside that calendar's supported years.
-		from_civil_day : Calendar, CivilDay -> Try(Date, [OutOfRange, ..])
+		from_civil_day : Calendar, CivilDay -> Try(Date, [OutOfRange])
 		from_civil_day = |calendar, coordinate| match calendar {
 			Gregorian => match GregorianDate.from_civil_day(coordinate) {
 				Ok(date) => Ok(Gregorian(date))
@@ -189,7 +189,7 @@ Calendar := [Gregorian, Julian].{
 
 		## Convert to a description of the same civil day in the requested calendar.
 		## Return OutOfRange if that day is unsupported by the destination provider.
-		in_calendar : Date, Calendar -> Try(Date, [OutOfRange, ..])
+		in_calendar : Date, Calendar -> Try(Date, [OutOfRange])
 		in_calendar = |date, target| from_civil_day(target, to_civil_day(date))
 
 		## Equal day extent on the shared civil axis, independent of description.
@@ -297,14 +297,14 @@ Calendar := [Gregorian, Julian].{
 		Resolution : [Year, Month, Day, Hour, Minute, Second, Fraction(U8)]
 
 		## Select the whole provider year; year zero is 1 BCE.
-		year : Calendar, I64 -> Try(Value, [OutOfRange, InvalidMonth, InvalidDay, ..])
+		year : Calendar, I64 -> Try(Value, [OutOfRange, InvalidMonth, InvalidDay])
 		year = |calendar, number| {
 			date = Calendar.Date.from_fields(calendar, { year: number, month: 1, day: 1 })?
 			Ok({ start: value_midnight(date), precision: Year })
 		}
 
 		## Select a whole calendar month; invalid month numbers return InvalidMonth.
-		month : Calendar, I64, U8 -> Try(Value, [OutOfRange, InvalidMonth, InvalidDay, ..])
+		month : Calendar, I64, U8 -> Try(Value, [OutOfRange, InvalidMonth, InvalidDay])
 		month = |calendar, number, month_number| {
 			date = Calendar.Date.from_fields(calendar, { year: number, month: month_number, day: 1 })?
 			Ok({ start: value_midnight(date), precision: Month })
@@ -315,21 +315,21 @@ Calendar := [Gregorian, Julian].{
 		day = |date| { start: value_midnight(date), precision: Day }
 		## Describe the entire local hour beginning at the supplied date and hour.
 		## Reject an invalid hour; zone interpretation may later yield disconnected coverage.
-		hour : Calendar.Date, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
+		hour : Calendar.Date, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
 		hour = |date, h| {
 			clock = ClockTime.from_fields({ hour: h, minute: 0, second: 0, microsecond: 0 })?
 			Ok({ start: { date, clock }, precision: Hour })
 		}
 		## Describe the entire local minute on the supplied date. Validate hour/minute
 		## fields; omitted seconds locate its start but do not narrow its resolution.
-		minute : Calendar.Date, U8, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
+		minute : Calendar.Date, U8, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
 		minute = |date, h, m| {
 			clock = ClockTime.from_fields({ hour: h, minute: m, second: 0, microsecond: 0 })?
 			Ok({ start: { date, clock }, precision: Minute })
 		}
 		## Describe the entire local second on the supplied date. Invalid clock fields
 		## and unsupported leap seconds return structured errors.
-		second : Calendar.Date, U8, U8, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
+		second : Calendar.Date, U8, U8, U8 -> Try(Value, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
 		second = |date, h, m, s| {
 			clock = ClockTime.from_fields({ hour: h, minute: m, second: s, microsecond: 0 })?
 			Ok({ start: { date, clock }, precision: Second })
@@ -338,7 +338,7 @@ Calendar := [Gregorian, Julian].{
 		## fraction is the supplied decimal integer: {value: 12, digits: 2} is .12.
 		## Zero digits and values requiring more digits are malformed. More than six
 		## digits are unsupported, even when trailing zeroes could be discarded.
-		fractional_second : Calendar.Date, { hour : U8, minute : U8, second : U8 }, { value : U32, digits : U8 } -> Try(Value, [InvalidFraction, UnsupportedPrecision, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond, ..])
+		fractional_second : Calendar.Date, { hour : U8, minute : U8, second : U8 }, { value : U32, digits : U8 } -> Try(Value, [InvalidFraction, UnsupportedPrecision, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
 		fractional_second = |date, clock_fields, fraction| {
 			if fraction.digits == 0 {
 				return Err(InvalidFraction)
@@ -371,7 +371,7 @@ Calendar := [Gregorian, Julian].{
 
 		## Half-open civil selection. O(1), with no zone choice or elapsed-time claim.
 		## Year/month bounds use Gregorian/Julian's twelve-month shape explicitly.
-		bounds : Value -> Try({ start : { date : Calendar.Date, clock : ClockTime }, end : { date : Calendar.Date, clock : ClockTime } }, [OutOfRange, ..])
+		bounds : Value -> Try({ start : { date : Calendar.Date, clock : ClockTime }, end : { date : Calendar.Date, clock : ClockTime } }, [OutOfRange])
 		bounds = |value| {
 			selected_date = value.start.date
 			calendar = Calendar.Date.calendar(selected_date)
@@ -473,7 +473,7 @@ value_fraction_width = |digits| match digits {
 	_ => crash "Validated decimal resolution invariant"
 }
 
-arithmetic_narrow_year : I128 -> Try(I64, [OutOfRange, ..])
+arithmetic_narrow_year : I128 -> Try(I64, [OutOfRange])
 arithmetic_narrow_year = |year| {
 	if year < -2147483648 or year > 2147483647 {
 		return Err(OutOfRange)
@@ -481,7 +481,7 @@ arithmetic_narrow_year = |year| {
 	I128.to_i64_try(year)
 }
 
-arithmetic_destination : I64, U8, U8, Calendar.Arithmetic.Policy -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields), ..])
+arithmetic_destination : I64, U8, U8, Calendar.Arithmetic.Policy -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields)])
 arithmetic_destination = |year, month, day, policy| {
 	length = match GregorianDate.days_in_month(year, month) {
 		Ok(value) => value
@@ -507,7 +507,7 @@ arithmetic_destination = |year, month, day, policy| {
 	}
 }
 
-arithmetic_shift_days : GregorianDate, I64 -> Try(GregorianDate, [OutOfRange, ..])
+arithmetic_shift_days : GregorianDate, I64 -> Try(GregorianDate, [OutOfRange])
 arithmetic_shift_days = |date, days| {
 	start = CivilDay.to_day_number(GregorianDate.to_civil_day(date))
 	number = match I64.plus_try(start, days) {

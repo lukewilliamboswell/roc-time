@@ -254,7 +254,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 	## application for this evaluation; no timezone is inferred. Rules remain
 	## immutable in the native cursor. Start/end selection follows RFC first-fold
 	## and before-gap policies, and all native schedule budgets remain available.
-	schedule : id, ICalTimedRule, TimedRecurrence.Window, ICalPeriod.Context -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	schedule : id, ICalTimedRule, TimedRecurrence.Window, ICalPeriod.Context -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 	schedule = |series, value, window, context| {
 		prepared = prepare(value, context)?
 		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
@@ -263,7 +263,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 	## Advanced context validation and checked ending preparation, without
 	## occurrence enumeration. Reuse with TimedSchedule.from_prepared; ordinary
 	## callers can use ScheduleDefinition to retain the original declaration too.
-	prepare : ICalTimedRule, ICalPeriod.Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime), ..])
+	prepare : ICalTimedRule, ICalPeriod.Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 	prepare = |value, context| {
 		compatible = match (value.mode, context) {
 			(Utc, Utc) => Bool.True

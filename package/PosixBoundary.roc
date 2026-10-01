@@ -39,14 +39,14 @@ PosixBoundary :: [Micros(I64)].{
 	## Convert nanoseconds since the POSIX epoch without losing precision.
 	## Return Submicrosecond unless divisible by 1000, or OutOfRange if the result
 	## cannot fit the supported I64 microsecond range.
-	from_nanoseconds : I128 -> Try(PosixBoundary, [Submicrosecond, OutOfRange, ..])
+	from_nanoseconds : I128 -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
 	from_nanoseconds = |value| {
 		from_nanoseconds_with_rounding(value, RejectSubmicrosecond)
 	}
 
 	## Convert nanoseconds since the POSIX epoch using the supplied rounding policy.
 	## Range is checked after rounding; RejectSubmicrosecond rejects an inexact input.
-	from_nanoseconds_with_rounding : I128, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange, ..])
+	from_nanoseconds_with_rounding : I128, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
 	from_nanoseconds_with_rounding = |value, policy| {
 		Ok(Micros(quantize(value, 1000, policy)?))
 	}
@@ -54,7 +54,7 @@ PosixBoundary :: [Micros(I64)].{
 	## Convert exact decimal seconds since the POSIX epoch with explicit rounding.
 	## RejectSubmicrosecond preserves exactness; a rounded result outside I64
 	## microseconds returns OutOfRange.
-	from_seconds : Dec, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange, ..])
+	from_seconds : Dec, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
 	from_seconds = |value, policy| {
 		Ok(Micros(quantize(Dec.to_attos(value), 1000000000000, policy)?))
 	}
@@ -103,7 +103,7 @@ PosixBoundary :: [Micros(I64)].{
 
 	## Add a signed POSIX displacement to a position. Return OutOfRange on overflow.
 	## For calendar-day or month changes, use calendar arithmetic with an explicit context.
-	shift : PosixBoundary, PosixDelta -> Try(PosixBoundary, [OutOfRange, ..])
+	shift : PosixBoundary, PosixDelta -> Try(PosixBoundary, [OutOfRange])
 	shift = |Micros(value), delta| {
 		match I64.plus_try(value, PosixDelta.to_microseconds(delta)) {
 			Ok(result) => Ok(Micros(result))
@@ -114,7 +114,7 @@ PosixBoundary :: [Micros(I64)].{
 	## Return the first position minus the second, as a signed POSIX displacement.
 	## OutOfRange is possible even when both positions individually fit.
 	## This is coordinate width, not leap-aware physical elapsed time.
-	difference : PosixBoundary, PosixBoundary -> Try(PosixDelta, [OutOfRange, ..])
+	difference : PosixBoundary, PosixBoundary -> Try(PosixDelta, [OutOfRange])
 	difference = |Micros(a), Micros(b)| {
 		match I64.minus_try(a, b) {
 			Ok(result) => Ok(PosixDelta.from_microseconds(result))
@@ -173,7 +173,7 @@ PosixBoundary :: [Micros(I64)].{
 
 # Private: divisor is either 1000 or 10^12. Remainder magnitude is below divisor;
 # quotient +/- 1 and twice the remainder cannot overflow I128. Narrow only last.
-quantize : I128, I128, PosixBoundary.Rounding -> Try(I64, [Submicrosecond, OutOfRange, ..])
+quantize : I128, I128, PosixBoundary.Rounding -> Try(I64, [Submicrosecond, OutOfRange])
 quantize = |value, divisor, policy| {
 	q = I128.div_trunc_by(value, divisor)
 	r = I128.rem_by(value, divisor)

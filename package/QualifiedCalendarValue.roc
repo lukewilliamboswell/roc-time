@@ -31,7 +31,7 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 	## Attach up to nine qualifications and canonicalize their order. Reject repeated
 	## scopes and scopes finer than the value supplies. Whole and component scopes
 	## may coexist; this constructor does not choose an interpretation model.
-	new : Calendar.Value, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope), ..])
+	new : Calendar.Value, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope)])
 	new = |value, qualifications| {
 		if qualifications.len() > 9 {
 			return Err(TooManyQualifications)
@@ -89,7 +89,7 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 	## Qualified descriptions require an explicit admissible model; CalendarEvidence
 	## provides finite-alternative point queries. NeedsModel is checked here before
 	## any zone work or range lowering.
-	selection_cursor : QualifiedCalendarValue, ZoneRules -> Try(ZoneRules.SelectionCursor, [NeedsModel, OutOfRange, EmptySelection, ReversedSelection, OutsideValidity, ..])
+	selection_cursor : QualifiedCalendarValue, ZoneRules -> Try(ZoneRules.SelectionCursor, [NeedsModel, OutOfRange, EmptySelection, ReversedSelection, OutsideValidity])
 	selection_cursor = |description, rules| {
 		if !description.qualifications.is_empty() {
 			return Err(NeedsModel)
