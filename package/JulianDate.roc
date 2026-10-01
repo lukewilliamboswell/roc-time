@@ -11,7 +11,7 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	## Validate a proleptic Julian date with astronomical year numbering.
 	## Return OutOfRange outside the supported year range, InvalidMonth outside
 	## 1..12, or InvalidDay for a nonexistent day. No clamping is performed.
-	from_fields : Fields -> Try(JulianDate, [OutOfRange, InvalidMonth, InvalidDay, ..])
+	from_fields : Fields -> Try(JulianDate, [OutOfRange, InvalidMonth, InvalidDay])
 	from_fields = |fields| {
 		length = days_in_month(fields.year, fields.month)?
 		if fields.day < 1 or fields.day > length {
@@ -22,7 +22,7 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	## Return the number of days in a Julian month, including its leap-year rule.
 	## Reject unsupported years with OutOfRange and months outside 1..12 with InvalidMonth.
-	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth, ..])
+	days_in_month : I64, U8 -> Try(U8, [OutOfRange, InvalidMonth])
 	days_in_month = |year, month| {
 		if year < -2147483648 or year > 2147483647 {
 			return Err(OutOfRange)
@@ -52,7 +52,7 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 
 	## Describe a shared civil-day coordinate in the Julian calendar.
 	## Return OutOfRange if that day lies outside the supported year range.
-	from_civil_day : CivilDay -> Try(JulianDate, [OutOfRange, ..])
+	from_civil_day : CivilDay -> Try(JulianDate, [OutOfRange])
 	from_civil_day = |day| {
 		number = CivilDay.to_day_number(day)
 		if number < year_start(-2147483648) or number >= year_start(2147483648) {

@@ -12,7 +12,7 @@ import GregorianDate
 ##
 ## ```roc
 ## import time.GregorianDate
-## import time.Calendar.Date
+## import time.Calendar
 ## import time.ClockTime
 ## import time.LocalDateTime
 ##
@@ -53,7 +53,7 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 
 	## Compose checked half-open civil bounds from selection components in O(1).
 	## An exclusive upper bound beyond the provider range returns OutOfRange.
-	calendar_value_bounds : Calendar.Value -> Try({ start : LocalDateTime, end : LocalDateTime }, [OutOfRange, ..])
+	calendar_value_bounds : Calendar.Value -> Try({ start : LocalDateTime, end : LocalDateTime }, [OutOfRange])
 	calendar_value_bounds = |value| {
 		bounds = Calendar.Value.bounds(value)?
 		Ok({ start: new(bounds.start.date, bounds.start.clock), end: new(bounds.end.date, bounds.end.clock) })
@@ -102,7 +102,7 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	## Canonical Gregorian date/clock text preserves the local position. It is
 	## neither a resolved timestamp nor a persistence format for every calendar.
 	## Reject other calendars; callers can explicitly convert with in_calendar.
-	to_gregorian_text : LocalDateTime -> Try(Str, [UnsupportedCalendar(Calendar), ..])
+	to_gregorian_text : LocalDateTime -> Try(Str, [UnsupportedCalendar(Calendar)])
 	to_gregorian_text = |value| {
 		day = Calendar.Date.as_gregorian(value.date)?
 		Ok("${GregorianDate.to_text(day)}T${ClockTime.to_text(value.clock)}")
@@ -122,7 +122,7 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 
 	## Describe the same civil-day and clock position in another supported calendar.
 	## The clock is unchanged; an unsupported destination date returns OutOfRange.
-	in_calendar : LocalDateTime, Calendar -> Try(LocalDateTime, [OutOfRange, ..])
+	in_calendar : LocalDateTime, Calendar -> Try(LocalDateTime, [OutOfRange])
 	in_calendar = |value, target| {
 		converted = Calendar.Date.in_calendar(value.date, target)?
 		Ok(new(converted, value.clock))

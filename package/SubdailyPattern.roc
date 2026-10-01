@@ -25,7 +25,7 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 
 	## Construct hourly, minutely or secondly periods with checked calendar filters and clock
 	## selectors. Reject nonpositive intervals and invalid selector fields before enumeration.
-	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(SubdailyPattern, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, ..])
+	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(SubdailyPattern, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond])
 	new = |start, spec| {
 		if spec.interval < 1 or spec.interval > 2147483647 {
 			return Err(InvalidInterval)
@@ -79,12 +79,12 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 
 	## Test a date against this pattern’s calendar filters; this does not test clock membership
 	## or period alignment.
-	matches_date : SubdailyPattern, GregorianDate -> Try(Bool, [OutOfRange, ..])
+	matches_date : SubdailyPattern, GregorianDate -> Try(Bool, [OutOfRange])
 	matches_date = |pattern, date| CalendarPattern.Filter.matches(pattern.dates, date)
 
 	## Constant arithmetic plus O(log 86400) clock seeks; no intervening
 	## periods are visited. Both boundaries must fit the Gregorian provider.
-	period : SubdailyPattern, U64 -> Try(Period, [OutOfRange, ..])
+	period : SubdailyPattern, U64 -> Try(Period, [OutOfRange])
 	period = |pattern, index| {
 		start = pattern.anchor_second + index.to_i128() * pattern.interval * pattern.unit
 		end_second = start + pattern.unit

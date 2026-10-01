@@ -27,7 +27,7 @@ JulianOracle := [Forward(I64, U8, U8), Inverse(I64)].{
 		}
 	}
 
-	verify : List(Case), U64 -> Try(U64, [CaseOrder(U64), Mismatch(U64), CaseCount, ..])
+	verify : List(Case), U64 -> Try(U64, [CaseOrder(U64), Mismatch(U64), CaseCount])
 	verify = |cases, count| {
 		if List.len(cases) != count {
 			return Err(CaseCount)

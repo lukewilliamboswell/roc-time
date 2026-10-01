@@ -69,7 +69,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## Anchor and inclusions must retain Gregorian labels. Exclusions and UNTIL
 	## retain native local-position semantics and their calendar descriptions.
 	## Boundary exclusions preserve their distinct POSIX domain.
-	from_definition : Definition -> Try(TimedRecurrence, [UnsupportedCalendar(Calendar), InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
+	from_definition : Definition -> Try(TimedRecurrence, [UnsupportedCalendar(Calendar), InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])
 	from_definition = |value| {
 		if value.inclusions.len() > 4096 or value.boundary_exclusions.len() > 4096 or value.exclusions.len() > 4096 - value.boundary_exclusions.len() {
 			return Err(TooManySelectors)
@@ -90,7 +90,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## Construct a timed calendar recurrence from a Gregorian date and clock anchor. Validate
 	## calendar/clock selectors, termination and positions before any zone lookup or occurrence
 	## expansion.
-	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
+	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])
 	new = |start, spec| {
 		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
 		validate_options(anchor, spec.termination, spec.by_set_pos)?
@@ -109,7 +109,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## Construct an hourly, minutely or secondly recurrence from local fields. Frequency-specific
 	## clock defaults and calendar filters are checked once; elapsed-time interpretation still
 	## requires explicit rules.
-	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart, ..])
+	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])
 	new_subdaily = |start, spec| {
 		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
 		validate_options(anchor, spec.termination, spec.by_set_pos)?
@@ -128,7 +128,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## Inputs plus existing boundary exclusions total at most 4096.
 	## O(n log n) normalization, O(log n) membership.
 	## Existing cursors retain their original immutable rule and exclusion set.
-	with_exclusions : TimedRecurrence, List(LocalDateTime) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	with_exclusions : TimedRecurrence, List(LocalDateTime) -> Try(TimedRecurrence, [TooManySelectors])
 	with_exclusions = |rule, labels| {
 		if labels.len() > 4096 - rule.boundary_exclusions.len() {
 			return Err(TooManySelectors)
@@ -142,7 +142,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## and BYSETPOS, including explicit inclusions. Local exclusions stay distinct.
 	## Supplied inputs plus existing local exclusions must total at most 4096.
 	## O(n log n) sorting/deduplication; O(log n) membership per occurrence.
-	with_boundary_exclusions : TimedRecurrence, List(PosixBoundary) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	with_boundary_exclusions : TimedRecurrence, List(PosixBoundary) -> Try(TimedRecurrence, [TooManySelectors])
 	with_boundary_exclusions = |rule, boundaries| {
 		if boundaries.len() > 4096 - rule.exclusions.len() {
 			return Err(TooManySelectors)
@@ -154,7 +154,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## They may precede the anchor or follow COUNT/UNTIL; the query still applies.
 	## Duplicate starts merge with the rule, and exclusions win over both.
 	## Existing cursors retain their input set. Construction is O(n log n).
-	with_inclusions : TimedRecurrence, List({ date : GregorianDate, clock : ClockTime }) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	with_inclusions : TimedRecurrence, List({ date : GregorianDate, clock : ClockTime }) -> Try(TimedRecurrence, [TooManySelectors])
 	with_inclusions = |rule, starts| {
 		if starts.len() > 4096 {
 			return Err(TooManySelectors)
@@ -166,7 +166,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## Add explicit starts while retaining existing inclusions and exclusions.
 	## Existing normalized entries plus supplied inputs must total at most 4096
 	## before deduplication. Construction sorts the combined bounded collection.
-	add_inclusions : TimedRecurrence, List({ date : GregorianDate, clock : ClockTime }) -> Try(TimedRecurrence, [TooManySelectors, ..])
+	add_inclusions : TimedRecurrence, List({ date : GregorianDate, clock : ClockTime }) -> Try(TimedRecurrence, [TooManySelectors])
 	add_inclusions = |rule, starts| {
 		if starts.len() > 4096 - rule.inclusions.len() {
 			return Err(TooManySelectors)
@@ -295,7 +295,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 
 	## Start a bounded source-window query using explicit immutable rules and fold/gap policies.
 	## Reject invalid windows; defer interpretation errors to cursor consumption.
-	cursor : TimedRecurrence, Window, Context -> Try(Cursor, [EmptyWindow, ReversedWindow, OutOfRange, ..])
+	cursor : TimedRecurrence, Window, Context -> Try(Cursor, [EmptyWindow, ReversedWindow, OutOfRange])
 	cursor = |rule, window, context| {
 		match LocalDateTime.compare_position(window.start, window.end) {
 			EQ => return Err(EmptyWindow)
@@ -355,7 +355,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		## Merge explicit starts after rule selection/COUNT, retaining at most
 		## one rule lookahead and one pending inclusion classification. Looking
 		## ahead may examine a full BYSETPOS period under the same budgets.
-		next : Cursor, Limits -> Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
+		next : Cursor, Limits -> Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
 		next = |initial, limits| {
 			if initial.rule.inclusions.is_empty() {
 				return next_rule(initial, limits)
@@ -470,7 +470,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		## Output capacity is a separate bound from pending candidate buffers.
 		## At capacity return Limited(OutputLimit) without looking ahead; even
 		## an exactly full final batch needs resumption to prove completion.
-		collect : Cursor, CollectLimits -> Try(Batch, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
+		collect : Cursor, CollectLimits -> Try(Batch, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
 		collect = |initial, limits| {
 			var $current = initial
 			var $occurrences = []
@@ -921,7 +921,7 @@ validate_options = |anchor, termination, positions| {
 	Ok({})
 }
 
-timed_frame : TimedRecurrence, U64 -> Try({ start_day : I64, end_day : I64, clock_start : U64, clock_end : U64, end : LocalDateTime }, [OutOfRange, ..])
+timed_frame : TimedRecurrence, U64 -> Try({ start_day : I64, end_day : I64, clock_start : U64, clock_end : U64, end : LocalDateTime }, [OutOfRange])
 timed_frame = |rule, index| match rule.schedule {
 	Calendar(pattern) => {
 		period = CalendarPattern.period(pattern, index)?
@@ -935,7 +935,7 @@ timed_frame = |rule, index| match rule.schedule {
 	}
 }
 
-matches_day : TimedRecurrence, U64, GregorianDate -> Try(Bool, [OutOfRange, ..])
+matches_day : TimedRecurrence, U64, GregorianDate -> Try(Bool, [OutOfRange])
 matches_day = |rule, index, date| match rule.schedule {
 	Calendar(pattern) => CalendarPattern.matches(pattern, index, date)
 	Subdaily(pattern) => SubdailyPattern.matches_date(pattern, date)
@@ -1168,7 +1168,7 @@ expect {
 
 # Internal rule execution: only Cursor.next performs inclusion merging.
 
-next_rule : TimedRecurrence.Cursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart, ..])
+next_rule : TimedRecurrence.Cursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
 next_rule = |initial, limits| {
 	var $state = initial
 	var $steps = 0.U64

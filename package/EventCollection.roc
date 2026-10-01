@@ -9,7 +9,7 @@ EventCollection(id) :: [Events(List({ id : id, span : PosixSpan }))].{
 	## Expected O(n) construction for constant-cost ID hashing/equality; the
 	## input list and ID payloads may remain shared.
 	## One entry per identity. Duplicate IDs are errors, even for equal spans.
-	from_entries : List({ id : id, span : PosixSpan }) -> Try(EventCollection(id), [DuplicateId(id), ..])
+	from_entries : List({ id : id, span : PosixSpan }) -> Try(EventCollection(id), [DuplicateId(id)])
 		where [id.is_eq : id, id -> Bool, id.to_hash : id, Hasher -> Hasher]
 	from_entries = |entries| {
 		var $seen = Dict.empty()

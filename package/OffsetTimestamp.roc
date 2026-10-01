@@ -36,7 +36,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : OffsetTimestamp, rest : state }, [InvalidOffsetTimestamp(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : OffsetTimestamp, rest : state }, [InvalidOffsetTimestamp(Error), Encoding(err)]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]
@@ -110,7 +110,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
 
 	## This source label is UTC for UnassertedUtc and offset-local otherwise.
-	boundary : OffsetTimestamp -> Try(PosixBoundary, [OutOfRange, ..])
+	boundary : OffsetTimestamp -> Try(PosixBoundary, [OutOfRange])
 	boundary = |value| FixedOffset.resolve(effective_offset(value.offset), local_label(value))
 
 	## Explicit projection for canonical timestamp output. The requested width

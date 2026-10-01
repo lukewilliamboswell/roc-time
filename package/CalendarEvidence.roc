@@ -35,7 +35,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	## deduplicate it. Reject calendar/resolution changes, changes to unqualified
 	## components, and alternatives whose exclusive civil end cannot be represented.
 	## Indexed errors refer to the original input list, starting at zero.
-	new : QualifiedCalendarValue, List(Calendar.Value) -> Try(CalendarEvidence, [InconsistentEvidence, TooManyAlternatives, CalendarMismatch(U64), ResolutionMismatch(U64), UnqualifiedComponent({ index : U64, scope : QualifiedCalendarValue.Scope }), CandidateOutOfRange(U64), ..])
+	new : QualifiedCalendarValue, List(Calendar.Value) -> Try(CalendarEvidence, [InconsistentEvidence, TooManyAlternatives, CalendarMismatch(U64), ResolutionMismatch(U64), UnqualifiedComponent({ index : U64, scope : QualifiedCalendarValue.Scope }), CandidateOutOfRange(U64)])
 	new = |description, alternatives| {
 		if alternatives.is_empty() {
 			return Err(InconsistentEvidence)
@@ -111,7 +111,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	## Rules, point and model are immutable across resumptions. No coverage list
 	## is built. Construction rejects an unrepresentable exclusive civil bound
 	## before any query can stop early on sufficient witnesses.
-	query : CalendarEvidence, ZoneRules, PosixBoundary -> Try(Query, [OutsideValidity, OutOfRange, ..])
+	query : CalendarEvidence, ZoneRules, PosixBoundary -> Try(Query, [OutsideValidity, OutOfRange])
 	query = |evidence, rules, point| {
 		offset = ZoneRules.offset_at(rules, point)?
 		calendar = Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(QualifiedCalendarValue.described_value(evidence.description))))

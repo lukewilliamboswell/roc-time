@@ -36,7 +36,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	## Decode one encoded string using this type's text parser.
 	## Encoding failures remain distinct from this profile's validation errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ICalDuration, rest : state }, [InvalidICalDuration(Error), Encoding(err), ..]))
+	parser_for : encoding -> (state -> Try({ value : ICalDuration, rest : state }, [InvalidICalDuration(Error), Encoding(err)]))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
 		]

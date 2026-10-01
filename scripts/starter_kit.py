@@ -13,7 +13,7 @@ import zipfile
 
 sys.dont_write_bytecode = True
 from roc_version import package_pin, replace_pin, read_pin
-from update_example_urls import migrate_example_api
+from update_example_urls import migrate_example_api, migrate_compiler_api
 from promote_examples import PROMOTED, ZONE_STARTERS, application_source, sources as application_sources
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -172,7 +172,7 @@ def build(output: Path, bundle_url: str, zone_bundle_url: str) -> Path:
         for path in sources:
             if path.is_symlink():
                 raise ValueError(f"symlink source is not permitted: {path}")
-            source = migrate_example_api(path.read_text())
+            source = migrate_compiler_api(migrate_example_api(path.read_text()), compiler)
             if path.name == "main.roc":
                 source = replace_pin(source, compiler)
                 source, core_count = re.subn(r'(?m)^(\s*time:\s*)"[^"]+"', lambda match: f'{match[1]}"{bundle_url}"', source)

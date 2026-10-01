@@ -120,7 +120,7 @@ DateRecurrence :: {
 	## Validate DTSTART against the whole first period, including BYSETPOS.
 	## Invalid generated dates are skipped; UNTIL is inclusive. COUNT applies
 	## before exclusions; explicit inclusions do not consume or replenish COUNT.
-	new : GregorianDate, Spec -> Try(DateRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange, ..])
+	new : GregorianDate, Spec -> Try(DateRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])
 	new = |anchor, spec| {
 		if spec.by_set_pos.len() > 4096 or spec.inclusions.len() > 4096 or spec.exclusions.len() > 4096 {
 			return Err(TooManySelectors)
@@ -163,7 +163,7 @@ DateRecurrence :: {
 
 	## Bind a fresh cursor to this exact immutable rule and a finite half-open
 	## date window. Evaluation starts at the series anchor, preserving COUNT.
-	cursor : DateRecurrence, Window -> Try(Cursor, [EmptyWindow, ReversedWindow, ..])
+	cursor : DateRecurrence, Window -> Try(Cursor, [EmptyWindow, ReversedWindow])
 	cursor = |rule, window| {
 		if window.start == window.end {
 			return Err(EmptyWindow)
@@ -195,7 +195,7 @@ DateRecurrence :: {
 		## Reducing capacity below an already retained buffer returns BufferLimit
 		## without advancing; Batch.buffered reports that existing retained count.
 		## Shared cursors may copy a period buffer; no scan hides inside one step.
-		collect : Cursor, Limits -> Try(Batch, [OutOfRange, ..])
+		collect : Cursor, Limits -> Try(Batch, [OutOfRange])
 		collect = |initial, limits| {
 			batch = fold(initial, limits, [], |dates, date| Continue(dates.append(date)))?
 			status = match batch.status {
@@ -212,7 +212,7 @@ DateRecurrence :: {
 		## max_occurrences limits visitor calls; steps account for engine work,
 		## not the caller's visitor. No intermediate output list is constructed.
 		## Resume with the returned cursor and value to preserve the accumulator.
-		fold : Cursor, Limits, acc, (acc, GregorianDate -> [Continue(acc), Stop(acc)]) -> Try(FoldBatch(acc), [OutOfRange, ..])
+		fold : Cursor, Limits, acc, (acc, GregorianDate -> [Continue(acc), Stop(acc)]) -> Try(FoldBatch(acc), [OutOfRange])
 		fold = |initial, limits, initial_value, visit| {
 			var $state = initial
 			var $value = initial_value
@@ -353,7 +353,7 @@ DateRecurrence :: {
 
 		## Return one date without looking for the following date. End is proven
 		## exhaustion; Limited needs more work/capacity and is not end-of-series.
-		next : Cursor, { max_steps : U64, max_buffered : U64 } -> Try(Next, [OutOfRange, ..])
+		next : Cursor, { max_steps : U64, max_buffered : U64 } -> Try(Next, [OutOfRange])
 		next = |initial, budget| {
 			batch = fold(initial, { max_steps: budget.max_steps, max_buffered: budget.max_buffered, max_occurrences: 1 }, None, |_, date| Stop(Some(date)))?
 			status = match batch.status {

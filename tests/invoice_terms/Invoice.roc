@@ -3,7 +3,7 @@ import time.GregorianDate
 
 ## This merchant's payment terms clamp a missing due-day to month end.
 Invoice :: { issued : GregorianDate, due : GregorianDate }.{
-	with_monthly_terms : GregorianDate, I64 -> Try(Invoice, [OutOfRange, InvalidDestination(GregorianDate.Fields), NegativeTerm, ..])
+	with_monthly_terms : GregorianDate, I64 -> Try(Invoice, [OutOfRange, InvalidDestination(GregorianDate.Fields), NegativeTerm])
 	with_monthly_terms = |issued, months| {
 		if months < 0 {
 			return Err(NegativeTerm)
