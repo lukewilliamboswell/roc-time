@@ -6,13 +6,13 @@ complete applications, memory, recurrence, zones, or coverage, and does not
 establish a fastest-library ranking.
 
 ```sh
-# Requires the compiler pinned in package/main.roc, Zig 0.16.0, Rust 1.95.0
+# Requires a current Roc nightly, Zig 0.16.0, Rust 1.95.0
 # with x86_64-unknown-linux-musl, Go 1.26.5, CPython 3.12.3 + pip, and Docker.
-ROC=/path/to/pinned/roc python3 scripts/benchmark_comparison.py --fetch --smoke
+ROC=/path/to/roc python3 scripts/benchmark_comparison.py --fetch --smoke
 # Offline dependency reuse; builds finish before comparative measurements.
-ROC=/path/to/pinned/roc python3 scripts/benchmark_comparison.py --cpu 2
+ROC=/path/to/roc python3 scripts/benchmark_comparison.py --cpu 2
 # A single explicitly selected domain:
-ROC=/path/to/pinned/roc python3 scripts/benchmark_comparison.py --profile seconds --cpu 2
+ROC=/path/to/roc python3 scripts/benchmark_comparison.py --profile seconds --cpu 2
 ```
 
 Choose an available CPU (`os.sched_getaffinity(0)`), preferably with an idle SMT

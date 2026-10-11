@@ -6,13 +6,13 @@ Site :: [].{
 	pages : List(Page)
 	pages = [
 		{ path: "index.html", title: "Time for real applications", label: "Overview", description: "Find availability, handle civil time and preserve the meaning of dates with roc-time." },
-		{ path: "getting-started.html", title: "Run your first application", label: "Get started", description: "Install the pinned compiler, run a released example and choose your package dependencies." },
+		{ path: "getting-started.html", title: "Run your first application", label: "Get started", description: "Install Roc, run a released example and choose your package dependencies." },
 		{ path: "booking.html", title: "Find free booking windows", label: "Booking & coverage", description: "Turn timestamp inputs into useful availability without losing gaps or endpoint meaning." },
 		{ path: "calendar-zones.html", title: "Work with dates and clock changes", label: "Calendars & zones", description: "Choose calendar arithmetic and interpret local time using explicit immutable zone rules." },
 		{ path: "schedules.html", title: "Generate and exchange schedules", label: "Schedules", description: "Keep recurrence identity, COUNT and exceptions intact with bounded resumable queries." },
 		{ path: "profiles.html", title: "Know the supported scope", label: "Profiles & limits", description: "Distinguish supported temporal profiles, precision limits and development-only features." },
 		{ path: "api.html", title: "Find the right API", label: "API reference", description: "Navigate roc-time modules by the job you need to do, with version-specific reference links." },
-		{ path: "versions.html", title: "Keep examples and versions together", label: "Versions", description: "Understand release candidates, compiler pins, package URLs and development compatibility." },
+		{ path: "versions.html", title: "Keep examples and versions together", label: "Versions", description: "Understand release candidates, package URLs, compilers and development compatibility." },
 	]
 	render = |url, body| {
 		current = match pages.find_first(|page| "/${page.path}" == url) {

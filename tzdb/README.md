@@ -35,12 +35,12 @@ the content-addressed package archive, so applications need no separate files.
 This layout does not promise that a one-zone application eliminates all other
 zones from its binary.
 
-To add the published companion, copy the `zones` dependency URL from the
-[staffing application's header](../examples/staffing/main.roc), alongside its
-`time` dependency and compiler requirement. Import `zones.Database` to select
-data and `time.ZoneRules` to validate it. The [release notes and starter kit](../README.md#try-it)
-provide both package archives and complete applications. Run an application
-directly with its declared Roc compiler; no data-generation script is needed.
+To add the published companion, copy the `zones` dependency URL from the release
+notes, alongside the `time` dependency; the
+[staffing application](../examples/staffing/main.roc) shows both in use. Import
+`zones.Database` to select data and `time.ZoneRules` to validate it. The
+[release notes and examples archive](../README.md#try-it) provide both package
+archives and complete applications. No data-generation script is needed.
 
 For contributors, see the
 [contributor guide](../CONTRIBUTING.md#zone-data-representation-measurements)

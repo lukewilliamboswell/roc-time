@@ -15,8 +15,8 @@ APIs where a realistic caller otherwise has to reproduce temporal logic.
 
 Broader recurrence profiles remain in [recurrence execution](recurrence.md).
 
-Release and resource evidence applies throughout this sequence. Keep public
-examples runnable with their declared compiler and immutable package URLs,
+Release and resource evidence applies throughout this sequence. Keep each release's
+examples archive runnable against that release's immutable package URLs,
 including both core and zone data when needed. Measure provider acquisition,
 construction and retained memory separately; establish each advertised backend's
 execution evidence. Required checks belong to the changed slice, not a later
@@ -58,7 +58,7 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 - Full ISO normative clauses are needed for clause-level conformance claims; catalogue summaries and Tempo support claims are insufficient. Independently specified foundations can proceed without them.
 - Select exact external serialization and reasoning profiles before exposing those APIs. Unsupported scopes must remain explicit.
 - Verify scheduled fuzz execution from actual workflow runs. Establish supported Wasm execution separately.
-- Measure complexity, allocations, final layouts and retained slices on the pinned compiler. Current functional evidence does not establish those resource claims.
+- Measure complexity, allocations, final layouts and retained slices, recording the compiler used. Current functional evidence does not establish those resource claims.
 - Extend hosted resource gates with coordinate-extent-independent span operations; member-count scaling for coverage and events; bounded zone selection and inspection. Separate construction from consumption, include early-stop/resume and failing controls in dev/speed builds, and instrument live/peak requested bytes before making retained-memory claims.
 - Retain the compiler reproduction under `tests/compiler_repro/result_widening/` until the pinned interpreter supports the affected error propagation; validate before removing the explicit mapping in calendar arithmetic.
 - Recheck `tests/compiler_repro/list_append_match_concat/` and

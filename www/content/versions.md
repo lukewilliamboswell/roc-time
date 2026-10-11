@@ -1,12 +1,12 @@
 # Keep examples and versions together
 
-A working example has three parts: the application’s complete source folder, its package URLs and its Roc compiler version. Preserve all three when you copy or upgrade it.
+A working example has two parts you keep together: the application’s complete source folder and its package URLs. The Roc compiler is not pinned by either; each release’s notes record the compiler it was built and tested with.
 
 ## Published examples
 
-The app header’s `roc` field records the compiler. `time` and optional `zones` fields point to immutable, content-addressed packages. Changing the compiler alone is not a package upgrade strategy.
+An archived application’s `time` and optional `zones` fields point to immutable, content-addressed packages. The packages are checked daily against the latest Roc nightly; when a nightly breaks a release, the fix is a new patch release, so upgrade the package URLs rather than expecting an existing release to change.
 
-Choose a [release](https://github.com/lukewilliamboswell/roc-time/releases) and download its starter kit. The kit contains release-specific package URLs; a source tag can retain preceding example pins. Copy the kit's headers when targeting that release. Each root is named `main.roc` and may import neighboring modules.
+Choose a [release](https://github.com/lukewilliamboswell/roc-time/releases) and download its `roc-time-examples-<version>.zip`. The archive contains release-specific package URLs; the repository’s own examples depend on its working tree by relative path. Copy the archive's headers when targeting that release. Each root is named `main.roc` and may import neighboring modules.
 
 ## Core and optional zone data
 
@@ -18,13 +18,13 @@ The [repeated local time application](https://github.com/lukewilliamboswell/roc-
 
 ## Development examples
 
-Read `package/main.roc` for the development compiler. Examples under `tests/` can depend on local source and require the full checkout. Public examples declare their own compiler and package URLs; inspect their headers rather than assuming they match development.
+Examples in the repository depend on the working-tree packages by relative path and require the full checkout and a current Roc nightly. They show the development API, which can be ahead of any release; use a release’s archive when targeting that release.
 
 ## When upgrading
 
 1. Read the target package’s release notes and API changes.
-2. Take the compiler and both relevant package URLs from a compatible released application.
+2. Take both relevant package URLs from that release’s archive, and install the compiler its notes name or a later nightly.
 3. Update the application header intentionally and keep companion modules with it.
 4. Run the complete application, including the date/zone boundary cases that matter to your caller.
 
-The website itself has a build compiler and basic-ssg platform pin. Those are documentation tooling dependencies; they do not change the compiler required by a released roc-time example.
+The website itself is built with a pinned tooling compiler and basic-ssg platform. Those are documentation tooling dependencies; they say nothing about the compiler a released roc-time example needs.

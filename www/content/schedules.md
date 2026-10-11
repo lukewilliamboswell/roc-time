@@ -30,7 +30,7 @@ COUNT belongs to the anchored rule; excluding one source does not replenish it. 
 
 ## Editing and exchanging definitions
 
-The `ICal` adapters provide checked definition access and canonical extracted-property export. The [meeting exchange scenario](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/meeting_exchange) demonstrates editing, exporting and reimporting a weekly meeting across a fixed zone transition.
+The `ICal` adapters provide checked definition access and canonical extracted-property export. The [meeting exchange scenario](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/meeting_exchange) demonstrates editing, exporting and reimporting a weekly meeting across a fixed zone transition.
 
 `ScheduleDefinition` separates a reusable in-memory definition from its query cursor. Check your selected release for availability. Store supported schedule declarations using their standard property formats; supply interpretation context explicitly when loading them. Export does not promise to preserve every native calendar policy or embed a zone table. A standard adapter must reject unrepresentable meaning rather than silently discard it.
 
