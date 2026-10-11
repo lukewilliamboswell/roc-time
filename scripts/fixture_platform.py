@@ -16,6 +16,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / ".roc-time-tmp" / "fixture-platform"
+# Roc requires platform link inputs inside the platform directory; these are
+# ignored copies of the artifacts staged and verified under BUILD.
+TARGETS = ROOT / "tests" / "platform" / "targets"
 REVISION = "d4db636a2f606edf5ae4803f84588f7a5207d53a"
 LINK_INPUTS = {
     "crt1.o": "ffb51a69191a69fc34acaec1003fabe245d8841da7036d124d3445718415f9ea",
@@ -53,6 +56,7 @@ def build_host() -> str:
                 path.write_bytes(content)
             if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
                 raise RuntimeError(f"Bad cached fixture link input: {path}")
+    shutil.copytree(destination, TARGETS / target, dirs_exist_ok=True)
     return target
 
 

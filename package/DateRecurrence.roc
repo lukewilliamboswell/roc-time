@@ -727,8 +727,12 @@ expect {
 			match first.status {
 				Item(item) => {
 					last = DateRecurrence.Cursor.next(item.cursor, { max_steps: 0, max_buffered: 366 })?
-					item.date == test_daterecurrence_date(2025, 1, 31) and progress.reason == WorkLimit and
-						last.status == End and last.steps == 0
+					item.date == test_daterecurrence_date(2025, 1, 31) and progress.reason == WorkLimit and last.steps == 0 and (
+						match last.status {
+							End => True
+							_ => False
+						}
+					)
 				}
 				_ => False
 			}

@@ -128,7 +128,7 @@ def main():
     if target == "x64musl":
         host_command.append("-Dtarget=x86_64-linux-musl")
     run(host_command)
-    destination = BUILD / "targets" / target
+    destination = BASE / "platform/targets" / target
     destination.mkdir(parents=True, exist_ok=True)
     for artifact in (fixture_platform.BUILD / "targets" / target).iterdir():
         if artifact.is_file():

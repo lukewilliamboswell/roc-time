@@ -59,7 +59,8 @@ def environment() -> str | None:
     WORK.mkdir(parents=True, exist_ok=True)
     dependency = json.loads((DATA / "dependency.json").read_text())
     print(f"{version}; LLVM speed backend with --fuzz; target={target}; roc-fuzz={dependency['version']} ({dependency['revision']})", flush=True)
-    archive = WORK / "release.tar.zst"
+    # Keyed by version so a pin upgrade does not collide with the previous cached release.
+    archive = WORK / f"release-{dependency['version']}.tar.zst"
     if not archive.exists():
         pending = WORK / "release.download"
         command(["curl", "-L", "--fail", "--retry", "2", dependency["url"], "-o", str(pending)])

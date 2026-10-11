@@ -319,15 +319,17 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			}
 			offset = match source.zone {
 				None => {
-					if context != None {
-						return Err(UnexpectedContext)
+					match context {
+						Some(_) => return Err(UnexpectedContext)
+						None => {}
 					}
 					base_offset(source.timestamp)
 				}
 				Some(zone) => match zone.identifier {
 					Numeric(fixed) => {
-						if context != None {
-							return Err(UnexpectedContext)
+						match context {
+							Some(_) => return Err(UnexpectedContext)
+							None => {}
 						}
 						fixed
 					}
@@ -419,10 +421,9 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		## requested presentation calendar is unsupported.
 		fact_count : Snapshot -> U64
 		fact_count = |snapshot| 2 + (
-			if snapshot.context == None {
-				0
-			} else {
-				1
+			match snapshot.context {
+				None => 0
+				Some(_) => 1
 			}
 		) + source_fact_count(snapshot.source, Bool.False)
 		## Returns a zero-based stored interpretation fact or End beyond fact_count. Reading evidence performs no new zone lookup.

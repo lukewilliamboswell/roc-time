@@ -48,6 +48,12 @@ def migrate_compiler_api(source: str, compiler: str) -> str:
         "https://github.com/roc-lang/basic-cli/releases/download/0.22.2/9zUBxb1LtXYVc4eR4hAtd1WQDwBYDhM6HQdZz1UFCm2m.tar.zst",
         "https://github.com/roc-lang/basic-cli/releases/download/0.23.0/GNN5tt2gKdX4dhawg4915C4YB193woHFdcCkz31fhGxv.tar.zst",
     )
+    if nightly[1] >= "2026-10-09":
+        # Earlier basic-cli releases no longer compile: redundant exposes are errors.
+        source = source.replace(
+            "https://github.com/roc-lang/basic-cli/releases/download/0.23.0/GNN5tt2gKdX4dhawg4915C4YB193woHFdcCkz31fhGxv.tar.zst",
+            "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst",
+        )
     signature = re.compile(r"(?m)^([ \t]*[A-Za-z_][A-Za-z_0-9!]*[ \t]*:[^\n]*(?:->|=>))([^\n]*)$")
     return signature.sub(
         lambda match: match[1] + re.sub(r",[ \t]*\.\.(?=[ \t]*\])", "", match[2]),
@@ -151,6 +157,7 @@ def self_test() -> None:
     legacy_platform = "https://github.com/roc-lang/basic-cli/releases/download/0.22.2/9zUBxb1LtXYVc4eR4hAtd1WQDwBYDhM6HQdZz1UFCm2m.tar.zst"
     assert migrate_compiler_api(legacy_platform, "nightly-2026-09-19-d025939") == legacy_platform
     assert "/0.23.0/" in migrate_compiler_api(legacy_platform, "nightly-2026-09-27-a3ce7f1")
+    assert "/0.25.0/" in migrate_compiler_api(legacy_platform, "nightly-2026-10-09-258ab27")
     temporary = ROOT / ".roc-time-tmp"
     temporary.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="example-copy-test-", dir=temporary) as directory:
