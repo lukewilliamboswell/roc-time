@@ -1,0 +1,43 @@
+name: Install the package compiler
+description: Install a Roc nightly as `roc`. No header pins the package compiler, so the default is the latest published nightly.
+
+inputs:
+  tag:
+    description: Nightly release tag. Empty resolves the latest release of roc-lang/nightlies; a workflow with several jobs resolves once and passes the tag on.
+    default: ""
+outputs:
+  tag:
+    description: The nightly release tag that was installed.
+    value: ${{ steps.resolve.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the nightly tag
+      id: resolve
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REQUESTED: ${{ inputs.tag }}
+      run: |
+        tag="$REQUESTED"
+        if [ -z "$tag" ]; then
+          tag="$(gh api repos/roc-lang/nightlies/releases/latest --jq .tag_name)"
+        fi
+        case "$tag" in
+          nightly-*) echo "tag=$tag" >> "$GITHUB_OUTPUT" ;;
+          *) echo "::error::not a nightly release tag: $tag"; exit 1 ;;
+        esac
+
+    - uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
+      with:
+        version: nightly-new-compiler
+        nightly-tag: ${{ steps.resolve.outputs.tag }}
+
+    - name: Print the package compiler version
+      shell: bash
+      env:
+        TAG: ${{ steps.resolve.outputs.tag }}
+      run: |
+        roc version
+        test "$(roc version)" = "Roc compiler version $TAG"

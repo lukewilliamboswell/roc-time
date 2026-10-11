@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Existing release whose docs and examples should be published"
+        description: "Existing release whose API docs should be published"
         required: true
         type: string
 
@@ -26,29 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
-    outputs:
-      followup_changed: ${{ steps.followup.outputs.changed }}
-      followup_branch: ${{ steps.followup.outputs.branch }}
-      followup_sha: ${{ steps.followup.outputs.commit_sha }}
-      followup_pr: ${{ steps.followup.outputs.pull_request_number }}
 
     steps:
-      - name: Checkout authored documentation and public examples
+      - name: Checkout authored documentation and tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-
-      - name: Record documentation base commit
-        id: docs-base
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout trusted workflow tooling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .roc-time-tmp/workflow-source
           persist-credentials: false
 
       - name: Checkout released documentation sources
@@ -58,79 +41,29 @@ jobs:
           path: .roc-time-tmp/release-source
           persist-credentials: false
 
-      - name: Read Roc version
-        id: roc-version
-        run: |
-          release_compiler=$(python3 .roc-time-tmp/workflow-source/scripts/roc_version.py --root .roc-time-tmp/release-source)
-          release_authority=$(python3 .roc-time-tmp/workflow-source/scripts/roc_version.py --root .roc-time-tmp/release-source --format authority)
-          echo "nightly-tag=$release_compiler" >> "$GITHUB_OUTPUT"
-          echo "authority=$release_authority" >> "$GITHUB_OUTPUT"
+      # API docs are generated from the package, so they use the package compiler.
+      - uses: ./.github/actions/setup-roc-nightly
 
-      - name: Install Roc
-        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
-        with:
-          version: nightly-new-compiler
-          nightly-tag: ${{ steps.roc-version.outputs.nightly-tag }}
-
-      - name: Download published role metadata
-        if: steps.roc-version.outputs.authority == 'header'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.release_version }}
-        run: gh release download "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --pattern roc-time-bundles.json --dir .release
-
-      - name: Resolve release URLs by role
-        if: steps.roc-version.outputs.authority == 'header'
-        id: urls
-        env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/release_bundles.py urls --manifest .release/roc-time-bundles.json --github-output "$GITHUB_OUTPUT"
-
-      - name: Promote staged applications from the release source
-        if: steps.roc-version.outputs.authority == 'header'
-        env:
-          CORE_URL: ${{ steps.urls.outputs.core_url }}
-          ZONE_URL: ${{ steps.urls.outputs.zones_url }}
-          RELEASE_COMPILER: ${{ steps.roc-version.outputs.nightly-tag }}
-        run: |
-          if [ -f .roc-time-tmp/release-source/scripts/promote_examples.py ]; then
-            python3 .roc-time-tmp/workflow-source/scripts/promote_examples.py --source-root .roc-time-tmp/release-source --compiler "$RELEASE_COMPILER" --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
-          fi
-
-      - name: Bind released examples to published packages
-        if: steps.roc-version.outputs.authority == 'header'
-        env:
-          CORE_URL: ${{ steps.urls.outputs.core_url }}
-          ZONE_URL: ${{ steps.urls.outputs.zones_url }}
-        run: |
-          api_args=()
-          if grep -q '^[[:space:]]*ICalDateRule,' .roc-time-tmp/release-source/package/main.roc; then
-            api_args+=(--migrate-ical)
-          fi
-          python3 .roc-time-tmp/workflow-source/scripts/update_example_urls.py --examples-dir .roc-time-tmp/release-source/examples --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL" --compiler "${{ steps.roc-version.outputs.nightly-tag }}" "${api_args[@]}"
-
-      - name: Validate published examples with their release compiler
-        if: steps.roc-version.outputs.authority == 'header'
-        run: python3 .roc-time-tmp/workflow-source/scripts/test_published_examples.py --examples-dir .roc-time-tmp/release-source/examples --expected-dir .roc-time-tmp/release-source/tests/examples
+      - uses: ./.github/actions/setup-blueprint
 
       - name: Restore immutable historical API documentation
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/release_docs.py fetch --allow-missing "$RELEASE_VERSION" --output .roc-time-tmp/api-docs
+        run: python3 scripts/release_docs.py fetch --allow-missing "$RELEASE_VERSION" --output .roc-time-tmp/api-docs
 
       - name: Require earlier release documentation history
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 .roc-time-tmp/workflow-source/scripts/check_docs_history.py --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs
+        run: python3 scripts/check_docs_history.py --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs
 
       - name: Generate release API documentation
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           if [ ! -d ".roc-time-tmp/api-docs/$RELEASE_VERSION" ]; then
-            python3 .roc-time-tmp/workflow-source/scripts/docs.py "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --source-root .roc-time-tmp/release-source
+            python3 scripts/docs.py "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --source-root .roc-time-tmp/release-source
           fi
 
       - name: Preserve release API documentation as an immutable asset
@@ -138,85 +71,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          python3 .roc-time-tmp/workflow-source/scripts/release_docs.py pack "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --output .roc-time-tmp/docs-assets
-          python3 .roc-time-tmp/workflow-source/scripts/release_docs.py publish "$RELEASE_VERSION" ".roc-time-tmp/docs-assets/roc-time-docs-$RELEASE_VERSION.tar.gz"
+          python3 scripts/release_docs.py pack "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --output .roc-time-tmp/docs-assets
+          python3 scripts/release_docs.py publish "$RELEASE_VERSION" ".roc-time-tmp/docs-assets/roc-time-docs-$RELEASE_VERSION.tar.gz"
 
-      - name: Read authored site compiler
-        id: site-compiler
-        run: |
-          python3 - <<'PYTHON'
-          import os, sys
-          from pathlib import Path
-          sys.path.insert(0, '.roc-time-tmp/workflow-source/scripts')
-          from compiler_pins import header_pin
-          pin = header_pin(Path('.roc-time-tmp/workflow-source/www/main.roc').read_text())[2]
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              print(f'pin={pin}', file=output)
-          PYTHON
-
-      - name: Install authored site compiler
-        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
-        with:
-          version: nightly-new-compiler
-          nightly-tag: ${{ steps.site-compiler.outputs.pin }}
-
+      # The site builder is repository tooling, so it runs on the pinned
+      # compiler the Blueprint environment provides for it.
       - name: Assemble authored guides and versioned API documentation
-        env:
-          SITE_COMPILER_PIN: ${{ steps.site-compiler.outputs.pin }}
-        run: |
-          # setup-roc can select the first extracted directory when used twice.
-          # This Ubuntu job selects the requested installation explicitly.
-          site_roc="$GITHUB_WORKSPACE/roc_nightly-linux_x86_64-${SITE_COMPILER_PIN#nightly-}/roc"
-          test "$("$site_roc" version)" = "Roc compiler version $SITE_COMPILER_PIN"
-          python3 .roc-time-tmp/workflow-source/scripts/assemble_docs_site.py --roc "$site_roc" --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
-
-      - name: Promote the verified public applications
-        if: steps.roc-version.outputs.authority == 'header'
-        run: rsync -a --delete .roc-time-tmp/release-source/examples/ examples/
-
-      - name: Open signed release follow-up PR
-        if: steps.roc-version.outputs.authority == 'header'
-        id: followup
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.release_version }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          EXPECTED_BASE: ${{ steps.docs-base.outputs.sha }}
-          FOLLOWUP_PATHS: 'examples'
-        run: |
-          read -r -a followup_paths <<< "$FOLLOWUP_PATHS"
-          python3 .roc-time-tmp/workflow-source/scripts/create_release_followup.py --expected-base "$EXPECTED_BASE" --paths "${followup_paths[@]}"
+        run: blueprint run site -- --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
           path: .roc-time-tmp/pages-site
-
-  validate-followup:
-    name: Validate generated release follow-up
-    needs: publish-docs
-    if: needs.publish-docs.outputs.followup_changed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    permissions:
-      contents: read
-      pull-requests: read
-      actions: write
-      statuses: write
-    steps:
-      - name: Checkout trusted validation controller
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-      - name: Dispatch and verify exact follow-up checks
-        env:
-          GH_TOKEN: ${{ github.token }}
-          FOLLOWUP_BRANCH: ${{ needs.publish-docs.outputs.followup_branch }}
-          FOLLOWUP_SHA: ${{ needs.publish-docs.outputs.followup_sha }}
-          FOLLOWUP_PR: ${{ needs.publish-docs.outputs.followup_pr }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: python3 scripts/validate_followup.py --repo "$GITHUB_REPOSITORY" --branch "$FOLLOWUP_BRANCH" --sha "$FOLLOWUP_SHA" --pr "$FOLLOWUP_PR" --default-branch "$DEFAULT_BRANCH"
 
   deploy-pages:
     name: Deploy versioned docs
