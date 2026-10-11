@@ -9,6 +9,17 @@ Use the compiler pinned by the `roc` field in `package/main.roc`; verify its `ve
 `ROC` to its executable when running repository scripts. Keep experiments and
 generated artifacts under ignored `.roc-time-tmp/`.
 
+Repository automation is moving to Roc scripts under `scripts/*.roc`. They run on
+`roc-stable`, a second compiler named in [Blueprint.roc](Blueprint.roc) and pinned
+by `Blueprint.lock`; it never checks, tests or bundles the packages. With Nix and
+the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint) 0.4.0 CLI
+installed, `blueprint run check` runs the complete gate that CI runs, and
+`blueprint shell` enters the environment. The scripts select the package compiler
+through `ROC_NIGHTLY`, falling back to `roc` on `PATH`. The environment does not
+yet provide the Python, Zig and Rust that the remaining Python harness needs;
+install those as described under [Tests](#tests). Commit `Blueprint.roc` and
+`Blueprint.lock`; only `blueprint update` writes the lock.
+
 Examples are focused applications, not test fixtures. Each belongs in its own
 folder with a `main.roc` entrypoint and pure logic in a separate type module.
 Keep unit `expect` tests beside their implementation. Run them once with

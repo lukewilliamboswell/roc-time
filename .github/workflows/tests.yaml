@@ -54,7 +54,11 @@ jobs:
           rustup toolchain install "$rust_version" --profile minimal --target x86_64-unknown-linux-musl
           echo "RUSTUP_TOOLCHAIN=$rust_version" >> "$GITHUB_ENV"
 
-      - run: python3 scripts/all_tests.py
+      - uses: ./.github/actions/setup-blueprint
+
+      # roc-stable runs the script; the package compiler installed above is
+      # still the one the package headers pin.
+      - run: blueprint run check
 
       - name: Preserve fuzz smoke evidence and reproducers
         if: always()
