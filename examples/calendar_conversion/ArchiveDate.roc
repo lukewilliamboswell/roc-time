@@ -2,7 +2,7 @@ import time.Calendar
 
 ## Preserve an archive's source calendar while displaying a common catalogue date.
 ArchiveDate :: { original : Calendar.Date, catalogue : Calendar.Date }.{
-	from_record : Str, Calendar.Date.Fields -> Try(ArchiveDate, [UnsupportedCalendar(Str), OutOfRange, InvalidMonth, InvalidDay, ..])
+	from_record : Str, Calendar.Date.Fields -> Try(ArchiveDate, [UnsupportedCalendar(Str), OutOfRange, InvalidMonth, InvalidDay])
 	from_record = |calendar_name, fields| {
 		calendar = match Calendar.from_name(calendar_name) {
 			Ok(value) => value

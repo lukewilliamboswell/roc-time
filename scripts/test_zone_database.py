@@ -11,16 +11,15 @@ import tempfile
 
 sys.dont_write_bytecode = True
 from generate_zone_database import verify, package_header
-from roc_version import read_pin
 from fixture_platform import build_host
 from oracle_replay import parse_metrics
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def validate_header(source, compiler):
-    if source != package_header(compiler):
-        raise ValueError("Zone package must expose only Database and pin the core compiler")
+def validate_header(source):
+    if source != package_header():
+        raise ValueError("Zone package must expose only Database and pin no compiler")
 
 
 def check_integrity(package):
@@ -32,7 +31,7 @@ def check_integrity(package):
         raise SystemExit('Zone implementation changed: regenerate the distributable pack')
     if 'main.roc' in manifest['files']:
         raise SystemExit('Compiler header must not be part of the generated-data digests')
-    validate_header((package / 'main.roc').read_text(), read_pin(ROOT / 'package/main.roc'))
+    validate_header((package / 'main.roc').read_text())
     expected = set(manifest['files']) | {'manifest.json', 'main.roc'}
     if {p.name for p in package.iterdir()} != expected:
         raise SystemExit('Unexpected or missing generated package files')
@@ -43,18 +42,19 @@ def check_integrity(package):
 
 
 def header_controls():
-    # Compiler upgrades preserve the generated-data manifest; the header is
-    # independently constrained so extra exports/dependencies cannot hide there.
-    for compiler in ('nightly-2026-09-05-b195f5b', 'nightly-2026-09-06-d85e877'):
-        validate_header(package_header(compiler), compiler)
-        for malformed in (package_header('0.0.0'), package_header(compiler).replace('[Database]', '[Database, Extra]'),
-                          package_header(compiler) + 'extra = 1\n', 'package [Database] {}\n'):
-            try:
-                validate_header(malformed, compiler)
-            except ValueError:
-                pass
-            else:
-                raise AssertionError('Invalid zone package header was accepted')
+    # The header is outside the generated-data manifest, so constrain it
+    # independently: no compiler pin, extra exports or dependencies can hide there.
+    validate_header(package_header())
+    for malformed in ('package [Database] { roc: "nightly-2026-09-05-b195f5b" }\n',
+                      package_header().replace('[Database]', '[Database, Extra]'),
+                      package_header() + 'extra = 1\n',
+                      'package [Database] { other: "../x/main.roc" }\n'):
+        try:
+            validate_header(malformed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Invalid zone package header was accepted')
 
 
 def main():
