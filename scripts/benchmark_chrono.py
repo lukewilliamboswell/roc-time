@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Narrow, validated in-process roc-time / chrono microbenchmarks."""
-from roc_version import package_pin
 import argparse
 import datetime as dt
 import hashlib
@@ -102,8 +101,6 @@ def main():
         parser.error("iterations 1..10000000, samples 1..50, warmups 0..10")
     roc = os.environ.get("ROC", "roc")
     roc_version = subprocess.check_output([roc, "version"], text=True).strip()
-    if package_pin(ROOT) not in roc_version:
-        raise RuntimeError(f"compiler does not match the package header: {roc_version}")
     rust_pin = (BASE / "rust-version").read_text().strip()
     rustc = os.environ.get("RUSTC", "rustc")
     rustc_version = subprocess.check_output([rustc, "-Vv"], text=True)

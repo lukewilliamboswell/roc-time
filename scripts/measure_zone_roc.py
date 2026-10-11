@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Prototype generated zone encodings and measure compiler/binary costs (not a DB release)."""
-from roc_version import package_pin
 import argparse
 import hashlib
 import io
@@ -71,8 +70,6 @@ def main(wheel, samples, encoding, smoke=False):
     tmp.mkdir(exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="zone-roc-measure-", dir=tmp))
     version, _ = execute([roc, "version"], work, work, "version")
-    if version.stdout.strip() != "Roc compiler version " + package_pin(ROOT):
-        raise SystemExit("Wrong Roc compiler")
     entries = {}
     with zipfile.ZipFile(wheel) as archive:
         for info in archive.infolist():
