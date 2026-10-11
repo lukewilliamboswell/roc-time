@@ -557,7 +557,11 @@ in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
 ## Compilers and releases
 
-Nothing moves either compiler automatically.
+Nothing moves either compiler automatically. `Update Blueprint lock` proposes a
+weekly pull request that refreshes `Blueprint.lock` only; it cannot change the
+`roc-stable` tag. Pull requests opened by automation do not start pull request
+workflows, so it dispatches `CI` on its branch; close and reopen the pull request
+to run the release dry run before merging.
 
 The package compiler is the latest nightly. When a nightly breaks the packages or
 examples, fix them on `main`; when it breaks a published release, that release
@@ -612,7 +616,14 @@ environment to allow deployment from `main`.
 The nightly compatibility workflow runs the latest full release's examples
 archive, unchanged, on the latest nightly and keeps one tracking issue open while
 it fails. A failure there means that release needs a patch release: fix `main`,
-then release the next patch version. The published archive is never edited.
+then release the next patch version. The published archive is never edited. A
+release without an archive passes with a notice. Dispatch the workflow with
+`nightly_tag` or `release_tag` to test another combination, and reproduce a run
+locally with:
+
+```sh
+EXAMPLES_ARCHIVE=roc-time-examples-0.2.0.zip blueprint run examples
+```
 
 `roc-0.1.x` is a frozen branch from the earlier compiler-pin model and is not a
 release source.
