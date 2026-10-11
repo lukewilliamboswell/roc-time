@@ -3,6 +3,9 @@ examples/hello
 generated-docs/
 dist/
 .roc-time-tmp/
+# Platform link inputs copied from .roc-time-tmp/ by the test and benchmark scripts.
+/tests/platform/targets/
+/benchmarks/chrono/platform/targets/
 
 __pycache__/
 
