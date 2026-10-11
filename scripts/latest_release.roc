@@ -10,15 +10,21 @@ import src/Release
 import src/Script
 
 main! = |_args| {
-	# Describe the latest full release of REPOSITORY (prereleases are skipped):
-	# its tag, the URLs of its two bundles, and the URL of its examples archive,
-	# which is empty for a release published before archives existed. The
-	# key=value lines are also appended to GITHUB_OUTPUT when that is set.
+	# Describe a release of REPOSITORY: its tag, the URLs of its two bundles, and
+	# the URL of its examples archive, which is empty for a release published
+	# before archives existed. RELEASE_TAG selects the release; without it the
+	# latest full release is used, skipping prereleases. The key=value lines are
+	# also appended to GITHUB_OUTPUT when that is set.
 	repository = Script.env_str!("REPOSITORY") ?? "lukewilliamboswell/roc-time"
 	gh = |args| Cmd.new("gh").args_str(args.concat(["--repo", repository]))
+	requested = match Script.env_str!("RELEASE_TAG") {
+		Ok(tag) => [tag]
+		Err(NotSet) => []
+		Err(err) => return Err(err)
+	}
 	summary : { tag : Str, assets : List(Str) }
 	summary = Json.parse(
-		gh(["release", "view", "--json", "tagName,assets", "--jq", "{tag: .tagName, assets: [.assets[].name]}"]).exec_output!()?.stdout_utf8,
+		gh(["release", "view"].concat(requested).concat(["--json", "tagName,assets", "--jq", "{tag: .tagName, assets: [.assets[].name]}"])).exec_output!()?.stdout_utf8,
 	).map_err(|_| InvalidReleaseSummary)?
 	if !summary.assets.contains("roc-time-bundles.json") {
 		return Script.fail!("release ${summary.tag} has no roc-time-bundles.json role manifest")

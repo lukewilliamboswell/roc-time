@@ -35,5 +35,7 @@ config = [
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
 	Task("release", [Use("dev"), Run(["roc-stable", "scripts/build_release.roc"])]),
 	Task("latest-release", [Use("dev"), Run(["roc-stable", "scripts/latest_release.roc"])]),
+	Task("examples", [Use("dev"), Run(["roc-stable", "scripts/test_examples.roc"])]),
+	Task("propose-lock-update", [Use("dev"), Run(["roc-stable", "scripts/propose_lock_update.roc"])]),
 	Task("site", [Use("dev"), Run(["python3", "scripts/assemble_docs_site.py", "--roc", "roc-stable"])]),
 ]
