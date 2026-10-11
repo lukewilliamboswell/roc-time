@@ -2,7 +2,7 @@ import time.PosixSpan
 
 ## The recorder treats each sample window as a nonempty half-open span.
 SampleWindow :: { span : PosixSpan }.{
-	from_seconds : Dec, Dec -> Try(SampleWindow, [EmptySpan, ReversedBounds, Submicrosecond, OutOfRange, ..])
+	from_seconds : Dec, Dec -> Try(SampleWindow, [EmptySpan, ReversedBounds, Submicrosecond, OutOfRange])
 	from_seconds = |start, end| {
 		Ok({ span: PosixSpan.from_seconds(start, end, RejectSubmicrosecond)? })
 	}
