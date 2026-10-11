@@ -65,9 +65,10 @@ multiple bookings and writes the free windows as canonical timestamps.
 
 ## Try it
 
-Download the starter kit from [Releases](https://github.com/lukewilliamboswell/roc-time/releases)
-and install the Roc compiler declared in its application headers.
-From the extracted kit folder, run:
+Download `roc-time-examples-<version>.zip` from a
+[release](https://github.com/lukewilliamboswell/roc-time/releases) and install the
+Roc compiler its release notes name, or a later nightly. From the extracted
+folder, run:
 
 ```sh
 roc version
@@ -76,11 +77,12 @@ roc examples/booking_exchange/main.roc
 
 No Python runner is required. Each example is a complete application with a
 `main.roc` entrypoint and companion modules; keep its whole folder together.
-The [example catalog](examples/README.md) contains more applications you can run
-from a repository checkout using their pinned compiler and published packages.
+The archive holds every application in the [example catalog](examples/README.md),
+bound to that release's packages by URL. In a repository checkout the same
+applications depend on the working-tree packages by relative path.
 
-For your own application, copy the `time` dependency and `roc` compiler fields
-from a released example's header. Named-zone applications also use the
+For your own application, copy the `time` dependency from an archived example's
+header; the package headers do not pin a compiler. Named-zone applications also use the
 [optional zone-data package](tzdb/README.md). The
 [release notes](https://github.com/lukewilliamboswell/roc-time/releases)
 include both package URLs. See the

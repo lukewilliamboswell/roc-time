@@ -4,20 +4,20 @@ Start with [booking exchange](booking_exchange/main.roc) for text input,
 availability calculation and text output, or [archive search](archive_search/main.roc)
 for dates whose supplied precision and uncertainty must be preserved.
 
-Each application has a `main.roc` entrypoint and companion type modules. Download
-or copy the complete application folder, then run `roc main.roc` inside it.
-Alternatively, clone this repository and run `roc examples/booking_exchange/main.roc`.
-No Python runner is required.
+Each application has a `main.roc` entrypoint and companion type modules. In this
+repository they depend on the working-tree packages by relative path, so they
+show the API on the default branch: clone the repository and run
+`roc examples/booking_exchange/main.roc` with a current Roc nightly.
 
-Use the compiler named by the `roc` field in that application's header. Its
-package dependencies are immutable published URLs, so these examples do not
-require building the repository's development package. The header is the source
-of truth for the compiler and package versions needed to run that application.
+To run them against a published release instead, download that release's
+`roc-time-examples-<version>.zip`. It holds these same applications with only the
+package dependencies changed to that release's URLs, and its release notes name
+the compiler it was built and tested with. Keep each application's folder
+together.
 
-Development may use a newer compiler. CI validates these examples unchanged with
-their declared compiler, then tests temporary copies against development source
-and candidate bundles. Release follow-up PRs update public example URLs and pins
-without changing the development package compiler.
+CI runs every application here in place, and runs each release's archive unchanged
+against the exact bundles being published. The examples in this folder are never
+rewritten after a release.
 
 | Application | Demonstrates |
 | --- | --- |

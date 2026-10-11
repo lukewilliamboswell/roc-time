@@ -18,6 +18,11 @@ Script := [].{
 			self.base.args(args).exec_cmd!()
 		}
 
+		## Run the command and return its standard output without the trailing
+		## newline. A nonzero exit is an error.
+		output! : Command, List(OsStr) => Try(Str, _)
+		output! = |self, args| Ok(Str.trim_end(self.base.args(args).exec_output!()?.stdout_utf8))
+
 		## Build the underlying basic-cli command with the supplied arguments.
 		cmd : Command, List(OsStr) -> Cmd
 		cmd = |self, args| self.base.args(args)

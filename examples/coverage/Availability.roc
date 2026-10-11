@@ -11,7 +11,7 @@ import time.PosixSpan
 Availability :: { free : Coverage, bookings : EventCollection(Str) }.{
 	Booking : { start : LocalDateTime, end : LocalDateTime, offset : FixedOffset }
 
-	from_bookings : Booking, List({ id : Str, window : Booking }) -> Try(Availability, [EmptySpan, ReversedBounds, OutOfRange, DuplicateId(Str), ..])
+	from_bookings : Booking, List({ id : Str, window : Booking }) -> Try(Availability, [EmptySpan, ReversedBounds, OutOfRange, DuplicateId(Str)])
 	from_bookings = |opening, bookings| {
 		work = resolve_booking(opening)?
 		var $busy = []
@@ -22,7 +22,7 @@ Availability :: { free : Coverage, bookings : EventCollection(Str) }.{
 		Ok({ free: Coverage.complement_within(EventCollection.to_coverage(events), work), bookings: events })
 	}
 
-	report : Availability -> Try(List(Str), [OutOfRange, ..])
+	report : Availability -> Try(List(Str), [OutOfRange])
 	report = |available| {
 		var $lines = ["Bookings retained: ${EventCollection.event_count(available.bookings).to_str()}"]
 		for segment in EventCollection.segments(available.bookings) {

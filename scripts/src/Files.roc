@@ -53,8 +53,8 @@ walk! = |entries, found|
 compare_bytes = |left, right|
 	match (left, right) {
 		([a, .. as left_rest], [b, .. as right_rest]) =>
-			if a < b LT else if a > b GT else compare_bytes(left_rest, right_rest)
-		([], []) => EQ
-		([], _) => LT
-		(_, []) => GT
+			if a < b Before else if a > b After else compare_bytes(left_rest, right_rest)
+		([], []) => Same
+		([], _) => Before
+		(_, []) => After
 	}

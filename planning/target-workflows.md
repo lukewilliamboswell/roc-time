@@ -10,36 +10,27 @@ model is 0.2.0.
 
 ## Deliverables
 
-- Remove every `roc` header field and replace the exact-pin guards in the Python
-  harness with a recorded `roc version`.
-- Point `examples/` at `../../package/main.roc` and `../../tzdb/package/main.roc`,
-  apply the source migrations currently applied only to copies, and fold the
-  staged `tests/` applications into `examples/`.
-- Roc scripts: layout static checks, in-place example tests, both bundles with
-  their role manifest, loopback bundle and archive tests including rejection
-  cases, `roc-time-examples-<version>.zip`, and release notes naming both
-  compilers. Delete the Python each replaces, including the starter kit and the
-  release follow-up tooling.
-- `ci.yml` and `release.yml` on the floating nightly, resolved once per run;
-  publication behind a protected `release` environment; docs publication without
-  the follow-up pull request. Retire the nightly updater and its configuration.
-- `nightly.yml` with one tracking issue, and `update-blueprint.yml`.
-- Rewrite the compiler, release and example guidance in CONTRIBUTING.md,
-  AGENTS.md, README.md, the example and zone READMEs and the site content.
+- `nightly.yml`: run the latest full release's examples archive unchanged on the
+  latest nightly, driven by `scripts/test_examples.roc`, with a report job that
+  keeps one tracking issue. Until a full release carries an archive, finish green
+  with a notice and no issue.
+- `update-blueprint.yml`: propose a signed, lock-only pull request from
+  `blueprint update` and start its `ci.yml` run.
+- Release 0.2.0 from `main`, the first release with an examples archive.
+- Port the Python harness (`scripts/python_harness.py` and the scripts it runs)
+  and the documentation tooling to Roc scripts.
 
 ## Decisions and acceptance still needed
 
-- The specification describes one package. Record how the `time`/`zones` pair
-  and an `expected/` output directory in the archive fit, and report both to
-  roc-automation.
-- The environment provides only `roc-stable` and the programs Roc scripts start.
-  Decide whether Python 3.14.3, Zig 0.16.0 and Rust move into it when the
+- The specification describes one package. Report to roc-automation how the
+  `time`/`zones` pair and the `expected/` directory in the archive fit.
+- The environment provides only the pinned compiler and the programs Roc scripts
+  start. Decide whether Python 3.14.3, Zig 0.16.0 and Rust move into it when the
   remaining harness is ported.
-- Repository settings are outside the tree: required check names, the `release`
-  environment, and removal of the updater's required `configuration` check
-  before its workflow is deleted.
+- Repository settings are outside the tree: required check names (`test`,
+  `Build and test release candidate`), the protected `release` environment, and
+  removal of the updater's required `configuration` check.
 
-Complete when a release dry run produces an archive whose headers differ from
-the repository's only in the package dependencies, a rehearsed incompatible
-nightly opens, updates and closes exactly one issue, and no workflow or script
-reads a compiler pin from a header.
+Complete when a rehearsed incompatible nightly opens, updates and closes exactly
+one issue against a published release, and a lock update pull request passes
+`ci.yml`.

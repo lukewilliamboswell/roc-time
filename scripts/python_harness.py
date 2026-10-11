@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Run the development package gate: tests, docs, bundles and copied examples.
+"""Run the checks that are still driven from Python.
 
-Published examples have a separate compiler and CI job; run
-scripts/test_published_examples.py with their declared compiler to validate them.
+scripts/check_all.roc is the repository gate. It checks the Roc tooling, the
+packages, the examples and the release artifacts, and calls this harness for
+compile-failure, static-dispatch, codec, resource, oracle, fuzz, measurement
+and documentation checks. ROC selects the package compiler.
 """
 from __future__ import annotations
-from roc_version import package_pin
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -16,7 +16,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CREATED_RE = re.compile(r"^Created:\s+(.+\.tar\.zst)\s*$", re.MULTILINE)
 
 
 def roc_command() -> str:
@@ -54,28 +53,14 @@ def main() -> None:
     tmp_base = Path(os.environ.get("ROC_TIME_TMPDIR", ROOT / ".roc-time-tmp"))
     tmp_dir = tmp_base / "roc-time-ci"
     docs_dir = tmp_dir / "docs"
-    bundle_dir = tmp_dir / "bundle"
 
     shutil.rmtree(tmp_dir, ignore_errors=True)
     docs_dir.mkdir(parents=True)
-    bundle_dir.mkdir(parents=True)
 
     os.environ["ROC_TIME_TMPDIR"] = str(tmp_base)
     os.environ["ROC"] = ROC
 
-    version = run([ROC, "version"], capture=True).stdout.strip()
-    print(version, flush=True)
-    pinned = package_pin(ROOT)
-    if version != f"Roc compiler version {pinned}":
-        raise SystemExit(f"Expected compiler {pinned}; set ROC to the pinned executable")
-
-    run([sys.executable, "scripts/test_roc_version.py"])
-
-    heading("Checking package...")
-    run([ROC, "check", "package/main.roc"])
-
-    heading("Running package tests...")
-    run([ROC, "test", "package/main.roc"])
+    run([ROC, "version"])
 
     heading("Checking domain and representation compile failures...")
     run([sys.executable, "scripts/test_compile_failures.py"])
@@ -143,58 +128,16 @@ def main() -> None:
         run([generator_python, "scripts/measure_zone_roc.py", "--smoke", "--encoding", encoding])
     run([sys.executable, "scripts/measure_zone_package.py", "--smoke"])
 
-    heading("Checking scripts and examples...")
-    run([sys.executable, "scripts/update_example_urls.py", "--self-test"])
-    run([sys.executable, "scripts/test_published_examples.py", "--self-test"])
-    run([sys.executable, "scripts/release_bundles.py", "self-test"])
-    run([sys.executable, "scripts/release_starter.py", "self-test"])
-    run([sys.executable, "scripts/test_create_release_followup.py"])
-    run([sys.executable, "scripts/test_validate_followup.py"])
+    heading("Checking documentation tooling...")
     run([sys.executable, "scripts/check_docs_history.py", "--self-test"])
     run([sys.executable, "scripts/test_docs.py"])
     run([sys.executable, "scripts/test_release_docs.py"])
-    run([sys.executable, "scripts/test_clock_output.py"])
-    run([sys.executable, "scripts/test_local_examples.py"])
 
     heading("Generating package docs...")
     run([sys.executable, "scripts/docs.py", "0.0.0", "--docs-root", str(docs_dir)])
 
     heading("Verifying documentation code examples...")
     run([sys.executable, "scripts/test_doc_examples.py"])
-
-    if sys.platform.startswith("win"):
-        heading("Skipping package bundling on Windows.")
-        return
-
-    heading("Bundling package...")
-    completed = run(
-        [sys.executable, "scripts/bundle.py", "--output-dir", str(bundle_dir)],
-        capture=True,
-    )
-    print(completed.stdout, end="")
-
-    match = CREATED_RE.search(completed.stdout)
-    if match is None:
-        raise SystemExit("Error: could not extract bundle path from roc bundle output")
-
-    core_bundle = match.group(1)
-    heading("Bundling optional zone package...")
-    zone_completed = run(
-        [sys.executable, "scripts/bundle.py", "--package-dir", "tzdb/package", "--output-dir", str(bundle_dir)],
-        capture=True,
-    )
-    print(zone_completed.stdout, end="")
-    zone_match = CREATED_RE.search(zone_completed.stdout)
-    if zone_match is None:
-        raise SystemExit("Error: could not extract zone bundle path from roc bundle output")
-
-    heading("Testing examples against exact core and zone bundles...")
-    run([sys.executable, "scripts/test_bundle_examples.py", "--bundle-path", core_bundle,
-         "--zone-bundle-path", zone_match.group(1)])
-    run([sys.executable, "scripts/test_bundle_failures.py", "--bundle-path", core_bundle,
-         "--zone-bundle-path", zone_match.group(1)])
-    run([sys.executable, "scripts/test_starter_kit.py", "--bundle-path", core_bundle,
-         "--zone-bundle-path", zone_match.group(1)])
 
 
 if __name__ == "__main__":

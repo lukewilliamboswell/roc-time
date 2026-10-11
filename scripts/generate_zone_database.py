@@ -16,7 +16,6 @@ from zoneinfo._common import load_data
 from zoneinfo._zoneinfo import _parse_tz_str, _TZStr
 
 sys.dont_write_bytecode = True
-from roc_version import package_pin, read_pin
 from generate_zone_oracle import WHEEL_SHA256, WHEEL_URL, EPOCH, seconds
 
 START = seconds(dt.datetime(1800, 1, 1, tzinfo=dt.UTC))
@@ -24,9 +23,9 @@ END = seconds(dt.datetime(2200, 1, 1, tzinfo=dt.UTC))
 PROFILE = "iana-2025b-wheel-2025.2-posix-1800-2200-v1"
 
 
-def package_header(compiler):
-    # Compiler requirements change independently of the pinned IANA data pack.
-    return f'package [Database] {{ roc: "{compiler}" }}\n'
+def package_header():
+    # The package compiler floats; no header pins it.
+    return 'package [Database] {}\n'
 
 
 def table(raw):
@@ -128,7 +127,7 @@ def generate(wheel, output):
         (output / 'names.txt').write_text("".join(f"{name}\t{unique[target]}\n" for name, target in names.items()))
         implementation = Path(__file__).resolve().parents[1] / 'tzdb/Database.roc'
         (output / 'Database.roc').write_bytes(implementation.read_bytes())
-        (output / 'main.roc').write_text(package_header(read_pin(implementation.parents[1] / 'package/main.roc')))
+        (output / 'main.roc').write_text(package_header())
         for source, destination in [('LICENSE', 'LICENSE.txt'), ('licenses/LICENSE_APACHE', 'LICENSE_APACHE.txt')]:
             (output / destination).write_bytes(archive.read('tzdata-2025.2.dist-info/licenses/' + source))
     manifest = dict(profile=PROFILE, source_version="2025b", encoding="text-assets-v1", wheel_url=WHEEL_URL, wheel_sha256=WHEEL_SHA256,
@@ -145,9 +144,6 @@ def generate(wheel, output):
 
 def verify(output, names, roc):
     root = Path(__file__).resolve().parents[1]
-    version = subprocess.check_output([roc, 'version'], text=True).strip()
-    if version != 'Roc compiler version ' + package_pin(root):
-        raise ValueError('Wrong Roc compiler')
     directory = output / 'verification'
     directory.mkdir()
     import os

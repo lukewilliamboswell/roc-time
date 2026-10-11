@@ -1,7 +1,7 @@
 # Development environment and tasks for roc-time, realised by roc-blueprint with Nix.
 #
 #     blueprint run check    # everything CI checks
-#     blueprint run stable-version
+#     blueprint run release  # build and test the bundles and examples archive
 #     blueprint shell        # the environment, to run scripts/*.roc directly
 #     blueprint update       # refresh Blueprint.lock
 #
@@ -33,4 +33,7 @@ config = [
 	Shell("default", [Use("dev")]),
 	Task("check", [Use("dev"), Run(["roc-stable", "scripts/check_all.roc"])]),
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
+	Task("release", [Use("dev"), Run(["roc-stable", "scripts/build_release.roc"])]),
+	Task("latest-release", [Use("dev"), Run(["roc-stable", "scripts/latest_release.roc"])]),
+	Task("site", [Use("dev"), Run(["python3", "scripts/assemble_docs_site.py", "--roc", "roc-stable"])]),
 ]
