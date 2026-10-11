@@ -30,7 +30,7 @@ InvoiceReportChecks :: [].{
 			crash "same ISO week overflow was hidden across calendar year boundary"
 		}
 		empty : List(InvoiceReport.Input)
-		empty = []
+		empty = List.with_capacity(zero)
 		if InvoiceReport.render(empty) != Ok([
 			"Invoice report (USD; supplied accounting dates)",
 			"Totals by ISO week (week year, not calendar year)",
