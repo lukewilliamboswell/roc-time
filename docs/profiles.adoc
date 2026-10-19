@@ -7,18 +7,18 @@ Each module documents a *profile*: the syntax and meaning it accepts. The API pa
 
 == Match the profile to your input
 
-[cols="1,2,3",options="header"]
+[cols="1,4",options="header"]
 |===
-| Area | What you can do | What to check
-| Exact values | Compare explicit-offset timestamps and combine spans | Signed I64 microseconds; checked overflow and precision
-| Calendars | Convert Gregorian/Julian dates and calculate Gregorian deadlines | Proleptic rules apply in all supported years; historical national reforms aren't inferred
-| Named zones | Interpret local labels with the optional IANA data package | Explicit rules must cover the requested time range
-| Timestamp/interval text | Parse supported explicit-offset timestamps and exact intervals | Leap seconds and sub-microsecond input aren't accepted in these profiles
-| EDTF | Retain supported date precision and qualifications | The date adapter supports a subset of EDTF; check the module before importing a wider form
-| IXDTF | Retain annotations and check supplied offset/zone assertions | An annotation needn't be supported for presentation; unknown critical extensions fail
-| Recurrence | Import supported extracted RFC 5545 DATE/DATE-TIME values | No general ICS reader; recurrence rules differ from repeated clamped arithmetic
-| Explanation | Ask what a supported value means and which context it needs | Work/output limits apply; diagnostic prose isn't a storage format
-| Standard text storage | Save values through their standard parser/serializer pair | Text doesn't embed every interpretation choice or an immutable zone table
+| Area | Support and limits
+| Exact values | Compare explicit-offset timestamps and combine spans. Calculations use signed I64 microseconds and check overflow and precision.
+| Calendars | Convert Gregorian/Julian dates and calculate Gregorian deadlines. Their rules apply in all supported years; historical national reforms aren't inferred.
+| Named zones | Interpret local labels with the optional IANA data package. Supply rules that cover the requested time range.
+| Timestamp/interval text | Parse supported explicit-offset timestamps and exact intervals. These profiles reject leap seconds and sub-microsecond input.
+| EDTF | Retain supported date precision and qualifications. The date adapter supports a subset of EDTF; check its grammar before importing a wider form.
+| IXDTF | Retain annotations and check supplied offset/zone assertions. An annotation can be retained without supporting its presentation; unknown critical extensions fail.
+| Recurrence | Import supported extracted RFC 5545 DATE/DATE-TIME values. There is no general ICS reader, and recurrence rules differ from repeated clamped arithmetic.
+| Explanation | Ask what a supported value means and which context it needs. Work/output limits apply; diagnostic prose isn't a storage format.
+| Standard text storage | Save values through their standard parser/serializer pair. The text doesn't embed every interpretation choice or an immutable zone table.
 |===
 
 Follow the xref:api.adoc#api[API map] to find the module for your task. A format's name alone doesn't establish support for every part of its standard.
