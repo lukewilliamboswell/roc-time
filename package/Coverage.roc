@@ -320,12 +320,14 @@ Coverage :: [Spans(List(PosixSpan))].{
 		for left in a {
 			var $cursor = PosixSpan.start(left)
 			upper = PosixSpan.end(left)
-			while $j < List.len(b) and PosixBoundary.compare($cursor, upper) == LT {
+			# Stop before a right span that cannot overlap this left member.
+			# A nested break here leaks the output accumulator on nightly-2026-10-18;
+			# tests/fuzz/corpus/coverage/subtraction-inner-loop-stop retains the case.
+			while $j < List.len(b) and PosixBoundary.compare($cursor, upper) == LT and
+				PosixBoundary.compare(PosixSpan.start(at(b, $j)), upper) == LT {
 				right = at(b, $j)
 				if PosixBoundary.compare(PosixSpan.end(right), $cursor) != GT {
 					$j = $j + 1
-				} else if PosixBoundary.compare(PosixSpan.start(right), upper) != LT {
-					break
 				} else {
 					if PosixBoundary.compare($cursor, PosixSpan.start(right)) == LT {
 						$output = List.append($output, fragment($cursor, PosixSpan.start(right)))
@@ -638,6 +640,17 @@ expect {
 	coverage = Coverage.from_spans([unit])
 	Coverage.contains(coverage, PosixSpan.start(unit)) and !Coverage.contains(coverage, PosixSpan.end(unit)) and
 		Coverage.complement_within(coverage, unit) == Coverage.empty
+}
+
+expect {
+	# R04/R15 regression: retain both operands after subtracting a prefix, then
+	# stop before a later subtrahend. Expected spans follow the raw endpoints.
+	span = |lo, hi| PosixSpan.new(PosixBoundary.from_microseconds(lo), PosixBoundary.from_microseconds(hi))
+	a = Coverage.from_spans([span(-8, -5)?, span(-1, 0)?, span(2, 3)?, span(8, 14)?])
+	b = Coverage.from_spans([span(-7, -6)?, span(-5, -2)?])
+	result = Coverage.difference(a, b)
+	result == Coverage.from_spans([span(-8, -7)?, span(-6, -5)?, span(-1, 0)?, span(2, 3)?, span(8, 14)?]) and
+		Coverage.member_count(a) == 4 and Coverage.member_count(b) == 2
 }
 
 expect {
