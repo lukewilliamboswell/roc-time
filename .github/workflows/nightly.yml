@@ -44,7 +44,7 @@ jobs:
         with:
           tag: ${{ inputs.nightly_tag }}
 
-      - uses: ./.github/actions/setup-blueprint
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
 
       - name: Resolve the release
         id: release
@@ -84,30 +84,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      LABEL: nightly-compatibility
-      OUTCOME: ${{ needs.test.outputs.outcome }}
-      NIGHTLY: ${{ needs.test.outputs.nightly }}
-      RELEASE: ${{ needs.test.outputs.release }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - name: Open, update or close the issue
-        run: |
-          issue="$(gh issue list --state open --label "$LABEL" --json number --jq '.[0].number // empty')"
-          if [ "$OUTCOME" = success ]; then
-            if [ -n "$issue" ]; then
-              gh issue close "$issue" --comment "Release $RELEASE passes on $NIGHTLY: $RUN_URL"
-            fi
-            exit 0
-          fi
-          message="The examples archive of release $RELEASE fails on $NIGHTLY: $RUN_URL
-
-          The archive is immutable, so the remedy is a patch release whose packages and examples work on this nightly. This issue closes itself when the latest release passes."
-          if [ -n "$issue" ]; then
-            gh issue comment "$issue" --body "$message"
-          else
-            gh label create "$LABEL" --color D93F0B --description "The latest release fails on the latest Roc nightly" --force
-            gh issue create --label "$LABEL" --title "Latest release fails on the latest Roc nightly" --body "$message"
-          fi
+      - uses: lukewilliamboswell/roc-automation/actions/nightly-report@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
+        with:
+          outcome: ${{ needs.test.outputs.outcome }}
+          nightly-tag: ${{ needs.test.outputs.nightly }}
+          release-tag: ${{ needs.test.outputs.release }}

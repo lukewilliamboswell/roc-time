@@ -43,7 +43,7 @@ jobs:
 
       - uses: ./.github/actions/setup-harness
 
-      - uses: ./.github/actions/setup-blueprint
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
 
       - name: Validate release request
         id: validate
@@ -63,6 +63,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.validate.outputs.release_version || '999.999.999' }}
           REPOSITORY: ${{ github.repository }}
           OUTPUT_DIR: dist
+          RELEASE_NOTES_FILE: docs/releases/${{ steps.validate.outputs.release_version || '0.2.0' }}.md
         run: blueprint run release
 
       - name: Resolve the previous release
@@ -93,6 +94,7 @@ jobs:
             dist/zones/*.tar.zst
             dist/roc-time-bundles.json
             dist/roc-time-examples-*.zip
+            dist/roc-time-docs-*.tar.gz
             dist/release-notes.md
           if-no-files-found: error
           retention-days: 7
@@ -113,20 +115,18 @@ jobs:
           name: release-candidate
           path: dist
 
-      # Upload the complete asset inventory to a draft and verify it before
-      # publishing: a published release is never completed or replaced later.
       - name: Publish the tested assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
-          IS_PRERELEASE: ${{ needs.build.outputs.is_prerelease }}
-        run: |
-          gh release create "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "$RELEASE_VERSION" --draft --prerelease="$IS_PRERELEASE" \
-            --notes-file dist/release-notes.md --generate-notes \
-            dist/core/*.tar.zst dist/zones/*.tar.zst dist/roc-time-bundles.json "dist/roc-time-examples-$RELEASE_VERSION.zip"
-          test "$(gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')" = 4
-          gh release edit "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+        uses: lukewilliamboswell/roc-automation/actions/publish-release@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
+        with:
+          version: ${{ needs.build.outputs.release_version }}
+          prerelease: ${{ needs.build.outputs.is_prerelease }}
+          notes-file: dist/release-notes.md
+          assets: |
+            dist/core/*.tar.zst
+            dist/zones/*.tar.zst
+            dist/roc-time-bundles.json
+            dist/roc-time-examples-*.zip
+            dist/roc-time-docs-*.tar.gz
 
   publish-docs:
     needs:

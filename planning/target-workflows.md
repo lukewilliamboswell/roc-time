@@ -1,7 +1,7 @@
 # Target workflows
 
 Align the repository with the
-[roc-automation target workflows](https://github.com/lukewilliamboswell/roc-automation/blob/main/docs/ideal-workflows.md):
+[roc-automation workflows](https://github.com/lukewilliamboswell/roc-automation/blob/dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e/docs/workflows.adoc):
 tooling as Roc scripts on a Blueprint-pinned `roc-stable`, packages and examples
 on the floating nightly with no `roc` header field, repository examples on
 relative package paths, an examples archive on each release, and a nightly check

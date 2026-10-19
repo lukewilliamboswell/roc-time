@@ -28,7 +28,7 @@ jobs:
 
       - uses: ./.github/actions/setup-harness
 
-      - uses: ./.github/actions/setup-blueprint
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
 
       # Scripts run on roc-stable; the packages and examples use the nightly.
       - run: blueprint run check

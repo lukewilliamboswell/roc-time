@@ -48,6 +48,7 @@ main! = |_args| {
 			roc_stable
 				.cmd(["scripts/build_release.roc"])
 				.env("RELEASE_VERSION", "999.999.999")
+				.env("RELEASE_NOTES_FILE", "docs/releases/0.2.0.md")
 				.env("OUTPUT_DIR", Path.to_os_str(Path.join(temporary, "dist")))
 				.exec_cmd!(),
 	)?

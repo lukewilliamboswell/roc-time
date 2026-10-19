@@ -4,6 +4,7 @@ app [main!] {
 }
 
 import cli.OsStr
+import cli.Cmd
 import cli.Path
 import src/Release
 import src/Script
@@ -33,6 +34,19 @@ main! = |_args| {
 	Script.section!("EXAMPLES ARCHIVE")?
 	script("scripts/build_examples_archive.roc").exec_cmd!()?
 	script("scripts/test_examples.roc").env("EXAMPLES_ARCHIVE", Path.to_os_str(archive)).exec_cmd!()?
+
+	# Documentation is part of the tested candidate, before the immutable
+	# release is published. Pages restores this exact archive afterwards.
+	Script.section!("API DOCUMENTATION")?
+	python = Script.env_str!("PYTHON") ?? "python3"
+	docs = Path.join(output, "api-docs")
+	Cmd.new_str(python)
+		.args(["scripts/docs.py", OsStr.from_str(version), "--docs-root", Path.to_os_str(docs)])
+		.env("ROC", Script.roc_nightly!()?.program())
+		.exec_cmd!()?
+	Cmd.new_str(python)
+		.args(["scripts/release_docs.py", "pack", OsStr.from_str(version), "--docs-root", Path.to_os_str(docs), "--output", directory])
+		.exec_cmd!()?
 
 	Script.section!("RELEASE NOTES")?
 	notes = script("scripts/release_notes.roc").exec_output!()?.stdout_utf8

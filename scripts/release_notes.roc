@@ -23,6 +23,12 @@ main! = |_args| {
 	repository = Script.env_str!("REPOSITORY") ?? "lukewilliamboswell/roc-time"
 	bundle_dir = Path.utf8(Script.env_str!("BUNDLE_DIR") ?? "dist")
 	bundles = Release.parse_manifest(Path.read_utf8!(Path.join(bundle_dir, "roc-time-bundles.json"))?)?
+	notes_file = Script.env_str!("RELEASE_NOTES_FILE") ?? "docs/releases/${version}.md"
+	authored = Path.read_utf8!(Path.utf8(notes_file))?
+	if Str.trim(authored).is_empty() {
+		return Script.fail!("release notes are empty: ${notes_file}")
+	}
+	Stdout.write!("${Str.trim_end(authored)}\n\n")?
 	Stdout.write!(
 		Release.notes({
 			version,

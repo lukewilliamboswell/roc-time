@@ -34,45 +34,19 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Checkout released documentation sources
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ inputs.release_version }}
-          path: .roc-time-tmp/release-source
-          persist-credentials: false
-
-      # API docs are generated from the package, so they use the package compiler.
-      - uses: ./.github/actions/setup-roc-nightly
-
-      - uses: ./.github/actions/setup-blueprint
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
 
       - name: Restore immutable historical API documentation
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
-        run: python3 scripts/release_docs.py fetch --allow-missing "$RELEASE_VERSION" --output .roc-time-tmp/api-docs
+        run: python3 scripts/release_docs.py fetch --output .roc-time-tmp/api-docs
 
       - name: Require earlier release documentation history
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: python3 scripts/check_docs_history.py --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs
-
-      - name: Generate release API documentation
-        env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
-        run: |
-          if [ ! -d ".roc-time-tmp/api-docs/$RELEASE_VERSION" ]; then
-            python3 scripts/docs.py "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --source-root .roc-time-tmp/release-source
-          fi
-
-      - name: Preserve release API documentation as an immutable asset
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ inputs.release_version }}
-        run: |
-          python3 scripts/release_docs.py pack "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs --output .roc-time-tmp/docs-assets
-          python3 scripts/release_docs.py publish "$RELEASE_VERSION" ".roc-time-tmp/docs-assets/roc-time-docs-$RELEASE_VERSION.tar.gz"
 
       # The site builder is repository tooling, so it runs on the pinned
       # compiler the Blueprint environment provides for it.

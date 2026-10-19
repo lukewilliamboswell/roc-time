@@ -67,6 +67,16 @@ The oracle, fuzz, resource, measurement and documentation tooling is still Pytho
 with no third-party dependencies, driven by `python_harness.py`, which the gate
 calls with the package compiler as `ROC`.
 
+CI uses the shared Blueprint setup, release publication and nightly reporting
+actions from [roc-automation](https://github.com/lukewilliamboswell/roc-automation),
+pinned by full commit SHA. The release candidate includes the generated API-doc
+archive before publication. The publisher downloads and verifies every uploaded
+asset before publishing an immutable release; Pages restores those archives.
+Author release notes in `docs/releases/<version>.md` before dispatching a release.
+The gate's dry run selects the next release's notes through `RELEASE_NOTES_FILE`;
+update that path in `scripts/check_all.roc` and the workflow's dry-run default when
+preparing the next version.
+
 | Script | Purpose |
 | --- | --- |
 | `python_harness.py` | The Python-driven stages of the gate |
