@@ -36,11 +36,11 @@ also expose weekday, ordinal-day and ISO week-date queries. These operations do
 not require zone interpretation; display does not prove that a local label exists
 in a particular zone.
 
-The [invoice report](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/invoice_report)
-and [named-zone appointment](https://github.com/lukewilliamboswell/roc-time/tree/main/tests/zoned_appointment)
-scenarios exercise these APIs against local source. Run these test applications
-from a checkout with its package-pinned compiler. For an application using a
-released package, consult that release's API documentation and compiler pin.
+The [invoice report](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/invoice_report)
+and [named-zone appointment](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/zoned_appointment)
+scenarios exercise these APIs against local source. Run these applications
+from a checkout with a current Roc nightly. For an application using a
+released package, consult that release's API documentation and release notes.
 
 ## API reference
 

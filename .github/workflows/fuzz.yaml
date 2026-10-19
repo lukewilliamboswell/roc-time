@@ -16,18 +16,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Read Roc version
-        id: roc-version
-        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
-      - name: Install Roc
-        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
-        with:
-          version: nightly-new-compiler
-          nightly-tag: ${{ steps.roc-version.outputs.nightly-tag }}
+      - uses: ./.github/actions/setup-roc-nightly
       - run: python3 scripts/fuzz.py --operation all --runs 10000000 --seconds 120 --seed 20260905
       - name: Preserve campaign evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: extended-fuzz-evidence
           path: .roc-time-tmp/fuzz/

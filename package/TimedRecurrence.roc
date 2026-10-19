@@ -463,7 +463,6 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 					$state = { ..$state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
 				}
 			}
-			crash "merge loop returns an outcome"
 		}
 
 		## Budgets apply to the entire batch, not separately to each output.
@@ -1340,7 +1339,6 @@ next_rule = |initial, limits| {
 			}
 		}
 	}
-	crash "Timed recurrence loop returns an outcome"
 }
 
 sorted_positions : List(LocalDateTime) -> List(LocalDateTime)

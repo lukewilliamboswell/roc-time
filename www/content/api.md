@@ -78,7 +78,7 @@ original declaration and its interpretation context matters.
 
 ## Developing against main?
 
-The [module source and documentation on main](https://github.com/lukewilliamboswell/roc-time/tree/main/package) describe the development API. Generate matching local API documentation with the package-pinned compiler:
+The [module source and documentation on main](https://github.com/lukewilliamboswell/roc-time/tree/main/package) describe the development API. Generate matching local API documentation with a current Roc nightly:
 
 ```sh
 roc docs package/main.roc --output=.roc-time-tmp/api-main

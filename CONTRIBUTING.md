@@ -5,9 +5,34 @@ for engineering guardrails. Check any active task in `planning/` before changing
 its scope. Issues and pull requests should identify a realistic caller scenario
 and the affected design requirements.
 
-Use the compiler pinned by the `roc` field in `package/main.roc`; verify its `version` output and set
-`ROC` to its executable when running repository scripts. Keep experiments and
-generated artifacts under ignored `.roc-time-tmp/`.
+Two compilers are in use and they are not interchangeable.
+
+| Command | Selected by | Used for |
+| --- | --- | --- |
+| `roc-stable` | The nightly release named in [Blueprint.roc](Blueprint.roc), pinned by `Blueprint.lock` | Running the automation scripts in `scripts/*.roc` |
+| `roc` | Nothing: install the latest [nightly](https://github.com/roc-lang/nightlies/releases) | Checking, testing, bundling and running the packages and examples |
+
+No Roc file carries a `roc` header field and there is no `.roc-version`. The
+packages float because the useful question is whether they work with the compiler
+users install today; the tooling is pinned so it keeps working when a nightly
+breaks something.
+
+Install Nix, the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
+0.4.0 CLI and a current nightly `roc`. Then:
+
+```sh
+blueprint run check      # the complete gate that CI runs
+blueprint shell          # enter the environment and run scripts/*.roc directly
+```
+
+Scripts take the package compiler from `ROC_NIGHTLY`, falling back to `roc` on
+`PATH`. The environment provides `roc-stable` and the programs the Roc scripts
+start. It does not yet provide the CPython 3.14.3, Zig 0.16.0 and Rust that the
+remaining Python harness needs; install those as described under [Tests](#tests)
+and select them with `ROC_TIME_GENERATOR_PYTHON` and `ZIG` where they are not the
+defaults. Commit `Blueprint.roc` and `Blueprint.lock`; only `blueprint update`
+writes the lock. Keep experiments and generated artifacts under ignored
+`.roc-time-tmp/`.
 
 Examples are focused applications, not test fixtures. Each belongs in its own
 folder with a `main.roc` entrypoint and pure logic in a separate type module.
@@ -15,20 +40,46 @@ Keep unit `expect` tests beside their implementation. Run them once with
 `roc test package/main.roc`; the CLI discovers the package's module graph.
 Do not add separate `*Tests.roc` unit modules or a per-module test loop.
 Put integration fixtures and harnesses under `tests/` using the same root layout.
-Update recursive discovery and verify local and bundled package usage when
-adding or moving an example.
+Examples depend on `../../package/main.roc` and, where they use zone data,
+`../../tzdb/package/main.roc`, so they always exercise the working tree. The gate
+discovers every folder under `examples/`; add a `tests/examples/<name>.txt`
+expectation for deterministic output.
 
 ## Scripts
 
-
-All repository tooling lives in `scripts/` and is written in Python 3 with no
-third-party Python dependencies.
+New automation is written as Roc scripts. Each entry point in `scripts/*.roc`
+starts with `#!/usr/bin/env roc-stable`, is committed executable, names basic-cli
+by release URL and carries no `roc` field. Pure logic lives in `scripts/src/`
+modules with `expect` tests, which the gate runs on `roc-stable`. Scripts never
+depend on this repository's packages.
 
 | Script | Purpose |
 | --- | --- |
-| `all_tests.py` | Development gate: check, test, fuzz, docs, bundles and copied examples |
-| `test_published_examples.py` | Run unchanged public applications with their declared compiler |
-| `roc_version.py` | Read compiler header pins and reject conflicting authorities |
+| `check_all.roc` | The gate: tooling and layout checks, package check and tests, examples, the Python harness and a release dry run |
+| `test_examples.roc` | Check, run and build the examples in place, or an examples archive unchanged, against recorded output |
+| `build_bundle.roc` | Bundle `package/` and `tzdb/package/` and write the `roc-time-bundles.json` role manifest |
+| `build_examples_archive.roc` | Build `roc-time-examples-<version>.zip` bound to a release's bundle URLs |
+| `build_release.roc` | Build and test exactly what a release publishes, with its release notes |
+| `release_notes.roc` | Release notes naming both compilers, the package URLs and their digests |
+| `latest_release.roc` | Describe the latest full release: tag, bundle URLs and examples archive URL |
+
+The oracle, fuzz, resource, measurement and documentation tooling is still Python 3
+with no third-party dependencies, driven by `python_harness.py`, which the gate
+calls with the package compiler as `ROC`.
+
+CI uses the shared Blueprint setup, release publication and nightly reporting
+actions from [roc-automation](https://github.com/lukewilliamboswell/roc-automation),
+pinned by full commit SHA. The release candidate includes the generated API-doc
+archive before publication. The publisher downloads and verifies every uploaded
+asset before publishing an immutable release; Pages restores those archives.
+Author release notes in `docs/releases/<version>.md` before dispatching a release.
+The gate's dry run selects the next release's notes through `RELEASE_NOTES_FILE`;
+update that path in `scripts/check_all.roc` and the workflow's dry-run default when
+preparing the next version.
+
+| Script | Purpose |
+| --- | --- |
+| `python_harness.py` | The Python-driven stages of the gate |
 | `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_gregorian.py` | Measure validated date construction and coordinate round trips with checked checksums |
@@ -41,18 +92,8 @@ third-party Python dependencies.
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
-| `bundle.py` | Bundle `package/` into a distributable `.tar.zst` |
 | `docs.py` | Generate API docs into an ignored build directory |
 | `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
-| `test_bundle_examples.py` | Verify examples against exact core/zone archives with fresh HTTP acquisition |
-| `test_bundle_failures.py` | Reject missing, swapped and malformed candidate bundles |
-| `starter_kit.py` | Create a ZIP with complete starter apps, package URLs and the compiler pin |
-| `release_starter.py` | Bind a release ZIP to exact source contents, compiler pin, role URLs and archive digests |
-| `test_starter_kit.py` | Verify extracted starters from an outside working directory and reject broken inputs |
-| `update_example_urls.py` | Point the examples at a released bundle URL |
-
-Python tooling orchestrates compiler subprocesses and localhost serving for
-bundle verification.
 
 ## API documentation
 
@@ -62,23 +103,21 @@ examples. `scripts/test_doc_examples.py` checks them together against the real
 package and runs in the default gate. The docs publisher adds
 `docs/overview.html` as the landing guide because the compiler-generated package
 index currently contains navigation and a logo only. Review generated API pages
-with `ROC=/path/to/pinned/roc python3 scripts/docs.py 0.1.0 --docs-root .roc-time-tmp/docs-review`.
+with `ROC=/path/to/roc python3 scripts/docs.py 0.1.0 --docs-root .roc-time-tmp/docs-review`.
 
 ## Tests
 
 The gate also runs `tests/static_dispatch/main.roc` under both the interpreter
 and native execution to check public operator, dictionary-key and iterator use.
 
-Run the development gate with `ROC=/path/to/development/roc python3 scripts/all_tests.py`.
-Separately run `ROC=/path/to/example/roc python3 scripts/test_published_examples.py`
-with the compiler in the example app headers. The latter uses published URLs
-unchanged; the development gate tests disposable copies with local dependencies.
-Generate local versioned docs with `python3 scripts/docs.py 0.1.0`.
+Run the gate with `blueprint run check`; set `ROC_NIGHTLY` to use a package
+compiler other than `roc` on `PATH`. `scripts/test_examples.roc` alone runs every
+example in place against the working tree. Generate local versioned docs with
+`python3 scripts/docs.py 0.1.0`.
 
-The development compiler is pinned in the `roc` headers of `package/main.roc` and
-`tzdb/package/main.roc`; those package pins must agree. Published examples keep
-their own app-header pins. `python3 scripts/roc_version.py` reads the development
-pin for tooling; it does not maintain a separate version registry.
+A new nightly can fail the gate with no fault in the change under review. Compare
+with the default branch and the latest nightly compatibility run before treating
+a failure as a regression.
 
 Property-based testing with [roc-fuzz](https://github.com/lukewilliamboswell/roc-fuzz)
 is a core development method for temporal semantics, alongside fixed fixtures,
@@ -89,7 +128,7 @@ See the [contributor method](AGENTS.md#property-based-testing).
 At least one oracle is required for temporal implementation work. Run:
 
 ```sh
-ROC=/path/to/pinned/roc python3 scripts/oracles.py --workers 4
+ROC=/path/to/roc python3 scripts/oracles.py --workers 4
 ```
 
 The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone, 448 calendar-pattern and 512 RFC date-rule
@@ -159,7 +198,7 @@ a 400-year table model outside that range. The model extension is not direct
 Python support. The forward formula shares our year-counting approach, so
 sequential tests and sourced conventions remain necessary alongside agreement.
 
-Civil query evidence runs with `ROC=/path/to/pinned/roc python3 scripts/test_civil_queries.py`.
+Civil query evidence runs with `ROC=/path/to/roc python3 scripts/test_civil_queries.py`.
 It replays pinned [CPython fixtures and labelled cycle extensions](tests/civil_query_checks/provenance.md)
 and independently walks all 146097 days of a Gregorian cycle in native dev/speed
 builds. The Gregorian fuzz target supplements this with generated full-range
@@ -168,7 +207,7 @@ construction separately from query allocations over owned, shared and sliced
 dates; these are requested-byte counters, not retained-memory measurements.
 
 DATE recurrence export evidence runs with
-`ROC=/path/to/pinned/roc python3 scripts/test_date_export.py`. Its
+`ROC=/path/to/roc python3 scripts/test_date_export.py`. Its
 [sourced/profile fixtures](tests/date_export_checks/PROVENANCE.md) distinguish
 RFC occurrence facts from our canonical spelling and native-profile limits.
 The recurrence fuzz target checks exported properties and restored cursors
@@ -180,7 +219,7 @@ controls run in both dev and speed builds. Normal replay never regenerates
 expected output from the package under test.
 
 Timed recurrence export evidence runs with
-`ROC=/path/to/pinned/roc python3 scripts/test_timed_export.py`. Its
+`ROC=/path/to/roc python3 scripts/test_timed_export.py`. Its
 [independent fixtures](tests/timed_export_checks/README.md) compare canonical
 properties and bounded execution across explicit UTC, floating and synthetic
 zone contexts. The recurrence fuzz target also checks rebuilt and reimported
@@ -204,9 +243,9 @@ extend this evidence to zoned DTSTART with UTC EXDATE. They distinguish original
 source exclusions from selected-boundary exclusions across actual gaps/folds,
 colliding source labels and explicit RDATE/PERIOD inclusions. Original and saved
 definitions run with different finite budgets against fixed independent
-positions and identities. `test_local_examples.py` runs the composed checks in
-interpreter/dev/speed modes; `all_tests.py` also checks the independently
-calculated UTC coordinates and distributable bundles. The meeting exchange
+positions and identities. `scripts/test_examples.roc` runs the composed checks
+interpreted and natively; the gate also checks the independently calculated UTC
+coordinates and distributable bundles. The meeting exchange
 application demonstrates a UTC cancellation for a local Paris meeting.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
@@ -245,7 +284,7 @@ Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
 use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
-`scripts/fuzz.py` is their single runner. Set `ROC` to the compiler pinned in the `roc` field of `package/main.roc`:
+`scripts/fuzz.py` is their single runner. Set `ROC` to the package compiler:
 
 ```sh
 python3 scripts/fuzz.py --operation all
@@ -293,7 +332,7 @@ records would bypass the semantic representation. Runtime interpolations use
 an explicit fallible `parse` call. Invalid typed literals belong in the normal
 compile-failure gate and must fail for the intended validation diagnostic.
 
-The pinned compiler's encoding hook uses `encoding.parse_str(encoding, state)`
+The compiler's encoding hook uses `encoding.parse_str(encoding, state)`
 and `encoding.encode_str(text, state)`. Keep the executable codec checks when
 upgrading the compiler: documentation on the compiler's moving main branch may
 describe a different hook signature. Codec tests establish interchange strings,
@@ -301,11 +340,11 @@ not a versioned native persistence format.
 
 ## Instrumented fixture platform
 
-Install Zig 0.16.0 (`ZIG` can select its executable) alongside the pinned Roc
+Install Zig 0.16.0 (`ZIG` can select its executable) alongside the package
 compiler. The default gate builds the host and verifies its controls:
 
 ```sh
-ROC=/path/to/pinned/roc python3 scripts/fixture_platform.py --verify
+ROC=/path/to/roc python3 scripts/fixture_platform.py --verify
 ```
 
 The [resource probe](tests/platform_probe/main.roc) uses the copied roc-pdf host
@@ -324,7 +363,7 @@ host symbol and preserved debug information provide a starting point for samplin
 profilers or breakpoints. Profiling sessions still need an explicit workload and
 measurement method; marker I/O is not free.
 
-Dev builds exercise `expect` failures. The pinned optimized backend removes
+Dev builds exercise `expect` failures. The optimized backend removes
 `expect`, so resource assertions needed in optimized runs use `Host.assert!`.
 The host makes both supported assertion failures return nonzero; negative
 controls test that behavior. Keep tested operations observable using runtime
@@ -380,7 +419,7 @@ result must stop iteration rather than retry forever. The standard ceiling is
 4 KiB of requested allocation traffic per stage, except 8 KiB for the timed
 iterator prefix, 12 KiB for the composed schedule iterator prefix and 8 KiB
 for its terminal zero-work result. These accommodate measured traffic on the
-pinned compiler. Schedule checks also pause between start and calendar-end
+compiler in use when they were set. Schedule checks also pause between start and calendar-end
 interpretation, then resume with zero source work under the shared zone budget.
 A secondly recurrence over the same horizons separately verifies that seeking
 and consuming one clock period stays within the base budget. A POSIX cutoff at
@@ -504,12 +543,12 @@ are in [tests/platform/NOTICE](tests/platform/NOTICE).
 The [cross-language benchmark guide](benchmarks/comparison/README.md) adds
 Go, Python, Jiff and Tempo adapters, dependency pins, upstream workload references
 and explicit compatibility profiles. Run its opt-in setup with
-`ROC=/path/to/pinned/roc python3 scripts/benchmark_comparison.py --fetch --smoke`.
+`ROC=/path/to/roc python3 scripts/benchmark_comparison.py --fetch --smoke`.
 Docker and the additional language runtimes are not required by the normal gate.
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
-The normal `all_tests.py` gate compiles both benchmark executables and runs
+The gate compiles both benchmark executables and runs
 `benchmark_chrono.py --smoke --fetch`: 1,000 iterations, one warmup and three
 samples per kernel, checked against the independent corpus and checksums.
 Use the Rust version in `benchmarks/chrono/rust-version` and install the matching
@@ -526,153 +565,91 @@ Run longer opt-in benchmarks without concurrent builds or tests. They compare
 selected date and timestamp operations, not overall library capability; their
 in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
-## Development and compiler-support releases
+## Compilers and releases
 
-`main` is the development branch. The `roc` entries in `package/main.roc` and
-`tzdb/package/main.roc` select its compiler; these two packages are built and
-validated together. `.github/roc-nightly.json` lists the root files the nightly
-updater may edit, without duplicating their version values. Example app headers
-are outside that update scope, even if their pins happen to match development.
+Nothing moves either compiler automatically. `Update Blueprint lock` proposes a
+weekly pull request that refreshes `Blueprint.lock` only; it cannot change the
+`roc-stable` tag. Pull requests opened by automation do not start pull request
+workflows, so it dispatches `CI` on its branch; close and reopen the pull request
+to run the release dry run before merging.
 
-Public `examples/` contain complete, multi-file applications with immutable
-published package URLs and their own compiler pins. Run them directly with
-`roc examples/booking_exchange/main.roc` using the declared compiler. Development
-CI copies the same applications to ignored temporary storage, rebinds their
-headers to the development compiler and local packages, and compares their
-outputs. Bundle checks repeat that validation against candidate archives.
-Published-example CI runs the checked-in applications unchanged with their own
-compiler. Do not format the public examples using a newer compiler: Roc's
-formatter can advance nightly header pins.
+The package compiler is the latest nightly. When a nightly breaks the packages or
+examples, fix them on `main`; when it breaks a published release, that release
+needs a patch release, described below.
 
-A branch such as `roc-0.1.x` identifies an upstream compiler compatibility line,
-not a package version. Prefer fixing bugs on `main`, then use reviewed
-`git cherry-pick -x` backports and validate against the support branch compiler.
-Forward-port fixes originating there where applicable. Compiler patch updates
-within the line require validation; another compiler minor line gets another
-branch. Support duration, funded LTS and response-time commitments are separate
-policies.
+To change the tooling compiler, open a pull request that changes the `roc-stable`
+tag in `Blueprint.roc`, run `blueprint update roc` in the same pull request if the
+locked overlay revision predates that nightly, and fix any script the new compiler
+breaks there, so the tag and the scripts move together. The documentation
+site builder under `www/` is tooling too and builds on `roc-stable`.
 
-The release workflow declares any simulated stable compiler mapping explicitly
-until upstream stable releases are available. Read its support-line configuration
-and the branch's package headers for the selected pins. The release guard checks
-that mapping and upstream availability; release notes disclose simulation when
-used. Replace it with verified stable compiler support when upstream provides it.
-Publication from development `main` is disabled. Every package release targets
-supported stable Roc, even when development moves ahead.
+Releases are dispatched from `main` and are immutable. To release:
 
-To release:
+1. Dispatch `Release` on `main` with a new package SemVer such as `0.2.0` or
+   `0.2.0-rc1`; a prerelease suffix marks the release as a prerelease. Every pull
+   request runs the same workflow as a dry run under version `999.999.999`.
+2. The workflow runs the gate, then `scripts/build_release.roc`, which bundles both
+   packages with the latest nightly, builds `roc-time-examples-<version>.zip` from
+   the same commit, and runs that archive unchanged against those exact bundles
+   served on loopback through a fresh package cache. It also rejects missing,
+   corrupt and swapped bundles.
+3. The `publish` job, behind the protected `release` environment, uploads the
+   tested files to a draft, verifies the asset inventory and publishes it. Then
+   `Release docs` publishes the versioned API docs and deploys Pages.
+4. Verify the release notes, both package URLs and the examples archive against
+   the published URLs.
 
-1. Prepare and validate the exact support-branch candidate, including both
-   packages, their bundles, and the multi-file examples rebound to those bundles.
-2. Dispatch `Release` on that branch with a new package SemVer. Package versions
-   are independent of compiler lines. Every published package change receives a
-   new immutable release and content-addressed archives; never replace an
-   existing version's contents.
-3. Verify release notes, both package URLs, the starter archive and direct Roc
-   execution against the actual published URLs. The app headers record the
-   compiler used for that release.
-4. Review the release follow-up PR updating public example applications on
-   `main`. Preserve development package pins. API docs are restored from release
-   assets during deployment; the README uses durable navigation links.
+A release publishes four assets. `roc-time-<hash>.tar.zst` and
+`roc-time-tzdb-<hash>.tar.zst` are the two packages; Roc uses the filename prefix
+to distinguish packages sharing a versioned release path, and the archive bytes
+and content hashes are those produced by `roc bundle`. `roc-time-bundles.json`
+records the two roles and archive digests; archive count never identifies a role.
+`roc-time-examples-<version>.zip` holds every application under `examples/` with
+only its `time` and `zones` dependency lines changed to that release's URLs, a
+README, and `expected/` output recorded at release time. Committed examples are
+never rewritten after a release, so there is no follow-up pull request.
 
-Configure the `github-pages` environment to allow the explicit supported
-compiler branches that publish documentation, as well as `main`. Keep that
-allowlist narrow; adding a release workflow does not update environment policy.
+The release notes state `roc version` and `roc-stable version`. That record
+replaces a header pin as the statement of what the release was built and tested
+with.
 
-For a rehearsal, select `nightly_validation: true`. Supplying `release_version`
-also exercises the branch/package-version guard; omit it for ordinary compiler
-candidate validation. Neither validation mode publishes packages or deploys docs.
-A different merge commit needs its own validation; parent results do not validate it.
-
-The daily nightly updater proposes scoped compiler-header changes to `main`.
-Automatic merging is disabled in this pilot. Bot PR creation and required checks
-are repository settings; installing workflows does not enable those settings.
-No bot approval or branch-protection bypass is part of this policy.
-
-The shared [maintainer guide](https://github.com/lukewilliamboswell/roc-automation/blob/355f762079f676df4d0ae86416edf34216b488e0/docs/package-maintainer-guide.md)
-provides reusable guidance. OpenSSF evidence and support commitments remain each
-project's responsibility.
-
-## Packaging
-
-Bundle the package for distribution using `python3 scripts/bundle.py --output-dir dist`.
-
-Run the release workflow from GitHub Actions with a release version such as `0.1.0`
-or `0.1.0-rc1`. The pinned release action marks RC versions as prereleases;
-their docs remain versioned and do not replace the stable docs redirect.
-It builds and tests the exact core/zone pair, creates the GitHub release,
-generates versioned docs, opens a follow-up PR for published examples
-against the default branch, and publishes docs to GitHub Pages. Released examples
-are validated in an isolated checkout of the tag using their release compiler
-and published URLs; the reviewed follow-up promotes that complete public example
-collection without changing development package pins.
-The follow-up uses a GitHub-signed commit and explicitly dispatches the test and
-release-validation workflows, since a PR created with `GITHUB_TOKEN` does not
-automatically trigger ordinary PR workflows. The separate controller reports
-`Release follow-up validation` only after both workflows and their required jobs
-pass for the exact generated commit. It does not approve or merge the PR. If the
-base or generated branch moves, regenerate and validate against the current base;
-the creator refuses to overwrite unrelated or unsigned branch work.
-API documentation is stored as immutable release assets and restored during
-Pages assembly. Generated pages are not checked into Git; authored guides live
-in `www/`. Assembly refuses missing earlier release documentation;
-each release tag and starter manifest records its own compiler pin.
+Never move a tag, replace a published asset or publish rebuilt archives under an
+existing version. If publication fails after the draft is created, delete the
+draft and dispatch again; if it fails after publication, the fix is a new version.
 If docs publication fails after the release succeeds, rerun the separate
-`Release docs` workflow with that existing release version. It reads published
-role metadata and does not recreate the release or tag.
-Example rebinding migrates `Rfc*` iCalendar identifiers to `ICal*` only for
-release checkouts exporting the renamed API. Development copies and new starter
-kits use current names; published example sources and earlier releases retain
-their original names. The URL updater's `--migrate-ical` switch is explicit so
-recovering older documentation does not rewrite it for a newer package API.
-If publication fails after creating the tag, preserve its commit. Recover using
-the original successful run's bundle, role-metadata and starter artifacts; verify
-their digests and starter contents before creating the release with
-`gh release create --verify-tag`. Never move the tag or substitute rebuilt
-archives. Keep API-comparison diagnostics in the workflow artifact and include
-only a bounded summary in release notes; a failed comparison must remain explicit.
-The additional `roc-time-bundles.json` asset records the two roles and archive
-digests for later core-version comparisons. Published filenames use
-`roc-time-<hash>.tar.zst` and `roc-time-tzdb-<hash>.tar.zst`: Roc uses the
-filename prefix to distinguish packages sharing a versioned release path.
-The archive bytes and content hashes remain those produced by `roc bundle`. A legacy release without this
-metadata requires the explicit `previous_core_url` workflow input; archive count
-does not identify a package role. Automatic previous-release discovery selects
-the latest stable release; to compare a later RC against an earlier RC, supply
-that earlier RC's core archive as `previous_core_url`.
-`scripts/release_bundles.py self-test` verifies
-role selection and rejection paths without publishing or contacting GitHub.
+`Release docs` workflow with that existing release version. API documentation is
+stored as immutable release assets and restored during Pages assembly; generated
+pages are not checked into Git and authored guides live in `www/`. Assembly
+refuses missing earlier release documentation. Configure the `github-pages`
+environment to allow deployment from `main`.
 
-Prepare a starter ZIP for explicit core and zone URLs with:
+The nightly compatibility workflow runs the latest full release's examples
+archive, unchanged, on the latest nightly and keeps one tracking issue open while
+it fails. A failure there means that release needs a patch release: fix `main`,
+then release the next patch version. The published archive is never edited. A
+release without an archive passes with a notice. Dispatch the workflow with
+`nightly_tag` or `release_tag` to test another combination, and reproduce a run
+locally with:
 
 ```sh
-python3 scripts/starter_kit.py --output .roc-time-tmp/roc-time-starter.zip \
-  --bundle-url "$CORE_URL" --zone-bundle-url "$ZONE_URL"
+EXAMPLES_ARCHIVE=roc-time-examples-0.2.0.zip blueprint run examples
 ```
 
-The ZIP contains the applications selected by `scripts/starter_kit.py`, including
-the staged applications in `scripts/promote_examples.py`, their companion
-modules, license and compiler pin. Each application runs directly with Roc; the
-optional runner checks compiler compatibility. The full gate generates and extracts a kit against the
-candidate archives, acquires them through a fresh cache, and checks interpreter
-and native outputs while invoking from outside the checkout's working directory.
-Generated artifacts stay under `.roc-time-tmp/`. Failure controls cover missing
-companion modules, compiler mismatch and missing, corrupt or swapped archives.
-The release workflow prepares the ZIP with final role URLs, uploads it separately
-from the Roc package archives, and validates the downloaded artifact before tests
-and publication. The validator compares exact member contents, compiler metadata
-and archive digests and rejects missing, extra or modified entries. Tests extract
-that supplied ZIP and rebase only known dependency URLs in a copy to the local
-server. This proves prepared content and acquisition behavior; it does not prove
-availability of future GitHub release URLs. Release notes link both package archives, the starter ZIP
-and its exact compiler release, and include a runnable example importing both packages.
+`roc-0.1.x` is a frozen branch from the earlier compiler-pin model and is not a
+release source.
+
+Build and test a release candidate locally with:
+
+```sh
+RELEASE_VERSION=999.999.999 OUTPUT_DIR=.roc-time-tmp/dist blueprint run release
+```
 
 ## Zone-data representation measurements
 
-With the pinned Roc compiler and CPython 3.14.3, run:
+With the package compiler and CPython 3.14.3, run:
 
 ```sh
-ROC=/path/to/pinned/roc python3 scripts/measure_zone_roc.py .roc-time-tmp/tzdata.whl --samples 3
+ROC=/path/to/roc python3 scripts/measure_zone_roc.py .roc-time-tmp/tzdata.whl --samples 3
 ```
 
 Use the same pinned wheel as the zone oracle generator. The script verifies its
@@ -696,7 +673,7 @@ Do not copy measurement transcripts into the architecture or active plan.
 Generate the optional bounded database into a new directory with:
 
 ```sh
-python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/pinned/roc
+python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/roc
 ```
 
 Generation verifies the configured interpreter and wheel hash. The generator
@@ -728,7 +705,7 @@ CPython generation pin. Refresh into a new ignored directory, review semantic
 changes, then replace the committed generated pack and its manifest together.
 The resource fixture uses runtime names and consumes transition checksums. It
 limits lookup to zero allocation/reallocation calls in development and at most
-one in optimized native builds under the pinned compiler. This covers the data lookup and
+one in optimized native builds under the compiler used for the measurement. This covers the data lookup and
 returned record, not core adaptation, parsing/formatting or retained memory.
 Trace marks bracket the operation. The host assertion remains active when
 optimized `expect` checks are removed. Bundled examples import the text assets
@@ -740,23 +717,20 @@ python3 scripts/bundle.py --package-dir tzdb/package --output-dir .roc-time-tmp/
 ```
 
 Measure the actual package with
-`ROC=/path/to/pinned/roc python3 scripts/measure_zone_package.py --package tzdb/package`.
+`ROC=/path/to/roc python3 scripts/measure_zone_package.py --package tzdb/package`.
 Repeat `--package` to compare a historical pack checked out under `.roc-time-tmp/`.
 Reports retain commands, hashes, compiler/target, build samples and observable
 lookup results. Source encoding, compile-time evaluation and linked data retention
 are separate costs; a static name alone does not prove unused-zone elimination.
 
-Use `update_example_urls.py --zone-bundle-url` alongside `--bundle-url` when
-updating both independently versioned dependencies. Example
-bundle checks rewrite both core and optional-data dependencies to local URLs.
-To test existing artifacts, pass both `--bundle-path CORE.tar.zst` and
-`--zone-bundle-path ZONES.tar.zst` to `scripts/test_bundle_examples.py`.
-Supplying neither builds both from source. The verifier isolates the package
-cache, requires successful acquisition of both archives and runs native examples
-from an empty working directory. Run `scripts/test_bundle_failures.py` with the
-same pair to verify acquisition and role-error diagnostics.
+To test existing artifacts, set `EXAMPLES_ARCHIVE` to an examples archive and
+`BUNDLE_DIR` to a directory produced by `scripts/build_bundle.roc`, then run
+`scripts/test_examples.roc`. The verifier isolates the package cache, requires
+successful acquisition of both archives and runs native examples
+from an empty working directory, then verifies the acquisition and role-error
+diagnostics for missing, corrupt and swapped bundles.
 
-Run `ROC=/path/to/pinned/roc python3 scripts/measure_gregorian.py` for the
+Run `ROC=/path/to/roc python3 scripts/measure_gregorian.py` for the
 Gregorian conversion microbenchmark (LLVM speed, one million dates, three
 warmups and fifteen samples). Run it without concurrent test or build jobs.
 The fields and roundtrip workloads include process startup and final formatting;

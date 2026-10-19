@@ -6,12 +6,14 @@ do not point the generator at `www/` during development.
 
 ## Build and preview
 
-From the repository root, use the compiler declared in `www/main.roc`:
+The site builder is repository tooling. It runs on `roc-stable`, the pinned compiler
+the [Blueprint environment](../Blueprint.roc) provides. From the repository root,
+inside `blueprint shell`:
 
 ```sh
-roc version
-roc check www/main.roc
-roc build www/main.roc --output=.roc-time-tmp/docs-site-builder
+roc-stable version
+roc-stable check www/main.roc
+roc-stable build www/main.roc --output=.roc-time-tmp/docs-site-builder
 .roc-time-tmp/docs-site-builder www/content .roc-time-tmp/docs-site
 python3 www/verify.py .roc-time-tmp/docs-site --api-root .roc-time-tmp/api-docs
 python3 -m http.server 8000 --directory .roc-time-tmp/docs-site --bind 127.0.0.1
@@ -40,19 +42,19 @@ Roc build may download the pinned dependency.
   layout includes a keyboard skip link and visible focus styles. There are no
   runtime scripts, remote fonts, analytics or external styling dependencies.
 - Link tasks to real multi-file applications and version-specific API docs.
-  Direct readers to the chosen release and application headers, and
-  check release-specific header rewriting before recommending a source tag’s
-  dependency URLs. Keep the starter kit’s app/compiler/package pins together.
+  Direct readers to the chosen release, its notes and its examples archive;
+  repository examples use relative package paths, so do not recommend a source
+  tag’s headers as dependency URLs.
 - `verify.py` checks generated page coverage, titles/headings/navigation, local
   links/fragments and release API links against explicitly restored release documentation. It
   does not claim live external link availability or execute example code.
 
 Rebuild into a fresh ignored output directory after deleting or renaming source
 pages: basic-ssg writes output but does not remove stale files. The verifier
-rejects stale HTML pages. Run the pinned formatter after changing Roc files:
+rejects stale HTML pages. Run `roc-stable fmt` after changing Roc files:
 
 ```sh
-roc fmt --check www/main.roc www/Site.roc
+roc-stable fmt --check www/main.roc www/Site.roc
 ```
 
 ## Publishing boundary
@@ -67,7 +69,7 @@ For a complete local assembly, first restore release assets:
 
 ```sh
 python3 scripts/release_docs.py fetch --output .roc-time-tmp/api-docs
-python3 scripts/assemble_docs_site.py --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
+blueprint run site -- --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
 ```
 
 Use fresh output directories. The standalone verifier needs that same restored

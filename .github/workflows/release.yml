@@ -3,36 +3,28 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      nightly_validation:
-        description: "Run validation only; never publish a release or deploy docs"
-        type: boolean
-        default: false
       release_version:
-        description: "Release version, e.g. 1.0.1"
-        required: false
+        description: "Release version, e.g. 0.2.0 or 0.2.0-rc1"
+        required: true
         type: string
-      previous_core_url:
-        description: "Explicit previous core archive URL (legacy release or earlier prerelease)"
-        required: false
-        type: string
+  # A pull request runs everything except publication, as a dry run.
   pull_request:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation) && format('release-{0}', github.repository) || format('release-validate-{0}-{1}', github.repository, github.ref) }}
-  cancel-in-progress: ${{ (github.event_name != 'workflow_dispatch' || inputs.nightly_validation) }}
+  group: ${{ github.event_name == 'workflow_dispatch' && format('release-{0}', github.repository) || format('release-dry-run-{0}-{1}', github.repository, github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   build:
-    name: Build release bundle
+    name: Build and test release candidate
     runs-on: ubuntu-latest
     outputs:
       release_version: ${{ steps.validate.outputs.release_version }}
       docs_version: ${{ steps.validate.outputs.docs_version }}
-      test_matrix: ${{ steps.bundles.outputs.test_matrix }}
-      candidate_version: ${{ steps.validate.outputs.release_version || 'unreleased-validation' }}
+      is_prerelease: ${{ steps.validate.outputs.is_prerelease }}
 
     steps:
       - name: Checkout
@@ -41,266 +33,110 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check release branch and candidate identity
-        if: github.event_name == 'workflow_dispatch' && (!inputs.nightly_validation || inputs.release_version != '')
-        uses: lukewilliamboswell/roc-automation/actions/check-release@5e6663c1436f038a35cc076a1b2921983e9b954c
-        with:
-          version: ${{ inputs.release_version }}
-          # Pilot publication comes from the supported-compiler branch.
-          allow-default-branch: 'false'
-          allow-nightly-bootstrap: 'false'
-          compiler-root: package/main.roc
-          # Explicit simulation until upstream publishes stable Roc.
-          simulated-stable-pin: nightly-2026-09-27-a3ce7f1
-          simulated-stable-line: '0.1'
+      - name: Require the default branch for publication
+        if: github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          echo "::error::Releases are dispatched on the default branch"
+          exit 1
 
-      - name: Read Roc version
-        id: roc-version
-        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/setup-roc-nightly
 
-      - name: Install Zig for the instrumented test host
-        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29
-        with:
-          version: 0.16.0
-          use-cache: false
+      - uses: ./.github/actions/setup-harness
 
-      - name: Install Roc
-        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
-        with:
-          version: nightly-new-compiler
-          nightly-tag: ${{ steps.roc-version.outputs.nightly-tag }}
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@be0776b7446800b1d975df5f9cb4961d560c1aa7
 
       - name: Validate release request
         id: validate
         uses: roc-lang/release-package/actions/validate-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
-          release_version: ${{ (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation) && inputs.release_version || '' }}
-          dry_run: ${{ (github.event_name != 'workflow_dispatch' || inputs.nightly_validation) }}
+          release_version: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '' }}
+          dry_run: ${{ github.event_name != 'workflow_dispatch' }}
           github_token: ${{ github.token }}
 
-      - name: Install pinned Python for generator smoke
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version-file: benchmarks/python-version
+      - name: Run the repository gate
+        run: blueprint run check
 
-      - name: Install pinned Rust for benchmark correctness smoke
-        run: |
-          rust_version=$(cat benchmarks/chrono/rust-version)
-          rustup toolchain install "$rust_version" --profile minimal --target x86_64-unknown-linux-musl
-          echo "RUSTUP_TOOLCHAIN=$rust_version" >> "$GITHUB_ENV"
+      # The bundles and examples archive built here are the ones published:
+      # the archive is run unchanged against these exact bundles on loopback.
+      - name: Build and test the release candidate
+        env:
+          RELEASE_VERSION: ${{ steps.validate.outputs.release_version || '999.999.999' }}
+          REPOSITORY: ${{ github.repository }}
+          OUTPUT_DIR: dist
+          RELEASE_NOTES_FILE: docs/releases/${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '0.2.0' }}.md
+        run: blueprint run release
 
-      - name: Validate package
-        run: python3 scripts/all_tests.py
-
-      - name: Resolve previous core release
-        if: (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation)
+      - name: Resolve the previous release
+        if: github.event_name == 'workflow_dispatch'
         id: previous
         env:
           GH_TOKEN: ${{ github.token }}
-          PREVIOUS_CORE_URL: ${{ inputs.previous_core_url }}
-        run: python3 scripts/release_bundles.py previous --previous-core-url "$PREVIOUS_CORE_URL" --output .release/previous-url.txt --github-output "$GITHUB_OUTPUT"
+          REPOSITORY: ${{ github.repository }}
+        run: blueprint run latest-release
 
       - name: Check version bump
         uses: roc-lang/release-package/actions/run-bump-check@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
         with:
           release_version: ${{ steps.validate.outputs.release_version }}
-          dry_run: ${{ (github.event_name != 'workflow_dispatch' || inputs.nightly_validation) }}
-          # The previous release may not compile with the current Roc nightly,
+          dry_run: ${{ github.event_name != 'workflow_dispatch' }}
+          # The previous release may not compile with the current nightly,
           # which prevents roc bump from comparing the two public APIs.
           bump_check: warn
           bump_entrypoint: package/main.roc
-          previous_url: ${{ steps.previous.outputs.previous_url }}
+          previous_url: ${{ steps.previous.outputs.core_url }}
 
-      - name: Bundle package
-        run: python3 scripts/release_bundles.py build --output .release/bundle-manifest.json
-
-      - name: Prepare release bundle metadata
-        id: bundles
-        uses: roc-lang/release-package/actions/prepare-bundles@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
+      - name: Upload the release candidate
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          bundle_glob: dist/*/*.tar.zst
-          bundle_manifest_path: .release/bundle-manifest.json
-          test_os_json: '["ubuntu-latest"]'
-
-      - name: Record explicit release roles
-        run: python3 scripts/release_bundles.py metadata
-
-      - name: Prepare starter kit with final role URLs
-        env:
-          RELEASE_VERSION: ${{ steps.validate.outputs.release_version || 'unreleased-validation' }}
-        run: python3 scripts/release_starter.py prepare --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
-
-      - name: Upload starter kit
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: release-starter
-          path: .release/starter/roc-time-starter.zip
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload release bundles
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: release-bundles
-          path: .release/bundles/*
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload release metadata
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: release-metadata
+          name: release-candidate
           path: |
-            .release/bump-output.txt
-            .release/previous-url.txt
-            .release/release-bundles.json
-            .release/test-matrix.json
-            .release/roc-time-bundles.json
+            dist/core/*.tar.zst
+            dist/zones/*.tar.zst
+            dist/roc-time-bundles.json
+            dist/roc-time-examples-*.zip
+            dist/roc-time-docs-*.tar.gz
+            dist/release-notes.md
           if-no-files-found: error
           retention-days: 7
 
-  test-bundles:
-    name: Test exact core and zones bundle pair
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-
-      - name: Read Roc version
-        id: roc-version
-        run: echo "nightly-tag=$(python3 scripts/roc_version.py)" >> "$GITHUB_OUTPUT"
-
-      - name: Install Roc
-        uses: roc-lang/setup-roc@f5a74bf90aa694b43ab4a7cbfdb19273bc6aa697
-        with:
-          version: nightly-new-compiler
-          nightly-tag: ${{ steps.roc-version.outputs.nightly-tag }}
-
-      - name: Download release bundles
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: release-bundles
-          path: .release/test-bundles
-
-      - name: Download release metadata
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: release-metadata
-          path: .release
-
-      - name: Resolve exact bundle roles
-        id: pair
-        run: python3 scripts/release_bundles.py paths --bundle-dir .release/test-bundles --github-output "$GITHUB_OUTPUT"
-
-      - name: Test supplied release pair
-        env:
-          CORE_BUNDLE: ${{ steps.pair.outputs.core }}
-          ZONE_BUNDLE: ${{ steps.pair.outputs.zones }}
-        run: python3 scripts/test_bundle_examples.py --bundle-path "$CORE_BUNDLE" --zone-bundle-path "$ZONE_BUNDLE"
-
-      - name: Download starter kit
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: release-starter
-          path: .release/starter
-
-      - name: Test supplied starter kit
-        env:
-          CORE_BUNDLE: ${{ steps.pair.outputs.core }}
-          ZONE_BUNDLE: ${{ steps.pair.outputs.zones }}
-          RELEASE_VERSION: ${{ needs.build.outputs.candidate_version }}
-        run: python3 scripts/test_starter_kit.py --bundle-path "$CORE_BUNDLE" --zone-bundle-path "$ZONE_BUNDLE" --kit-path .release/starter/roc-time-starter.zip --role-metadata .release/roc-time-bundles.json --repo "$GITHUB_REPOSITORY" --release-version "$RELEASE_VERSION"
-
-  publish-release:
+  publish:
     name: Publish GitHub release
-    needs:
-      - build
-      - test-bundles
-    if: (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation)
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Download the release candidate
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          fetch-depth: 0
+          name: release-candidate
+          path: dist
 
-      - name: Download release bundles
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - name: Publish the tested assets
+        uses: lukewilliamboswell/roc-automation/actions/publish-release@be0776b7446800b1d975df5f9cb4961d560c1aa7
         with:
-          name: release-bundles
-          path: .release/bundles
-
-      - name: Download release metadata
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: release-metadata
-          path: .release
-
-      - name: Download starter kit
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: release-starter
-          path: .release/starter
-
-      - name: Validate starter kit before publication
-        env:
-          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
-        run: python3 scripts/release_starter.py validate --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip
-
-      - name: Bound API comparison diagnostics for release notes
-        run: python3 scripts/release_starter.py summarize-bump --bump-output .release/bump-output.txt --summary-output .release/bump-summary.txt --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-
-      - name: Make release notes
-        uses: roc-lang/release-package/actions/make-release-notes@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
-        with:
-          release_version: ${{ needs.build.outputs.release_version }}
-          docs_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/${{ needs.build.outputs.docs_version }}/
-          bump_output_file: .release/bump-summary.txt
-          github_token: ${{ github.token }}
-
-      - name: Add starter download and compiler instructions
-        env:
-          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
-        run: python3 scripts/release_starter.py notes --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --role-metadata .release/roc-time-bundles.json --bundle-dir .release/bundles --kit-path .release/starter/roc-time-starter.zip --notes-path .release/release-notes.md
-
-      - name: Disclose the compiler-support simulation
-        if: github.ref == 'refs/heads/roc-0.1.x'
-        run: |
-          cat >> .release/release-notes.md <<'NOTE'
-
-          This release pilots the `roc-0.1.x` support workflow with
-          `nightly-2026-09-27-a3ce7f1` standing in for a future stable Roc compiler.
-          It does not claim compatibility with an upstream stable Roc 0.1 release.
-          NOTE
-
-      - name: Publish release
-        uses: roc-lang/release-package/actions/publish-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
-        with:
-          release_version: ${{ needs.build.outputs.release_version }}
-          github_token: ${{ github.token }}
-
-      - name: Publish role metadata and starter kit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
-        run: gh release upload "$RELEASE_VERSION" .release/roc-time-bundles.json .release/starter/roc-time-starter.zip --repo "$GITHUB_REPOSITORY"
+          version: ${{ needs.build.outputs.release_version }}
+          prerelease: ${{ needs.build.outputs.is_prerelease }}
+          notes-file: dist/release-notes.md
+          assets: |
+            dist/core/*.tar.zst
+            dist/zones/*.tar.zst
+            dist/roc-time-bundles.json
+            dist/roc-time-examples-*.zip
+            dist/roc-time-docs-*.tar.gz
 
   publish-docs:
     needs:
       - build
-      - publish-release
-    if: (github.event_name == 'workflow_dispatch' && !inputs.nightly_validation)
+      - publish
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
-      pull-requests: write
       pages: write
       id-token: write
-      actions: write
-      statuses: write
     uses: ./.github/workflows/release-docs.yml
     with:
       release_version: ${{ needs.build.outputs.release_version }}

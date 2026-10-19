@@ -348,7 +348,6 @@ DateRecurrence :: {
 					}
 				}
 			}
-			crash "Recurrence loop returns a batch"
 		}
 
 		## Return one date without looking for the following date. End is proven

@@ -111,6 +111,24 @@ bounded enumeration of valid fields (at most 372 candidate dates per year).
 
 ## Curated inputs and replay contract
 
+`coverage/subtraction-inner-loop-stop` retains a 16-byte reduction of an
+allocation leak found while upgrading to `nightly-2026-10-18-1df370f`.
+Its SHA-256 is `06cd81b7bbf093eedd1bcc6dd47ea6b2d2ecadce2ce7668a257c77a3916d0928`.
+The generator is `coverage-v2` at commit
+`d976acb7dbcfeff56dcd09c57ef51b87e0245763`, with roc-fuzz 0.4.3 at
+`1abb6f0f76fc3ed6016cdf5da4e16e8ed1cfdfc4`, LLVM speed / x64musl.
+The original search used seed 1, 10,000 runs / 5 seconds, 256-byte inputs,
+256 MB RSS and a two-second per-input timeout. `coverage minimize` reduced the
+47-byte discovery to this input; it is not claimed globally minimal.
+The same source/input passes on October 9 and reports one leaked allocation
+on October 18. A public-API probe isolates the leak to `Coverage.difference`;
+placing its right-start stop bound in the loop condition removes it without
+changing the subtraction law or asymptotic cost. The test still uses the
+independent unit-cell oracle, sharing checks and algebraic laws above.
+Replay with `python3 scripts/fuzz.py --operation replay --targets coverage`.
+The readable endpoint regression lives beside `Coverage.difference`'s unit
+tests; this raw input additionally exercises the fuzz host's leak detector.
+
 Each semantic corpus includes four intentionally constructed 128-byte inputs:
 `zero` (all 0), `ones` (all 255), `ramp` (0 through 127), and `alternating`
 (`[0,255,1,127,128,2,254,42]` repeated sixteen times). They were curated on

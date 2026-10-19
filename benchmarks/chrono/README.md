@@ -4,19 +4,19 @@ This opt-in benchmark compares a narrow semantic intersection through real publi
 
 ```sh
 # Once: acquire the exact Cargo.lock dependencies and run a bounded setup check.
-ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --fetch --smoke
+ROC=/path/to/roc python3 scripts/benchmark_chrono.py --fetch --smoke
 # Subsequent runs use Cargo --offline --locked.
-ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py
+ROC=/path/to/roc python3 scripts/benchmark_chrono.py
 # Explicit alternative compiler backend; never combine these results with speed.
-ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --roc-opt dev --smoke
+ROC=/path/to/roc python3 scripts/benchmark_chrono.py --roc-opt dev --smoke
 ```
 
 The profiling mode verifies every output and records user-space CPU samples
 from the selected optimized build. Add `--debug` for Roc source locations:
 
 ```sh
-ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile parse --iterations 10000000 --samples 15
-ROC=/path/to/pinned/roc python3 scripts/benchmark_chrono.py --profile add_days --debug --iterations 10000000 --samples 15
+ROC=/path/to/roc python3 scripts/benchmark_chrono.py --profile parse --iterations 10000000 --samples 15
+ROC=/path/to/roc python3 scripts/benchmark_chrono.py --profile add_days --debug --iterations 10000000 --samples 15
 ```
 
 This requires Linux `perf` and permission to sample user-space events. Recordings
@@ -25,14 +25,14 @@ runs do not emit comparative timing results: sampling overhead is diagnostic.
 Comparative measurements require `--roc-opt speed` without `--debug`;
 `--debug` is accepted only with `--profile`.
 `perf annotate` on the printed recording can show instruction-level costs.
-On the pinned compiler, `--debug` also disables selected LLVM optimizations,
+On the compiler measured, `--debug` also disables selected LLVM optimizations,
 including loop unrolling and SLP vectorization. Compare the normal optimized
 profile before attributing its runtime costs to a source-level debug profile;
 the two executables need not have equal performance.
 
 The scoped `.cargo/config.toml` also directs editor/Cargo builds started in this crate to ignored temporary output.
 
-Requires the repository-pinned Roc compiler, Zig 0.16.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler must match [rust-version](rust-version); a matching compiler selected through `RUSTC` or PATH is accepted without requiring a named rustup alias. Its full revision is recorded.
+Requires a current Roc nightly, Zig 0.16.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler must match [rust-version](rust-version); a matching compiler selected through `RUSTC` or PATH is accepted without requiring a named rustup alias. Its full revision is recorded.
 
 ## Workloads
 

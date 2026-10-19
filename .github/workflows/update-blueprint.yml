@@ -1,0 +1,42 @@
+name: Update Blueprint lock
+
+# Propose refreshed locked inputs for the tooling environment. The tooling
+# compiler tag and script dependencies in Blueprint.roc change only by hand.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-blueprint-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    name: Propose a lock update
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      # Create the branch commit, open the pull request, and dispatch CI on it:
+      # a pull request opened with this token does not start workflows itself.
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@be0776b7446800b1d975df5f9cb4961d560c1aa7
+
+      - run: blueprint update
+
+      - name: Propose the lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: blueprint run propose-lock-update

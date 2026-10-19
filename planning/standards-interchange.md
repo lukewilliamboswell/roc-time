@@ -60,7 +60,7 @@ Extend narrow roc-fuzz targets through public APIs, replay curated cases and run
 finite campaigns. Check intended compile-failure diagnostics and executable
 examples locally and from the distributable bundle. Measure parsing, formatting
 and bounded explanation separately from interpretation; include failing controls
-for resource assertions. Use the pinned compiler and normal integration gate.
+for resource assertions. Use the package compiler and normal integration gate.
 
 Full ISO normative clauses remain an external dependency for broader conformance
 claims, not for the independently specified RFC and LOC feature profiles.

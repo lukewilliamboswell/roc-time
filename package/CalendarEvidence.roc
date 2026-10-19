@@ -158,7 +158,6 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 				$state = { ..$state, index: $state.index + 1, yes: $state.yes or inside, no: $state.no or !inside }
 				$examined = $examined + 1
 			}
-			crash "Evidence loop returns an outcome"
 		}
 
 		## Summarize the query point and progress without examining more alternatives.
