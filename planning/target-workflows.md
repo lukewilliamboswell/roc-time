@@ -5,14 +5,10 @@ Align the repository with the
 tooling as Roc scripts on a Blueprint-pinned `roc-stable`, packages and examples
 on the floating nightly with no `roc` header field, repository examples on
 relative package paths, an examples archive on each release, and a nightly check
-of the latest release. Releases are dispatched from `main`; the first under this
-model is 0.2.0.
+of the latest release. Releases are dispatched from `main`.
 
 ## Deliverables
 
-- Publish 0.2.0 from `main` with its examples archive, native HTML manual archive
-  and PDF. Verify the deployed manual, legacy guide routes and unchanged
-  historical API URLs after restoring the tested archives.
 - Port the Python harness (`scripts/python_harness.py` and the scripts it runs)
   and the remaining API documentation tooling to Roc scripts.
 - After 0.2.0, rehearse `Nightly compatibility` with an incompatible
@@ -28,7 +24,7 @@ model is 0.2.0.
   start. Decide whether Python 3.14.3, Zig 0.16.0 and Rust move into it when the
   remaining harness is ported.
 - Repository settings are outside the tree: required check names (`test`,
-  `Build and test release candidate`), the protected `release` environment, removal of
+  `Build and test release candidate`), removal of
   the updater's required `configuration` check, and permission for GitHub Actions
   to create pull requests.
 
