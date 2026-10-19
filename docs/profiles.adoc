@@ -34,11 +34,12 @@ Different failures call for different responses:
 
 Your application supplies clock readings, timezone data and any choice of a repeated local occurrence. The library won't use your machine's timezone or fetch replacement data. Standard adapters can have their own documented interpretation policies, so check the adapter as well as the underlying type.
 
-== Archive interval descriptions in development
+[#archive-interval-descriptions-in-development]
+== Archive interval descriptions
 
 The current source also provides `EdtfInterval` and `CalendarInterval` for date intervals with independently described endpoints. For example, `2004-02-01/2005-02` retains a day on one side and a month on the other. `1985/` has an unknown end; `1985/..` has an explicitly open end. Those are different descriptions.
 
-These modules and the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/archive_intervals[archive intervals example] are development additions after 0.2.0; don't expect them in the 0.2.0 archive. Parsing and saving the interval doesn't resolve it into timeline coverage. The module reports interpretation as unsupported rather than inventing exact endpoint dates. See the development API for its declared EDTF subset.
+These modules and the https://github.com/lukewilliamboswell/roc-time/tree/0.3.0/examples/archive_intervals[archive intervals example] are available from 0.3.0. Parsing and saving the interval doesn't resolve it into timeline coverage. The module reports interpretation as unsupported rather than inventing exact endpoint dates. See the 0.3.0 API for its declared EDTF subset.
 
 == What is outside these guides?
 

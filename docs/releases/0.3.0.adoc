@@ -1,0 +1,30 @@
+= roc-time 0.3.0
+
+This release adds date interval descriptions, updates the bundled timezone rules
+and makes the manual easier to follow.
+
+`CalendarInterval` and `EdtfInterval` preserve independently described endpoints.
+For example, `2004-02-01/2005-02` keeps a day at the start and a month at the end.
+An unknown end (`1985/`) stays distinct from an open end (`1985/..`). Checked
+construction, parsing, canonical text and codecs retain those meanings for
+storage and exchange. The new archive intervals application shows how to use
+them. This is a declared EDTF date-interval subset; interpreting these
+descriptions as timeline coverage remains unsupported.
+
+The optional zone package now contains IANA 2026e rules from tzdata 2026.5.
+This corrects changed offsets, including a Winnipeg appointment at 09:00 on
+2026-11-02: the updated rules resolve it to 14:00 UTC. All previously accepted
+zone names remain available.
+
+Recurrence behavior is unchanged. New independent checks cover 108 composed
+local-zone schedules, including gaps, folds, exclusions, ending intent and
+resumption. They complement the existing UTC fixtures and bounded resource
+checks.
+
+The guides now start with concrete tasks and real example output. The HTML and
+PDF manual remove repeated chapter-home links and give the supported-format
+summary more room. The examples archive includes the new archive intervals
+application, bound to this release's packages.
+
+Thanks to Kip Cole and the Tempo contributors for the ideas behind roc-time's
+interval-oriented model.

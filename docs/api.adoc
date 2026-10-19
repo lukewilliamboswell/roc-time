@@ -86,7 +86,7 @@ aren't a storage format.
 | Explain a supported value | `Explanation`
 |===
 
-After 0.2.0, the development source adds `CalendarInterval` and `EdtfInterval`
+Version 0.3.0 adds `CalendarInterval` and `EdtfInterval`
 for independently described interval endpoints, including unknown and open
 ends. They retain those meanings for storage without claiming resolved
 coverage. xref:profiles.adoc#archive-interval-descriptions-in-development[The archive interval guide]
