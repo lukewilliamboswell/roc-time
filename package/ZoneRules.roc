@@ -492,7 +492,6 @@ ZoneRules :: {
 					}
 				}
 			}
-			crash "Classification loop returns an outcome"
 		}
 
 		## Summarize retained progress and evidence counts without continuing classification.
@@ -646,7 +645,6 @@ ZoneRules :: {
 					}
 				}
 			}
-			crash "Selection loop returns a batch"
 		}
 
 		## Summarize cursor progress and buffered count without evaluating more segments.
