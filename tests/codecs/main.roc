@@ -10,6 +10,7 @@ main! = |_| {
 		civil_invalid_date: "\"1900-02-29\"",
 		civil_invalid_clock: "\"23:59:60\"",
 		civil_tokens: ["2026-09-07", "09:30", "tail"],
+		interval_invalid: "\"2005/2004\"",
 		invalid_date: "\"2020-02-30\"",
 		invalid_stamp: "\"2020-02-30T00:00:00Z\"",
 		invalid_exact: "\"2026-06-15T09:00:00Z/2026-06-15T09:00:00Z\"",

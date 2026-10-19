@@ -346,7 +346,7 @@ unique = |values| {
 }
 
 # Applications whose output must be compared; adding one without a fixture fails.
-required_expectations = ["booking_exchange", "archive_search", "staffing", "invoice", "upcoming_meetings", "appointment_display", "zoned_appointment", "invoice_report", "schedule_exchange", "meeting_exchange"]
+required_expectations = ["archive_intervals", "booking_exchange", "archive_search", "staffing", "invoice", "upcoming_meetings", "appointment_display", "zoned_appointment", "invoice_report", "schedule_exchange", "meeting_exchange"]
 
 # Keep the static rule and this harness on the same package paths.
 expect StaticChecks.core_path == "../../package/main.roc"

@@ -10,9 +10,8 @@ parsers and serializers without waiting for every symbolic reasoning model.
 - Extend admissible models beyond finite, same-resolution calendar alternatives
   when required by supported symbolic forms. Preserve component scope without
   inferred numeric tolerances and endpoint knowledge separately from open bounds.
-- Interval descriptions with independent endpoint resolution, plus distinct
-  alternatives and all-of selections. Define supported reasoning models and
-  compare definite/possible/impossible results with small independent models.
+- Distinct alternatives and all-of selections. Define supported reasoning models
+  and compare definite/possible/impossible results with small independent models.
 - Explicit symbolic ranges beyond numerical providers, including long years,
   masks and finer fractions; do not silently coerce them into kernel endpoints.
 - Extend caller examples, property-based tests, independent expectations,
@@ -37,11 +36,11 @@ native construction. Delete completed deliverables as acceptance is established.
 
 ## Civil endpoint integration
 
-Introduce endpoint knowledge separately from interval materialization. Each side
-must retain a known resolution-bearing description, an unknown endpoint, or an
-explicit unbounded endpoint. Exact resolved endpoints are a different case from
-an endpoint lying somewhere within a calendar selection. CalendarValue's lower
-boundary is not an inferred actual endpoint.
+Extend interpretation of civil endpoint domains without conflating it with
+interval materialization. Preserve the declaration's known resolution-bearing,
+unknown and open endpoint states. Exact resolved endpoints are a different case
+from an endpoint lying somewhere within a calendar selection. CalendarValue's
+lower boundary is not an inferred actual endpoint.
 
 - Preserve each endpoint's original resolution and qualifiers through explicit
   calendar/zone interpretation. A year start and a month end are independent
@@ -61,8 +60,5 @@ boundary is not an inferred actual endpoint.
   General interval relationships need their own supported profile and oracle;
   point-membership evidence does not establish Allen reasoning over uncertainty.
 
-Endpoint interchange first needs faithful public construction and serialization.
-It can preserve unknown/open bounds and independently qualified resolutions
-while returning explicit unsupported interpretation. Broader quantified civil
-endpoint reasoning is deferred until a selected caller needs it; syntax support
-must not advertise that reasoning as implemented.
+Broader quantified civil endpoint reasoning is deferred until a selected caller
+needs it. Faithful interchange alone does not establish that reasoning model.

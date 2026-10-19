@@ -205,3 +205,12 @@ POSIX UNTIL using the independent 1970-01-02 epoch anchor, and preserve duration
 PERIOD declarations and adapter policy. Zero/tiny/full rendering budgets and
 out-of-range fact indexes supplement these semantic checks without expanding
 unbounded rules.
+
+The interchange target also checks EDTF intervals through CalendarInterval and
+EdtfInterval. Generated endpoints keep independent year/month/day resolutions;
+an independent bounded month enumeration checks provable unqualified reversal.
+Unknown and explicitly open endpoints remain distinct, qualified reverse-looking
+labels do not invent a tolerance, and zero/one-fact explanation budgets remain
+limited. The existing interchange-v1 input decoder and pinned platform are
+unchanged. LOC sourced meanings and model boundaries are documented in
+[interchange evidence](../interchange/README.md).

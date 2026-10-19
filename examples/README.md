@@ -42,5 +42,6 @@ rewritten after a release.
 | [Dispatch deadlines](dispatch_deadlines/main.roc) | Select the final pickup slot of each month’s final Monday, preserving local time across daylight saving and series count across queries |
 | [Equipment loans](equipment_loans/main.roc) | Keep monthly loans on the 31st, clamp return dates across clock changes, and add an extra one-week booking |
 | [Outage evidence](outage_evidence/main.roc) | Compare paired outage reports with independent endpoint notes without inventing correlations |
+| [Archive intervals](archive_intervals/main.roc) | Import and save mixed-precision creation dates, preserving unknown versus open ends without inventing exact appointments |
 | [Archive search](archive_search/main.roc) | Import EDTF dates and offset timestamps; preserve search precision and unresolved qualifications |
 | [Recorder handoff](sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |

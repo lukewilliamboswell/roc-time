@@ -7,6 +7,8 @@ import ResolvedBoundary
 import ResolvedSelection
 import Calendar
 import QualifiedCalendarValue
+import CalendarInterval
+import EdtfInterval
 import EdtfDate
 import OffsetTimestamp
 import Ixdtf
@@ -48,7 +50,7 @@ Explanation :: { source : Source }.{
 
 	## A supported description, rule, coverage value, or stored interpretation result.
 	## SelectionBatch also permits explaining why evaluation remains incomplete.
-	Source : [DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(Calendar.Value), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
+	Source : [CalendarInterval(CalendarInterval), EdtfInterval(EdtfInterval), DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(Calendar.Value), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
 
 	## Per-render limits on indexed fact accesses and total UTF-8 output bytes.
 	## A zero limit prevents any fact from being visited.
@@ -66,6 +68,8 @@ Explanation :: { source : Source }.{
 	## Return the number of facts available from the retained source without rendering them.
 	fact_count : Explanation -> U64
 	fact_count = |value| match value.source {
+		CalendarInterval(v) => CalendarInterval.fact_count(v)
+		EdtfInterval(v) => EdtfInterval.fact_count(v)
 		DateRecurrence(v) => DateRecurrence.fact_count(v)
 		TimedRecurrence(v) => TimedRecurrence.fact_count(v)
 		ICalTimedRule(v) => ICalTimedRule.fact_count(v)
@@ -89,6 +93,8 @@ Explanation :: { source : Source }.{
 	## resolve zones, enumerate recurrence occurrences, or complete a limited batch.
 	fact_at : Explanation, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| match value.source {
+		CalendarInterval(v) => CalendarInterval.fact_at(v, index)
+		EdtfInterval(v) => EdtfInterval.fact_at(v, index)
 		DateRecurrence(v) => DateRecurrence.fact_at(v, index)
 		TimedRecurrence(v) => TimedRecurrence.fact_at(v, index)
 		ICalTimedRule(v) => ICalTimedRule.fact_at(v, index)
@@ -319,6 +325,17 @@ render = |fact| match SemanticFact.kind(fact) {
 
 	}
 
+	CalendarIntervalDescription => { text: "Civil interval description. Known endpoints retain independent resolution and qualifiers; timeline interpretation is not supported for these endpoint domains. No exact coverage has been computed.", clipped: False }
+	CalendarEndpoint(data) => {
+		text: "${Str.inspect(data.role)} endpoint: ${
+			match data.knowledge {
+				Known => "known description; its facts follow"
+				Unknown => "unknown; evidence is missing"
+				Open => "explicitly open; no bound asserted"
+			}
+		}.",
+		clipped: False,
+	}
 	ExactIntervalDescription(data) => { text: "Exact interval: stored half-open POSIX extent [${PosixBoundary.to_microseconds(PosixSpan.start(data.span)).to_str()}, ${PosixBoundary.to_microseconds(PosixSpan.end(data.span)).to_str()}) microseconds since 1970-01-01; start included, end excluded.", clipped: False }
 	OffsetEndpoint(data) => { text: "${Str.inspect(data.role)} endpoint: ${local_fields(data.local, data.fraction_digits)}; ${data.fraction_digits.to_str()} fractional digits; ${offset_assertion(data.offset)}.", clipped: False }
 	ICalDateTimeDescription(data) => {
