@@ -1,9 +1,9 @@
 [#api]
 = Find the right API
 
-xref:index.adoc#manual[Manual home]
-
-Choose a module by the job you need to do. Module names below describe the current source. Open the API documentation linked from your https://github.com/lukewilliamboswell/roc-time/releases[package release] for matching signatures and supported operations.
+This map helps you choose a starting module. It describes the current source;
+follow your https://github.com/lukewilliamboswell/roc-time/releases[release's API link]
+for the exact functions available in your package.
 
 == Exact time and availability
 
@@ -13,8 +13,9 @@ with an explicit opening span to find free windows. Keep an `EventCollection`
 when you also need booking identities: coverage merges occupied time and cannot
 recover which booking contributed it.
 
-For a single timestamp, start with `OffsetTimestamp.parse` and `to_text`.
-Convert to a `PosixBoundary` when you need timeline computation.
+For a single timestamp, `OffsetTimestamp.parse` checks its text and `to_text`
+writes the canonical form. A `PosixBoundary` identifies its position on the
+timeline; `PosixDelta` represents a displacement between positions.
 
 [cols="1,2",options="header"]
 |===
@@ -28,11 +29,10 @@ Convert to a `PosixBoundary` when you need timeline computation.
 
 == Calendar meaning and interpretation
 
-Import `Calendar` for its related types: `Calendar.Date` is a validated civil
-date, `Calendar.Delta` is a calendar displacement, and `Calendar.Value` preserves
-supplied resolution. These remain distinct types with their own constructors and
-operations. A month description cannot accidentally become a month displacement.
-`Calendar.Arithmetic` applies calendar components with an explicit destination policy.
+`Calendar.Date` holds a validated date; `Calendar.Delta` says how far to shift it
+in calendar units; `Calendar.Value` can describe a whole year or month. These
+are separate types: “June 2026” and “one month later” do different jobs.
+Import `Calendar` to access them and `Calendar.Arithmetic` for date calculations.
 
 For invoice dates, start with `GregorianDate` and use `Calendar.Arithmetic` when
 advancing a month. Choose the invalid-date policy explicitly: January 31 with
@@ -40,10 +40,11 @@ clamping and January 31 with rejection answer different business questions.
 Use `Calendar.Value` when supplied precision, such as a whole month, is part of
 the meaning rather than an exact date.
 
-A `LocalDateTime` is a label awaiting interpretation. Use `FixedOffset` for a
-known offset or `ZoneRules` for a named-zone appointment, with an explicit policy
-for gaps and folds. Resolving a whole local-day selection is a separate operation:
-its timeline coverage can be empty or disconnected.
+A `LocalDateTime` describes what a clock shows. `FixedOffset` places it on a
+timeline when you know the offset. `ZoneRules` handles named-zone appointments,
+including skipped and repeated times. Selecting all positions in a local day is
+a separate question: a skipped day can be empty, and repeated labels can produce
+separate pieces of coverage.
 
 [cols="1,2",options="header"]
 |===
@@ -52,25 +53,27 @@ its timeline coverage can be empty or disconnected.
 | Preserve supplied precision | `Calendar.Value`, `QualifiedCalendarValue`
 | Advance with an explicit calendar policy | `Calendar.Arithmetic`, `Calendar.Delta`
 | Express clock labels and resolve them | `ClockTime`, `LocalDateTime`, `FixedOffset`, `ZoneRules`
+| Display a Gregorian date or local label in English | `EnglishGregorian`
 |===
 
 == Recurrence, import and storage
 
-For reusable timed appointments, construct a `ScheduleDefinition` with
-`from_ical` or `from_native`, create a cursor for a source-start window, and call
-`TimedSchedule.collect` with explicit work and output limits. Keep the returned
-batch intact: `Limited` carries incomplete progress and resumption state, not a
-complete list of appointments. See xref:schedules.adoc#schedules[scheduling] for the query model.
+For reusable timed appointments, `ScheduleDefinition.from_ical` imports a
+supported iCalendar definition and `from_native` accepts a native one. Create a
+cursor for the start-date window you want, then call `TimedSchedule.collect`
+with work and output limits. A `Limited` batch includes the cursor needed to
+continue; keep it with the partial output. xref:schedules.adoc#schedules[Schedules]
+explains what the query selects.
 
 Start with `DateRecurrence` for date-only rules. The lower-level patterns and
 `TimedRecurrence` are useful when composing selectors or working with starts
 without appointment endings; ordinary scheduling need not begin there.
 
-For advanced construction, `TimedSchedule.Endings` validates reusable ending
-definitions before queries. The iCalendar adapters' `prepare` operations and
-`TimedSchedule.from_prepared` expose this path explicitly. Prepared execution
-inputs are not a storage format; use `ScheduleDefinition` when retaining the
-original declaration and its interpretation context matters.
+If you're composing execution inputs directly, `TimedSchedule.Endings` validates
+ending definitions for reuse. The adapters' `prepare` operations and
+`TimedSchedule.from_prepared` expose that advanced path. To retain a declaration
+for later queries, keep its `ScheduleDefinition`; prepared execution inputs
+aren't a storage format.
 
 [cols="1,2",options="header"]
 |===
@@ -82,6 +85,12 @@ original declaration and its interpretation context matters.
 | Preserve imported descriptions | `EdtfDate`, `Ixdtf`
 | Explain a supported value | `Explanation`
 |===
+
+After 0.2.0, the development source adds `CalendarInterval` and `EdtfInterval`
+for independently described interval endpoints, including unknown and open
+ends. They retain those meanings for storage without claiming resolved
+coverage. xref:profiles.adoc#archive-interval-descriptions-in-development[The archive interval guide]
+shows the distinction and links the new example.
 
 https://github.com/lukewilliamboswell/roc-time/releases[Choose a release and its API documentation]
 

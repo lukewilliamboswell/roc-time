@@ -11,9 +11,6 @@ finite immutable zone rules and event/coverage distinctions.
   independently; projecting an adjusted boundary cannot recover its source.
 - Resolve omitted yearly defaults before widening RFC adaptation, retaining
   the shared native execution engine.
-- Extend independent timed expectations beyond UTC to local-zone transitions
-  and exception/ending interactions as their supported profiles expand. Retain
-  bounded fuzz models, invalid-input checks and realistic applications.
 
 ## Decisions and acceptance still needed
 

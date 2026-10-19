@@ -1,4 +1,5 @@
 import fuzz.Fuzz
+import local.LocalCases
 import time.Explanation
 import time.SemanticFact
 import time.TimedSchedule
@@ -39,6 +40,17 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 
 	check : RecurrenceCase -> Fuzz.Outcome
 	check = |input| {
+		# Independent two-segment local model composed with exclusions/endings.
+		LocalCases.check({
+			shift: if input.last_monday {
+				-30.I64 * (1 + I64.rem_by(input.interval.to_i64(), 2))
+			} else {
+				30.I64 * (1 + I64.rem_by(input.interval.to_i64(), 2))
+			},
+			position: I64.rem_by(input.count.to_i64(), 3) - 1,
+			termination: U8.rem_by(input.query_month, 3),
+			exclusion: U8.rem_by(input.work, 3),
+		})
 		anchor = date(
 			2024,
 			1,

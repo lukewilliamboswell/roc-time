@@ -1,34 +1,45 @@
 [#profiles]
 = Know the supported scope
 
-xref:index.adoc#manual[Manual home]
+Before connecting an importer, check that the selected parser supports the forms your source produces. A calendar feed can contain a valid rule that a particular adapter doesn't handle. A date description can parse successfully without identifying a single instant.
 
-A format name is not a promise to implement its entire standard. Match the exact profile and operation to your input: parsing a description does not necessarily resolve it, enumerate it or preserve its original spelling.
+Each module documents a *profile*: the syntax and meaning it accepts. The API pages for your release list exact grammars, limits and errors.
 
 == Match the profile to your input
 
-[cols="1,2,3",options="header"]
+[cols="1,4",options="header"]
 |===
-| Area | Supported direction | Boundary to keep visible
-| Exact values | Offset timestamps, nonempty half-open spans and coverage | Signed I64 microseconds; no silent overflow or precision reduction
-| Calendars | Gregorian and Julian dates and explicit calendar arithmetic | Proleptic rules; no inferred historical reform or unsupported-calendar fallback
-| Named zones | Optional IANA zone-data package | Interpretation requires complete immutable data within its declared validity
-| Timestamp/interval text | Declared offset timestamp and exact interval profiles | Explicit offset; no leap-second or sub-microsecond acceptance in these profiles
-| EDTF | Declared date-description forms retaining meaningful precision and qualification | Not all ISO 8601-2 or every EDTF level; consult the module’s actual profile
-| IXDTF | Declared annotations/assertions and explicit interpretation | Unknown critical extensions fail; zone and offset assertions remain distinct
-| Recurrence | Declared extracted RFC 5545 DATE/DATE-TIME profiles | No general ICS reader; RFC rules differ from repeated clamped arithmetic
-| Explanation | Bounded semantic facts and supported contextual explanations | Inspection text and prose are not persistence formats
-| Standard text storage | Store supported timestamp and date-description text using its parser and serializer | A standard declaration does not embed every native interpretation choice or immutable zone table
+| Area | Support and limits
+| Exact values | Compare explicit-offset timestamps and combine spans. Calculations use signed I64 microseconds and check overflow and precision.
+| Calendars | Convert Gregorian/Julian dates and calculate Gregorian deadlines. Their rules apply in all supported years; historical national reforms aren't inferred.
+| Named zones | Interpret local labels with the optional IANA data package. Supply rules that cover the requested time range.
+| Timestamp/interval text | Parse supported explicit-offset timestamps and exact intervals. These profiles reject leap seconds and sub-microsecond input.
+| EDTF | Retain supported date precision and qualifications. The date adapter supports a subset of EDTF; check its grammar before importing a wider form.
+| IXDTF | Retain annotations and check supplied offset/zone assertions. An annotation can be retained without supporting its presentation; unknown critical extensions fail.
+| Recurrence | Import supported extracted RFC 5545 DATE/DATE-TIME values. There is no general ICS reader, and recurrence rules differ from repeated clamped arithmetic.
+| Explanation | Ask what a supported value means and which context it needs. Work/output limits apply; diagnostic prose isn't a storage format.
+| Standard text storage | Save values through their standard parser/serializer pair. The text doesn't embed every interpretation choice or an immutable zone table.
 |===
 
-For precise accepted grammar, field limits and error types, follow the version-specific xref:api.adoc#api[API map]. There is deliberately no single “ISO compliant” badge.
+Follow the xref:api.adoc#api[API map] to find the module for your task. A format's name alone doesn't establish support for every part of its standard.
 
 == Failure is part of the interface
 
-Malformed, unsupported, out-of-range and incomplete inputs require different responses. A user can fix malformed spelling; a valid unsupported calendar needs a different capability. A bounded query that ran out of work is not an empty success.
+Different failures call for different responses:
 
-The core never reads the clock, consults a machine timezone, fetches a database or chooses a fold occurrence on your behalf. Applications supply effects and interpretation context explicitly. Adapters may define their own documented standard-specific policies.
+* *Malformed:* ask the user to fix the input's spelling or structure.
+* *Unsupported:* the input needs a capability outside this parser's profile; changing its spelling won't add that capability.
+* *Out of range:* choose a supported date range or rules covering the requested time.
+* *Incomplete evaluation:* resume with the returned cursor or choose a suitable budget. Partial output isn't a complete empty result.
+
+Your application supplies clock readings, timezone data and any choice of a repeated local occurrence. The library won't use your machine's timezone or fetch replacement data. Standard adapters can have their own documented interpretation policies, so check the adapter as well as the underlying type.
+
+== Archive interval descriptions in development
+
+The current source also provides `EdtfInterval` and `CalendarInterval` for date intervals with independently described endpoints. For example, `2004-02-01/2005-02` retains a day on one side and a month on the other. `1985/` has an unknown end; `1985/..` has an explicitly open end. Those are different descriptions.
+
+These modules and the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/archive_intervals[archive intervals example] are development additions after 0.2.0; don't expect them in the 0.2.0 archive. Parsing and saving the interval doesn't resolve it into timeline coverage. The module reports interpretation as unsupported rather than inventing exact endpoint dates. See the development API for its declared EDTF subset.
 
 == What is outside these guides?
 
-General ICS processing, wider calendar providers, leap-aware time and complete ISO/EDTF/RRULE coverage need separate declared support. The https://github.com/lukewilliamboswell/roc-time/blob/main/design.md[design] describes the intended architecture; it is not a list of features included in your selected package.
+General ICS processing, wider calendar providers, leap-aware time and complete ISO/EDTF/RRULE coverage need separately declared support. The https://github.com/lukewilliamboswell/roc-time/blob/main/design.md[design] describes the intended architecture, including work beyond the selected release.

@@ -1,38 +1,59 @@
 # Contributing to roc-time
 
-Read [design.md](design.md) for the temporal contracts and [AGENTS.md](AGENTS.md)
-for engineering guardrails. Check any active task in `planning/` before changing
-its scope. Issues and pull requests should identify a realistic caller scenario
-and the affected design requirements.
+Start with a small application scenario: what input does the caller have, and
+what result should they get? Include that scenario in your issue or pull request,
+along with the relevant requirements from [design.md](design.md). This helps
+reviewers distinguish a useful convenience from a change in temporal meaning.
 
-Two compilers are in use and they are not interchangeable.
+Before implementing, read [AGENTS.md](AGENTS.md) for the contribution method and
+any relevant task under `planning/`. The design describes the lasting contracts;
+the plans describe unfinished work. For a documentation change, start with the
+reader's task and check every command or example you change.
+
+## Set up your checkout
+
+The package follows the latest Roc nightly. Automation runs on a separate pinned
+compiler so the checks can still run when a new nightly breaks package code.
 
 | Command | Selected by | Used for |
 | --- | --- | --- |
 | `roc-stable` | The nightly release named in [Blueprint.roc](Blueprint.roc), pinned by `Blueprint.lock` | Running the automation scripts in `scripts/*.roc` |
-| `roc` | Nothing: install the latest [nightly](https://github.com/roc-lang/nightlies/releases) | Checking, testing, bundling and running the packages and examples |
+| `roc` | Your installed latest [nightly](https://github.com/roc-lang/nightlies/releases) | Checking, testing, bundling and running the packages and examples |
 
-No Roc file carries a `roc` header field and there is no `.roc-version`. The
-packages float because the useful question is whether they work with the compiler
-users install today; the tooling is pinned so it keeps working when a nightly
-breaks something.
+There is no `roc` header field or `.roc-version`. Check `roc version` when
+reporting a result, and keep `roc-stable` for automation rather than testing the
+package with it.
 
 Install Nix, the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
-0.4.0 CLI and a current nightly `roc`. Then:
+0.4.0 CLI and a current nightly `roc`. The complete check also needs CPython
+3.14.3, Zig 0.16.0 and Rust for the existing Python-driven harness; details are
+under [Tests](#tests). With those installed:
 
 ```sh
-blueprint run check      # the complete gate that CI runs
-blueprint shell          # enter the environment and run scripts/*.roc directly
+roc version
+blueprint run check
 ```
+
+This is the same complete gate CI runs: package checks, examples, semantic tests,
+resource checks, documentation and a release dry run. For an interactive shell
+with the automation dependencies, run `blueprint shell`.
 
 Scripts take the package compiler from `ROC_NIGHTLY`, falling back to `roc` on
 `PATH`. The environment provides `roc-stable` and the programs the Roc scripts
 start. It does not yet provide the CPython 3.14.3, Zig 0.16.0 and Rust that the
 remaining Python harness needs; install those as described under [Tests](#tests)
 and select them with `ROC_TIME_GENERATOR_PYTHON` and `ZIG` where they are not the
-defaults. Commit `Blueprint.roc` and `Blueprint.lock`; only `blueprint update`
-writes the lock. Keep experiments and generated artifacts under ignored
+defaults. For example, `ROC_NIGHTLY=/path/to/roc blueprint run check` selects a
+particular package compiler. Commit `Blueprint.roc` and `Blueprint.lock`; only
+`blueprint update` writes the lock. Keep experiments and generated artifacts under ignored
 `.roc-time-tmp/`.
+
+## Make and check a change
+
+For package code, begin with `roc check package/main.roc`,
+`roc test package/main.roc` and the application affected by your change. Before
+handoff, run `blueprint run check`. A failing setup step is still unverified;
+include its actual error rather than treating later unchecked stages as passed.
 
 Examples are focused applications, not test fixtures. Each belongs in its own
 folder with a `main.roc` entrypoint and pure logic in a separate type module.
@@ -101,6 +122,10 @@ preparing the next version.
 
 ## API documentation
 
+There are two outputs to review: the authored user manual and the generated
+module reference. The manual explains workflows; module comments document exact
+operations and executable API examples.
+
 The user manual is authored in `docs/index.adoc` and top-level AsciiDoc chapters.
 Keep existing chapter filenames and explicit ASCII IDs stable. Use
 `xref:chapter.adoc#id[descriptive text]` for links between chapters, and include
@@ -146,17 +171,23 @@ examples. `scripts/test_doc_examples.py` checks them together against the real
 package and runs in the default gate. The docs publisher adds
 `scripts/templates/api-overview.html` as the landing guide because the compiler-generated package
 index currently contains navigation and a logo only. Review generated API pages
-with `ROC=/path/to/roc python3 scripts/docs.py 0.1.0 --docs-root .roc-time-tmp/docs-review`.
+with `ROC=/path/to/roc python3 scripts/docs.py 0.0.0-dev --docs-root .roc-time-tmp/docs-review`.
+Here `0.0.0-dev` is a local preview label, not a published release.
 
 ## Tests
 
-The gate also runs `tests/static_dispatch/main.roc` under both the interpreter
-and native execution to check public operator, dictionary-key and iterator use.
+For a first contribution, you can run the package check, unit tests and one
+affected example while working. The complete gate below adds independent
+semantic comparisons, generated inputs, compile-failure checks and resource
+fixtures. Pick the focused commands relevant to your change; keep the full gate
+for integration.
 
 Run the gate with `blueprint run check`; set `ROC_NIGHTLY` to use a package
 compiler other than `roc` on `PATH`. `scripts/test_examples.roc` alone runs every
-example in place against the working tree. Generate local versioned docs with
-`python3 scripts/docs.py 0.1.0`.
+example in place against the working tree. Generate local development API docs
+with `python3 scripts/docs.py 0.0.0-dev`. The gate also runs
+`tests/static_dispatch/main.roc` in the interpreter and natively to check public
+operators, dictionary keys and iterators.
 
 A new nightly can fail the gate with no fault in the change under review. Compare
 with the default branch and the latest nightly compatibility run before treating
@@ -271,9 +302,8 @@ separates native construction, semantic access, checked wrapper construction,
 export and first/resumed consumption. Wrapper construction currently renders
 canonical properties to validate their byte cap; its allocation traffic is
 measured separately. These counters measure requested bytes, not retained
-memory. The staged [meeting exchange application](tests/meeting_exchange/main.roc)
-is checked against local sources and distributable bundles; public promotion
-waits for a compatible release. The same oracle and fuzz models exercise
+memory. The [meeting exchange application](examples/meeting_exchange/main.roc)
+is checked against local sources and distributable bundles. The same oracle and fuzz models exercise
 `ScheduleDefinition` construction and fresh-window cursors, including source
 identities and native fractional labels. Its hosted resource gate varies
 0–4096 ending overrides, owned/shared/sliced inputs and finite query horizons,
@@ -723,9 +753,13 @@ Generate the optional bounded database into a new directory with:
 python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/roc
 ```
 
-Generation verifies the configured interpreter and wheel hash. The generator
-and [package manifest](tzdb/package/manifest.json) declare the finite validity
-horizon. Future footer transitions are expanded ahead of time, with original
+Generation requires CPython 3.14.3 and the distribution wheel URL/hash pinned
+in `scripts/generate_zone_database.py` (currently tzdata 2026.5 / IANA 2026e).
+Download that wheel to the path supplied above; the historical oracle wheel is
+pinned independently in `scripts/generate_zone_oracle.py` and is not a substitute.
+Generation verifies integrity and both embedded IANA version declarations. The
+generator and [package manifest](tzdb/package/manifest.json) declare the finite
+validity horizon. Future footer transitions are expanded ahead of time, with original
 alias/canonical identities from `tzdata.zi`.
 The output is a separate Roc package with `Database.get(name)` returning the
 structural record accepted by `ZoneRules.from_database`; core has no dependency
@@ -750,6 +784,12 @@ examples remain necessary before distribution.
 The default test gate replays the committed `tzdb/package/` without the wheel or
 CPython generation pin. Refresh into a new ignored directory, review semantic
 changes, then replace the committed generated pack and its manifest together.
+Review each intervening IANA release and extend the source-backed public caller
+fixtures in [tests/zone_database](tests/zone_database/README.md). Preserve the
+historical oracle pins and corpora unless deliberately reviewing those separately.
+Existing release URLs and resolved snapshots keep their original data; an
+application selects new rules by updating its dependency and explicitly
+re-resolving where needed.
 The resource fixture uses runtime names and consumes transition checksums. It
 limits lookup to zero allocation/reallocation calls in development and at most
 one in optimized native builds under the compiler used for the measurement. This covers the data lookup and

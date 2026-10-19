@@ -1,51 +1,64 @@
 [#calendar-zones]
 = Work with dates and clock changes
 
-xref:index.adoc#manual[Manual home]
+An invoice due next month and a shift that crosses a clock change need different calculations. Here you'll calculate a due date, then work out how many hours an overnight shift covers.
 
-A calendar date, a local date/time and a resolved timeline boundary answer different questions. Choose the operation that matches the caller’s meaning before choosing a timezone.
+The commands below work from a checkout with a current Roc nightly. For released packages, get the same applications from the xref:getting-started.adoc#getting-started[examples archive]. Repository links show current source, which may be ahead of your release.
 
 == Invoice terms: calendar arithmetic
 
-“Due next month” is a calendar operation. Adding a fixed number of seconds does not express it. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/invoice[released invoice application] demonstrates calendar arithmetic with an explicit policy for dates missing from the destination month.
+A merchant issues an invoice on January 31 with payment due one calendar month later. February has no 31st, so the merchant's terms clamp the date to the month's last day. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/invoice[invoice example] applies that policy:
 
-For 31 January plus one month, a caller must decide whether to reject the destination, clamp to the month’s last day or carry according to the operation’s documented policy. That choice belongs in your business rule. Clamped arithmetic is not reversible in general and is not a recurrence engine.
+[source,sh]
+----
+roc examples/invoice/main.roc
+----
 
-Gregorian and Julian dates use proleptic rules and astronomical years, including year zero. A calendar conversion preserves the civil day while changing its description; it does not assign midnight in a zone.
+[source,text]
+----
+Payment terms: one calendar month, clamped to month end
+Issued: 2025-01-31
+Payment due: 2025-02-28
+----
+
+`Calendar.Arithmetic` shifts the calendar date with an explicit destination policy. If your business rule requires a missing day to be rejected, choose rejection instead. Adding a fixed number of seconds can't express either rule reliably. Adding a month and subtracting one also needn't recover the original date after clamping: February 28 doesn't remember January 31.
+
+Gregorian and Julian dates use their rules in every supported year, rather than modeling each country's historical adoption. Year zero means 1 BCE. Converting between the calendars keeps the civil day; it doesn't choose midnight or a timezone.
 
 == Overnight staffing: interpret a local selection
 
-The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/staffing[released staffing application] interprets an overnight Melbourne shift across a clock change.
+A Melbourne team works from 22:00 to 06:00 across the spring clock change. The clock skips an hour, so the shift covers seven hours rather than eight. Run the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/staffing[staffing example]:
 
 [source,sh]
 ----
 roc examples/staffing/main.roc
 ----
 
-The application loads named data from the optional package and constructs immutable `ZoneRules`. No host timezone lookup occurs inside the library. Read the zone package metadata for its source data and validity horizon.
+[source,text]
+----
+Overnight staffing in Australia/Melbourne
+Local shift: 22:00 to 06:00 across the spring clock change
+Budget 7 hours per team member.
+----
 
-A selected set of civil labels may map to disconnected coverage, or to no coverage for skipped labels. Taking just its earliest and latest resolved points would lose that meaning.
+The application selects named-zone data from the optional package, validates it with `ZoneRules.from_database`, and asks which timeline positions have labels in the local shift. The library doesn't consult your machine's timezone. The data package's manifest tells you which release and date range it covers.
+
+A *local selection* means all positions whose clock labels fall in the chosen range. During a repeated hour, it can contain separate pieces; a skipped date can contain none. Keeping only the earliest and latest positions would fill gaps that weren't selected.
 
 == Appointments need a choice
 
-A repeated clock label can identify more than one boundary. A skipped label can identify none. A resolver must report these outcomes; your application chooses the policy appropriate to an appointment.
+An appointment at a repeated 01:30 is a different question: which occurrence did the person book? A resolver reports a repeated time as `Fold`, a skipped time as `Gap`, and a single match as `Unique`. Your application then applies the appointment's policy. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/repeated_local_time[repeated local time example] compares the choices with selecting the whole repeated range.
 
-Finite rules also have a validity boundary. A visible candidate is not enough if missing context prevents proving that all candidates were considered. An out-of-validity error is not an instruction to assume UTC.
+The rules must cover enough time to find every possible match. If the query reaches beyond the data's validity, it returns an error even when one candidate is visible. Select rules covering the request rather than treating that candidate as complete or assuming UTC.
 
 == Parse and present civil labels
 
-Use the civil text parsers for validated date and clock labels, and
-`EnglishGregorian` for explicit English Gregorian presentation. Gregorian dates
-also expose weekday, ordinal-day and ISO week-date queries. These operations do
-not require zone interpretation; display does not prove that a local label exists
-in a particular zone.
+`GregorianDate`, `ClockTime` and `LocalDateTime` parse date and clock labels without assigning a zone. `EnglishGregorian` can display them as `7 Sep 2026, 09:30`. Its minute/second choices reject nonzero omitted fields, so presentation won't silently discard precision. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/appointment_display[appointment display example] shows these choices.
 
-The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/invoice_report[invoice report]
-and https://github.com/lukewilliamboswell/roc-time/tree/main/examples/zoned_appointment[named-zone appointment]
-scenarios exercise these APIs against local source. Run these applications
-from a checkout with a current Roc nightly. For an application using a
-released package, consult that release's API documentation and release notes.
+A displayed local label hasn't been proved to exist in any particular zone. For a named-zone appointment, interpret it first and present the selected result, as in the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/zoned_appointment[named-zone appointment example].
+
+Gregorian dates also provide weekday, ordinal-day and ISO week-date queries. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/invoice_report[invoice report] combines them with calendar arithmetic. Consult your release's API pages for its available operations.
 
 == API reference
 
-`Calendar.Arithmetic` · `Calendar.Date` · `LocalDateTime` · `ZoneRules`
+`Calendar.Arithmetic`, `Calendar.Date`, `LocalDateTime` and `ZoneRules` are mapped in xref:api.adoc#api[the API guide].

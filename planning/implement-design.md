@@ -30,7 +30,7 @@ libraries is not sufficient justification.
 
 - Extend [standards interchange](standards-interchange.md) and
   [calendar descriptions and uncertainty](calendar-descriptions.md) with selected
-  EDTF endpoints, unknown/open bounds, masks and sets (R13–R14). Deliver faithful
+  EDTF unspecified digits and sets (R13–R14). Deliver faithful
   parsing, canonical serialization, explanation and persistence together. Never
   substitute year starts for uncertain endpoints or unsupported reasoning for a
   successful answer. Preserve the broader symbolic obligations in those plans.

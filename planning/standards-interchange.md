@@ -15,8 +15,7 @@ priority as described in the [implementation plan](implement-design.md).
 
 ## Remaining caller slices
 
-1. **Richer archive descriptions:** support independently resolved interval
-   endpoints, unknown versus open bounds, then selected masks and finite
+1. **Richer archive descriptions:** support selected masks and finite
    one-of/all-of sets.
    Preserve metadata without needing a complete uncertainty solver. Interpretation
    uses shared native machinery or returns an explicit unsupported result.

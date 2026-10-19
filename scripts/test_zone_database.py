@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Verify committed zone data offline and exercise every name through the core."""
 import hashlib
+import io
+import zipfile
 import json
 import os
 from pathlib import Path
@@ -10,7 +12,8 @@ import sys
 import tempfile
 
 sys.dont_write_bytecode = True
-from generate_zone_database import verify, package_header
+from generate_zone_database import (verify, package_header, validate_integrity, validate_source,
+                                    WHEEL_SHA256, WHEEL_URL, SOURCE_VERSION, SOURCE_REVISION, PROFILE)
 from fixture_platform import build_host
 from oracle_replay import parse_metrics
 
@@ -24,6 +27,11 @@ def validate_header(source):
 
 def check_integrity(package):
     manifest = json.loads((package / 'manifest.json').read_text())
+    for field, expected_value in dict(wheel_sha256=WHEEL_SHA256, wheel_url=WHEEL_URL,
+                                     source_version=SOURCE_VERSION, source_revision=SOURCE_REVISION,
+                                     profile=PROFILE).items():
+        if manifest[field] != expected_value:
+            raise SystemExit(f'Zone source pin mismatch: {field}')
     generator = ROOT / 'scripts/generate_zone_database.py'
     if hashlib.sha256(generator.read_bytes()).hexdigest() != manifest['generator_sha256']:
         raise SystemExit('Zone generator changed: regenerate and review the committed pack')
@@ -57,10 +65,33 @@ def header_controls():
             raise AssertionError('Invalid zone package header was accepted')
 
 
+def source_controls():
+    try:
+        validate_integrity(b'corrupted wheel')
+    except ValueError as error:
+        assert str(error) == 'Pinned wheel integrity mismatch'
+    else:
+        raise AssertionError('Corrupt wheel accepted')
+    # Reject a mismatched version in either independently embedded metadata file.
+    for zi_version, module_version in [('2025b', SOURCE_VERSION), (SOURCE_VERSION, '2025b')]:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('tzdata/zoneinfo/tzdata.zi', f'# version {zi_version}\n')
+            archive.writestr('tzdata/__init__.py', f'IANA_VERSION = "{module_version}"\n')
+        with zipfile.ZipFile(io.BytesIO(buffer.getvalue())) as archive:
+            try:
+                validate_source(archive)
+            except ValueError as error:
+                assert str(error) == 'Wrong source version'
+            else:
+                raise AssertionError('Wrong source version accepted')
+
+
 def main():
     package = ROOT / 'tzdb/package'
     manifest = check_integrity(package)
     header_controls()
+    source_controls()
     roc = os.environ.get('ROC', 'roc')
     if '/' in roc or '\\' in roc: roc = str(Path(roc).resolve())
     temporary = ROOT / '.roc-time-tmp'
@@ -71,7 +102,7 @@ def main():
         verify(copied, manifest['names'], roc)
         app = 'tests/zone_database/main.roc'
         binary = Path(directory) / ('provider.exe' if os.name == 'nt' else 'provider')
-        for command in [[roc, 'check', app], [roc, app], [roc, 'build', app, f'--output={binary}'], [str(binary)]]:
+        for command in [[roc, 'check', app], [roc, '--opt=interpreter', app], [roc, 'build', app, f'--output={binary}'], [str(binary)]]:
             subprocess.run(command, cwd=ROOT, check=True, timeout=180)
         target = build_host()
         source = 'tests/zone_database/resource/main.roc'

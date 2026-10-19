@@ -134,7 +134,7 @@ SemanticFact :: { value : Kind }.{
 	## Typed observations of declarations, requirements, interpretation results and
 	## evaluation status. Pattern-match these data for custom bounded presentation;
 	## a fact is not a validated temporal value or an interchange envelope.
-	Kind : [RecurrenceBoundaryExclusion(PosixBoundary), RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
+	Kind : [CalendarIntervalDescription, CalendarEndpoint({ role : [Start, End], knowledge : [Known, Unknown, Open] }), RecurrenceBoundaryExclusion(PosixBoundary), RecurrenceDescription(RecurrenceData), RecurrenceTermination(RecurrenceEnd), RecurrenceSelector(Selector), RecurrenceException(RecurrenceExceptionData), RecurrencePolicy(RecurrencePolicyData), ICalTimedRuleDescription(ICalTimedRuleData), CoverageDescription(CoverageData), CoverageMember(CoverageMemberData), CivilBoundaryDescription(CivilBoundaryData), CivilSelectionDescription(CivilSelectionData), LocalSelectionDescription(LocalSelectionData), SelectionEvaluation(SelectionEvaluationData), ExactIntervalDescription(ExactIntervalData), OffsetEndpoint(OffsetEndpointData), ICalDateTimeDescription(ICalDateTimeData), ICalDurationDescription(ICalDurationData), ICalPeriodDescription(ICalPeriodData), CalendarDescription(CalendarData), TimestampDescription(TimestampData), Qualification(QualificationData), Requirement([ZoneContext, UncertaintyModel]), ZoneAnnotation(ZoneData), Annotation(AnnotationData), ResolvedPosition(PositionData), Context(ContextData), Presentation([Gregorian, UnsupportedCalendar(Str)])]
 
 	## Wrap a typed observation without validating its fields or resolving its meaning.
 	## Use native values and their fact visitors when validation guarantees are needed.
@@ -149,6 +149,8 @@ SemanticFact :: { value : Kind }.{
 	## children or copying arbitrary text fields. Use Explanation for bounded detail.
 	summary : SemanticFact -> Str
 	summary = |fact| match fact.value {
+		CalendarIntervalDescription => "CalendarInterval(unresolved civil endpoint domains)"
+		CalendarEndpoint(data) => "CalendarEndpoint(role=${Str.inspect(data.role)}, knowledge=${Str.inspect(data.knowledge)})"
 		RecurrenceDescription(data) => {
 			anchor = match data.anchor {
 				Date(date) => Str.inspect(date)

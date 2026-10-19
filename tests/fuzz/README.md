@@ -1,5 +1,10 @@
 # Temporal property targets
 
+The recurrence target also checks a composed local-zone model with gap/fold
+starts, non-hour shifts, source and UTC exclusions, inclusions and PERIOD endings.
+Its independent model, deterministic corpus, seed provenance and resource scopes
+are described in [the local recurrence evidence](../local_recurrence/README.md).
+
 The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, `tests/clock/main.roc`, `tests/offsets/main.roc`, `tests/zones/main.roc`, `tests/events/main.roc`, `tests/patterns/main.roc`, and `tests/recurrence/main.roc`
 import the real public package and the content-addressed
 [roc-fuzz 0.4.3 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.4.3).
@@ -205,3 +210,12 @@ POSIX UNTIL using the independent 1970-01-02 epoch anchor, and preserve duration
 PERIOD declarations and adapter policy. Zero/tiny/full rendering budgets and
 out-of-range fact indexes supplement these semantic checks without expanding
 unbounded rules.
+
+The interchange target also checks EDTF intervals through CalendarInterval and
+EdtfInterval. Generated endpoints keep independent year/month/day resolutions;
+an independent bounded month enumeration checks provable unqualified reversal.
+Unknown and explicitly open endpoints remain distinct, qualified reverse-looking
+labels do not invent a tolerance, and zero/one-fact explanation budgets remain
+limited. The existing interchange-v1 input decoder and pinned platform are
+unchanged. LOC sourced meanings and model boundaries are documented in
+[interchange evidence](../interchange/README.md).

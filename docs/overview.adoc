@@ -1,48 +1,45 @@
 [#overview]
 = Time for real applications
 
-xref:index.adoc#manual[Manual home]
+roc-time helps you answer questions such as “When is this room free?”, “When is this invoice due?” and “Which appointments belong to next week's schedule?” It keeps dates, elapsed time and bookings distinct, so you don't have to recover their meaning from bare timestamps.
 
-Bookings occupy a window. An invoice falls due on a calendar date. A weekly meeting keeps its local clock time when the offset changes. *roc-time gives each of these a meaning you can work with.*
-
-xref:getting-started.adoc#getting-started[Run a working application] · xref:api.adoc#api[Find the right API]
+If you know some Roc, you can xref:getting-started.adoc#getting-started[run your first application] with a released examples archive. You don't need to build the library first.
 
 == Start with your task
 
 [cols="1,2",options="header"]
 |===
 | You need to… | Start here
-| Parse booking timestamps and find free space | xref:booking.adoc#booking[Booking and coverage]
-| Calculate an invoice date or handle an overnight shift | xref:calendar-zones.adoc#calendar-zones[Calendars and zones]
-| Generate recurring reservations without losing exceptions | xref:schedules.adoc#schedules[Schedules]
-| Decide whether an input format is supported | xref:profiles.adoc#profiles[Profiles and limits]
+| Read booking timestamps and find free space | xref:booking.adoc#booking[Booking and coverage]
+| Calculate an invoice date or an overnight shift | xref:calendar-zones.adoc#calendar-zones[Calendars and zones]
+| Generate recurring reservations and handle exceptions | xref:schedules.adoc#schedules[Schedules]
+| Check whether your input format is supported | xref:profiles.adoc#profiles[Profiles and limits]
+| Find a module or function | xref:api.adoc#api[API map]
+| Upgrade an existing application | xref:versions.adoc#versions[Versions]
 |===
 
-Get runnable applications, compiler requirements and API documentation from the https://github.com/lukewilliamboswell/roc-time/releases[releases page].
+The https://github.com/lukewilliamboswell/roc-time/releases[releases page] has runnable examples, matching API documentation and the compiler used to test each release. Contributors can start with https://github.com/lukewilliamboswell/roc-time/blob/main/CONTRIBUTING.md[the contributor guide].
 
 == Why intervals, not just instants?
 
-Two bookings can meet at 10:00 without overlapping. A span includes its start and excludes its end: `[09:00, 10:00)` is followed cleanly by `[10:00, 11:00)`.
+A booking occupies time between two boundaries. To find availability, subtract that time from opening hours and keep every gap that remains. `Coverage` holds those pieces for you.
 
-`Coverage` keeps all the occupied or available pieces. Subtract a lunch booking from an opening window and both morning and afternoon remain. You do not need a fabricated “last microsecond of the morning.”
+Each span includes its start and excludes its end. Two bookings can meet at 10:00 without overlapping: `[09:00, 10:00)` followed by `[10:00, 11:00)`. You don't need a “last microsecond of the morning.”
 
-An event is still an identified event, even when it occupies the same time as another event. A month such as June 2026 still has month precision. The library keeps those distinctions until your application chooses to combine them.
+Sometimes you also need to know whose booking it is. Two customers can book the same window; their events keep separate identities even when their occupied coverage is equal. Likewise, an archive date of “June 2026” keeps month precision rather than becoming a recorded instant at midnight on June 1.
 
 == What it looks like
 
-An opening window is 09:00–17:00 UTC. A booking arrives as 12:00–14:00 at UTC+02:00. After interpretation, that booking occupies 10:00–12:00 UTC; the remaining coverage is *09:00–10:00 and 12:00–17:00 UTC*.
+An opening window is 09:00–17:00 UTC. A booking arrives as 12:00–14:00 at UTC+02:00, which occupies 10:00–12:00 UTC. Subtracting it leaves *09:00–10:00 and 12:00–17:00 UTC*. A single earliest-start/latest-end pair would accidentally fill the gap.
 
-The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange[complete booking application] parses inputs, subtracts bookings and prints canonical timestamps. It is a multi-file Roc application you can run directly.
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange[booking application source] parses inputs, subtracts bookings and prints UTC timestamps. The xref:getting-started.adoc#getting-started[first application guide] shows how to run the release's copy.
 
 == Explicit choices, useful guarantees
 
-* Exact coordinates use signed 64-bit microseconds and checked arithmetic.
-* Local labels need an explicit offset or immutable zone rules.
-* Recurrence work has finite budgets; an incomplete result says so and can be resumed.
-* Parsing, display, explanation and storage have separate purposes.
+Exact calculations use signed 64-bit integer microseconds and checked arithmetic. Your application supplies a clock reading or timezone rules when it needs them. For repeated local times, you choose which occurrence an appointment means. For a long schedule, you choose how much work one query can do and resume it if necessary.
 
-See xref:profiles.adoc#profiles[supported scope] before depending on a standards profile. This is an actively developing package, not a claim to every date/time format or calendar.
+xref:profiles.adoc#profiles[Profiles and limits] describes the formats and operations supported today. Parsing, display, explanation and storage serve different purposes; a readable label doesn't replace the original declaration or its interpretation context.
 
 == Prior art
 
-roc-time is inspired by https://github.com/elixir-tempo/tempo[Kip Cole’s Tempo], especially its treatment of calendar precision, intervals and set algebra. Credit belongs to Kip and Tempo’s contributors for that foundation. roc-time is an independent Roc implementation, not an API-compatible port.
+roc-time is inspired by https://github.com/elixir-tempo/tempo[Kip Cole's Tempo], especially its treatment of calendar precision, intervals and set algebra. Credit belongs to Kip and Tempo's contributors for that foundation. roc-time is an independent Roc implementation with its own API.

@@ -8,6 +8,8 @@ import time.ICalDateTime
 import time.ICalDuration
 import time.ICalPeriod
 import time.PosixDelta
+import time.CalendarInterval
+import time.EdtfInterval
 import time.EdtfDate
 import time.OffsetTimestamp
 import time.Calendar
@@ -35,6 +37,7 @@ InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier
 		date_text = "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}-${pad(day.to_u64(), 2)}"
 		check_edtf(input, day, date_text)
 		check_scoped_edtf(input, day)
+		check_edtf_interval(input, day, date_text)
 		check_timestamp(input, day, date_text)
 		check_timestamp_format_limits(input)
 		check_malformed(input, date_text)
@@ -159,7 +162,6 @@ check_scoped_edtf = |input, day| {
 			crash "Scoped explanation lost group identity or invented interpretation"
 		}
 		check_declaration_limits(source, input.digits.to_u64())
-
 	}
 }
 
@@ -934,5 +936,58 @@ check_timestamp_format_limits = |input| {
 			}
 		}
 		$scale = $scale * 10
+	}
+}
+
+# Independent small-model law: for dates within a single generated year,
+# enumerate month labels and test existence of a start <= end. This does
+# not resolve zones or claim quantified timeline reasoning. Endpoint states,
+# independent resolutions and qualifications are checked before round trips.
+check_edtf_interval = |input, _day, date_text| {
+	start_text = match input.precision {
+		0 => input.year.to_str()
+		1 => "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}"
+		_ => date_text
+	}
+	end_month = 1 + input.day % 12
+	end_text = "${input.year.to_str()}-${pad(end_month.to_u64(), 2)}"
+	# Finite independent month/day enumeration of admissible date pairs.
+	var $satisfiable = False
+	for month in [1.U8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] {
+		if (input.precision == 0 or month == input.month) and month <= end_month {
+			# A whole end month includes its final day; the supplied day is valid.
+			$satisfiable = True
+		}
+	}
+	parsed = EdtfInterval.parse("${start_text}/${end_text}")
+	if !$satisfiable {
+		if parsed != Err(ReversedBounds) {
+			crash "Civil domain contradiction disagrees with independent bounded month model"
+		}
+	} else {
+		value = parsed ?? crash "Admissible generated civil endpoint domains rejected"
+		start_date = EdtfDate.parse(start_text) ?? crash "Generated valid start rejected"
+		end_date = EdtfDate.parse(end_text) ?? crash "Generated valid end rejected"
+		parts = CalendarInterval.endpoints(EdtfInterval.description(value))
+		if parts != { start: Known(EdtfDate.description(start_date)), end: Known(EdtfDate.description(end_date)) } or
+			EdtfInterval.new(parts.start, parts.end) != Ok(value) or
+				EdtfInterval.parse(EdtfInterval.to_text(value)) != Ok(value) {
+			crash "EDTF interval lost independently generated endpoint declarations"
+		}
+	}
+	for (suffix, state) in [("", Unknown), ("..", Open)] {
+		value = EdtfInterval.parse("${date_text}/${suffix}") ?? crash "Endpoint knowledge rejected"
+		parts = CalendarInterval.endpoints(EdtfInterval.description(value))
+		if parts.end != state or CalendarInterval.interpretation_support(EdtfInterval.description(value)) != UnsupportedCivilEndpointModel {
+			crash "Unknown/open changed meaning or became successful empty coverage"
+		}
+	}
+	qualified = EdtfInterval.parse("${date_text}~/${end_text}") ?? crash "Unmodeled qualifier must not create a false contradiction"
+	source = Explanation.new(EdtfInterval(qualified))
+	limited = Explanation.plain(source, { max_facts: 1, max_utf8_bytes: 4096 })
+	zero = Explanation.plain(source, { max_facts: 0, max_utf8_bytes: 4096 })
+	if limited.status != Limited(FactLimit) or limited.visited_facts != 1 or zero.visited_facts != 0 or
+		Explanation.fact_at(source, U64.highest) != End {
+		crash "EDTF interval explanation escaped its fact budget"
 	}
 }

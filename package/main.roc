@@ -17,6 +17,8 @@ package
 		ICalDuration,
 		ICalDateTime,
 		EdtfDate,
+		CalendarInterval,
+		EdtfInterval,
 		OffsetTimestamp,
 		ExactInterval,
 		Ixdtf,

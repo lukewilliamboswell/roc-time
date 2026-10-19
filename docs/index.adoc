@@ -5,14 +5,20 @@
 :toclevels: 3
 :sectnums:
 
-Exact spans, calendar meaning and explicit interpretation for Roc applications.
-This manual describes version {docs-version}.
+Find free time between bookings, calculate calendar dates and query recurring
+appointments in Roc. This manual accompanies version {docs-version}; links to
+repository source can show newer APIs, identified in the relevant guide.
 
 Start with xref:getting-started.adoc#getting-started[the first application],
 choose a task from xref:overview.adoc#overview[the overview], or use
 xref:api.adoc#api[the API map]. Download the
 https://github.com/lukewilliamboswell/roc-time/releases/download/{docs-version}/roc-time-{docs-version}.pdf[PDF manual]
 for offline reading.
+
+If you're contributing a change, start with the
+https://github.com/lukewilliamboswell/roc-time/blob/main/CONTRIBUTING.md[contributor guide].
+The module API pages linked from each release provide exact function signatures;
+the chapters here explain how to put them together.
 
 include::overview.adoc[leveloffset=+1]
 include::getting-started.adoc[leveloffset=+1]

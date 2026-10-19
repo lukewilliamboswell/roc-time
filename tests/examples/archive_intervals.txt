@@ -1,0 +1,6 @@
+painting-17: 1964/2008
+letters-42: 2004-02-01/2005-02
+collection-9: 1985/
+ongoing-6: 1985/..
+draft-2: 2004-06-~01/2004-06-~20
+Exact timeline search needs an endpoint model; the catalog description is saved.

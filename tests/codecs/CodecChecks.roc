@@ -1,3 +1,4 @@
+import time.EdtfInterval
 import time.EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
@@ -16,6 +17,7 @@ CodecChecks := [].{
 	Errors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidICalDateTime(ICalDateTime.Error), InvalidICalDuration(ICalDuration.Error), InvalidICalPeriod(ICalPeriod.Error)]
 	Document : { date : EdtfDate, dates : List(EdtfDate), exact : ExactInterval, ixdtf : Ixdtf, rfc_date : ICalDateTime, rfc_duration : ICalDuration, rfc_period : ICalPeriod, stamp : OffsetTimestamp, tail : Str }
 	run = |input| {
+		check_interval_codecs(input.interval_invalid)
 		check_civil(input.civil, input.civil_invalid_date, input.civil_invalid_clock)
 		check_civil_tokens(input.civil_tokens)
 		result : Try(Document, Errors)
@@ -50,10 +52,12 @@ CodecChecks := [].{
 		}
 		# Runtime interpolation remains Str followed by explicit fallible parse.
 		dynamic = EdtfDate.parse("${input.year}-02-29")
-		if (match dynamic {
-			Ok(value) => EdtfDate.to_text(value) == "2020-02-29"
-			Err(_) => Bool.False
-		}) == Bool.False {
+		if (
+			match dynamic {
+				Ok(value) => EdtfDate.to_text(value) == "2020-02-29"
+				Err(_) => Bool.False
+			}
+		) == Bool.False {
 			crash "Explicit interpolated parse failed"
 		}
 		invalid_date : Try(EdtfDate, Errors)
@@ -214,5 +218,37 @@ check_tokens = |tokens, expected| {
 	if encode(first.value, ["prefix"]) != Ok(["prefix", "1984?"]) or
 		encode(first.value, ["full", "buffer"]) != Err(WriteBlocked) {
 		crash "Generic semantic encoder lost state or format failure"
+	}
+}
+
+IntervalErrors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfInterval(EdtfInterval.Error)]
+
+check_interval_codecs = |invalid| {
+	value : EdtfInterval
+	value = "?2004-06-11/2005-02"
+	parsed : Try({ items : List(EdtfInterval), tail : Str }, IntervalErrors)
+	parsed = Json.parse("{\"items\":[\"2004?-06-11/2005-02\",\"1985/..\",\"1985/\"],\"tail\":\"kept\"}")
+	record = parsed ?? crash "EDTF interval JSON list rejected"
+	if record.items.first() != Ok(value) or record.tail != "kept" {
+		crash "EDTF interval codec lost declaration or parser state"
+	}
+	replay : Try({ items : List(EdtfInterval), tail : Str }, IntervalErrors)
+	replay = Json.parse(Json.to_str(record))
+	if replay != Ok(record) {
+		crash "EDTF interval semantic JSON round trip changed knowledge states"
+	}
+	bad : Try(EdtfInterval, IntervalErrors)
+	bad = Json.parse(invalid)
+	if bad != Err(InvalidEdtfInterval(ReversedBounds)) {
+		crash "Interval semantic error was hidden"
+	}
+	parse = EdtfInterval.parser_for(TokenEncoding.Default)
+	first = parse(["1985/", "tail"]) ?? crash "Generic interval codec rejected date interval"
+	if first.rest != ["tail"] {
+		crash "Generic interval codec consumed trailing state"
+	}
+	encode = EdtfInterval.encoder_for(TokenEncoding.Default)
+	if encode(first.value, []) != Ok(["1985/"]) {
+		crash "Generic interval codec did not encode standard text"
 	}
 }
