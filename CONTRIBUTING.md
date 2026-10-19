@@ -62,6 +62,8 @@ depend on this repository's packages.
 | `build_release.roc` | Build and test exactly what a release publishes, with its release notes |
 | `release_notes.roc` | Release notes naming both compilers, the package URLs and their digests |
 | `latest_release.roc` | Describe the latest full release: tag, bundle URLs and examples archive URL |
+| `build_docs.roc` | Verify the released renderer and build/check the native HTML and PDF manual |
+| `assemble_site.roc` | Assemble a tested manual archive and restored immutable API versions |
 
 The oracle, fuzz, resource, measurement and documentation tooling is still Python 3
 with no third-party dependencies, driven by `python_harness.py`, which the gate
@@ -72,7 +74,9 @@ actions from [roc-automation](https://github.com/lukewilliamboswell/roc-automati
 pinned by full commit SHA. The release candidate includes the generated API-doc
 archive before publication. The publisher downloads and verifies every uploaded
 asset before publishing an immutable release; Pages restores those archives.
-Author release notes in `docs/releases/<version>.md` before dispatching a release.
+Author release notes in `docs/releases/<version>.adoc` before dispatching a release
+and include them from `docs/releases.adoc`. The native renderer prepares the same
+source as GitHub Markdown; no second AsciiDoc interpretation is maintained here.
 The gate's dry run selects the next release's notes through `RELEASE_NOTES_FILE`;
 update that path in `scripts/check_all.roc` and the workflow's dry-run default when
 preparing the next version.
@@ -97,11 +101,50 @@ preparing the next version.
 
 ## API documentation
 
+The user manual is authored in `docs/index.adoc` and top-level AsciiDoc chapters.
+Keep existing chapter filenames and explicit ASCII IDs stable. Use
+`xref:chapter.adoc#id[descriptive text]` for links between chapters, and include
+every chapter in `index.adoc` so it reaches the combined PDF. Use simple PSV
+tables with explicit columns and named source blocks. Raw HTML, arbitrary
+AsciiDoc extensions and direct Roc-source includes are outside the renderer's
+supported profile. See the
+[shared authoring contract](https://lukewilliamboswell.github.io/roc-automation/documentation.html#experimental-native-docs-contract).
+
+```sh
+RELEASE_VERSION=0.2.0 DOCS_OUTPUT=.roc-time-tmp/manual-preview blueprint run docs
+```
+
+Use a new output directory. This builds both the HTML site and `roc-time.pdf`
+with roc-automation's released `tools-0.1.0-rc.1` renderer. `scripts/src/Docs.roc`
+records the reviewed SHA-256 for each supported executable (Linux x86-64,
+Linux ARM64 and Apple Silicon); every cached or supplied binary is checked
+before execution. `ROC_DOCS_BINARY` may select a binary with the same digest.
+Upgrade the release and all reviewed digests together. Rendering uses the
+shared theme and needs no compiler; Roc scripts run its preparation/assembly,
+and the Blueprint environment provides Poppler for independent PDF checks.
+
+The gate checks every local HTML link/fragment, legacy chapter route, chapter
+destination in the PDF, and exact visible source-block bytes. PDF extraction
+checks chapter and command text. Review desktop/mobile navigation, scrolling
+tables, and PDF layout when changing content. Tables scroll horizontally on
+narrow screens. These checks do not claim PDF/UA conformance.
+
+For a complete preview with immutable historical API references:
+
+```sh
+python3 scripts/release_docs.py fetch --output .roc-time-tmp/api-history
+blueprint run site -- --api-root .roc-time-tmp/api-history --output .roc-time-tmp/site-preview
+```
+
+With `RELEASE_VERSION` set, site assembly downloads that release's tested manual
+archive instead of rebuilding it. `MANUAL_ARCHIVE` selects a local candidate.
+API trees are restored separately, preserving `/<version>/` URLs byte for byte.
+
 API usage examples belong in module `##` comments, in fenced `roc` code blocks.
 Use complete imports through the `time` dependency and executable `expect`
 examples. `scripts/test_doc_examples.py` checks them together against the real
 package and runs in the default gate. The docs publisher adds
-`docs/overview.html` as the landing guide because the compiler-generated package
+`scripts/templates/api-overview.html` as the landing guide because the compiler-generated package
 index currently contains navigation and a logo only. Review generated API pages
 with `ROC=/path/to/roc python3 scripts/docs.py 0.1.0 --docs-root .roc-time-tmp/docs-review`.
 
@@ -282,7 +325,7 @@ network service.
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
-use the content-addressed [roc-fuzz 0.3.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.3.0)
+use the content-addressed [roc-fuzz 0.4.3 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.4.3)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.py` is their single runner. Set `ROC` to the package compiler:
 
@@ -580,8 +623,8 @@ needs a patch release, described below.
 To change the tooling compiler, open a pull request that changes the `roc-stable`
 tag in `Blueprint.roc`, run `blueprint update roc` in the same pull request if the
 locked overlay revision predates that nightly, and fix any script the new compiler
-breaks there, so the tag and the scripts move together. The documentation
-site builder under `www/` is tooling too and builds on `roc-stable`.
+breaks there, so the tag and the scripts move together. Native documentation
+rendering uses the separately verified released binary described below.
 
 Releases are dispatched from `main` and are immutable. To release:
 
@@ -592,14 +635,15 @@ Releases are dispatched from `main` and are immutable. To release:
    packages with the latest nightly, builds `roc-time-examples-<version>.zip` from
    the same commit, and runs that archive unchanged against those exact bundles
    served on loopback through a fresh package cache. It also rejects missing,
-   corrupt and swapped bundles.
+   corrupt and swapped bundles. It builds the API archive and native HTML/PDF
+   manual before publication and verifies the assembled archives together.
 3. The `publish` job, behind the protected `release` environment, uploads the
    tested files to a draft, verifies the asset inventory and publishes it. Then
    `Release docs` publishes the versioned API docs and deploys Pages.
 4. Verify the release notes, both package URLs and the examples archive against
    the published URLs.
 
-A release publishes four assets. `roc-time-<hash>.tar.zst` and
+A release publishes seven assets. `roc-time-<hash>.tar.zst` and
 `roc-time-tzdb-<hash>.tar.zst` are the two packages; Roc uses the filename prefix
 to distinguish packages sharing a versioned release path, and the archive bytes
 and content hashes are those produced by `roc bundle`. `roc-time-bundles.json`
@@ -608,6 +652,9 @@ records the two roles and archive digests; archive count never identifies a role
 only its `time` and `zones` dependency lines changed to that release's URLs, a
 README, and `expected/` output recorded at release time. Committed examples are
 never rewritten after a release, so there is no follow-up pull request.
+`roc-time-docs-<version>.tar.gz` preserves compiler-generated API pages.
+`roc-time-manual-<version>.zip` preserves the native HTML manual, its PDF,
+fonts and notices; `roc-time-<version>.pdf` is the same PDF as a direct download.
 
 The release notes state `roc version` and `roc-stable version`. That record
 replaces a header pin as the statement of what the release was built and tested
@@ -619,7 +666,7 @@ draft and dispatch again; if it fails after publication, the fix is a new versio
 If docs publication fails after the release succeeds, rerun the separate
 `Release docs` workflow with that existing release version. API documentation is
 stored as immutable release assets and restored during Pages assembly; generated
-pages are not checked into Git and authored guides live in `www/`. Assembly
+pages are not checked into Git and authored guides live in `docs/*.adoc`. Assembly
 refuses missing earlier release documentation. Configure the `github-pages`
 environment to allow deployment from `main`.
 
@@ -641,7 +688,7 @@ release source.
 Build and test a release candidate locally with:
 
 ```sh
-RELEASE_VERSION=999.999.999 OUTPUT_DIR=.roc-time-tmp/dist blueprint run release
+RELEASE_VERSION=999.999.999 RELEASE_NOTES_FILE=docs/releases/0.2.0.adoc OUTPUT_DIR=.roc-time-tmp/dist blueprint run release
 ```
 
 ## Zone-data representation measurements

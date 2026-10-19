@@ -1,0 +1,25 @@
+[#manual]
+= roc-time manual
+:doctype: book
+:toc: left
+:toclevels: 3
+:sectnums:
+
+Exact spans, calendar meaning and explicit interpretation for Roc applications.
+This manual describes version {docs-version}.
+
+Start with xref:getting-started.adoc#getting-started[the first application],
+choose a task from xref:overview.adoc#overview[the overview], or use
+xref:api.adoc#api[the API map]. Download the
+https://github.com/lukewilliamboswell/roc-time/releases/download/{docs-version}/roc-time-{docs-version}.pdf[PDF manual]
+for offline reading.
+
+include::overview.adoc[leveloffset=+1]
+include::getting-started.adoc[leveloffset=+1]
+include::booking.adoc[leveloffset=+1]
+include::calendar-zones.adoc[leveloffset=+1]
+include::schedules.adoc[leveloffset=+1]
+include::profiles.adoc[leveloffset=+1]
+include::api.adoc[leveloffset=+1]
+include::versions.adoc[leveloffset=+1]
+include::releases.adoc[leveloffset=+1]

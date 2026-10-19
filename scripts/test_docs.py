@@ -137,8 +137,8 @@ class DocsIndexTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.temporary_root) as directory:
             root = Path(directory)
             source = root / "source"
-            (source / "docs").mkdir(parents=True)
-            (source / "docs/overview.html").write_text("overview")
+            (source / "scripts/templates").mkdir(parents=True)
+            (source / "scripts/templates/api-overview.html").write_text("overview")
             output = root / "site"
             output.mkdir()
             (output / "index.html").write_text("existing stable landing page")

@@ -9,6 +9,8 @@ import cli.Path
 import src/Release
 import src/Script
 import src/Text
+import src/Docs
+import src/Manual
 
 main! = |_args| {
 	# Build and test exactly what a release publishes, into OUTPUT_DIR (default
@@ -47,6 +49,26 @@ main! = |_args| {
 	Cmd.new_str(python)
 		.args(["scripts/release_docs.py", "pack", OsStr.from_str(version), "--docs-root", Path.to_os_str(docs), "--output", directory])
 		.exec_cmd!()?
+
+	Script.section!("NATIVE MANUAL")?
+	manual = Path.join(output, "manual")
+	Docs.build!(manual, version)?
+	Manual.verify!(Path.join(manual, "site"), Bool.True)?
+	pdf = Path.join(manual, "roc-time.pdf")
+	if Path.read_bytes!(pdf)? != Path.read_bytes!(Path.join(Path.join(manual, "site"), "roc-time.pdf"))? {
+		return Script.fail!("downloadable and site PDFs differ")
+	}
+	Path.copy!(pdf, Path.join(output, "roc-time-${version}.pdf"))?
+	manual_archive = Path.join(output, "roc-time-manual-${version}.zip")
+	Cmd.new("zip").args(["-X", "-q", "-r", Path.to_os_str(manual_archive), "."]).cwd(Path.join(manual, "site")).exec_cmd!()?
+	# Exercise the archived HTML/PDF and exact API archive together, as Pages will.
+	roc_stable.cmd([
+		"scripts/assemble_site.roc",
+		"--api-root",
+		Path.to_os_str(docs),
+		"--output",
+		Path.to_os_str(Path.join(output, "site")),
+	]).env("MANUAL_ARCHIVE", Path.to_os_str(manual_archive)).env("VERIFY_MANUAL_SOURCE", "true").exec_cmd!()?
 
 	Script.section!("RELEASE NOTES")?
 	notes = script("scripts/release_notes.roc").exec_output!()?.stdout_utf8

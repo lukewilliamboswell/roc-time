@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Existing release whose API docs should be published"
+        description: "Release whose tested native manual should be deployed; all historical API docs are restored"
         required: true
         type: string
 
@@ -25,7 +25,7 @@ jobs:
     name: Publish versioned docs
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout authored documentation and tooling
@@ -48,9 +48,11 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: python3 scripts/check_docs_history.py --repo "$GITHUB_REPOSITORY" --version "$RELEASE_VERSION" --docs-root .roc-time-tmp/api-docs
 
-      # The site builder is repository tooling, so it runs on the pinned
-      # compiler the Blueprint environment provides for it.
-      - name: Assemble authored guides and versioned API documentation
+      # Restore the tested manual; deployment never rebuilds a published manual.
+      - name: Assemble the released native manual and versioned API documentation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: blueprint run site -- --api-root .roc-time-tmp/api-docs --output .roc-time-tmp/pages-site
 
       - name: Upload Pages artifact
