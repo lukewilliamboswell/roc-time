@@ -1,8 +1,6 @@
 [#booking]
 = Find free booking windows
 
-xref:index.adoc#manual[Manual home]
-
 Suppose your application receives bookings as timestamp strings and needs to offer the time left in a working day. Start with an opening window, turn each booking into occupied time, then subtract it. Keep an explicit `Z` or numeric offset in each timestamp so bookings from different offsets can be compared.
 
 == The pipeline

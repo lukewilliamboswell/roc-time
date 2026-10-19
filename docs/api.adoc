@@ -1,8 +1,6 @@
 [#api]
 = Find the right API
 
-xref:index.adoc#manual[Manual home]
-
 This map helps you choose a starting module. It describes the current source;
 follow your https://github.com/lukewilliamboswell/roc-time/releases[release's API link]
 for the exact functions available in your package.

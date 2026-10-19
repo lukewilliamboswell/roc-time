@@ -1,8 +1,6 @@
 [#profiles]
 = Know the supported scope
 
-xref:index.adoc#manual[Manual home]
-
 Before connecting an importer, check that the selected parser supports the forms your source produces. A calendar feed can contain a valid rule that a particular adapter doesn't handle. A date description can parse successfully without identifying a single instant.
 
 Each module documents a *profile*: the syntax and meaning it accepts. The API pages for your release list exact grammars, limits and errors.

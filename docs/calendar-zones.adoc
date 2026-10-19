@@ -1,8 +1,6 @@
 [#calendar-zones]
 = Work with dates and clock changes
 
-xref:index.adoc#manual[Manual home]
-
 An invoice due next month and a shift that crosses a clock change need different calculations. Here you'll calculate a due date, then work out how many hours an overnight shift covers.
 
 The commands below work from a checkout with a current Roc nightly. For released packages, get the same applications from the xref:getting-started.adoc#getting-started[examples archive]. Repository links show current source, which may be ahead of your release.

@@ -1,8 +1,6 @@
 [#versions]
 = Keep examples and versions together
 
-xref:index.adoc#manual[Manual home]
-
 When copying an example, keep its whole application folder and its package URLs together. The folder supplies neighboring modules; the URLs select the library version. The release notes tell you which Roc compiler tested that combination.
 
 == Published examples

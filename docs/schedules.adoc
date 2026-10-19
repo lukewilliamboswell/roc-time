@@ -1,8 +1,6 @@
 [#schedules]
 = Generate and exchange schedules
 
-xref:index.adoc#manual[Manual home]
-
 A weekly reservation needs a starting date, a repetition rule and any exceptions. When you query next month, you still want the same series: its count and cancellations shouldn't restart at the beginning of your screenful.
 
 == Start with a bounded reservation query

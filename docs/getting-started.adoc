@@ -1,8 +1,6 @@
 [#getting-started]
 = Run your first application
 
-xref:index.adoc#manual[Manual home]
-
 You'll run a booking application that reads opening hours and two bookings, then prints the free windows in UTC. You'll need a Roc compiler and the examples archive from a package release.
 
 == Get the examples archive

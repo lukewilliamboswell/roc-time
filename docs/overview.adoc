@@ -1,8 +1,6 @@
 [#overview]
 = Time for real applications
 
-xref:index.adoc#manual[Manual home]
-
 roc-time helps you answer questions such as “When is this room free?”, “When is this invoice due?” and “Which appointments belong to next week's schedule?” It keeps dates, elapsed time and bookings distinct, so you don't have to recover their meaning from bare timestamps.
 
 If you know some Roc, you can xref:getting-started.adoc#getting-started[run your first application] with a released examples archive. You don't need to build the library first.
