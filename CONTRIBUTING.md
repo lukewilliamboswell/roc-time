@@ -723,9 +723,13 @@ Generate the optional bounded database into a new directory with:
 python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/roc
 ```
 
-Generation verifies the configured interpreter and wheel hash. The generator
-and [package manifest](tzdb/package/manifest.json) declare the finite validity
-horizon. Future footer transitions are expanded ahead of time, with original
+Generation requires CPython 3.14.3 and the distribution wheel URL/hash pinned
+in `scripts/generate_zone_database.py` (currently tzdata 2026.5 / IANA 2026e).
+Download that wheel to the path supplied above; the historical oracle wheel is
+pinned independently in `scripts/generate_zone_oracle.py` and is not a substitute.
+Generation verifies integrity and both embedded IANA version declarations. The
+generator and [package manifest](tzdb/package/manifest.json) declare the finite
+validity horizon. Future footer transitions are expanded ahead of time, with original
 alias/canonical identities from `tzdata.zi`.
 The output is a separate Roc package with `Database.get(name)` returning the
 structural record accepted by `ZoneRules.from_database`; core has no dependency
@@ -750,6 +754,12 @@ examples remain necessary before distribution.
 The default test gate replays the committed `tzdb/package/` without the wheel or
 CPython generation pin. Refresh into a new ignored directory, review semantic
 changes, then replace the committed generated pack and its manifest together.
+Review each intervening IANA release and extend the source-backed public caller
+fixtures in [tests/zone_database](tests/zone_database/README.md). Preserve the
+historical oracle pins and corpora unless deliberately reviewing those separately.
+Existing release URLs and resolved snapshots keep their original data; an
+application selects new rules by updating its dependency and explicitly
+re-resolving where needed.
 The resource fixture uses runtime names and consumes transition checksums. It
 limits lookup to zero allocation/reallocation calls in development and at most
 one in optimized native builds under the compiler used for the measurement. This covers the data lookup and

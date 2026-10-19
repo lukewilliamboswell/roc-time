@@ -16,11 +16,23 @@ from zoneinfo._common import load_data
 from zoneinfo._zoneinfo import _parse_tz_str, _TZStr
 
 sys.dont_write_bytecode = True
-from generate_zone_oracle import WHEEL_SHA256, WHEEL_URL, EPOCH, seconds
+# Distribution releases are independent of the historical oracle corpora.
+# Never refresh generate_zone_oracle.py's pins as a side effect of shipping data.
+WHEEL_VERSION = "2026.5"
+SOURCE_VERSION = "2026e"
+WHEEL_SHA256 = "b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac"
+WHEEL_URL = "https://files.pythonhosted.org/packages/94/21/1e5995a1c920cce14e4bffae20c665ec10e7ed03ab25e006cd741092b718/tzdata-2026.5-py2.py3-none-any.whl"
+SOURCE_REVISION = "039ef27cc5f062a2055cb67435d6d71adbefd27d"
+EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
+
+
+def seconds(value):
+    delta = value - EPOCH
+    return delta.days * 86400 + delta.seconds
 
 START = seconds(dt.datetime(1800, 1, 1, tzinfo=dt.UTC))
 END = seconds(dt.datetime(2200, 1, 1, tzinfo=dt.UTC))
-PROFILE = "iana-2025b-wheel-2025.2-posix-1800-2200-v1"
+PROFILE = f"iana-{SOURCE_VERSION}-wheel-{WHEEL_VERSION}-posix-1800-2200-v1"
 
 
 def package_header():
@@ -77,16 +89,26 @@ def table(raw):
     return initial, min(bounds), max(bounds), kept, len(probes)
 
 
+def validate_integrity(raw):
+    if hashlib.sha256(raw).hexdigest() != WHEEL_SHA256:
+        raise ValueError("Pinned wheel integrity mismatch")
+
+
+def validate_source(archive):
+    zi = archive.read("tzdata/zoneinfo/tzdata.zi")
+    if (not zi.startswith(f"# version {SOURCE_VERSION}\n".encode())
+            or f'IANA_VERSION = "{SOURCE_VERSION}"' not in archive.read("tzdata/__init__.py").decode()):
+        raise ValueError("Wrong source version")
+    return zi
+
+
 def generate(wheel, output):
     if platform.python_implementation() != "CPython" or platform.python_version() != "3.14.3":
         raise SystemExit("Requires CPython 3.14.3 for pinned TZif/footer decoding")
-    if hashlib.sha256(wheel.read_bytes()).hexdigest() != WHEEL_SHA256:
-        raise SystemExit("Pinned wheel integrity mismatch")
+    validate_integrity(wheel.read_bytes())
     output.mkdir(parents=True, exist_ok=False)
     with zipfile.ZipFile(wheel) as archive:
-        zi = archive.read("tzdata/zoneinfo/tzdata.zi")
-        if not zi.startswith(b"# version 2025b\n"):
-            raise ValueError("Wrong source version")
+        zi = validate_source(archive)
         links, canonical = {}, set()
         for line in zi.decode().splitlines():
             fields = line.split()
@@ -122,15 +144,15 @@ def generate(wheel, output):
                 rows.append("\t".join([target, digest, str(initial), str(minimum), str(maximum),
                                         ";".join(f"{t},{v}" for t, v in transitions) or "-"]))
             names[name] = target
-        header = f"roc-time-tzdb-v1\t2025b\t{PROFILE}\t{START}\t{END}"
+        header = f"roc-time-tzdb-v1\t{SOURCE_VERSION}\t{PROFILE}\t{START}\t{END}"
         (output / 'zones.txt').write_text(header + "\n" + "\n".join(rows) + "\n")
         (output / 'names.txt').write_text("".join(f"{name}\t{unique[target]}\n" for name, target in names.items()))
         implementation = Path(__file__).resolve().parents[1] / 'tzdb/Database.roc'
         (output / 'Database.roc').write_bytes(implementation.read_bytes())
         (output / 'main.roc').write_text(package_header())
         for source, destination in [('LICENSE', 'LICENSE.txt'), ('licenses/LICENSE_APACHE', 'LICENSE_APACHE.txt')]:
-            (output / destination).write_bytes(archive.read('tzdata-2025.2.dist-info/licenses/' + source))
-    manifest = dict(profile=PROFILE, source_version="2025b", encoding="text-assets-v1", wheel_url=WHEEL_URL, wheel_sha256=WHEEL_SHA256,
+            (output / destination).write_bytes(archive.read(f'tzdata-{WHEEL_VERSION}.dist-info/licenses/' + source))
+    manifest = dict(profile=PROFILE, source_version=SOURCE_VERSION, source_revision=SOURCE_REVISION, encoding="text-assets-v1", wheel_url=WHEEL_URL, wheel_sha256=WHEEL_SHA256,
                     generator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     zi_sha256=hashlib.sha256(zi).hexdigest(), zone_names=len(names), canonical_zones=len(unique),
                     offset_comparisons=checks, start_second=START, end_second=END,
