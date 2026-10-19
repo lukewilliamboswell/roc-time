@@ -1,5 +1,10 @@
 # Temporal property targets
 
+The recurrence target also checks a composed local-zone model with gap/fold
+starts, non-hour shifts, source and UTC exclusions, inclusions and PERIOD endings.
+Its independent model, deterministic corpus, seed provenance and resource scopes
+are described in [the local recurrence evidence](../local_recurrence/README.md).
+
 The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, `tests/clock/main.roc`, `tests/offsets/main.roc`, `tests/zones/main.roc`, `tests/events/main.roc`, `tests/patterns/main.roc`, and `tests/recurrence/main.roc`
 import the real public package and the content-addressed
 [roc-fuzz 0.4.3 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.4.3).

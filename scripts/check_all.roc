@@ -40,6 +40,7 @@ main! = |_args| {
 	python = Script.env_str!("PYTHON") ?? "python3"
 	Script.info!("+", "${python} scripts/python_harness.py")?
 	Cmd.new_str(python).args(["scripts/python_harness.py"]).env("ROC", roc_nightly.program()).exec_cmd!()?
+	roc_stable.run!(["scripts/test_local_recurrence.roc"])?
 
 	# A release dry run: the exact bundles and examples archive a release would
 	# publish, under a version no release uses.
