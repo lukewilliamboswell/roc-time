@@ -76,7 +76,34 @@ Text := [].{
 	## chronologically under it.
 	compare : Str, Str -> [Before, Same, After]
 	compare = |left, right| compare_bytes(Str.to_utf8(left), Str.to_utf8(right))
+
+	## Native preparation emits explicit heading IDs for PDF navigation. GitHub's
+	## Markdown dialect displays those literally, so remove only that metadata,
+	## leaving paragraphs and fenced source unchanged.
+	github_markdown : Str -> Str
+	github_markdown = |prepared| {
+		var $inside_code = Bool.False
+		var $lines = []
+		for line in prepared.split_on("\n") {
+			if line.starts_with("```") {
+				$inside_code = !$inside_code
+			}
+			rendered = if !$inside_code and line.starts_with("#") {
+				match line.split_on(" {#") {
+					[heading, id] if id.ends_with("}") => heading
+					_ => line
+				}
+			} else {
+				line
+			}
+			$lines = $lines.append(rendered)
+		}
+		Str.join_with($lines, "\n")
+	}
 }
+
+expect Text.github_markdown("# Title {#title}\n\nText {#literal}\n") == "# Title\n\nText {#literal}\n"
+expect Text.github_markdown("```roc\n# source {#literal}\n```\n## Topic {#topic}\n") == "```roc\n# source {#literal}\n```\n## Topic\n"
 
 compare_bytes = |left, right|
 	match (left, right) {

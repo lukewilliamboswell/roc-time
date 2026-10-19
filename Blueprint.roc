@@ -27,7 +27,7 @@ config = [
 			]),
 			# Programs the Roc scripts start. The Python, Zig and Rust used by the
 			# remaining test harness are not provided here; see CONTRIBUTING.md.
-			Tools(["coreutils", "gh", "git", "unzip", "zip"]),
+			Tools(["coreutils", "curl", "gh", "git", "poppler-utils", "unzip", "zip"]),
 		],
 	),
 	Shell("default", [Use("dev")]),
@@ -37,5 +37,6 @@ config = [
 	Task("latest-release", [Use("dev"), Run(["roc-stable", "scripts/latest_release.roc"])]),
 	Task("examples", [Use("dev"), Run(["roc-stable", "scripts/test_examples.roc"])]),
 	Task("propose-lock-update", [Use("dev"), Run(["roc-stable", "scripts/propose_lock_update.roc"])]),
-	Task("site", [Use("dev"), Run(["python3", "scripts/assemble_docs_site.py", "--roc", "roc-stable"])]),
+	Task("docs", [Use("dev"), Run(["roc-stable", "scripts/build_docs.roc"])]),
+	Task("site", [Use("dev"), Run(["roc-stable", "scripts/assemble_site.roc"])]),
 ]

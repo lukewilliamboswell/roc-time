@@ -48,7 +48,7 @@ main! = |_args| {
 			roc_stable
 				.cmd(["scripts/build_release.roc"])
 				.env("RELEASE_VERSION", "999.999.999")
-				.env("RELEASE_NOTES_FILE", "docs/releases/0.2.0.md")
+				.env("RELEASE_NOTES_FILE", "docs/releases/0.2.0.adoc")
 				.env("OUTPUT_DIR", Path.to_os_str(Path.join(temporary, "dist")))
 				.exec_cmd!(),
 	)?
@@ -64,8 +64,7 @@ check_tooling! = |roc_stable| {
 	for script in Files.direct_roc_files!("scripts")? {
 		roc_stable.run!(["check", Path.to_os_str(script)])?
 	}
-	# The documentation site builder is repository tooling, not package code.
-	roc_stable.run!(["check", "www/main.roc"])
+	roc_stable.run!(["test", "scripts/build_docs.roc"])
 }
 
 check_layout! = || {
@@ -74,7 +73,7 @@ check_layout! = || {
 	scripts = read!(Files.direct_roc_files!("scripts")?)?
 	mains = read!(Files.all_roc_files!("examples")?.keep_if(|path| Files.name(path) == "main.roc"))?
 	var $sources = read!(["Blueprint.roc"])?
-	for directory in ["benchmarks", "examples", "package", "scripts", "tests", "tzdb", "www"] {
+	for directory in ["benchmarks", "examples", "package", "scripts", "tests", "tzdb"] {
 		$sources = $sources.concat(read!(Files.all_roc_files!(directory)?)?)
 	}
 	problems = StaticChecks.pin_problems(Path.exists!(".roc-version")?, $sources)

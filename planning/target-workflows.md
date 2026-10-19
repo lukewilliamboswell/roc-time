@@ -10,9 +10,11 @@ model is 0.2.0.
 
 ## Deliverables
 
-- Release 0.2.0 from `main`, the first release with an examples archive.
+- Publish 0.2.0 from `main` with its examples archive, native HTML manual archive
+  and PDF. Verify the deployed manual, legacy guide routes and unchanged
+  historical API URLs after restoring the tested archives.
 - Port the Python harness (`scripts/python_harness.py` and the scripts it runs)
-  and the documentation tooling to Roc scripts.
+  and the remaining API documentation tooling to Roc scripts.
 - After 0.2.0, rehearse `Nightly compatibility` with an incompatible
   `nightly_tag`: it has only run against a release without an archive.
 - Dispatch `Update Blueprint lock` on `main` once merged; its API commit and pull

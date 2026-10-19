@@ -1,0 +1,36 @@
+[#versions]
+= Keep examples and versions together
+
+xref:index.adoc#manual[Manual home]
+
+A working example has two parts you keep together: the application’s complete source folder and its package URLs. The Roc compiler is not pinned by either; each release’s notes record the compiler it was built and tested with.
+
+== Published examples
+
+An archived application’s `time` and optional `zones` fields point to immutable, content-addressed packages. The packages are checked daily against the latest Roc nightly; when a nightly breaks a release, the fix is a new patch release, so upgrade the package URLs rather than expecting an existing release to change.
+
+Choose a https://github.com/lukewilliamboswell/roc-time/releases[release] and download its `roc-time-examples-<version>.zip`. The archive contains release-specific package URLs; the repository’s own examples depend on its working tree by relative path. Copy the archive's headers when targeting that release. Each root is named `main.roc` and may import neighboring modules.
+
+== Core and optional zone data
+
+The https://github.com/lukewilliamboswell/roc-time/releases[release notes] identify both packages. Use core-only dependencies for offset timestamps, interval algebra and calendar work. Add the zone-data package when the application needs named rules.
+
+A zone name and version describe data; they do not authenticate a transition table or silently fetch a replacement. An in-memory interpretation retains its explicit rules. Saving an IXDTF declaration alone does not save that context: applications must supply appropriate rules when loading it. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/interpretation_context[interpretation context example] shows how keeping or changing rules affects an interpretation.
+
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/repeated_local_time[repeated local time application] compares first and last appointment choices with the disconnected coverage of a repeated local range. It keeps these distinctions in memory without claiming that a local timestamp alone records them.
+
+== Development examples
+
+Examples in the repository depend on the working-tree packages by relative path and require the full checkout and a current Roc nightly. They show the development API, which can be ahead of any release; use a release’s archive when targeting that release.
+
+== When upgrading
+
+1. Read the target package’s release notes and API changes.
+2. Take both relevant package URLs from that release’s archive, and install the compiler its notes name or a later nightly.
+3. Update the application header intentionally and keep companion modules with it.
+4. Run the complete application, including the date/zone boundary cases that matter to your caller.
+
+The HTML site and PDF manual are rendered by a verified, pinned native
+`roc-docs` executable. It does not need a Roc compiler. The compiler-generated
+API reference is a separate release artifact; its historical URLs stay stable.
+These documentation tools do not select the compiler a released example needs.

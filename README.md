@@ -1,5 +1,9 @@
 # roc-time
 
+[Read the manual](https://lukewilliamboswell.github.io/roc-time/) ·
+[PDF](https://lukewilliamboswell.github.io/roc-time/roc-time.pdf) ·
+[Releases](https://github.com/lukewilliamboswell/roc-time/releases)
+
 A meeting occupies an hour. A date in an archive might identify only a year.
 A working day can lose an hour when the clocks change. Treating each of these as
 a timestamp leaves your application to recover what the time actually means.

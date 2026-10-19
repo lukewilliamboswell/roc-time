@@ -1,0 +1,10 @@
+[#releases]
+= Release notes
+
+xref:index.adoc#manual[Manual home]
+
+The https://github.com/lukewilliamboswell/roc-time/releases[release assets]
+carry the exact package URLs and tested compiler versions. Historical API
+archives remain available under their original versioned URLs.
+
+include::releases/0.2.0.adoc[leveloffset=+1]
