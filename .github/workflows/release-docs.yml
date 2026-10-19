@@ -34,7 +34,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dec2d52a5cb6cd251fd188ad1d797f400ee1bb6e
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@be0776b7446800b1d975df5f9cb4961d560c1aa7
 
       - name: Restore immutable historical API documentation
         env:
