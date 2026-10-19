@@ -3,45 +3,47 @@
 
 xref:index.adoc#manual[Manual home]
 
-Use this workflow when an application receives timestamped bookings and needs the remaining available time. Inputs must identify their offset; a local clock label alone cannot identify a booking on a timeline.
+Suppose your application receives bookings as timestamp strings and needs to offer the time left in a working day. Start with an opening window, turn each booking into occupied time, then subtract it. Keep an explicit `Z` or numeric offset in each timestamp so bookings from different offsets can be compared.
 
 == The pipeline
 
-1. Parse opening and booking intervals with `ExactInterval`.
-2. Obtain checked half-open spans from those values.
-3. Build `Coverage` from the occupied spans.
-4. Subtract occupied coverage within the opening span.
-5. Format the resulting endpoints as canonical timestamps for your caller.
-
-Read and run the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange[booking exchange application using released packages]. The input/output root is `main.roc`; `BookingExchange.roc` contains the pure pipeline.
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange[booking exchange source] separates input/output in `main.roc` from the calculation in `BookingExchange.roc`. After xref:getting-started.adoc#getting-started[getting the examples], run:
 
 [source,sh]
 ----
 roc examples/booking_exchange/main.roc
 ----
 
-Use the compiler and dependencies from the xref:getting-started.adoc#getting-started[getting-started guide].
+The application follows five steps:
+
+1. `ExactInterval.parse` validates the opening and booking strings.
+2. `ExactInterval.span` gives each interval's timeline span.
+3. `Coverage.from_spans` combines the occupied spans.
+4. `Coverage.complement_within` finds the free pieces inside the opening span.
+5. The application formats their endpoints as canonical UTC timestamps.
+
+For a 09:00–17:00 opening and a 10:00–12:00 booking, the free windows are *09:00–10:00 and 12:00–17:00*. Each span includes its start and excludes its end; a booking ending at noon doesn't occupy noon onward.
 
 == Keep the gaps
 
-An opening from 09:00 to 17:00 with a booking from 10:00 to 12:00 has two free spans. A single start/end pair cannot represent that result without accidentally including the booking.
+`Coverage` keeps every separate piece of time. It merges overlapping or touching bookings, so you don't have to remove duplicate occupied time before finding availability.
 
-`Coverage` normalizes overlapping and touching spans. That is useful for availability, but it deliberately loses individual booking identity. Keep your events separately when you need to answer “whose booking is this?”
+That merge loses booking identity. If two customers both book 10:00–12:00, their combined coverage is still one span. Keep an `EventCollection` alongside coverage when you need to report conflicts or identify whose booking contributed the time.
 
 == Know what can fail
 
-An interval must have ordered, nonempty endpoints. Invalid timestamp spelling, an unsupported precision or a reversed interval returns a structured error. The package does not quietly swap endpoints or invent a timezone.
+An interval needs a start earlier than its end. Reversed endpoints, an empty interval and malformed timestamps return errors; the parser won't swap endpoints or guess a timezone.
 
-The supported timestamp profile uses microsecond precision. Finer input is rejected rather than truncated. Arithmetic near the signed coordinate limits is checked too.
+The timestamp profile accepts microseconds. Input with finer precision is rejected rather than truncated, and arithmetic near the signed coordinate limits is checked. xref:profiles.adoc#profiles[Profiles and limits] explains how to distinguish invalid input from valid forms the selected parser doesn't support.
 
 == Store standard values
 
-Use the format's checked parser and serializer for values you store. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/catalogue_storage[catalogue storage application] stores EDTF date descriptions and RFC 3339 timestamps in application-owned fields, then parses them again. No library-specific archive wrapper is needed.
+When saving availability, keep each free span and serialize its endpoints. Your application chooses the surrounding collection format. A single earliest-start/latest-end pair would fill the gaps you've just calculated.
 
-For availability, keep each separate span and serialize its endpoints. Your application owns the collection schema; standard timestamp strings alone do not define a standardized coverage document. Debug inspection is not a storage format.
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/catalogue_storage[catalogue storage example] saves EDTF date descriptions and RFC 3339 timestamps in application-owned fields, then parses them again. The formats' serializers are the storage boundary; debug inspection text is for diagnostics.
 
-For expiry checks, the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/clock_deadline[clock deadline application in the repository] declares its platform and package in its header. Its platform root reads the clock, while a pure module compares the supplied reading with an expiry. The saved status describes its recorded check time, not the time the JSON is loaded.
+For an expiry check, the https://github.com/lukewilliamboswell/roc-time/tree/main/examples/clock_deadline[clock deadline example] reads the clock in its platform root and passes that reading to a pure comparison. Its saved JSON describes the check at that recorded time. Loading the JSON later doesn't perform a new check.
 
 == API reference
 
-`ExactInterval` · `OffsetTimestamp` · `Coverage`
+Start with `ExactInterval`, `OffsetTimestamp` and `Coverage` in the xref:api.adoc#api[API map]. Repository links above show current source; the release archive and API pages show the version you're using.

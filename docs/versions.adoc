@@ -3,34 +3,37 @@
 
 xref:index.adoc#manual[Manual home]
 
-A working example has two parts you keep together: the application’s complete source folder and its package URLs. The Roc compiler is not pinned by either; each release’s notes record the compiler it was built and tested with.
+When copying an example, keep its whole application folder and its package URLs together. The folder supplies neighboring modules; the URLs select the library version. The release notes tell you which Roc compiler tested that combination.
 
 == Published examples
 
-An archived application’s `time` and optional `zones` fields point to immutable, content-addressed packages. The packages are checked daily against the latest Roc nightly; when a nightly breaks a release, the fix is a new patch release, so upgrade the package URLs rather than expecting an existing release to change.
+A release's `roc-time-examples-<version>.zip` contains complete applications whose `time` and optional `zones` dependencies point at immutable packages. Download it from the https://github.com/lukewilliamboswell/roc-time/releases[releases page] when you want to target that version.
 
-Choose a https://github.com/lukewilliamboswell/roc-time/releases[release] and download its `roc-time-examples-<version>.zip`. The archive contains release-specific package URLs; the repository’s own examples depend on its working tree by relative path. Copy the archive's headers when targeting that release. Each root is named `main.roc` and may import neighboring modules.
+The daily compatibility workflow tests the latest published release against the latest Roc nightly. If a new compiler breaks an older package, check the workflow result and available patch releases. Existing release URLs don't change; adopting a fix means updating your package URL.
+
+Roc files don't pin the compiler. Starting with the compiler named in the release notes gives you the tested combination; later nightlies need their own compatibility check.
 
 == Core and optional zone data
 
-The https://github.com/lukewilliamboswell/roc-time/releases[release notes] identify both packages. Use core-only dependencies for offset timestamps, interval algebra and calendar work. Add the zone-data package when the application needs named rules.
+The release notes identify the core and zone-data packages. The core is enough for explicit-offset timestamps, interval algebra and calendar calculations. Add the data package for named zones.
 
-A zone name and version describe data; they do not authenticate a transition table or silently fetch a replacement. An in-memory interpretation retains its explicit rules. Saving an IXDTF declaration alone does not save that context: applications must supply appropriate rules when loading it. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/interpretation_context[interpretation context example] shows how keeping or changing rules affects an interpretation.
+A data update can change how a future local meeting resolves. Existing in-memory interpretations keep their original rules; explicitly resolve again when you want the new rules. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/interpretation_context[interpretation context source] demonstrates both choices.
 
-The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/repeated_local_time[repeated local time application] compares first and last appointment choices with the disconnected coverage of a repeated local range. It keeps these distinctions in memory without claiming that a local timestamp alone records them.
+Saving an IXDTF declaration records its supported text and annotations, not the rules used to interpret it. Supply the appropriate context when loading it. A zone name and version identify a snapshot; they don't authenticate an arbitrary transition table or fetch one for you.
+
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/repeated_local_time[repeated local time example] also shows why a local timestamp alone can't record every choice: selecting the first occurrence, the last occurrence or the whole repeated range gives different results.
 
 == Development examples
 
-Examples in the repository depend on the working-tree packages by relative path and require the full checkout and a current Roc nightly. They show the development API, which can be ahead of any release; use a release’s archive when targeting that release.
+Repository examples import the working-tree packages by relative path. Run them from a complete checkout with a current Roc nightly. They can use APIs added after the latest release; copying a new module name into an old release's header won't make that API available.
+
+The manual links to current source for browsing. For matching executable examples and function signatures, follow your release's archive and API links.
 
 == When upgrading
 
-1. Read the target package’s release notes and API changes.
-2. Take both relevant package URLs from that release’s archive, and install the compiler its notes name or a later nightly.
-3. Update the application header intentionally and keep companion modules with it.
-4. Run the complete application, including the date/zone boundary cases that matter to your caller.
+1. Read the target release's notes and API changes.
+2. Copy the relevant package URLs from its archive. Start with its tested compiler or verify your later nightly.
+3. Update your application's dependencies and keep any example companion modules you copied.
+4. Run the application with the date, precision and clock-change cases that matter to it.
 
-The HTML site and PDF manual are rendered by a verified, pinned native
-`roc-docs` executable. It does not need a Roc compiler. The compiler-generated
-API reference is a separate release artifact; its historical URLs stay stable.
-These documentation tools do not select the compiler a released example needs.
+Each release also has a tested HTML/PDF manual and compiler-generated API archive. Historical API URLs stay stable. The pinned native renderer builds the manual without a package compiler; that doesn't change which compiler your application needs.

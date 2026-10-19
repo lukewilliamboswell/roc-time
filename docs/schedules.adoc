@@ -3,40 +3,49 @@
 
 xref:index.adoc#manual[Manual home]
 
-A recurring reservation is a series with an anchor, a rule and exceptions. Querying a later window must preserve that series state; it must not start counting from one again.
+A weekly reservation needs a starting date, a repetition rule and any exceptions. When you query next month, you still want the same series: its count and cancellations shouldn't restart at the beginning of your screenful.
 
 == Start with a bounded reservation query
 
-The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/reservations[released equipment reservations application] demonstrates identified recurring appointments. Use `DateRecurrence` for dates and the timed recurrence/schedule APIs when starts need clock and zone interpretation.
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/reservations[equipment reservations source] demonstrates recurring appointments with identities and ending times. Run the copy in your xref:getting-started.adoc#getting-started[release archive], or run the current source from a checkout:
 
-Separate three decisions:
+[source,sh]
+----
+roc examples/reservations/main.roc
+----
 
-1. *Definition:* which source labels belong to the series?
-2. *Interpretation:* which immutable rules and gap/fold policies resolve them?
-3. *Query:* which finite source-label window and work/output budgets will this request consume?
+There are three choices to make:
 
-A schedule query selects starts. Its appointment durations can extend past the query end. If you need everything overlapping a reporting window, account for that caller meaning explicitly rather than treating a start query as an overlap query.
+1. *Definition:* when does the series start, how does it repeat, and which dates are added or excluded?
+2. *Interpretation:* which timezone rules and repeated/skipped-time policies apply to those local starts?
+3. *Query:* which start-date window do you want, and how much work and output can this call produce?
+
+`ScheduleDefinition` retains the declaration and context for fresh queries. `TimedSchedule.collect` collects a bounded batch from a cursor. For dates without clock times or appointment endings, start with `DateRecurrence`.
+
+A query selects appointment *starts*. A booking starting at 16:00 can end after a 17:00 query boundary. To find every booking overlapping a reporting window, account for bookings that started earlier as well; a start query alone doesn't answer that question.
 
 == Treat incomplete output honestly
 
-`Complete` means the bounded request finished. `Limited` carries partial output and a cursor for resumption. Keep the returned cursor: recreating one from the next visible date can lose COUNT, exclusion and recurrence selection state.
+A batch marked `Complete` finished the requested query. A `Limited` batch contains partial output and the cursor you need to continue. Keep that cursor: starting again from the next date can lose counting and exception state.
 
-A small output cap is not the same as a work cap. A rule may examine candidates that produce no matching occurrence. Do not retry a non-progressing limit forever; select a suitable budget or report that the request is incomplete.
+Work and output limits serve different purposes. A rule might examine many dates before finding a match, so “one appointment per batch” doesn't bound the search. If a budget can't make progress, increase it or report the incomplete result rather than retrying forever. The xref:api.adoc#api[API reference] describes the limits for each query.
 
 == Importing iCalendar values
 
-The released adapters accept declared profiles of extracted RFC 5545 DATE and DATE-TIME property values. This does *not* parse an entire ICS file, folded content lines or arbitrary property parameters.
+`ICalDateRule` and `ICalTimedRule` accept supported RFC 5545 property values after your application has extracted them. They don't read a whole `.ics` file, unfold content lines or accept arbitrary parameters. Check the chosen adapter's profile before importing an external calendar.
 
-Check your package’s API documentation for adapter names and accepted forms. Unsupported forms are explicit errors.
+For example, a rule's `COUNT` counts its anchored recurrence before exclusions. Canceling one of four rule occurrences doesn't create a fifth. A `PERIOD` addition can instead contribute a separate appointment with its own end. An occurrence's original local label stays meaningful even if a gap policy moves its resolved start.
 
-COUNT belongs to the anchored rule; excluding one source does not replenish it. Adding a PERIOD can provide an occurrence with its own ending. Source labels matter even when a gap policy changes the resolved boundary.
+Unsupported forms return errors. That lets your importer report which part needs another adapter without quietly changing the schedule.
 
 == Editing and exchanging definitions
 
-The `ICal` adapters provide checked definition access and canonical extracted-property export. The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/meeting_exchange[meeting exchange scenario] demonstrates editing, exporting and reimporting a weekly meeting across a fixed zone transition.
+The https://github.com/lukewilliamboswell/roc-time/tree/main/examples/meeting_exchange[meeting exchange example] edits a weekly meeting, exports its extracted properties, then reimports them across a fixed zone transition. These adapters expose checked definitions and canonical property text, so application code doesn't have to reconstruct a rule from query output.
 
-`ScheduleDefinition` separates a reusable in-memory definition from its query cursor. Check your selected release for availability. Store supported schedule declarations using their standard property formats; supply interpretation context explicitly when loading them. Export does not promise to preserve every native calendar policy or embed a zone table. A standard adapter must reject unrepresentable meaning rather than silently discard it.
+Save supported declarations using their standard property serializers and supply interpretation context when loading them. A property string doesn't embed a zone table, and some native calendar policies can't be expressed by the selected standard profile. Export rejects those cases rather than dropping the policy.
+
+Repository examples show the development API. Check your release archive and API pages before copying an operation into an application using an older package.
 
 == API reference
 
-`DateRecurrence` · `TimedRecurrence` · `TimedSchedule` · `ICalTimedRule`
+`DateRecurrence`, `TimedRecurrence`, `TimedSchedule`, `ScheduleDefinition` and `ICalTimedRule` appear in xref:api.adoc#api[the API map].

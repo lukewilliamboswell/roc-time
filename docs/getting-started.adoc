@@ -3,13 +3,13 @@
 
 xref:index.adoc#manual[Manual home]
 
-Start with a released application. Keep the complete example folder: its `main.roc` handles inputs and output, while companion modules contain the useful domain logic.
+You'll run a booking application that reads opening hours and two bookings, then prints the free windows in UTC. You'll need a Roc compiler and the examples archive from a package release.
 
 == Get the examples archive
 
-Choose a https://github.com/lukewilliamboswell/roc-time/releases[package release], download its `roc-time-examples-<version>.zip` and extract it. The release notes identify the packages, compiler and included applications.
+Choose a https://github.com/lukewilliamboswell/roc-time/releases[release], download `roc-time-examples-<version>.zip` and extract it. Install the Roc nightly named in that release's notes. A later nightly may work too; check the compatibility results if it fails.
 
-Install the Roc compiler named in the release notes, or a later nightly. The applications do not pin a compiler. Keep the package URLs from the same archive.
+The archive already contains the package URLs you need. Keep each application's whole folder: `main.roc` imports the neighboring module that does the calculation.
 
 == Run the booking example
 
@@ -21,26 +21,39 @@ roc version
 roc examples/booking_exchange/main.roc
 ----
 
-Compare the version command with the release notes. The application prints available UTC windows after subtracting two bookings, including one supplied with a different offset.
+The version command lets you compare your compiler with the release notes. The application prints:
 
-*No Python runner is required to run an example.* On first use Roc downloads the content-addressed package dependencies declared in the header.
+[source,text]
+----
+Restored available booking windows (UTC)
+2026-06-15T09:00:00.000000Z/2026-06-15T10:00:00.000000Z
+2026-06-15T12:00:00.000000Z/2026-06-15T15:00:00.000000Z
+2026-06-15T16:00:00.000000Z/2026-06-15T17:00:00.000000Z
+----
+
+Each line is a free interval with its start and end separated by `/`. The shop opens at 09:00 UTC and closes at 17:00. One booking arrives as 12:00–14:00 at UTC+02:00, which is 10:00–12:00 UTC; the other occupies 15:00–16:00 UTC.
+
+Roc downloads the content-addressed package dependencies on first use. You don't need Python or a separate example runner.
 
 == Change an input
 
-Open `examples/booking_exchange/main.roc`. Change one booking while keeping an explicit `Z` or numeric offset. Run the same command again. The companion `BookingExchange.roc` performs parsing and coverage subtraction through public library APIs.
+Open `examples/booking_exchange/main.roc`. Remove the second booking, `2026-06-15T15:00:00Z/2026-06-15T16:00:00Z`, from the list and run the application again. The two afternoon windows join into a single 12:00–17:00 UTC window.
 
-Keep both files together. The root file’s `import BookingExchange` resolves its neighboring module; copying only `main.roc` loses the application’s implementation.
+You can also move a booking by editing its timestamps. Keep the `Z` or numeric offset: without one, a local clock time doesn't tell the application where the booking belongs on the timeline. `BookingExchange.roc` parses the text and subtracts the occupied time through the public library API.
 
 == Use the library in your own app
 
-Keep the platform declaration appropriate to your application, and copy the `time` field from the downloaded example. That header is the source of truth for the immutable package URL; the release notes record the compiler the release was built and tested with.
+Copy the `time` dependency from an archived example's header into your application's header, keeping your own platform declaration. This gives you the exact package URL tested for that release. The library doesn't pin your compiler.
 
-Applications using named zones also add the `zones` dependency shown in `examples/staffing/main.roc` in the same archive. The core package does not bring the zone database with it.
+For named zones, also copy the `zones` dependency from the archived `examples/staffing/main.roc`. It supplies timezone data separately, so an application working only with explicit offsets doesn't need the database.
+
+If you copied an example from the repository instead, its relative dependencies point at the local checkout. xref:versions.adoc#versions[Versions] explains how to keep source, packages and API documentation together.
 
 == Choose your next step
 
-* xref:booking.adoc#booking[Find availability]: exact timestamps, spans and coverage.
-* xref:calendar-zones.adoc#calendar-zones[Calculate dates and handle clock changes]: calendar arithmetic and local interpretation.
-* xref:schedules.adoc#schedules[Generate schedules]: bounded recurrence and source identity.
+* xref:booking.adoc#booking[Find availability]: timestamps, spans and coverage.
+* xref:calendar-zones.adoc#calendar-zones[Calculate dates and handle clock changes]: due dates and local appointments.
+* xref:schedules.adoc#schedules[Generate schedules]: recurring bookings, exceptions and bounded queries.
 
-If an API you saw in a development example is missing, check xref:versions.adoc#versions[versions] before changing imports or compiler versions.
+If an imported API is missing, compare your package URL with the example's
+version before changing the compiler or rewriting imports.

@@ -1,49 +1,60 @@
 # Optional zone database
 
-This companion supplies IANA time-zone offsets and compatibility aliases over
-an explicit finite horizon on the POSIX timeline. The [package manifest](package/manifest.json)
-records the source release, covered identifiers, validity bounds and integrity hashes.
-It is a separate dependency: interval-only and fixed-offset applications need
-only roc-time. No host database, filesystem access or network lookup is needed
-when using the compiled data.
+An appointment at 09:00 in Melbourne needs rules that say which UTC offset
+applies on that date. This companion supplies those rules for IANA zone names
+and their compatibility aliases. Applications working only with explicit offsets
+or interval algebra can depend on the core package alone.
 
-The [overnight staffing application](../examples/staffing/main.roc) shows the
-ordinary flow: `Database.get(name)`, `ZoneRules.from_database(data)`, then resolve
-local appointments with explicit occurrence policies. `Database.get` returns
+## Add it to an application
+
+Copy the `zones` dependency URL from your release's notes or archived staffing
+example, alongside the `time` dependency. The
+[examples archive](../README.md#try-it) supplies complete applications using
+those exact packages. You don't need to generate data yourself.
+
+The [staffing application](../examples/staffing/main.roc) shows the flow:
+
+1. `zones.Database.get(name)` selects a data record for the requested name.
+2. `time.ZoneRules.from_database(data)` validates it for interpretation.
+3. The application resolves local labels with explicit appointment policies or
+   selects the coverage of a whole local range.
+
+The compiled package needs no host timezone database, filesystem access or
+network lookup during interpretation. Roc downloads its package dependency as
+usual when building the application.
+
+## Check the data you selected
+
+The [manifest](package/manifest.json) records the source release, identifiers,
+finite validity bounds and integrity hashes. `Database.get` returns
 `UnknownZone(name)` for an unrecognized name. Imported rules reject queries
-outside the supplied horizon; local resolution can need additional data around
-its endpoints to prove completeness.
+outside their horizon. Resolving a local label can require additional data near
+that boundary to prove all possible matches were considered.
 
-The pack preserves requested aliases and canonical identities. Its source is the
-Python tzdata distribution pinned by that manifest, including its historical coverage
-choices. Pre-standardization offsets are source conventions, not a guarantee of
-historical local practice. Future transitions expand that release's rules; they
-are not predictions of future legislation. The pack provides offsets, without
-an abbreviation or daylight-saving-status API.
+The pack keeps both the requested alias and its canonical identity. It supplies
+whole-second offsets on the POSIX timeline, without an abbreviation or
+daylight-saving-status API. Its historical coverage follows the pinned Python
+tzdata distribution; early offsets are source conventions, not proof of every
+place's historical clock practice. Future transitions follow that release's
+rules, which can change with later legislation.
 
-Keep the data version pinned independently of the core. An application may pass
-its own schema-compatible data to the same adapter. Updating a data dependency
-requires explicitly resolving new values; existing snapshots retain their rules.
-The data package imports no roc-time modules.
-The [voyage briefing](../examples/voyage/main.roc) demonstrates an application-owned
-clock schedule and an explicit update while retaining the original booking.
+Pin the data version independently of the core. Updating a dependency doesn't
+rewrite an existing in-memory interpretation: explicitly resolve again when you
+want new rules. The [voyage example](../examples/voyage/main.roc) demonstrates
+keeping an original booking while considering updated application-owned rules.
+Custom schema-compatible providers enter through the same adapter; this data
+package imports no roc-time modules.
 
-The package contains one implementation module and two compact text assets.
-Roc imports and decodes the assets into top-level values at compile time;
-ordinary lookups use the resulting immutable data. Both assets are included in
-the content-addressed package archive, so applications need no separate files.
-This layout does not promise that a one-zone application eliminates all other
-zones from its binary.
+## How the package is stored
 
-To add the published companion, copy the `zones` dependency URL from the release
-notes, alongside the `time` dependency; the
-[staffing application](../examples/staffing/main.roc) shows both in use. Import
-`zones.Database` to select data and `time.ZoneRules` to validate it. The
-[release notes and examples archive](../README.md#try-it) provide both package
-archives and complete applications. No data-generation script is needed.
+One implementation module and two compact text assets are bundled together.
+Roc decodes the assets into top-level values at compile time; lookups use the
+resulting immutable data. Applications don't load separate data files at
+runtime. This layout doesn't guarantee that choosing one zone removes every
+other zone from the compiled binary.
 
-For contributors, see the
-[contributor guide](../CONTRIBUTING.md#zone-data-representation-measurements)
-for generation, review and verification. Generated files and source notices are
-under `package/`. Maintain the decoder in `Database.roc` and regenerate the
-distributable package; do not edit generated assets or copied modules by hand.
+For generation and review, follow the
+[contributor workflow](../CONTRIBUTING.md#zone-data-representation-measurements).
+Maintain `Database.roc` and regenerate the distributable package instead of
+editing generated assets or the copied module by hand. Generated files and
+source notices live under `package/`.

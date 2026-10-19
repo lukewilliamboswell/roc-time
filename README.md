@@ -4,51 +4,16 @@
 [PDF](https://lukewilliamboswell.github.io/roc-time/roc-time.pdf) ·
 [Releases](https://github.com/lukewilliamboswell/roc-time/releases)
 
-A meeting occupies an hour. A date in an archive might identify only a year.
-A working day can lose an hour when the clocks change. Treating each of these as
-a timestamp leaves your application to recover what the time actually means.
-
-**roc-time is a [Roc](https://www.roc-lang.org) library for working with time at
-its intended precision.** Describe calendar dates and local times, resolve them
-with explicit calendar and zone rules, and work with the spans they occupy.
-Combine those spans to find availability, compare schedules or account for time,
-while keeping the identities of individual events.
-
-This makes everyday questions easier to express: *When are we both free? Which
-bookings overlap? How much of this shift falls inside opening hours? What does
-“June” mean when no particular day was supplied?* Clear boundaries and explicit
-interpretation help avoid invented midnight timestamps, ambiguous “end of day”
-values and assumptions that every local day lasts 24 hours.
-
-## Will this help me?
-
-| I want to… | What works | Try it |
-| --- | --- | --- |
-| Find free booking windows | Parse offset timestamps, subtract occupied time and serialize availability | [Booking exchange](examples/booking_exchange/main.roc) |
-| Check an expiry | Compare a platform-clock reading with an expiry and write a typed JSON record | [Clock deadline](examples/clock_deadline/main.roc) |
-| Calculate dates | Gregorian/Julian conversion and calendar arithmetic with explicit month-end policies | [Invoice terms](examples/invoice/main.roc) |
-| Handle clock changes | Resolve repeated/skipped local times and overnight selections using explicit zone rules | [Overnight staffing](examples/staffing/main.roc) |
-| Generate schedules | Date and timed recurrence, additions/exclusions and bounded, resumable queries | [Equipment reservations](examples/reservations/main.roc) |
-| Retain imported date meaning | Preserve date precision and uncertainty; explain supported interpretations | [Archive search](examples/archive_search/main.roc) |
-
-## Why intervals, not just instants?
-
-A booking occupies time. To find availability, subtract that occupied time from
-an opening window and keep every gap that remains. `Coverage` merges overlapping
-or touching spans and supports union, intersection and difference.
-
-Spans include their start and exclude their end: `[09:00, 10:00)` and
-`[10:00, 11:00)` meet without overlapping. Adjacent bookings can share a boundary
-without inventing an “end of hour” timestamp.
-
-Calendar meaning matters too. An archive value such as `2026-06` retains month
-precision; turning it into midnight on June 1 would lose that meaning. A local
-day needs explicit zone rules before it can be placed on a timeline. Exact
-timestamps still represent instants, and events retain their separate identities.
+**roc-time is a [Roc](https://www.roc-lang.org) library for dates, bookings and
+schedules.** Find free time between bookings, calculate an invoice's due date,
+or schedule a weekly meeting across clock changes. Dates, spans
+and individual events have separate types, so you can keep the meaning your
+application needs.
 
 ## What it looks like
 
-Find the free time around a booking supplied with a different UTC offset:
+A shop opens from 09:00 to 17:00 UTC. A booking arrives as 12:00–14:00 at
+UTC+02:00, which occupies 10:00–12:00 UTC. Subtract it from opening hours:
 
 ```roc
 import time.ExactInterval
@@ -60,62 +25,50 @@ busy = Coverage.from_spans([ExactInterval.span(booking)])
 free_windows = Coverage.complement_within(busy, ExactInterval.span(opening))
 ```
 
-The result covers **09:00–10:00 and 12:00–17:00 UTC** on June 15. Roc infers the
-interval types from usage and evaluates these top-level definitions at compile
-time, rejecting invalid literals. For runtime input, `ExactInterval.parse` returns
-structured errors. The complete
-[booking exchange application](examples/booking_exchange/main.roc) handles
-multiple bookings and writes the free windows as canonical timestamps.
+The free windows are **09:00–10:00 and 12:00–17:00 UTC**. Each span includes its
+start and excludes its end, so another booking can start at 12:00 without
+overlapping the first one. `Coverage` keeps every free window.
+
+This excerpt belongs in an application with a dependency named `time`. Roc
+infers the interval types and validates these literals at compile time. For
+text received at runtime, `ExactInterval.parse` returns an error for invalid
+input. The [complete booking application](examples/booking_exchange/main.roc)
+handles two bookings and prints the remaining windows.
 
 ## Try it
 
 Download `roc-time-examples-<version>.zip` from a
-[release](https://github.com/lukewilliamboswell/roc-time/releases) and install the
-Roc compiler its release notes name, or a later nightly. From the extracted
-folder, run:
+[release](https://github.com/lukewilliamboswell/roc-time/releases), extract it,
+and install the Roc nightly named in its release notes. From the extracted
+folder:
 
 ```sh
 roc version
 roc examples/booking_exchange/main.roc
 ```
 
-No Python runner is required. Each example is a complete application with a
-`main.roc` entrypoint and companion modules; keep its whole folder together.
-The archive holds every application in the [example catalog](examples/README.md),
-bound to that release's packages by URL. In a repository checkout the same
-applications depend on the working-tree packages by relative path.
+Keep each example's whole folder: `main.roc` imports its neighboring modules.
+Roc downloads the package dependencies on first use; you don't need a Python
+runner. A later nightly may also work; the release notes and nightly
+compatibility checks record what has been tested.
 
 For your own application, copy the `time` dependency from an archived example's
-header; the package headers do not pin a compiler. Named-zone applications also use the
-[optional zone-data package](tzdb/README.md). The
-[release notes](https://github.com/lukewilliamboswell/roc-time/releases)
-include both package URLs. See the
-[documentation](https://lukewilliamboswell.github.io/roc-time/) for guides,
-API reference and supported format profiles.
+header. Named-zone applications also need the optional `zones` dependency shown
+in the archived staffing example. The archive uses that release's immutable
+package URLs; examples in this checkout use the local packages.
 
-## What to expect
+## Where to go next
 
-Exact calculations use integer microseconds. Calendar quantities, elapsed time,
-events and coverage are distinct types. Invalid inputs and exhausted work limits
-are explicit results; the core does not choose your zone, read the clock or fetch
-data on your behalf.
-
-Parsing and serialization support explicit profiles of date/time standards.
-A supported spelling does not imply support for every feature in that standard.
-Store standard representations directly, and supply interpretation context when
-needed. See the documentation for precision, range and format limits.
+- [First application](https://lukewilliamboswell.github.io/roc-time/getting-started.html#getting-started): run an example and change a booking.
+- [Calendars and clock changes](https://lukewilliamboswell.github.io/roc-time/calendar-zones.html#calendar-zones): calculate due dates and overnight shifts.
+- [Schedules](https://lukewilliamboswell.github.io/roc-time/schedules.html#schedules): recurring appointments, exceptions and query limits.
+- [Example catalog](examples/README.md): complete applications for availability, archive dates, storage and more.
+- [Supported profiles](https://lukewilliamboswell.github.io/roc-time/profiles.html#profiles): accepted formats and limits. Exact calculations use checked integer microseconds; wider standards support is described per module.
+- [Contributing](CONTRIBUTING.md): setup, tests and the contribution workflow.
 
 ## Prior art
 
 Inspired by [Kip Cole's Tempo](https://github.com/elixir-tempo/tempo), especially
 calendar values at meaningful resolutions, calendar-aware durations and temporal
 set algebra. Credit to Kip and Tempo's contributors for that foundation.
-
-`roc-time` is an independent implementation with distinct Roc types for calendar
-descriptions, boundaries, coverage and events. It is not an API-compatible Tempo
-port. Tempo's [documentation](https://hexdocs.pm/ex_tempo/) introduces the broader
-interval-oriented approach.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and verification.
+roc-time is an independent implementation, with its own API and types.
