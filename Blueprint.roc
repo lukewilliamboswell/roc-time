@@ -31,16 +31,18 @@ config = [
 			# Programs the Roc scripts start, which the machine must provide. The
 			# Python, Zig and Rust used by the remaining test harness are not
 			# declared here; see CONTRIBUTING.md.
-			Expect(["base64", "chmod", "curl", "date", "gh", "git", "pdfinfo", "pdftotext", "sha256sum", "uname", "unzip", "zip"]),
+			Expect(["base64", "chmod", "curl", "date", "gh", "git", "sha256sum", "uname", "unzip", "zip"]),
 		],
 	),
-	Shell("default", [Use("dev")]),
-	Task("check", [Use("dev"), Run(["roc-stable", "scripts/check_all.roc"])]),
+	# Tasks that build or verify the manual also read its PDF.
+	Environment("docs", [Extend("dev"), Expect(["pdfinfo", "pdftotext"])]),
+	Shell("default", [Use("docs")]),
+	Task("check", [Use("docs"), Run(["roc-stable", "scripts/check_all.roc"])]),
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
-	Task("release", [Use("dev"), Run(["roc-stable", "scripts/build_release.roc"])]),
+	Task("release", [Use("docs"), Run(["roc-stable", "scripts/build_release.roc"])]),
 	Task("latest-release", [Use("dev"), Run(["roc-stable", "scripts/latest_release.roc"])]),
 	Task("examples", [Use("dev"), Run(["roc-stable", "scripts/test_examples.roc"])]),
 	Task("propose-lock-update", [Use("dev"), Run(["roc-stable", "scripts/propose_lock_update.roc"])]),
-	Task("docs", [Use("dev"), Run(["roc-stable", "scripts/build_docs.roc"])]),
-	Task("site", [Use("dev"), Run(["roc-stable", "scripts/assemble_site.roc", "--"])]),
+	Task("docs", [Use("docs"), Run(["roc-stable", "scripts/build_docs.roc"])]),
+	Task("site", [Use("docs"), Run(["roc-stable", "scripts/assemble_site.roc", "--"])]),
 ]

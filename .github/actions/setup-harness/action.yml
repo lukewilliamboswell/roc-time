@@ -1,5 +1,5 @@
 name: Set up the Python harness toolchain
-description: Zig, CPython and Rust at the versions the remaining Python test harness requires. The Blueprint environment does not provide these yet.
+description: Zig, CPython and Rust at the versions the remaining Python test harness requires, and the PDF tools the Blueprint docs environment expects. Blueprint provides none of these.
 
 runs:
   using: composite
@@ -21,3 +21,9 @@ runs:
         rust_version=$(cat benchmarks/chrono/rust-version)
         rustup toolchain install "$rust_version" --profile minimal --target x86_64-unknown-linux-musl
         echo "RUSTUP_TOOLCHAIN=$rust_version" >> "$GITHUB_ENV"
+
+    - name: Install the PDF tools the manual checks expect
+      shell: bash
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y -q --no-install-recommends poppler-utils
