@@ -6,7 +6,7 @@ complete applications, memory, recurrence, zones, or coverage, and does not
 establish a fastest-library ranking.
 
 ```sh
-# Requires a current Roc nightly, Zig 0.16.0, Rust 1.95.0
+# Requires a current Roc nightly, Zig 0.17.0, Rust 1.95.0
 # with x86_64-unknown-linux-musl, Go 1.26.5, CPython 3.12.3 + pip, and Docker.
 ROC=/path/to/roc python3 scripts/benchmark_comparison.py --fetch --smoke
 # Offline dependency reuse; builds finish before comparative measurements.

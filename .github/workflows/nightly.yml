@@ -44,7 +44,10 @@ jobs:
         with:
           tag: ${{ inputs.nightly_tag }}
 
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@be0776b7446800b1d975df5f9cb4961d560c1aa7
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@7aff4132691ad4fc348abe9df146a57512b49bd6
+        with:
+          cache: 'true'
+          cache-workload: nightly
 
       - name: Resolve the release
         id: release
@@ -85,7 +88,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: lukewilliamboswell/roc-automation/actions/nightly-report@be0776b7446800b1d975df5f9cb4961d560c1aa7
+      - uses: lukewilliamboswell/roc-automation/actions/nightly-report@7aff4132691ad4fc348abe9df146a57512b49bd6
         with:
           outcome: ${{ needs.test.outputs.outcome }}
           nightly-tag: ${{ needs.test.outputs.nightly }}

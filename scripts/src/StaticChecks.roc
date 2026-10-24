@@ -8,7 +8,7 @@ StaticChecks := [].{
 	## file nor a `roc` header field may exist.
 	pin_problems : Bool, List({ path : Str, source : Str }) -> List(Str)
 	pin_problems = |roc_version_exists, sources| {
-		version_file = if roc_version_exists [".roc-version must not exist: the package compiler is not pinned"] else []
+		version_file = if (roc_version_exists) [".roc-version must not exist: the package compiler is not pinned"] else []
 		version_file.concat(
 			sources
 				.keep_if(|file| Text.pins_compiler(file.source))

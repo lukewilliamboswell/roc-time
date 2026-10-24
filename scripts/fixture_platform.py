@@ -24,6 +24,10 @@ LINK_INPUTS = {
     "libc.a": "85f5eb2316bc6f86be7bd66008488c7d2eca290942b01ad2e86f02f8b5e8c90f",
 }
 
+def zig_env(global_cache: Path) -> dict[str, str]:
+    """Zig 0.17 takes its global cache directory only from the environment."""
+    return {**os.environ, "ZIG_GLOBAL_CACHE_DIR": str(global_cache)}
+
 def build_host() -> str:
     """Build once before parallel fixture compilation; return Roc target name."""
     target = {("Darwin", "arm64"): "arm64mac", ("Linux", "x86_64"): "x64musl"}.get((platform.system(), platform.machine()))
@@ -31,15 +35,14 @@ def build_host() -> str:
         raise RuntimeError("Fixture host supports arm64mac and x64musl; this host is unverified")
     zig = os.environ.get("ZIG", "zig")
     version = subprocess.check_output([zig, "version"], text=True).strip()
-    if version != "0.16.0":
-        raise RuntimeError(f"Fixture host requires Zig 0.16.0, found {version}")
+    if version != "0.17.0":
+        raise RuntimeError(f"Fixture host requires Zig 0.17.0, found {version}")
     BUILD.mkdir(parents=True, exist_ok=True)
     command = [zig, "build", "--build-file", str(ROOT / "tests/platform/build.zig"),
-               "--prefix", str(BUILD / "build"), "--cache-dir", str(BUILD / "cache"),
-               "--global-cache-dir", str(BUILD / "global-cache"), "-Doptimize=ReleaseFast"]
+               "--prefix", str(BUILD / "build"), "--cache-dir", str(BUILD / "cache"), "-Doptimize=ReleaseFast"]
     if target == "x64musl":
         command.append("-Dtarget=x86_64-linux-musl")
-    subprocess.run(command, cwd=ROOT, check=True, timeout=300)
+    subprocess.run(command, cwd=ROOT, check=True, timeout=300, env=zig_env(BUILD / "global-cache"))
     destination = BUILD / "targets" / target
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(BUILD / "build/lib/libhost.a", destination / "libhost.a")

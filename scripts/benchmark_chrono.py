@@ -120,11 +120,10 @@ def main():
     # default resource host remains DebugAllocator and is never overwritten.
     host_command = [os.environ.get("ZIG", "zig"), "build", "--build-file", str(ROOT / "tests/platform/build.zig"),
                     "--prefix", str(BUILD / "host"), "--cache-dir", str(BUILD / "host-cache"),
-                    "--global-cache-dir", str(BUILD / "global-cache"),
                     "-Doptimize=ReleaseFast", "-Dbenchmark-allocator=true"]
     if target == "x64musl":
         host_command.append("-Dtarget=x86_64-linux-musl")
-    run(host_command)
+    run(host_command, env=fixture_platform.zig_env(BUILD / "global-cache"))
     destination = BASE / "platform/targets" / target
     destination.mkdir(parents=True, exist_ok=True)
     for artifact in (fixture_platform.BUILD / "targets" / target).iterdir():

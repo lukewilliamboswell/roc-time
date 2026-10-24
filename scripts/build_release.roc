@@ -64,6 +64,7 @@ main! = |_args| {
 	# Exercise the archived HTML/PDF and exact API archive together, as Pages will.
 	roc_stable.cmd([
 		"scripts/assemble_site.roc",
+		"--",
 		"--api-root",
 		Path.to_os_str(docs),
 		"--output",
