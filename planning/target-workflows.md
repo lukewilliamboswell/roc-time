@@ -21,7 +21,7 @@ of the latest release. Releases are dispatched from `main`.
 - The specification describes one package. Report to roc-automation how the
   `time`/`zones` pair and the `expected/` directory in the archive fit.
 - The environment provides only the pinned compiler and the programs Roc scripts
-  start. Decide whether Python 3.14.3, Zig 0.16.0 and Rust move into it when the
+  start. Decide whether Python 3.14.3, Zig 0.17.0 and Rust move into it when the
   remaining harness is ported.
 - Repository settings are outside the tree: required check names (`test`,
   `Build and test release candidate`), removal of

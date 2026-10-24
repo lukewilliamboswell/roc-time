@@ -29,7 +29,7 @@ Install the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
 `roc-stable` itself and expects the machine to provide the programs the scripts
 start: `base64`, `chmod`, `curl`, `date`, `gh`, `git`, `pdfinfo`, `pdftotext`,
 `sha256sum`, `uname`, `unzip` and `zip`, plus `tar` and `ln` for unpacking. The
-complete check also needs CPython 3.14.3, Zig 0.16.0 and Rust for the existing
+complete check also needs CPython 3.14.3, Zig 0.17.0 and Rust for the existing
 Python-driven harness; details are under [Tests](#tests). With those installed:
 
 ```sh
@@ -44,7 +44,7 @@ with the automation dependencies, run `blueprint shell`.
 Scripts take the package compiler from `ROC_NIGHTLY`, falling back to `roc` on
 `PATH`. The environment provides `roc-stable` and checks that the programs the
 Roc scripts start are present. It does not provide the CPython 3.14.3, Zig
-0.16.0 and Rust that the remaining Python harness needs; install those as
+0.17.0 and Rust that the remaining Python harness needs; install those as
 described under [Tests](#tests) and select them with `ROC_TIME_GENERATOR_PYTHON`
 and `ZIG` where they are not the defaults. For example,
 `ROC_NIGHTLY=/path/to/roc blueprint run check` selects a particular package
@@ -417,7 +417,7 @@ not a versioned native persistence format.
 
 ## Instrumented fixture platform
 
-Install Zig 0.16.0 (`ZIG` can select its executable) alongside the package
+Install Zig 0.17.0 (`ZIG` can select its executable) alongside the package
 compiler. The default gate builds the host and verifies its controls:
 
 ```sh

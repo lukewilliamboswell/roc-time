@@ -32,7 +32,7 @@ the two executables need not have equal performance.
 
 The scoped `.cargo/config.toml` also directs editor/Cargo builds started in this crate to ignored temporary output.
 
-Requires a current Roc nightly, Zig 0.16.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler must match [rust-version](rust-version); a matching compiler selected through `RUSTC` or PATH is accepted without requiring a named rustup alias. Its full revision is recorded.
+Requires a current Roc nightly, Zig 0.17.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler must match [rust-version](rust-version); a matching compiler selected through `RUSTC` or PATH is accepted without requiring a named rustup alias. Its full revision is recorded.
 
 ## Workloads
 
