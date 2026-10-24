@@ -138,7 +138,7 @@ test_archive! = |roc_nightly, archive, temporary| {
 			# bundle only for applications that depend on it.
 			replace = |zoned, core_target, zones_target|
 				["--replace-dep", core_url, core_target]
-					.concat(if zoned ["--replace-dep", zones_url, zones_target] else [])
+					.concat(if (zoned) ["--replace-dep", zones_url, zones_target] else [])
 					.map(OsStr.from_str)
 
 			Script.section!("ARCHIVE SOURCES")?
@@ -238,7 +238,7 @@ applications! = |directory, expected| {
 			Ok({
 				name,
 				directory: folder,
-				expected: if name == "clock_deadline" Clock else if Path.exists!(golden)? Golden(golden) else Unchecked,
+				expected: if (name == "clock_deadline") Clock else if (Path.exists!(golden)?) Golden(golden) else Unchecked,
 			})
 		},
 	)

@@ -26,7 +26,7 @@ DocLinks := [].{
 					parts = href.split_on("#")
 					path = parts.first() ?? ""
 					fragment = parts.get(1) ?? ""
-					name = if path.is_empty() page.name else path
+					name = if (path.is_empty()) page.name else path
 					if name.starts_with("/") or name.contains("..") or name.contains(":") or parts.len() > 2 or !files.contains(name) {
 						$problems = $problems.append("${page.name}: missing or unsafe target ${href}")
 					} else if !fragment.is_empty() {

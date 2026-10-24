@@ -24,10 +24,13 @@ There is no `roc` header field or `.roc-version`. Check `roc version` when
 reporting a result, and keep `roc-stable` for automation rather than testing the
 package with it.
 
-Install Nix, the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
-0.4.0 CLI and a current nightly `roc`. The complete check also needs CPython
-3.14.3, Zig 0.16.0 and Rust for the existing Python-driven harness; details are
-under [Tests](#tests). With those installed:
+Install the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
+0.8.0 CLI and a current nightly `roc`; Nix is not needed. Blueprint fetches
+`roc-stable` itself and expects the machine to provide the programs the scripts
+start: `base64`, `chmod`, `curl`, `date`, `gh`, `git`, `pdfinfo`, `pdftotext`,
+`sha256sum`, `uname`, `unzip` and `zip`, plus `tar` and `ln` for unpacking. The
+complete check also needs CPython 3.14.3, Zig 0.16.0 and Rust for the existing
+Python-driven harness; details are under [Tests](#tests). With those installed:
 
 ```sh
 roc version
@@ -39,13 +42,14 @@ resource checks, documentation and a release dry run. For an interactive shell
 with the automation dependencies, run `blueprint shell`.
 
 Scripts take the package compiler from `ROC_NIGHTLY`, falling back to `roc` on
-`PATH`. The environment provides `roc-stable` and the programs the Roc scripts
-start. It does not yet provide the CPython 3.14.3, Zig 0.16.0 and Rust that the
-remaining Python harness needs; install those as described under [Tests](#tests)
-and select them with `ROC_TIME_GENERATOR_PYTHON` and `ZIG` where they are not the
-defaults. For example, `ROC_NIGHTLY=/path/to/roc blueprint run check` selects a
-particular package compiler. Commit `Blueprint.roc` and `Blueprint.lock`; only
-`blueprint update` writes the lock. Keep experiments and generated artifacts under ignored
+`PATH`. The environment provides `roc-stable` and checks that the programs the
+Roc scripts start are present. It does not provide the CPython 3.14.3, Zig
+0.16.0 and Rust that the remaining Python harness needs; install those as
+described under [Tests](#tests) and select them with `ROC_TIME_GENERATOR_PYTHON`
+and `ZIG` where they are not the defaults. For example,
+`ROC_NIGHTLY=/path/to/roc blueprint run check` selects a particular package
+compiler. Commit `Blueprint.roc` and `Blueprint.lock`; only `blueprint update`
+writes the lock. Keep experiments and generated artifacts under ignored
 `.roc-time-tmp/`.
 
 ## Make and check a change
@@ -651,9 +655,9 @@ examples, fix them on `main`; when it breaks a published release, that release
 needs a patch release, described below.
 
 To change the tooling compiler, open a pull request that changes the `roc-stable`
-tag in `Blueprint.roc`, run `blueprint update roc` in the same pull request if the
-locked overlay revision predates that nightly, and fix any script the new compiler
-breaks there, so the tag and the scripts move together. Native documentation
+tag in `Blueprint.roc`, run `blueprint update roc-stable` in the same pull request
+to lock the new archive's digests, and fix any script the new compiler breaks
+there, so the tag and the scripts move together. Native documentation
 rendering uses the separately verified released binary described below.
 
 Releases are dispatched from `main` and are immutable. To release:

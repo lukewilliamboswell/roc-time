@@ -48,7 +48,7 @@ main! = |_args| {
 				Path.create_all!(destination)?
 				for file in Files.direct_roc_files!(source)? {
 					text = Path.read_utf8!(file)?
-					rewritten = if Files.name(file) == "main.roc" Release.archive_main(text, core_url, zones_url)? else text
+					rewritten = if (Files.name(file) == "main.roc") Release.archive_main(text, core_url, zones_url)? else text
 					Path.write_utf8!(Path.join(destination, Files.name(file)), rewritten)?
 					$files = $files.append("${stem}/examples/${name}/${Files.name(file)}")
 				}

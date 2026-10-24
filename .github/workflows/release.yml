@@ -43,7 +43,10 @@ jobs:
 
       - uses: ./.github/actions/setup-harness
 
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@be0776b7446800b1d975df5f9cb4961d560c1aa7
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@7aff4132691ad4fc348abe9df146a57512b49bd6
+        with:
+          cache: 'true'
+          cache-workload: release
 
       - name: Validate release request
         id: validate
@@ -118,7 +121,7 @@ jobs:
           path: dist
 
       - name: Publish the tested assets
-        uses: lukewilliamboswell/roc-automation/actions/publish-release@be0776b7446800b1d975df5f9cb4961d560c1aa7
+        uses: lukewilliamboswell/roc-automation/actions/publish-release@7aff4132691ad4fc348abe9df146a57512b49bd6
         with:
           version: ${{ needs.build.outputs.release_version }}
           prerelease: ${{ needs.build.outputs.is_prerelease }}

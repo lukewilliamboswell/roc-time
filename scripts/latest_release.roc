@@ -37,14 +37,14 @@ main! = |_args| {
 			"tag=${summary.tag}",
 			"core_url=${Release.url(repository, summary.tag, bundles.core.artifact_file)}",
 			"zones_url=${Release.url(repository, summary.tag, bundles.zones.artifact_file)}",
-			"examples_url=${if summary.assets.contains(archive) Release.url(repository, summary.tag, archive) else ""}",
+			"examples_url=${if (summary.assets.contains(archive)) Release.url(repository, summary.tag, archive) else ""}",
 			"",
 		],
 		"\n",
 	)
 	match Script.env_str!("GITHUB_OUTPUT") {
 		Ok(output) => {
-			existing = if Path.exists!(Path.utf8(output))? Path.read_utf8!(Path.utf8(output))? else ""
+			existing = if (Path.exists!(Path.utf8(output))?) Path.read_utf8!(Path.utf8(output))? else ""
 			Path.write_utf8!(Path.utf8(output), "${existing}${lines}")?
 		}
 		Err(NotSet) => {}
