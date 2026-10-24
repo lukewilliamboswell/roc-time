@@ -468,6 +468,11 @@ explicitly; the schedule definition checks exercise dictionary lookup for
 checked native definitions. Recheck
 the failing root and its control when upgrading the compiler.
 
+[unit_value_dict_build](tests/compiler_repro/unit_value_dict_build/README.md)
+isolates optimized builds that hang when a dictionary's value is the empty
+record. `EventCollection` tracks seen identities in a `Set` instead; recheck the
+root and its Bool control when upgrading the compiler.
+
 The same command runs [recurrence prefix resource checks](tests/recurrence_resource/main.roc)
 in dev and speed builds. Runtime horizons ending in years 2001 and 2,000,000,000
 must produce the same first occurrence and identical requested-byte traffic.

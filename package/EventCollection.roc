@@ -12,14 +12,12 @@ EventCollection(id) :: [Events(List({ id : id, span : PosixSpan }))].{
 	from_entries : List({ id : id, span : PosixSpan }) -> Try(EventCollection(id), [DuplicateId(id)])
 		where [id.is_eq : id, id -> Bool, id.to_hash : id, Hasher -> Hasher]
 	from_entries = |entries| {
-		var $seen = Dict.empty()
+		var $seen = Set.empty()
 		for entry in entries {
-			match Dict.get($seen, entry.id) {
-				Ok(_) => return Err(DuplicateId(entry.id))
-				Err(KeyNotFound) => {
-					$seen = Dict.insert($seen, entry.id, {})
-				}
+			if Set.contains($seen, entry.id) {
+				return Err(DuplicateId(entry.id))
 			}
+			$seen = Set.insert($seen, entry.id)
 		}
 		Ok(Events(entries))
 	}
