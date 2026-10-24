@@ -1,0 +1,14 @@
+= roc-time 0.3.1
+
+This patch release keeps roc-time building with the current Roc nightly. Its
+API and behavior are the same as 0.3.0.
+
+With `nightly-2026-10-23-18478ff`, an optimized build of an application that
+calls `EventCollection.from_entries` could hang, or crash the compiler in a
+fuzz build. The collection now records the identities it has seen in a set,
+which avoids the compiler defect
+(https://github.com/roc-lang/roc/issues/12559[roc-lang/roc#12559]). Duplicate
+identities are still rejected with the first repeated ID, and events keep their
+input order.
+
+The examples archive is bound to this release's packages.

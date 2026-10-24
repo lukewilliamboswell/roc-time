@@ -727,7 +727,7 @@ release source.
 Build and test a release candidate locally with:
 
 ```sh
-RELEASE_VERSION=999.999.999 RELEASE_NOTES_FILE=docs/releases/0.3.0.adoc OUTPUT_DIR=.roc-time-tmp/dist blueprint run release
+RELEASE_VERSION=999.999.999 RELEASE_NOTES_FILE=docs/releases/0.3.1.adoc OUTPUT_DIR=.roc-time-tmp/dist blueprint run release
 ```
 
 ## Zone-data representation measurements
