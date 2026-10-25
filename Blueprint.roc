@@ -38,8 +38,12 @@ config = [
 	),
 	# Tasks that build or verify the manual also read its PDF.
 	Environment("docs", [Extend("dev"), Expect(["pdfinfo", "pdftotext"])]),
+	# The shared release workflow runs this utility against the `roc` on PATH; a
+	# maintainer runs the same task locally, such as `-- test-examples --update`.
+	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.5.0/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
 	Shell("default", [Use("docs")]),
 	Task("check", [Use("dev"), Run(["roc-stable", "scripts/check_all.roc"])]),
+	Task("release-package", [Use("release"), Run(["release-package"])]),
 	Task("harness", [Use("docs"), Run(["roc-stable", "scripts/check_all.roc", "--", "--harness"])]),
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
 	Task("propose-lock-update", [Use("dev"), Run(["roc-stable", "scripts/propose_lock_update.roc"])]),
