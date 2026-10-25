@@ -1,5 +1,8 @@
 name: CI
 
+# The Python, Zig and Rust harness: oracles, fuzz smoke, resource measurements
+# and documentation checks. The Roc-only gate and the examples run in the
+# release dry run, which Release runs on every pull request.
 on:
   pull_request:
   push:
@@ -17,7 +20,7 @@ concurrency:
 jobs:
   # A new nightly can fail this job with no fault in the change under test.
   # Compare with the default branch before treating a failure as a regression.
-  test:
+  harness:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -33,8 +36,8 @@ jobs:
           cache: 'true'
           cache-workload: ci
 
-      # Scripts run on roc-stable; the packages and examples use the nightly.
-      - run: blueprint run check
+      # Scripts run on roc-stable; the packages and tests use the nightly.
+      - run: blueprint run harness
 
       - name: Preserve fuzz smoke evidence and reproducers
         if: always()

@@ -66,9 +66,12 @@ Keep unit `expect` tests beside their implementation. Run them once with
 Do not add separate `*Tests.roc` unit modules or a per-module test loop.
 Put integration fixtures and harnesses under `tests/` using the same root layout.
 Examples depend on `../../package/main.roc` and, where they use zone data,
-`../../tzdb/package/main.roc`, so they always exercise the working tree. The gate
-discovers every folder under `examples/`; add a `tests/examples/<name>.txt`
-expectation for deterministic output.
+`../../tzdb/package/main.roc`, so they always exercise the working tree. Every
+folder under `examples/` is an application with a case in `tests/spec.json`;
+record a new or changed application's output with
+`release-package test-examples --update`, the utility the release workflow
+runs, built from roc-automation's `scripts/release_package.roc` with the `roc`
+on `PATH`.
 
 ## Scripts
 
@@ -80,13 +83,7 @@ depend on this repository's packages.
 
 | Script | Purpose |
 | --- | --- |
-| `check_all.roc` | The gate: tooling and layout checks, package check and tests, examples, the Python harness and a release dry run |
-| `test_examples.roc` | Check, run and build the examples in place, or an examples archive unchanged, against recorded output |
-| `build_bundle.roc` | Bundle `package/` and `tzdb/package/` and write the `roc-time-bundles.json` role manifest |
-| `build_examples_archive.roc` | Build `roc-time-examples-<version>.zip` bound to a release's bundle URLs |
-| `build_release.roc` | Build and test exactly what a release publishes, with its release notes |
-| `release_notes.roc` | Release notes naming both compilers, the package URLs and their digests |
-| `latest_release.roc` | Describe the latest full release: tag, bundle URLs and examples archive URL |
+| `check_all.roc` | `check`: tooling and layout checks, package check and tests, the check applications; `harness`: the Python-driven stages |
 | `build_docs.roc` | Verify the released renderer and build/check the native HTML and PDF manual |
 | `assemble_site.roc` | Assemble a tested manual archive and restored immutable API versions |
 
@@ -94,17 +91,15 @@ The oracle, fuzz, resource, measurement and documentation tooling is still Pytho
 with no third-party dependencies, driven by `python_harness.py`, which the gate
 calls with the package compiler as `ROC`.
 
-CI uses the shared Blueprint setup, release publication and nightly reporting
-actions from [roc-automation](https://github.com/lukewilliamboswell/roc-automation),
-pinned by full commit SHA. The release candidate includes the generated API-doc
-archive before publication. The publisher downloads and verifies every uploaded
-asset before publishing an immutable release; Pages restores those archives.
-Author release notes in `docs/releases/<version>.adoc` before dispatching a release
-and include them from `docs/releases.adoc`. The native renderer prepares the same
-source as GitHub Markdown; no second AsciiDoc interpretation is maintained here.
-The gate's dry run selects the next release's notes through `RELEASE_NOTES_FILE`;
-update that path in `scripts/check_all.roc` and the workflow's dry-run default when
-preparing the next version.
+`release.yml` calls the shared release workflow of
+[roc-automation](https://github.com/lukewilliamboswell/roc-automation) at a full
+commit SHA. It runs `blueprint run check`, then builds, tests and publishes the
+release with roc-automation's `release-package` utility; this repository keeps no
+bundling, archiving or publishing script. `nightly.yml` calls the shared
+compatibility workflow the same way. Author release notes in
+`docs/releases/<version>.adoc` before dispatching a release and include them from
+`docs/releases.adoc`; `{package-url}` and `{tzdb-url}` stand for the two bundle URLs.
+A pull request's dry run renders the newest notes file.
 
 | Script | Purpose |
 | --- | --- |
@@ -187,8 +182,8 @@ fixtures. Pick the focused commands relevant to your change; keep the full gate
 for integration.
 
 Run the gate with `blueprint run check`; set `ROC_NIGHTLY` to use a package
-compiler other than `roc` on `PATH`. `scripts/test_examples.roc` alone runs every
-example in place against the working tree. Generate local development API docs
+compiler other than `roc` on `PATH`. `release-package test-examples` alone runs
+every example in place against the working tree. Generate local development API docs
 with `python3 scripts/docs.py 0.0.0-dev`. The gate also runs
 `tests/static_dispatch/main.roc` in the interpreter and natively to check public
 operators, dictionary keys and iterators.
@@ -320,9 +315,8 @@ extend this evidence to zoned DTSTART with UTC EXDATE. They distinguish original
 source exclusions from selected-boundary exclusions across actual gaps/folds,
 colliding source labels and explicit RDATE/PERIOD inclusions. Original and saved
 definitions run with different finite budgets against fixed independent
-positions and identities. `scripts/test_examples.roc` runs the composed checks
-interpreted and natively; the gate also checks the independently calculated UTC
-coordinates and distributable bundles. The meeting exchange
+positions and identities. The gate runs the composed checks interpreted and
+natively, and the independently calculated UTC coordinates. The meeting exchange
 application demonstrates a UTC cancellation for a local Paris meeting.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
@@ -669,65 +663,63 @@ Releases are dispatched from `main` and are immutable. To release:
 
 1. Dispatch `Release` on `main` with a new package SemVer such as `0.2.0` or
    `0.2.0-rc1`; a prerelease suffix marks the release as a prerelease. Every pull
-   request runs the same workflow as a dry run under version `999.999.999`.
-2. The workflow runs the gate, then `scripts/build_release.roc`, which bundles both
-   packages with the latest nightly, builds `roc-time-examples-<version>.zip` from
-   the same commit, and runs that archive unchanged against those exact bundles
-   served on loopback through a fresh package cache. It also rejects missing,
-   corrupt and swapped bundles. It builds the API archive and native HTML/PDF
-   manual before publication and verifies the assembled archives together.
-3. The `publish` job, behind the protected `release` environment, uploads the
-   tested files to a draft, verifies the asset inventory and publishes it. Then
-   `Release docs` publishes the versioned API docs and deploys Pages.
+   request runs the same workflow as a dry run under version `0.0.1-dryrun`.
+2. The shared workflow runs the gate, checks the version with `roc bump` against
+   the latest release, runs the examples against the working tree, then bundles
+   both packages with the latest nightly, builds `roc-time-examples-<version>.zip`
+   and the API documentation archive from the same commit, and runs that archive
+   unchanged against those exact bundles served on loopback through a fresh
+   package cache, in a job that has no copy of this repository.
+3. The publish job, behind the protected `release` environment, checks out
+   nothing from this repository, attests the tested files, uploads them to a
+   draft, verifies every asset against the tested file and publishes. Then
+   `Release docs` restores every release's API docs and deploys Pages.
 4. Verify the release notes, both package URLs and the examples archive against
    the published URLs.
 
-A release publishes seven assets. `roc-time-<hash>.tar.zst` and
+A release publishes five assets. `roc-time-<hash>.tar.zst` and
 `roc-time-tzdb-<hash>.tar.zst` are the two packages; Roc uses the filename prefix
 to distinguish packages sharing a versioned release path, and the archive bytes
-and content hashes are those produced by `roc bundle`. `roc-time-bundles.json`
-records the two roles and archive digests; archive count never identifies a role.
+and content hashes are those produced by `roc bundle`.
 `roc-time-examples-<version>.zip` holds every application under `examples/` with
 only its `time` and `zones` dependency lines changed to that release's URLs, a
-README, and `expected/` output recorded at release time. Committed examples are
-never rewritten after a release, so there is no follow-up pull request.
-`roc-time-docs-<version>.tar.gz` preserves compiler-generated API pages.
-`roc-time-manual-<version>.zip` preserves the native HTML manual, its PDF,
-fonts and notices; `roc-time-<version>.pdf` is the same PDF as a direct download.
+README, and `spec.json` with the output recorded at release time. Committed
+examples are never rewritten after a release, so there is no follow-up pull
+request. `roc-time-docs-<version>.zip` preserves the compiler-generated API pages
+under `<version>/`; `LICENSE` is attached as published.
 
-The release notes state `roc version` and `roc-stable version`. That record
-replaces a header pin as the statement of what the release was built and tested
-with.
+The release notes state the `roc version` the release was built and tested with
+and the shared workflow revision that built it. That record replaces a header
+pin.
 
 Never move a tag, replace a published asset or publish rebuilt archives under an
 existing version. If publication fails after the draft is created, delete the
 draft and dispatch again; if it fails after publication, the fix is a new version.
-If docs publication fails after the release succeeds, rerun the separate
-`Release docs` workflow with that existing release version. API documentation is
+If docs deployment fails after the release succeeds, dispatch `Release docs`
+with that existing release version. API documentation is
 stored as immutable release assets and restored during Pages assembly; generated
 pages are not checked into Git and authored guides live in `docs/*.adoc`. Assembly
 refuses missing earlier release documentation. Configure the `github-pages`
 environment to allow deployment from `main`.
 
-The nightly compatibility workflow runs the latest full release's examples
-archive, unchanged, on the latest nightly and keeps one tracking issue open while
-it fails. A failure there means that release needs a patch release: fix `main`,
-then release the next patch version. The published archive is never edited. A
-release without an archive passes with a notice. Dispatch the workflow with
-`nightly_tag` or `release_tag` to test another combination, and reproduce a run
-locally with:
-
-```sh
-EXAMPLES_ARCHIVE=roc-time-examples-0.2.0.zip blueprint run examples
-```
+The nightly compatibility workflow is roc-automation's shared workflow: it runs
+the latest full release's examples archive, unchanged, on the latest nightly and
+keeps one tracking issue open while it fails. A failure there means that release
+needs a patch release: fix `main`, then release the next patch version. The
+published archive is never edited. Releases up to 0.3.1 carry `expected/` output
+rather than `spec.json`, so the shared runner tests releases from the next one
+on. Dispatch the workflow with `nightly-tag` or `release-tag` to test another
+combination.
 
 `roc-0.1.x` is a frozen branch from the earlier compiler-pin model and is not a
 release source.
 
-Build and test a release candidate locally with:
+Build and test a release candidate locally with roc-automation's utility and the
+package compiler on `PATH`:
 
 ```sh
-RELEASE_VERSION=999.999.999 RELEASE_NOTES_FILE=docs/releases/0.3.1.adoc OUTPUT_DIR=.roc-time-tmp/dist blueprint run release
+RP_REPOSITORY=lukewilliamboswell/roc-time release-package build 0.0.1-dryrun
+RP_REPOSITORY=lukewilliamboswell/roc-time release-package test-archive
 ```
 
 ## Zone-data representation measurements
@@ -818,13 +810,6 @@ Repeat `--package` to compare a historical pack checked out under `.roc-time-tmp
 Reports retain commands, hashes, compiler/target, build samples and observable
 lookup results. Source encoding, compile-time evaluation and linked data retention
 are separate costs; a static name alone does not prove unused-zone elimination.
-
-To test existing artifacts, set `EXAMPLES_ARCHIVE` to an examples archive and
-`BUNDLE_DIR` to a directory produced by `scripts/build_bundle.roc`, then run
-`scripts/test_examples.roc`. The verifier isolates the package cache, requires
-successful acquisition of both archives and runs native examples
-from an empty working directory, then verifies the acquisition and role-error
-diagnostics for missing, corrupt and swapped bundles.
 
 Run `ROC=/path/to/roc python3 scripts/measure_gregorian.py` for the
 Gregorian conversion microbenchmark (LLVM speed, one million dates, three

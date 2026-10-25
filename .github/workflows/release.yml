@@ -1,149 +1,34 @@
 name: Release
 
+# A pull request builds and tests the release under a version that is never
+# published: the Roc-only gate, the examples against the working tree, then the
+# exact bundles, examples archive and API docs archive, and the archived
+# examples against those bundles. Dispatch from main with a version to publish
+# the same files. The shared workflow owns the jobs; this repository owns its
+# packages, examples, notes and Blueprint tasks.
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
-      release_version:
-        description: "Release version, e.g. 0.2.0 or 0.2.0-rc1"
-        required: true
+      version:
+        description: "Version to publish, such as 0.4.0, or 0.4.0-rc1 for a release candidate; empty runs the dry run"
         type: string
-  # A pull request runs everything except publication, as a dry run.
-  pull_request:
+        default: ""
+      nightly-tag:
+        description: "Exact Roc nightly for a diagnostic run; empty resolves the latest"
+        type: string
+        default: ""
 
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && format('release-{0}', github.repository) || format('release-dry-run-{0}-{1}', github.repository, github.ref) }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+permissions: {}
 
 jobs:
-  build:
-    name: Build and test release candidate
-    runs-on: ubuntu-latest
-    outputs:
-      release_version: ${{ steps.validate.outputs.release_version }}
-      docs_version: ${{ steps.validate.outputs.docs_version }}
-      is_prerelease: ${{ steps.validate.outputs.is_prerelease }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Require the default branch for publication
-        if: github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
-        run: |
-          echo "::error::Releases are dispatched on the default branch"
-          exit 1
-
-      - uses: ./.github/actions/setup-roc-nightly
-
-      - uses: ./.github/actions/setup-harness
-
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@7aff4132691ad4fc348abe9df146a57512b49bd6
-        with:
-          cache: 'true'
-          cache-workload: release
-
-      - name: Validate release request
-        id: validate
-        uses: roc-lang/release-package/actions/validate-release@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
-        with:
-          release_version: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '' }}
-          dry_run: ${{ github.event_name != 'workflow_dispatch' }}
-          github_token: ${{ github.token }}
-
-      - name: Run the repository gate
-        run: blueprint run check
-
-      # The bundles and examples archive built here are the ones published:
-      # the archive is run unchanged against these exact bundles on loopback.
-      - name: Build and test the release candidate
-        env:
-          RELEASE_VERSION: ${{ steps.validate.outputs.release_version || '999.999.999' }}
-          REPOSITORY: ${{ github.repository }}
-          OUTPUT_DIR: dist
-          RELEASE_NOTES_FILE: docs/releases/${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '0.3.1' }}.adoc
-        run: blueprint run release
-
-      - name: Resolve the previous release
-        if: github.event_name == 'workflow_dispatch'
-        id: previous
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: blueprint run latest-release
-
-      - name: Check version bump
-        uses: roc-lang/release-package/actions/run-bump-check@3a25de642bce84c70b0f4ab6b30ee0f730acb5cf
-        with:
-          release_version: ${{ steps.validate.outputs.release_version }}
-          dry_run: ${{ github.event_name != 'workflow_dispatch' }}
-          # The previous release may not compile with the current nightly,
-          # which prevents roc bump from comparing the two public APIs.
-          bump_check: warn
-          bump_entrypoint: package/main.roc
-          previous_url: ${{ steps.previous.outputs.core_url }}
-
-      - name: Upload the release candidate
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: release-candidate
-          path: |
-            dist/core/*.tar.zst
-            dist/zones/*.tar.zst
-            dist/roc-time-bundles.json
-            dist/roc-time-examples-*.zip
-            dist/roc-time-docs-*.tar.gz
-            dist/roc-time-manual-*.zip
-            dist/roc-time-*.pdf
-            dist/release-notes.md
-          if-no-files-found: error
-          retention-days: 7
-
-  publish:
-    name: Publish GitHub release
-    needs: build
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: release
+  Release:
     permissions:
       contents: write
-
-    steps:
-      - name: Download the release candidate
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: release-candidate
-          path: dist
-
-      - name: Publish the tested assets
-        uses: lukewilliamboswell/roc-automation/actions/publish-release@7aff4132691ad4fc348abe9df146a57512b49bd6
-        with:
-          version: ${{ needs.build.outputs.release_version }}
-          prerelease: ${{ needs.build.outputs.is_prerelease }}
-          notes-file: dist/release-notes.md
-          assets: |
-            dist/core/*.tar.zst
-            dist/zones/*.tar.zst
-            dist/roc-time-bundles.json
-            dist/roc-time-examples-*.zip
-            dist/roc-time-docs-*.tar.gz
-            dist/roc-time-manual-*.zip
-            dist/roc-time-*.pdf
-
-  publish-docs:
-    needs:
-      - build
-      - publish
-    if: github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-      pages: write
       id-token: write
-    uses: ./.github/workflows/release-docs.yml
+      attestations: write
+    uses: lukewilliamboswell/roc-automation/.github/workflows/release-package.yml@50c5f56c62d575dfc1e30c468c91f328858f97fd
     with:
-      release_version: ${{ needs.build.outputs.release_version }}
+      version: ${{ inputs.version || '' }}
+      nightly-tag: ${{ inputs.nightly-tag || '' }}
+      check-task: check

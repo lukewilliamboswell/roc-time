@@ -1,0 +1,399 @@
+{
+  "apps": [
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Review imported timestamp annotations\n2022-07-08T00:14:07Z[Europe/Paris] -> Paris clock 02:14:07\n2022-07-08T00:14:07+00:00[Europe/Paris] -> offset assertion conflicts with supplied Paris rules\n2022-07-08T00:14:07Z[Europe/Paris][u-ca=hebrew] -> calendar preference preserved; presentation unsupported\n"
+        }
+      ],
+      "path": "examples/annotation_review/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Appointment: 7 Sep 2026, 09:30\nDate: 7 Sep 2026\nScheduled clock: 09:30:00\nRecorded local label: 7 Sep 2026, 09:30:00.125\n"
+        }
+      ],
+      "path": "examples/appointment_display/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "painting-17: 1964/2008\nletters-42: 2004-02-01/2005-02\ncollection-9: 1985/\nongoing-6: 1985/..\ndraft-2: 2004-06-~01/2004-06-~20\nExact timeline search needs an endpoint model; the catalog description is saved.\n"
+        }
+      ],
+      "path": "examples/archive_intervals/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Archive search (UTC)\n09:30 (minute): 2 recordings\n09:30:00 (second): 1 recordings\nAround 09:30: no exact count without a search range\nAround 09:30 (declared minute alternatives): 3 possible, 0 definite recordings\nImported archive dates (UTC)\n2025: 3 recordings\n2025-06: 2 recordings\n2025-06-12: 1 recordings\n2025-06~: preserved; needs an explicit model\n"
+        }
+      ],
+      "path": "examples/archive_search/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Restored available booking windows (UTC)\n2026-06-15T09:00:00.000000Z/2026-06-15T10:00:00.000000Z\n2026-06-15T12:00:00.000000Z/2026-06-15T15:00:00.000000Z\n2026-06-15T16:00:00.000000Z/2026-06-15T17:00:00.000000Z\n"
+        }
+      ],
+      "path": "examples/booking_exchange/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Source record: 1582-10-5 (julian)\nCatalogue date: 1582-10-15 (gregorian)\n"
+        }
+      ],
+      "path": "examples/calendar_conversion/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Restored archive description: 1984?\nRestored recording declaration: 2026-06-15T10:30:00.120+00:00\n"
+        }
+      ],
+      "path": "examples/catalogue_storage/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [
+            "2026-10-12T01:02:03Z"
+          ],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "{\"checked_at\":\"2026-10-12T01:02:03.000000Z\",\"expired\":false,\"expires_at\":\"2030-01-01T00:00:00.000000Z\"}\n"
+        }
+      ],
+      "path": "examples/clock_deadline/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Room availability on 2026-06-15\nOpening: 09:00–17:00 UTC; bookings: 12:00–13:00 +02:00 and 10:30–12:00 UTC\nBookings retained: 2\nBooking conflict: Design workshop, Project review, 2026-06-15 10:30 to 2026-06-15 11:00 (UTC)\nFree: 2026-06-15 09:00 to 2026-06-15 10:00 (UTC)\nFree: 2026-06-15 12:00 to 2026-06-15 17:00 (UTC)\nTotal available: 21600000000 microseconds of POSIX coordinate width\n"
+        }
+      ],
+      "path": "examples/coverage/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Remaining deadlines for the four-month dispatch contract\nFinal Monday, final pickup slot; March and April 2025\nJanuary waived; the original contract still ends in April.\n2025-03-31 17:00 Melbourne / 2025-03-31 06:00 UTC\n2025-04-28 17:00 Melbourne / 2025-04-28 07:00 UTC\n"
+        }
+      ],
+      "path": "examples/dispatch_deadlines/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Equipment loans: monthly starts and one extra booking\nMonthly loans clamp to month end; the extra booking lasts one week. Melbourne local times.\n2025-01-31 09:00 -> 2025-02-28 09:00 (672 POSIX hours)\n2025-02-14 09:00 -> 2025-02-21 09:00 (168 POSIX hours)\n2025-03-31 09:00 -> 2025-04-30 09:00 (721 POSIX hours)\n"
+        }
+      ],
+      "path": "examples/equipment_loans/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Before interpretation (Complete)\nIxdtf: instant declaration at year 2022, month 7, day 8, 0:14:07; UTC instant known; no local-offset assertion; zone annotation True; additional annotations 1.\nZone annotation: \"Europe/Paris\"; critical False.\nInterpretation requires explicit zone context.\nAnnotation: \"u-ca\" = \"hebrew\"; critical False.\nStored interpretation (Complete)\nResolved instant: 1657239247000000 POSIX microseconds since 1970-01-01; stored Gregorian local label year 2022, month 7, day 8, 2:14:07.000000; offset 7200 seconds.\nPresentation: calendar \"hebrew\" is unsupported; the resolved instant remains known.\nContext: zone \"Europe/Paris\", version \"rfc9557-example\", validity [1657238400000000, 1657242000000000) POSIX microseconds; supplied rules.\nIxdtf: instant declaration at year 2022, month 7, day 8, 0:14:07; UTC instant known; no local-offset assertion; zone annotation True; additional annotations 1.\nZone annotation: \"Europe/Paris\"; critical False.\nAnnotation: \"u-ca\" = \"hebrew\"; critical False.\n"
+        }
+      ],
+      "path": "examples/explain_annotations/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "P1D (Complete)\nRFC duration: 1 calendar day followed by 0 coordinate seconds; calendar days are not converted to 86400-second quantities. Applying it requires a start and explicit interpretation context.\nPT24H (Complete)\nRFC duration: 0 calendar days followed by 86400 coordinate seconds; calendar days are not converted to 86400-second quantities. Applying it requires a start and explicit interpretation context.\n20261003T120000/P1D (Complete)\nRFC period declaration: start year 2026, month 10, day 3, 12:00:00; local label requiring explicit interpretation context; duration ending retained. This explanation has not computed or resolved an end.\nStart date-time: year 2026, month 10, day 3, 12:00:00; local label requiring explicit interpretation context.\nPeriod ending duration: 1 calendar day followed by 0 coordinate seconds; calendar days are not converted to 86400-second quantities. Its start is supplied by the enclosing period; no end has been computed.\nInterpretation requires explicit zone context.\n20261003T120000Z/PT24H (Complete)\nRFC period declaration: start year 2026, month 10, day 3, 12:00:00; UTC label with explicit Z; duration ending retained. This explanation has not computed or resolved an end.\nStart date-time: year 2026, month 10, day 3, 12:00:00; UTC label with explicit Z.\nPeriod ending duration: 0 calendar days followed by 86400 coordinate seconds; calendar days are not converted to 86400-second quantities. Its start is supplied by the enclosing period; no end has been computed.\n2026-10-03T12:00:00+10:00/2026-10-04T12:00:00+11:00 (Complete)\nExact interval: stored half-open POSIX extent [1790992800000000, 1791075600000000) microseconds since 1970-01-01; start included, end excluded.\nStart endpoint: year 2026, month 10, day 3, 12:00:00; 0 fractional digits; asserted local offset 36000 seconds.\nEnd endpoint: year 2026, month 10, day 4, 12:00:00; 0 fractional digits; asserted local offset 39600 seconds.\n"
+        }
+      ],
+      "path": "examples/explain_event_terms/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "One counted date, excluded; an additional date remains (rendering Complete)\nDateRecurrence declaration: anchor Gregorian year 2025, month 1, day 31; Monthly periods; interval 1; week starts Monday; selector entries 0, explicit inclusions 1, exclusions 1. Occurrences have not been enumerated. Invalid calendar dates are skipped; exclusions do not replenish COUNT; explicit inclusions are outside rule termination.\nRule termination: COUNT 1 before exclusions and query restriction; not a promised output count. Explicit inclusions remain outside this limit.\nInclusion: Gregorian year 2025, month 7, day 4; matched by source position, not resolved coverage.\nExclusion: Gregorian year 2025, month 1, day 31; matched by source position, not resolved coverage.\nWeekly meeting with no termination; zone rules still required (rendering Complete)\nRFC timed recurrence declaration: Zoned mode; 0 explicit PERIOD entries. The application must supply rules for the property's named zone. The following native rule uses effective selectors, including clock defaults; source spelling is not reconstructed.\nInterpretation: explicit zone rules are required; repeated labels select the first occurrence; nonexistent labels use the offset before the gap. No zone interpretation has been performed.\nDefault recurrence duration: 0 calendar days followed by 3600 coordinate seconds; calendar days are not converted to 86400-second quantities. Each occurrence supplies its start; explicit PERIOD entries can override this default. No occurrence end has been computed.\nTimedRecurrence declaration: anchor Gregorian year 2026, month 10, day 1, 9:00:00.000000; Weekly periods; interval 1; week starts Monday; selector entries 5, explicit inclusions 0, exclusions 0. Occurrences have not been enumerated. Invalid calendar dates are skipped; exclusions do not replenish COUNT; explicit inclusions are outside rule termination.\nRule termination: no declared end; this does not prove infinitely many valid occurrences. Explicit inclusions remain outside this limit.\nSelector: weekday Thursday.\nSelector: effective hour 9.\nSelector: effective minute 0.\nSelector: effective second 0.\nSelector: anchored microsecond 0.\n"
+        }
+      ],
+      "path": "examples/explain_recurrence/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Appointment: choose the later occurrence (rendering Complete)\nResolved civil boundary: Gregorian year 1970, month 1, day 1, 0:30:00.000000; policy last occurrence; stored POSIX position 1800000000 microseconds since 1970-01-01; local offset 0 seconds.\nContext: zone \"Synthetic/Fallback\", version \"example-v1\", validity [-86400000000, 86400000000) POSIX microseconds; supplied rules.\nSelection: first evaluation step (rendering Complete)\nSelection evaluation incomplete: work limit reached; visited 1 segment; buffered 1 member.\nLocal selection request: from Gregorian year 1970, month 1, day 1, 0:30:00.000000 to Gregorian year 1970, month 1, day 1, 0:45:00.000000 (end excluded).\nContext: zone \"Synthetic/Fallback\", version \"example-v1\", validity [-86400000000, 86400000000) POSIX microseconds; supplied rules.\nSelection: resumed evaluation (rendering Complete)\nSelection evaluation complete; visited 1 segment; buffered 2 members.\nComplete civil selection: from Gregorian year 1970, month 1, day 1, 0:30:00.000000 to Gregorian year 1970, month 1, day 1, 0:45:00.000000 (end excluded); stored coverage has 2 separate spans.\nContext: zone \"Synthetic/Fallback\", version \"example-v1\", validity [-86400000000, 86400000000) POSIX microseconds; supplied rules.\nCoverage member 0: [-1800000000, -900000000) POSIX microseconds since 1970-01-01; start included, end excluded.\nCoverage member 1: [1800000000, 2700000000) POSIX microseconds since 1970-01-01; start included, end excluded.\n"
+        }
+      ],
+      "path": "examples/explain_selection/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Equipment inspection dates for 2026\nLast Tuesday every three months, starting in February.\n2026-02-24\n2026-05-26\n2026-08-25\n2026-11-24\n"
+        }
+      ],
+      "path": "examples/inspections/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Recording interpretation contexts\nRule labels reused: Synthetic/Archive / example-v1\nOriginal: offset 3600 seconds; provenance synthetic-original\nRetained snapshot: offset 3600 seconds; provenance synthetic-original\nExplicit re-resolution: offset 7200 seconds; provenance synthetic-updated\nPreferred calendar hebrew is retained; presentation is unsupported"
+        }
+      ],
+      "path": "examples/interpretation_context/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Payment terms: one calendar month, clamped to month end\nIssued: 2025-01-31\nPayment due: 2025-02-28\n"
+        }
+      ],
+      "path": "examples/invoice/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Invoice report (USD; supplied accounting dates)\nINV-100: 31 Dec 2020 (Thursday, day 366) | 2020-W53 | USD 125.00\nINV-101: 1 Jan 2021 (Friday, day 1) | 2020-W53 | USD 75.00\nINV-102: 1 Jan 2021 (Friday, day 1) | 2020-W53 | USD 25.00\nINV-103: 4 Jan 2021 (Monday, day 4) | 2021-W01 | USD 90.00\nTotals by ISO week (week year, not calendar year)\n2020-W53: USD 225.00\n2021-W01: USD 90.00\n"
+        }
+      ],
+      "path": "examples/invoice_report/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Service visits for April and May 2025\nThe March visit was moved to April 15; the original series still ends in May.\nFull-day visits in Australia/Melbourne\n2025-04-15: 24 hours of local-day coverage\n2025-05-31: 24 hours of local-day coverage\n"
+        }
+      ],
+      "path": "examples/maintenance/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Weekly Paris meeting exchange (extracted iCalendar property values)\nImported UTC cancellation for 5 April; added a two-hour meeting on 30 March\nCanonical DTSTART value: 20260322T090000\nCanonical RRULE value: FREQ=WEEKLY;INTERVAL=1;COUNT=4;BYHOUR=9;BYMINUTE=0;BYSECOND=0;WKST=MO\nCanonical DURATION value: PT3600S\nCanonical EXDATE value: 20260405T070000Z\nCanonical RDATE PERIOD value: 20260330T090000/PT7200S\nReimported meetings in [2026-03-20, 2026-04-15), using Europe/Paris:\n2026-03-22T09:00:00 Paris: 2026-03-22T08:00:00Z -> 2026-03-22T09:00:00Z\n2026-03-29T09:00:00 Paris: 2026-03-29T07:00:00Z -> 2026-03-29T08:00:00Z\n2026-03-30T09:00:00 Paris: 2026-03-30T07:00:00Z -> 2026-03-30T09:00:00Z\n2026-04-12T09:00:00 Paris: 2026-04-12T07:00:00Z -> 2026-04-12T08:00:00Z\nComplete: local 09:00 survives the clock change; COUNT is not replenished after exclusion.\n"
+        }
+      ],
+      "path": "examples/meeting_exchange/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Possible outage intervals\n12:02 UTC: paired possible, independent possible\n12:07 UTC: paired impossible, independent possible\n12:15 UTC: paired impossible, independent impossible\n"
+        }
+      ],
+      "path": "examples/outage_evidence/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Synthetic fallback: interpret a repeated local time\nLocal range: 19700101T003000/19700101T004500\nFirst occurrence: 1969-12-31T23:30:00Z\nLast occurrence: 1970-01-01T00:30:00Z\nSelection contains 2 separate windows:\n1969-12-31T23:30:00Z/1969-12-31T23:45:00Z\n1970-01-01T00:30:00Z/1970-01-01T00:45:00Z"
+        }
+      ],
+      "path": "examples/repeated_local_time/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Equipment reservations (UTC)\nJanuary 1: 780 POSIX minutes\nJanuary 2: 60 POSIX minutes\nJanuary 3: 330 POSIX minutes\n"
+        }
+      ],
+      "path": "examples/reservations/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Recorder handoff at 0.000002 POSIX seconds\nContinuous acquisition: the windows touch without duplicate coverage.\n"
+        }
+      ],
+      "path": "examples/sample_windows/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Date-only schedule exchange (extracted RFC property values)\nImported: monthly on the 31st, COUNT=3\nEdited: exclude 31 March; add 4 July\nCanonical DTSTART value: 20250131\nCanonical RRULE value: FREQ=MONTHLY;INTERVAL=1;COUNT=3;WKST=MO\nCanonical RDATE value: 20250704\nCanonical EXDATE value: 20250331\nReimported dates in [2025-01-01, 2025-08-01):\n2025-01-31\n2025-05-31\n2025-07-04\nComplete: missing month-days are skipped; exclusions do not replenish COUNT.\n"
+        }
+      ],
+      "path": "examples/schedule_exchange/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Overnight staffing in Australia/Melbourne\nLocal shift: 22:00 to 06:00 across the spring clock change\nBudget 7 hours per team member.\n"
+        }
+      ],
+      "path": "examples/staffing/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Upcoming Paris meetings; one result per page\n2026-03-22T09:00:00 Paris\nNext page\n2026-03-29T09:00:00 Paris\nNext page\n2026-04-12T09:00:00 Paris\nNext page\nComplete; cancelled starts do not replenish COUNT.\n"
+        }
+      ],
+      "path": "examples/upcoming_meetings/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Research voyage: briefing on 2026-07-01 at 12:00 ship time\nSaved booking (itinerary-1): 2026-07-01 11:00 UTC\nRevised itinerary (itinerary-2): 2026-07-01 12:00 UTC\nThe saved booking remains unchanged; adopting the revised time is an application decision.\n"
+        }
+      ],
+      "path": "examples/voyage/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Paris appointments, displayed in New York\n2026-03-28T09:30: 28 Mar 2026, 04:30:00 -> 29 Mar 2026, 03:30:00; 23 POSIX coordinate hours\n2026-10-24T09:30: 24 Oct 2026, 03:30:00 -> 25 Oct 2026, 04:30:00; 25 POSIX coordinate hours\nRepeated Paris label: 25 Oct 2026, 02:30\nChoice: 2026-10-25T02:30:00+02:00; 24 Oct 2026, 20:30:00 in New York\nChoice: 2026-10-25T02:30:00+01:00; 24 Oct 2026, 21:30:00 in New York\nExplicitly choosing Last: 24 Oct 2026, 21:30:00 in New York\nSpring label needs attention: Gap\nZone lookup needs attention: UnknownZone(\"Example/Unknown\")\nBeyond supplied rules: OutsideValidity\n"
+        }
+      ],
+      "path": "examples/zoned_appointment/main.roc"
+    }
+  ],
+  "dependencies": [],
+  "release": "working-tree",
+  "schema_version": 1
+}

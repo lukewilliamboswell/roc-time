@@ -5,17 +5,24 @@ app [main!] {
 
 import cli.Cmd
 import cli.Env
+import cli.OsStr
 import cli.Path
 import cli.Stderr
 import src/Files
 import src/Script
 import src/StaticChecks
+import src/Text
 
-main! = |_args| {
+main! = |args| {
 	# Two compilers, two jobs. roc-stable is pinned by Blueprint.lock and runs
 	# this repository's scripts, so tooling keeps working when a nightly breaks
-	# something. The floating package compiler checks the packages and examples,
-	# because that is the compiler users install today.
+	# something. The floating package compiler checks the packages and the check
+	# applications, because that is the compiler users install today.
+	#
+	# `blueprint run check` is the Roc-only gate the shared release workflow runs
+	# before it builds the examples and the release; `blueprint run harness` is
+	# the Python-driven remainder, which needs the toolchains that
+	# .github/actions/setup-harness installs.
 	roc_stable = Script.roc_stable!()?
 	roc_nightly = Script.roc_nightly!()?
 
@@ -23,6 +30,14 @@ main! = |_args| {
 	roc_stable.run!(["version"])?
 	roc_nightly.run!(["version"])?
 
+	match args.map(OsStr.display) {
+		[] => check!(roc_stable, roc_nightly)
+		["--harness"] => harness!(roc_stable, roc_nightly)
+		other => Script.fail!("usage: scripts/check_all.roc [-- --harness]; received ${Str.inspect(other)}")
+	}
+}
+
+check! = |roc_stable, roc_nightly| {
 	check_tooling!(roc_stable)?
 	check_layout!()?
 
@@ -31,9 +46,12 @@ main! = |_args| {
 	roc_nightly.run!(["test", "package/main.roc"])?
 	roc_nightly.run!(["check", "tzdb/package/main.roc"])?
 
-	roc_stable.run!(["scripts/test_examples.roc"])?
+	Env.with_temp_dir!(|temporary| check_applications!(roc_nightly, temporary))?
+	Script.info!("\nPASS", "all checks")
+}
 
-	# The Python harness still owns the compile-failure, static-dispatch, codec,
+harness! = |roc_stable, roc_nightly| {
+	# The Python harness owns the compile-failure, static-dispatch, codec,
 	# resource, oracle, fuzz, measurement and documentation checks. It selects
 	# the package compiler through ROC.
 	Script.section!("PYTHON HARNESS")?
@@ -41,25 +59,13 @@ main! = |_args| {
 	Script.info!("+", "${python} scripts/python_harness.py")?
 	Cmd.new_str(python).args(["scripts/python_harness.py"]).env("ROC", roc_nightly.program()).exec_cmd!()?
 	roc_stable.run!(["scripts/test_local_recurrence.roc"])?
-
-	# A release dry run: the exact bundles and examples archive a release would
-	# publish, under a version no release uses.
-	Env.with_temp_dir!(
-		|temporary|
-			roc_stable
-				.cmd(["scripts/build_release.roc"])
-				.env("RELEASE_VERSION", "999.999.999")
-				.env("RELEASE_NOTES_FILE", "docs/releases/0.3.1.adoc")
-				.env("OUTPUT_DIR", Path.to_os_str(Path.join(temporary, "dist")))
-				.exec_cmd!(),
-	)?
-	Script.info!("\nPASS", "all checks")
+	Script.info!("\nPASS", "harness")
 }
 
 check_tooling! = |roc_stable| {
 	Script.section!("TOOLING")?
 	roc_stable.run!(["fmt", "--check", "scripts", "Blueprint.roc"])?
-	for file in ["Text", "StaticChecks", "Release"] {
+	for file in ["Text", "StaticChecks"] {
 		roc_stable.run!(["test", Path.to_os_str(Path.join("scripts/src", "${file}.roc"))])?
 	}
 	for script in Files.direct_roc_files!("scripts")? {
@@ -89,3 +95,50 @@ check_layout! = || {
 		Err(LayoutProblems(problems.len()))
 	}
 }
+
+# Four check applications drive pure modules through the public package, with
+# their output recorded under tests/examples/<name>.txt. Two of them exercise
+# the exact pure module of a public example: Roc imports cannot leave an
+# application's directory, so a copy is staged with that module beside it and
+# the package named by absolute path. Each runs interpreted and as a native
+# build, from an empty working directory.
+check_applications! = |roc_nightly, temporary| {
+	Script.section!("CHECK APPLICATIONS")?
+	core = Path.display(Path.absolute!("package/main.roc")?)
+	staged = Path.join(temporary, "staged")
+	Path.create_all!(staged)?
+	var $checks = []
+	for name in ["schedule_definition_checks", "utc_cancellations_checks"] {
+		$checks = $checks.append({ name, directory: Path.join("tests", name) })
+	}
+	for (name, file) in [("clock_deadline_checks", "examples/clock_deadline/Deadline.roc"), ("invoice_report_checks", "examples/invoice_report/InvoiceReport.roc")] {
+		directory = Path.join(staged, name)
+		Path.copy_dir!(Path.join("tests", name), directory)?
+		Path.copy!(file, Path.join(directory, Files.name(file)))?
+		main = Path.join(directory, "main.roc")
+		Path.write_utf8!(main, Text.rewrite_dependency(Path.read_utf8!(main)?, "time", core)?)?
+		$checks = $checks.append({ name, directory })
+	}
+	build = Path.join(temporary, "build")
+	empty = Path.join(temporary, "empty-cwd")
+	Path.create_all!(build)?
+	Path.create_all!(empty)?
+	for check in $checks {
+		Script.info!("APP", check.name)?
+		expected = Path.read_utf8!(Path.join("tests/examples", "${check.name}.txt"))?
+		roc = |args| roc_nightly.cmd(args).cwd(check.directory)
+		roc(["check", "main.roc", "--no-cache"]).exec_cmd!()?
+		verify!(check.name, "interpreted", roc(["main.roc", "--no-cache"]).exec_output!()?.stdout_utf8, expected)?
+		binary = Path.join(build, check.name)
+		roc(["build", "main.roc", "--opt=dev", OsStr.from_str("--output=${Path.display(binary)}"), "--no-cache"]).exec_cmd!()?
+		verify!(check.name, "native", Cmd.new(Path.to_os_str(binary)).cwd(empty).exec_output!()?.stdout_utf8, expected)?
+	}
+	Script.info!("PASS", "${$checks.len().to_str()} check applications match their recorded output")
+}
+
+verify! = |name, mode, actual, expected|
+	if actual == expected {
+		Ok({})
+	} else {
+		Script.fail!("unexpected ${mode} output from ${name}:\n${actual}")
+	}

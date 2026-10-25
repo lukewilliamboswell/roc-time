@@ -63,56 +63,7 @@ Text := [].{
 			[first, .. as rest] => (first >= '0' and first <= '9') and rest.all(version_byte)
 			[] => Bool.False
 		}
-
-	## Sort names bytewise.
-	sort_names : List(Str) -> List(Str)
-	sort_names = |names|
-		names
-			.map(|name| (Str.to_utf8(name), name))
-			.sort_with(|(left, _), (right, _)| compare_bytes(left, right))
-			.map(|(_, name)| name)
-
-	## Bytewise order of two strings. Fixed-width UTC timestamps sort
-	## chronologically under it.
-	compare : Str, Str -> [Before, Same, After]
-	compare = |left, right| compare_bytes(Str.to_utf8(left), Str.to_utf8(right))
-
-	## Native preparation emits explicit heading IDs for PDF navigation. GitHub's
-	## Markdown dialect displays those literally, so remove only that metadata,
-	## leaving paragraphs and fenced source unchanged.
-	github_markdown : Str -> Str
-	github_markdown = |prepared| {
-		var $inside_code = Bool.False
-		var $lines = []
-		for line in prepared.split_on("\n") {
-			if line.starts_with("```") {
-				$inside_code = !$inside_code
-			}
-			rendered = if !$inside_code and line.starts_with("#") {
-				match line.split_on(" {#") {
-					[heading, id] if id.ends_with("}") => heading
-					_ => line
-				}
-			} else {
-				line
-			}
-			$lines = $lines.append(rendered)
-		}
-		Str.join_with($lines, "\n")
-	}
 }
-
-expect Text.github_markdown("# Title {#title}\n\nText {#literal}\n") == "# Title\n\nText {#literal}\n"
-expect Text.github_markdown("```roc\n# source {#literal}\n```\n## Topic {#topic}\n") == "```roc\n# source {#literal}\n```\n## Topic\n"
-
-compare_bytes = |left, right|
-	match (left, right) {
-		([a, .. as left_rest], [b, .. as right_rest]) =>
-			if (a < b) Before else if (a > b) After else compare_bytes(left_rest, right_rest)
-		([], []) => Same
-		([], _) => Before
-		(_, []) => After
-	}
 
 version_byte = |byte|
 	(byte >= '0' and byte <= '9') or (byte >= 'a' and byte <= 'z') or (byte >= 'A' and byte <= 'Z') or byte == '.' or byte == '-'
@@ -135,11 +86,6 @@ expect Text.valid_version("1.2.3-rc1")
 expect !Text.valid_version("")
 expect !Text.valid_version("v1.0.0")
 expect !Text.valid_version("1.0.0/../x")
-expect Text.compare("2026-10-12T00:00:00", "2026-10-12T00:00:01") == Before
-expect Text.compare("b", "a") == After
-expect Text.compare("a", "a") == Same
-expect Text.sort_names(["names.txt", "manifest.json", "LICENSE_APACHE.txt", "zones.txt", "LICENSE.txt", "LICENSE"]) == ["LICENSE", "LICENSE.txt", "LICENSE_APACHE.txt", "manifest.json", "names.txt", "zones.txt"]
-expect Text.sort_names([]) == []
 expect Text.pins_compiler("app [main!] {\n\troc: \"nightly-1\",\n}\n")
 expect Text.pins_compiler("package [Database] { roc: \"nightly-1\" }\n")
 expect Text.pins_compiler("package\n\t[A]\n\t{ roc: \"nightly-1\" }\n")

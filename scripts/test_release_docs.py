@@ -6,22 +6,29 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 import release_docs as docs
 
 class Assets(unittest.TestCase):
-    def test_deterministic_and_exact(self):
+    def test_restores_zip_and_legacy_tarball_exactly(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / 'source/0.1.0-rc1'
-            source.mkdir(parents=True)
-            (source / 'index.html').write_bytes(b'old exact bytes\r\n')
-            a = docs.pack(source.parent, source.name, root / 'a')
-            b = docs.pack(source.parent, source.name, root / 'b')
-            self.assertEqual(a.read_bytes(), b.read_bytes())
-            docs.restore(a, source.name, root / 'restored')
+            archive = root / docs.asset_names('0.1.0-rc1')[0]
+            with zipfile.ZipFile(archive, 'w') as out:
+                out.writestr('0.1.0-rc1/index.html', b'old exact bytes\r\n')
+                out.writestr('0.1.0-rc1/Module/index.html', b'module')
+            docs.restore(archive, '0.1.0-rc1', root / 'restored')
             self.assertEqual((root / 'restored/0.1.0-rc1/index.html').read_bytes(), b'old exact bytes\r\n')
+            self.assertEqual((root / 'restored/0.1.0-rc1/Module/index.html').read_bytes(), b'module')
             with self.assertRaisesRegex(ValueError, 'already exists'):
-                docs.restore(a, source.name, root / 'restored')
+                docs.restore(archive, '0.1.0-rc1', root / 'restored')
+            legacy = root / docs.asset_names('0.1.0')[1]
+            with tarfile.open(legacy, 'w:gz') as out:
+                entry = tarfile.TarInfo('0.1.0/index.html')
+                entry.size = 5
+                out.addfile(entry, io.BytesIO(b'pages'))
+            docs.restore(legacy, '0.1.0', root / 'restored')
+            self.assertEqual((root / 'restored/0.1.0/index.html').read_bytes(), b'pages')
 
     def test_unsafe_archive(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -34,6 +41,19 @@ class Assets(unittest.TestCase):
                     out.addfile(entry, io.BytesIO(b''))
                 with self.assertRaisesRegex(ValueError, 'Unsafe'):
                     docs.restore(archive, '0.1.0', root / 'output')
+            for name, attributes in [('0.1.0/../escape', 0), ('0.1.0/link', 0o120777 << 16), ('0.2.0/index.html', 0)]:
+                archive = root / 'bad.zip'
+                with zipfile.ZipFile(archive, 'w') as out:
+                    info = zipfile.ZipInfo(name)
+                    info.external_attr = attributes
+                    out.writestr(info, b'')
+                with self.assertRaisesRegex(ValueError, 'Unsafe'):
+                    docs.restore(archive, '0.1.0', root / 'output')
+            archive = root / 'empty.zip'
+            with zipfile.ZipFile(archive, 'w') as out:
+                out.writestr('0.1.0/other.html', b'')
+            with self.assertRaisesRegex(ValueError, 'lacks'):
+                docs.restore(archive, '0.1.0', root / 'output')
 
     def test_missing_history_includes_prereleases(self):
         rows = [{'tag_name': '0.1.0-rc1', 'draft': False, 'prerelease': True, 'assets': []}]
@@ -44,15 +64,12 @@ class Assets(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Missing historical'):
                 docs.fetch(Path('unused'), allow_missing='0.1.0-rc2')
 
-    def test_existing_different_asset_is_immutable(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / docs.asset_name('0.1.0-rc1')
-            archive.write_bytes(b'candidate')
-            metadata = {'assets': [{'name': archive.name, 'digest': 'sha256:wrong'}]}
-            with patch.object(docs, 'github', return_value=metadata), patch.object(docs.subprocess, 'run') as run:
-                with self.assertRaisesRegex(ValueError, 'refusing to replace'):
-                    docs.publish(archive, '0.1.0-rc1')
-                run.assert_not_called()
+    def test_both_asset_names_are_one_asset(self):
+        rows = [{'tag_name': '0.1.0', 'draft': False, 'prerelease': False, 'assets': [
+            {'name': 'roc-time-docs-0.1.0.zip'}, {'name': 'roc-time-docs-0.1.0.tar.gz'}]}]
+        with patch.object(docs, 'github', return_value=rows):
+            with self.assertRaisesRegex(ValueError, 'Multiple'):
+                docs.fetch(Path('unused'))
 
     def test_version_traversal(self):
         for value in ['../1.0.0', '01.0.0', '0.1.0/extra']:

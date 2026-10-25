@@ -1,8 +1,8 @@
 # Development environment and tasks for roc-time, realised by roc-blueprint
 # without Nix.
 #
-#     blueprint run check    # everything CI checks
-#     blueprint run release  # build and test the bundles and examples archive
+#     blueprint run check    # the Roc-only gate the release workflow runs first
+#     blueprint run harness  # the Python, Zig and Rust harness CI runs
 #     blueprint shell        # the environment, to run scripts/*.roc directly
 #     blueprint update       # refresh Blueprint.lock
 #
@@ -10,7 +10,9 @@
 # release named below, fetched and checked against Blueprint.lock; it runs the
 # scripts under scripts/. The packages and the examples are checked with
 # whatever `roc` is on PATH, which is meant to be the latest nightly, so nothing
-# here provides a bare `roc`.
+# here provides a bare `roc`. Building, testing and publishing a release is the
+# shared roc-automation workflow that .github/workflows/release.yml calls; it
+# runs the `check` task here before anything is packaged.
 app [config] { pf: platform "https://github.com/lukewilliamboswell/roc-blueprint/releases/download/0.8.0/FbJymjYdCxx9vqMcau7r4tQfeAbnVGqqJoYrLGqPCqKu.tar.zst" }
 
 import pf.Recipes
@@ -31,17 +33,15 @@ config = [
 			# Programs the Roc scripts start, which the machine must provide. The
 			# Python, Zig and Rust used by the remaining test harness are not
 			# declared here; see CONTRIBUTING.md.
-			Expect(["base64", "chmod", "curl", "date", "gh", "git", "sha256sum", "uname", "unzip", "zip"]),
+			Expect(["base64", "chmod", "curl", "date", "gh", "git", "sha256sum", "uname", "unzip"]),
 		],
 	),
 	# Tasks that build or verify the manual also read its PDF.
 	Environment("docs", [Extend("dev"), Expect(["pdfinfo", "pdftotext"])]),
 	Shell("default", [Use("docs")]),
-	Task("check", [Use("docs"), Run(["roc-stable", "scripts/check_all.roc"])]),
+	Task("check", [Use("dev"), Run(["roc-stable", "scripts/check_all.roc"])]),
+	Task("harness", [Use("docs"), Run(["roc-stable", "scripts/check_all.roc", "--", "--harness"])]),
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
-	Task("release", [Use("docs"), Run(["roc-stable", "scripts/build_release.roc"])]),
-	Task("latest-release", [Use("dev"), Run(["roc-stable", "scripts/latest_release.roc"])]),
-	Task("examples", [Use("dev"), Run(["roc-stable", "scripts/test_examples.roc"])]),
 	Task("propose-lock-update", [Use("dev"), Run(["roc-stable", "scripts/propose_lock_update.roc"])]),
 	Task("docs", [Use("docs"), Run(["roc-stable", "scripts/build_docs.roc"])]),
 	Task("site", [Use("docs"), Run(["roc-stable", "scripts/assemble_site.roc", "--"])]),
