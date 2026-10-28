@@ -66,7 +66,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.validate.outputs.release_version || '999.999.999' }}
           REPOSITORY: ${{ github.repository }}
           OUTPUT_DIR: dist
-          RELEASE_NOTES_FILE: docs/releases/${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '0.3.1' }}.adoc
+          RELEASE_NOTES_FILE: docs/releases/${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '0.3.2' }}.adoc
         run: blueprint run release
 
       - name: Resolve the previous release
