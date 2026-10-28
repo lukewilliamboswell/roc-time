@@ -68,7 +68,8 @@ check_tooling! = |roc_stable| {
 	for script in Files.direct_roc_files!("scripts")? {
 		roc_stable.run!(["check", Path.to_os_str(script)])?
 	}
-	roc_stable.run!(["test", "scripts/build_docs.roc"])
+	roc_stable.run!(["test", "scripts/build_docs.roc"])?
+	roc_stable.run!(["test", "scripts/fuzz.roc"])
 }
 
 check_layout! = || {

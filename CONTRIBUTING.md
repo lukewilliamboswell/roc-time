@@ -66,7 +66,7 @@ Examples depend on `../../package/main.roc` and, where they use zone data,
 `../../tzdb/package/main.roc`, so they always exercise the working tree. Every
 folder under `examples/` is an application with a case in `tests/spec.json`;
 record a new or changed application's output with
-`release-package test-examples --update`, the utility the release workflow
+`blueprint run release-package -- test-examples --update`, the utility the release workflow
 runs, built from roc-automation's `scripts/release_package.roc` with the `roc`
 on `PATH`.
 
@@ -88,7 +88,7 @@ depend on this repository's packages.
 | `build_docs.roc` | Verify the released renderer and build/check the native HTML and PDF manual |
 | `assemble_site.roc` | Render the tagged release manual and assemble restored immutable API versions |
 
-The Roc integration driver still calls legacy Python oracle, fuzz, resource and
+The Roc integration driver still calls legacy Python oracle, fixture and
 measurement drivers while those are migrated. Independent reference generators
 and Python benchmark subjects remain pinned evidence inputs. Every product
 command receives the selected package compiler explicitly.
@@ -115,7 +115,7 @@ A pull request's dry run renders the newest notes file.
 | `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
 | `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
-| `fuzz.py` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
+| `fuzz.roc` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `test_compile_failures.py` | Domain separation and opaque representation checks |
 | `docs.py` | Generate API docs into an ignored build directory |
 | `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
@@ -182,7 +182,7 @@ fixtures. Pick the focused commands relevant to your change; keep the full gate
 for integration.
 
 Run the gate with `blueprint run check`; set `ROC_NIGHTLY` to use a package
-compiler other than `roc` on `PATH`. `release-package test-examples` alone runs
+compiler other than `roc` on `PATH`. `blueprint run release-package -- test-examples` alone runs
 every example in place against the working tree. Generate local development API docs
 with `roc docs package/main.roc --output=.roc-time-tmp/api-main`. The gate also runs
 `tests/static_dispatch/main.roc` in the interpreter and natively to check public
@@ -355,15 +355,15 @@ Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
 use the content-addressed [roc-fuzz 0.4.3 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.4.3)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
-`scripts/fuzz.py` is their single runner. Set `ROC` to the package compiler:
+`scripts/fuzz.roc` is their single runner. Set `ROC_NIGHTLY` to select a package compiler:
 
 ```sh
-python3 scripts/fuzz.py --operation all
-python3 scripts/fuzz.py --operation build --targets precision
-python3 scripts/fuzz.py --operation run --targets precision --runs 10000 --seconds 5 --seed 1
-python3 scripts/fuzz.py --operation replay --targets precision
+blueprint run fuzz -- --operation all
+blueprint run fuzz -- --operation build --targets precision
+blueprint run fuzz -- --operation run --targets precision --runs 10000 --seconds 5 --seed 1
+blueprint run fuzz -- --operation replay --targets precision
 .roc-time-tmp/fuzz/precision show tests/fuzz/corpus/precision/alternating
-python3 scripts/fuzz.py --operation lifecycle
+blueprint run fuzz -- --operation lifecycle
 ```
 
 The full test command includes curated replay, 10,000-run/5-second searches for
@@ -539,7 +539,7 @@ formatting allows one allocation/reallocation call and 128 requested bytes per
 output, with dev/speed failing controls. Retained inputs are observed afterward.
 These counters measure allocation traffic, not live or retained memory.
 
-Run `python3 scripts/test_coverage_identity.py` with the pinned `ROC` to check
+Run `blueprint run resource-identities` with `ROC_NIGHTLY` to check
 that union with an empty operand and subtraction of empty coverage reuse the
 input without allocation. The default gate runs this check on both backends.
 Runtime inputs include empty and large coverage, signed endpoint extremes and
@@ -662,7 +662,7 @@ Releases are dispatched from `main` and are immutable. To release:
 1. Dispatch `Release` on `main` with a new package SemVer such as `0.2.0` or
    `0.2.0-rc1`; a prerelease suffix marks the release as a prerelease. Every pull
    request runs the same workflow as a dry run under version `0.0.1-dryrun`.
-2. The shared workflow runs the gate, checks the version with `roc bump` against
+2. CI runs the complete gate. The shared workflow checks the version with `roc bump` against
    the latest release, runs the examples against the working tree, then bundles
    both packages with the latest nightly, builds `roc-time-examples-<version>.zip`
    and the API documentation archive from the same commit, and runs that archive
@@ -671,11 +671,13 @@ Releases are dispatched from `main` and are immutable. To release:
 3. The publish job, behind the protected `release` environment, checks out
    nothing from this repository, attests the tested files, uploads them to a
    draft, verifies every asset against the tested file and publishes. Then
-   `Release docs` restores every release's API docs and deploys Pages.
+   `Documentation` restores immutable API versions, renders the tagged final-release
+   manual with the shared renderer, and deploys Pages.
 4. Verify the release notes, both package URLs and the examples archive against
    the published URLs.
 
-A release publishes five assets. `roc-time-<hash>.tar.zst` and
+Release files include the versioned PDF manual and the package, examples and
+API archives below. `roc-time-<hash>.tar.zst` and
 `roc-time-tzdb-<hash>.tar.zst` are the two packages; Roc uses the filename prefix
 to distinguish packages sharing a versioned release path, and the archive bytes
 and content hashes are those produced by `roc bundle`.
@@ -691,10 +693,9 @@ and the shared workflow revision that built it. That record replaces a header
 pin.
 
 Never move a tag, replace a published asset or publish rebuilt archives under an
-existing version. If publication fails after the draft is created, delete the
-draft and dispatch again; if it fails after publication, the fix is a new version.
-If docs deployment fails after the release succeeds, dispatch `Release docs`
-with that existing release version. API documentation is
+existing version. Use the shared publisher's interrupted-release checks when retrying a failed
+publication. A fix after publication always requires a new version.
+If docs deployment fails after the release succeeds, dispatch `Documentation` on `main` to restore the latest final release. API documentation is
 stored as immutable release assets and restored during Pages assembly; generated
 pages are not checked into Git and authored guides live in `docs/*.adoc`. Assembly
 refuses missing earlier release documentation. Configure the `github-pages`
@@ -704,9 +705,8 @@ The nightly compatibility workflow is roc-automation's shared workflow: it runs
 the latest full release's examples archive, unchanged, on the latest nightly and
 keeps one tracking issue open while it fails. A failure there means that release
 needs a patch release: fix `main`, then release the next patch version. The
-published archive is never edited. Releases up to 0.3.1 carry `expected/` output
-rather than `spec.json`, so the shared runner tests releases from the next one
-on. Dispatch the workflow with `nightly-tag` or `release-tag` to test another
+published archive is never edited. Releases through 0.3.2 carry `expected/` output
+rather than `spec.json`, so the first shared-format release is 0.3.3. Dispatch the workflow with `nightly-tag` or `release-tag` to test another
 combination.
 
 `roc-0.1.x` is a frozen branch from the earlier compiler-pin model and is not a
@@ -716,8 +716,8 @@ Build and test a release candidate locally with roc-automation's utility and the
 package compiler on `PATH`:
 
 ```sh
-RP_REPOSITORY=lukewilliamboswell/roc-time release-package build 0.0.1-dryrun
-RP_REPOSITORY=lukewilliamboswell/roc-time release-package test-archive
+RP_REPOSITORY=lukewilliamboswell/roc-time blueprint run release-package -- build 0.0.1-dryrun
+RP_REPOSITORY=lukewilliamboswell/roc-time blueprint run release-package -- test-archive
 ```
 
 ## Zone-data representation measurements

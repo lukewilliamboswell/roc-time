@@ -50,7 +50,7 @@ restore_all! = |output| {
 				archive = Path.join(work, asset.name)
 				Cmd.new("curl").args(["--fail", "--silent", "--show-error", "--location", "--max-time", "60", OsStr.from_str(url), "--output", Path.to_os_str(archive)]).exec_cmd!()?
 				digest = Script.command("sha256sum").output!([Path.to_os_str(archive)])?
-				if !digest.starts_with("${asset.digest.drop_prefix("sha256:")} ") or Path.read_bytes!(archive)?.len() != asset.size {
+				if !digest.starts_with("${asset.digest.drop_prefix("sha256:")} ") or Path.size_in_bytes!(archive)? != asset.size {
 					return Script.fail!("documentation asset bytes differ for ${version}")
 				}
 				restore_archive!(archive, version, output)?

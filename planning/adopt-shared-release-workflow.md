@@ -9,14 +9,11 @@ establish product portability.
 
 ## Remaining deliverables
 
-- Port the remaining Python fixture-host, oracle-replay, fuzz, zone-generation,
+- Port the remaining Python fixture verification, oracle-replay, zone-generation,
   measurement and benchmark drivers to Roc. The Roc integration inventory keeps
   them executable during migration. Retain independent Python reference
   generators and measured Python subjects, their dependency pins, corpus bytes,
   provenance and failure controls.
-- Finish sustained fuzz workflow alignment: its default-branch event guard,
-  Blueprint entrypoint and evolving corpus cache must supplement the small
-  committed smoke corpus. Keep per-target budgets explicit.
 - Verify the complete gate and documentation workflow on the PR with the locked
   native toolchains. Require `test`, `Build and verify documentation`,
   `Release / Build and test the source` and `Release / Test the release candidate`.

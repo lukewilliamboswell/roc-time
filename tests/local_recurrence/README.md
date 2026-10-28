@@ -112,8 +112,8 @@ The existing `recurrence-v1` roc-fuzz target maps its bounded input fields onto
 the same local model. It keeps the pinned 0.4.3 URL and existing runner:
 
 ```text
-ROC=/path/to/roc python3 scripts/fuzz.py --operation replay --targets recurrence
-ROC=/path/to/roc python3 scripts/fuzz.py --operation run --targets recurrence --runs 1000 --seconds 10 --seed 33
+ROC_NIGHTLY=/path/to/roc blueprint run fuzz -- --operation replay --targets recurrence
+ROC_NIGHTLY=/path/to/roc blueprint run fuzz -- --operation run --targets recurrence --runs 1000 --seconds 10 --seed 33
 ```
 
 The six-byte `local-gap-boundary-exclusion` seed decodes to count=1,

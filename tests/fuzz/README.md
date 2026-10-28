@@ -130,7 +130,7 @@ on October 18. A public-API probe isolates the leak to `Coverage.difference`;
 placing its right-start stop bound in the loop condition removes it without
 changing the subtraction law or asymptotic cost. The test still uses the
 independent unit-cell oracle, sharing checks and algebraic laws above.
-Replay with `python3 scripts/fuzz.py --operation replay --targets coverage`.
+Replay with `blueprint run fuzz -- --operation replay --targets coverage`.
 The readable endpoint regression lives beside `Coverage.difference`'s unit
 tests; this raw input additionally exercises the fuzz host's leak detector.
 
@@ -190,7 +190,7 @@ curated replay and the failure lifecycle using LLVM speed with `--fuzz`, compile
 10,000 runs or 5 seconds, a 256-byte input maximum, 256 MB RSS limit and a
 2-second per-input timeout. A time-limited campaign may execute fewer than
 10,000 inputs; these finite searches do not establish exhaustive correctness.
-Exact runnable commands live in CONTRIBUTING.md and `scripts/fuzz.py`.
+Exact runnable commands live in CONTRIBUTING.md and `scripts/fuzz.roc`.
 Other host/architecture combinations explicitly report fuzz checks as unverified.
 
 Selection explanation properties use those independent fold/gap preimages to
@@ -219,3 +219,30 @@ labels do not invent a tolerance, and zero/one-fact explanation budgets remain
 limited. The existing interchange-v1 input decoder and pinned platform are
 unchanged. LOC sourced meanings and model boundaries are documented in
 [interchange evidence](../interchange/README.md).
+
+## Runner and evolving corpus
+
+`blueprint run fuzz -- ...` runs the Roc driver on `roc-stable`; `ROC_NIGHTLY`
+selects the separate package compiler. The driver validates the pinned platform,
+keeps compiler and target stdout/stderr separately, and records source, runner,
+corpus and platform identities beside each search. Unsupported hosts, launch
+errors, signals, output limits and process deadlines fail explicitly.
+
+Scheduled searches restore `.roc-time-tmp/fuzz/persistent` through the workflow
+cache. Each target starts from that evolving corpus plus the committed seeds;
+committed files win name collisions and are never changed. A successful search
+replaces its cached corpus after validating at most 10,000 ordinary files of at
+most 256 bytes each. Missing caches start fresh. Failure artifacts and raw
+command logs remain separate from this cache.
+
+The PR gate uses 100 runs and one search second per target, plus curated replay
+and the failure lifecycle. The scheduled workflow permits 120 search seconds per
+target across all fourteen targets; its job deadline includes compilation and
+artifact upload. A process deadline or missing completion record never counts
+as successful bounded execution.
+
+Fuzz builds use `--opt=speed`: `nightly-2026-10-28-bad769b` rejects
+`roc build --fuzz --opt=dev` because fuzz instrumentation requires the LLVM
+backend (`speed` or `size`). The bounded PR workload is smoke evidence, not a
+performance measurement. Ordinary executable checks still use development
+builds, with optimized variants retained where backend behavior is tested.

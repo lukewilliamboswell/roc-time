@@ -1,0 +1,30 @@
+[
+  {
+    "name": "timestamp-parser",
+    "source": "tests/timestamp_parser_resource/main.roc",
+    "stdout": "timestamp-parser=1000,boundary=1000000\n",
+    "cases": [
+      ["1970-01-01T00:00:01Z", "direct", "normal", "1970-01-01t00:00:01Z"],
+      ["1970-01-01T00:00:01Z", "aliases", "normal", "1970-01-01t00:00:01Z"],
+      ["1970-01-01T00:00:01Z", "suffix", "normal", "1970-01-01t00:00:01Z"],
+      ["1970-01-01T00:00:01.0Z", "direct", "normal", "1970-01-01t00:00:01.0Z"],
+      ["1970-01-01T00:00:01.0Z", "aliases", "normal", "1970-01-01t00:00:01.0Z"],
+      ["1970-01-01T00:00:01.0Z", "suffix", "normal", "1970-01-01t00:00:01.0Z"],
+      ["1970-01-01T00:00:01.000000+00:00", "direct", "normal", "1970-01-01t00:00:01.000000+00:00"],
+      ["1970-01-01T00:00:01.000000+00:00", "aliases", "normal", "1970-01-01t00:00:01.000000+00:00"],
+      ["1970-01-01T00:00:01.000000+00:00", "suffix", "normal", "1970-01-01t00:00:01.000000+00:00"]
+    ],
+    "failure_args": ["1970-01-01T00:00:01Z", "direct", "allocate", "1970-01-01t00:00:01Z"]
+  },
+  {
+    "name": "coverage-identity",
+    "source": "tests/coverage_identity_resource/main.roc",
+    "stdout": "coverage-identity=preserved\n",
+    "cases": [
+      ["0", "union_right", "normal"], ["0", "union_left", "normal"], ["0", "difference_right", "normal"],
+      ["1", "union_right", "normal"], ["1", "union_left", "normal"], ["1", "difference_right", "normal"],
+      ["4096", "union_right", "normal"], ["4096", "union_left", "normal"], ["4096", "difference_right", "normal"]
+    ],
+    "failure_args": ["1", "union_right", "allocate"]
+  }
+]

@@ -3,6 +3,7 @@ app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/down
 import cli.Path
 import cli.Cmd
 import src/LocalOracle
+import src/FixtureHost
 import src/Script
 
 main! = |_args| {
@@ -16,13 +17,8 @@ main! = |_args| {
 		return Script.fail!("composed recurrence corpus digest changed; review its independent expectations")
 	}
 	LocalOracle.controls(expected)?
-	# Existing fixture preparation verifies platform inputs and builds its
-	# allocator-instrumented host. No host timezone data enters these tests.
-	python = Script.env_str!("PYTHON") ?? "python3"
-	target = Str.trim(Cmd.new_str(python).args(["scripts/fixture_platform.py"]).exec_output!()?.stdout_utf8.trim().split_on("\n").last() ?? "")
-	if target != "x64musl" and target != "arm64mac" {
-		return Script.fail!("unsupported recurrence fixture host")
-	}
+	# The same pinned host drives the resource and composed recurrence checks.
+	target = FixtureHost.build!()?
 	Path.create_all!(".roc-time-tmp/local-recurrence")?
 	nightly.run!(["check", "tests/local_recurrence/main.roc"])?
 	nightly.run!(["--opt=interpreter", "tests/local_recurrence/main.roc"])?

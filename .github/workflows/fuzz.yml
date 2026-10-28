@@ -1,0 +1,45 @@
+name: Extended semantic fuzzing
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * 1'
+
+permissions: {}
+
+jobs:
+  fuzz:
+    if: >-
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    # Fourteen targets, at most 120 search seconds each, plus compilation,
+    # lifecycle controls, cleanup and artifact upload.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-roc-nightly
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@a25b5129340b9b2ad1744d20330b8ee4d38a1849
+        with:
+          cache: 'true'
+          cache-workload: fuzz
+      - name: Restore and save the evolving search corpus
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: .roc-time-tmp/fuzz/persistent
+          key: fuzz-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/fuzz/dependency.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            fuzz-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/fuzz/dependency.json') }}-
+      - run: blueprint run fuzz -- --operation all --runs 10000000 --seconds 120 --seed 20260905
+      - name: Preserve campaign evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: extended-fuzz-evidence
+          path: .roc-time-tmp/fuzz/
+          include-hidden-files: true
+          retention-days: 14

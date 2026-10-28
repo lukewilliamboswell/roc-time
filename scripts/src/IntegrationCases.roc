@@ -12,8 +12,7 @@ IntegrationCases := [].{
 			.concat(application(roc, work, "codecs", ["dev", "speed"]))
 			.concat([
 				py("Chrono correctness smoke", ["scripts/benchmark_chrono.py", "--smoke", "--fetch", "--roc-opt", "dev"]),
-				py("timestamp parser allocations", ["scripts/test_timestamp_parser.py"]),
-				py("coverage identity allocations", ["scripts/test_coverage_identity.py"]),
+				{ name: "parser and coverage allocation identities", program: "scripts/check_resource_identities.roc", args: [] },
 				py("independent Gregorian queries", ["scripts/test_civil_queries.py"]),
 				py("independent DATE export", ["scripts/test_date_export.py"]),
 				py("independent timed export", ["scripts/test_timed_export.py"]),
@@ -21,7 +20,7 @@ IntegrationCases := [].{
 			])
 			.concat(application(roc, work, "zoned_appointment_checks", ["dev", "speed"]))
 			.concat([
-				py("fuzz replay and bounded search", ["scripts/fuzz.py", "--operation", "all", "--runs", "100", "--seconds", "1", "--seed", "1"]),
+				{ name: "fuzz replay and bounded search", program: "scripts/fuzz.roc", args: ["--", "--operation", "all", "--runs", "100", "--seconds", "1", "--seed", "1"] },
 				py("instrumented fixture controls", ["scripts/fixture_platform.py", "--verify"]),
 				py("oracle transport controls", ["scripts/test_oracle_replay.py"]),
 				py("independent temporal oracles", ["scripts/oracles.py"]),
