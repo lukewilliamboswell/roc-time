@@ -17,11 +17,15 @@ establish product portability.
 - Verify the complete gate and documentation workflow on the PR with the locked
   native toolchains. Require `test`, `Build and verify documentation`,
   `Release / Build and test the source` and `Release / Test the release candidate`.
-- Review repository settings with upstream's read-only checker. Prepare main/tag
-  protections and current required checks; disable Actions PR creation, enable
-  private vulnerability reporting, restrict Pages to main. Preserve immutable
-  releases and the release environment. Maintainer applies settings and reviews
-  obsolete branch deletions.
+- Apply the prepared repository settings: add active main and all-tag rulesets;
+  require `test`, `Build and verify documentation`,
+  `Release / Build and test the source` and `Release / Test the release candidate`;
+  restrict tag updates/deletions; disable Actions PR creation/approval; enable
+  private vulnerability reporting; restrict Pages to main (remove roc-0.1.x).
+  Upstream's read-only checker found these six gaps, including the missing
+  SECURITY.md added in this PR. Preserve immutable releases, read-only default
+  tokens and the main-only release environment. Maintainer applies settings and
+  reviews obsolete branch deletions.
 
 ## Acceptance and rollout
 
