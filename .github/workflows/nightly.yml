@@ -27,7 +27,7 @@ concurrency:
 jobs:
   test:
     name: Test the released examples
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       nightly: ${{ steps.nightly.outputs.tag }}
       release: ${{ steps.release.outputs.tag }}
@@ -84,7 +84,7 @@ jobs:
     name: Maintain the tracking issue
     needs: test
     if: always() && (needs.test.outputs.outcome == 'success' || needs.test.outputs.outcome == 'failure')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       issues: write
     steps:

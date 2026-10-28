@@ -23,7 +23,7 @@ concurrency:
 jobs:
   publish-docs:
     name: Publish versioned docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
 
@@ -71,7 +71,7 @@ jobs:
   deploy-pages:
     name: Deploy versioned docs
     needs: publish-docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
