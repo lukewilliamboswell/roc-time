@@ -20,7 +20,7 @@ concurrency:
 jobs:
   build:
     name: Build and test release candidate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       release_version: ${{ steps.validate.outputs.release_version }}
       docs_version: ${{ steps.validate.outputs.docs_version }}
@@ -66,7 +66,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.validate.outputs.release_version || '999.999.999' }}
           REPOSITORY: ${{ github.repository }}
           OUTPUT_DIR: dist
-          RELEASE_NOTES_FILE: docs/releases/${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '0.3.1' }}.adoc
+          RELEASE_NOTES_FILE: docs/releases/${{ github.event_name == 'workflow_dispatch' && inputs.release_version || '0.3.2' }}.adoc
         run: blueprint run release
 
       - name: Resolve the previous release
@@ -108,7 +108,7 @@ jobs:
     name: Publish GitHub release
     needs: build
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     permissions:
       contents: write

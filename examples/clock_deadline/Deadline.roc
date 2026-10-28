@@ -7,23 +7,11 @@ Deadline :: [].{
 	Record : { checked_at : OffsetTimestamp, expires_at : OffsetTimestamp, expired : Bool }
 	DecodeError : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidOffsetTimestamp(OffsetTimestamp.Error), OutOfRange, InconsistentStatus]
 
-	## basic-cli 0.22.2 replaces a pre-epoch clock error with zero. This app
-	## Source: basic-cli revision 23622ee334755e18118bfc885a20f53fa4a16d66,
-	## platform/Utc.roc (wrapper) and src/lib.rs (host clock error).
-	## requires a positive current-epoch reading and rejects that ambiguous zero.
-	## The bridge cannot distinguish a genuine epoch from the platform fallback.
-	## Floor is explicit precision reduction; the core retains signed input APIs.
-	acquire_positive_nanoseconds : U128 -> Try(PosixBoundary, [UnavailableOrEpochClock, OutOfRange, Submicrosecond])
-	acquire_positive_nanoseconds = |raw| {
-		if raw == 0 {
-			return Err(UnavailableOrEpochClock)
-		}
-		signed = match U128.to_i128_try(raw) {
-			Ok(value) => value
-			Err(_) => return Err(OutOfRange)
-		}
-		PosixBoundary.from_nanoseconds_with_rounding(signed, Floor)
-	}
+	## basic-cli 0.26.0 reports signed epoch nanoseconds, negative before 1970,
+	## and saturates an unrepresentable clock at the I128 limit, which is rejected
+	## here as out of range. Floor is explicit precision reduction.
+	acquire_nanoseconds : I128 -> Try(PosixBoundary, [OutOfRange, Submicrosecond])
+	acquire_nanoseconds = |nanos| PosixBoundary.from_nanoseconds_with_rounding(nanos, Floor)
 
 	## Store both positions as UTC timestamps with six fractional digits.
 	evaluate : PosixBoundary, Str -> Try(Record, [Expiry(OffsetTimestamp.Error), Output(OffsetTimestamp.Error), OutOfRange])

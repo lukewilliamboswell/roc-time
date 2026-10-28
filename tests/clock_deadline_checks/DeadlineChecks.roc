@@ -41,18 +41,18 @@ DeadlineChecks :: [].{
 				crash "deadline decoded fields differ"
 			}
 		}
-		raw_zero = zero.to_u128_wrap()
-		if Deadline.acquire_positive_nanoseconds(raw_zero) != Err(UnavailableOrEpochClock) {
-			crash "ambiguous platform zero accepted"
-		}
-		if Deadline.acquire_positive_nanoseconds(U128.highest - raw_zero) != Err(OutOfRange) or Deadline.acquire_positive_nanoseconds(I128.highest.to_u128_wrap() - raw_zero) != Err(OutOfRange) {
+		raw_zero = zero.to_i128_wrap()
+		if Deadline.acquire_nanoseconds(I128.highest - raw_zero) != Err(OutOfRange) or Deadline.acquire_nanoseconds(I128.lowest + raw_zero) != Err(OutOfRange) {
 			crash "clock acquisition overflow"
 		}
-		if Deadline.acquire_positive_nanoseconds(999999999 + raw_zero) != Ok(PosixBoundary.from_microseconds(999999)) {
+		if Deadline.acquire_nanoseconds(raw_zero) != Ok(PosixBoundary.from_microseconds(0)) {
+			crash "epoch acquisition"
+		}
+		if Deadline.acquire_nanoseconds(999999999 + raw_zero) != Ok(PosixBoundary.from_microseconds(999999)) or Deadline.acquire_nanoseconds(1 + raw_zero) != Ok(PosixBoundary.from_microseconds(0)) {
 			crash "positive acquisition floor"
 		}
-		if Deadline.acquire_positive_nanoseconds(1 + raw_zero) != Ok(PosixBoundary.from_microseconds(0)) {
-			crash "positive submicrosecond acquisition floor"
+		if Deadline.acquire_nanoseconds(-1 + raw_zero) != Ok(PosixBoundary.from_microseconds(-1)) or Deadline.acquire_nanoseconds(-1000 + raw_zero) != Ok(PosixBoundary.from_microseconds(-1)) {
+			crash "pre-epoch acquisition floor"
 		}
 		if Deadline.evaluate(PosixBoundary.from_microseconds(I64.highest - zero.to_i64_wrap()), "1970-01-01T00:00:00Z") != Err(Output(OutOfRange)) {
 			crash "timestamp output range hidden"
