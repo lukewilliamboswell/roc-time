@@ -39,7 +39,7 @@ config = [
 		],
 	),
 	# Tasks that build or verify the manual also read its PDF.
-	Environment("docs", [Extend("renderer"), Tools(["nix#poppler-utils"]), Expect(["pdfinfo", "pdftotext"])]),
+	Environment("docs", [Extend("renderer"), Tools(["nix#poppler-utils"])]),
 	Environment(
 		"native",
 		[
