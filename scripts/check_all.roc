@@ -19,10 +19,8 @@ main! = |args| {
 	# something. The floating package compiler checks the packages and the check
 	# applications, because that is the compiler users install today.
 	#
-	# `blueprint run check` is the Roc-only gate the shared release workflow runs
-	# before it builds the examples and the release; `blueprint run harness` is
-	# the Python-driven remainder, which needs the toolchains that
-	# .github/actions/setup-harness installs.
+	# The complete contributor gate runs here. The shared release workflow
+	# separately builds and tests the exact publication artifacts.
 	roc_stable = Script.roc_stable!()?
 	roc_nightly = Script.roc_nightly!()?
 
@@ -31,9 +29,14 @@ main! = |args| {
 	roc_nightly.run!(["version"])?
 
 	match args.map(OsStr.display) {
-		[] => check!(roc_stable, roc_nightly)
-		["--harness"] => harness!(roc_stable, roc_nightly)
-		other => Script.fail!("usage: scripts/check_all.roc [-- --harness]; received ${Str.inspect(other)}")
+		[] => {
+			check!(roc_stable, roc_nightly)?
+			harness!(roc_nightly)?
+			Cmd.new("release-package").args(["test-examples"]).env("RP_COMPILER", roc_nightly.program()).exec_cmd!()
+		}
+		["--source"] => check!(roc_stable, roc_nightly)
+		["--harness"] => harness!(roc_nightly)
+		other => Script.fail!("usage: scripts/check_all.roc [-- --source|--harness]; received ${Str.inspect(other)}")
 	}
 }
 
@@ -50,22 +53,16 @@ check! = |roc_stable, roc_nightly| {
 	Script.info!("\nPASS", "all checks")
 }
 
-harness! = |roc_stable, roc_nightly| {
-	# The Python harness owns the compile-failure, static-dispatch, codec,
-	# resource, oracle, fuzz, measurement and documentation checks. It selects
-	# the package compiler through ROC.
-	Script.section!("PYTHON HARNESS")?
-	python = Script.env_str!("PYTHON") ?? "python3"
-	Script.info!("+", "${python} scripts/python_harness.py")?
-	Cmd.new_str(python).args(["scripts/python_harness.py"]).env("ROC", roc_nightly.program()).exec_cmd!()?
-	roc_stable.run!(["scripts/test_local_recurrence.roc"])?
+harness! = |roc_nightly| {
+	Script.section!("INTEGRATION CASES")?
+	Cmd.new("scripts/check_integration.roc").env("ROC_NIGHTLY", roc_nightly.program()).exec_cmd!()?
 	Script.info!("\nPASS", "harness")
 }
 
 check_tooling! = |roc_stable| {
 	Script.section!("TOOLING")?
 	roc_stable.run!(["fmt", "--check", "scripts", "Blueprint.roc"])?
-	for file in ["Text", "StaticChecks"] {
+	for file in ["Text", "StaticChecks", "ApiArchive", "ApiInventory", "DocExamples"] {
 		roc_stable.run!(["test", Path.to_os_str(Path.join("scripts/src", "${file}.roc"))])?
 	}
 	for script in Files.direct_roc_files!("scripts")? {

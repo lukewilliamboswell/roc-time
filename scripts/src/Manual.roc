@@ -11,7 +11,7 @@ Manual := [].{
 	verify! = |site, compare_sources| {
 		entries = Path.list!(site)?
 		files = entries.map(Files.name)
-		for required in ["index.html", "getting-started.html", "booking.html", "calendar-zones.html", "schedules.html", "profiles.html", "api.html", "versions.html", "roc-time.pdf"] {
+		for required in ["index.html", "index.md", "llms.txt", "getting-started.html", "booking.html", "calendar-zones.html", "schedules.html", "profiles.html", "api.html", "versions.html", "roc-time.pdf"] {
 			if !files.contains(required) {
 				return Script.fail!("manual is missing ${required}")
 			}
@@ -20,6 +20,12 @@ Manual := [].{
 			.map_try!(|path| Ok({ name: Files.name(path), html: Path.read_utf8!(path)? }))?
 		for problem in DocLinks.problems(pages, files) {
 			return Script.fail!(problem)
+		}
+		for page in pages {
+			markdown = Str.replace_each(page.name, ".html", ".md")
+			if !files.contains(markdown) or !page.html.contains("text/markdown") or !page.html.contains("llms.txt") {
+				return Script.fail!("${page.name}: Markdown export or discovery links are missing")
+			}
 		}
 		pdf = Path.join(site, "roc-time.pdf")
 		if !Str.from_utf8_lossy(Path.read_bytes!(pdf)?.take_first(8)).starts_with("%PDF-2.0") {
@@ -58,7 +64,11 @@ Manual := [].{
 					if DocLinks.code_blocks(page.html) != blocks {
 						return Script.fail!("${page.name}: rendered source bytes differ")
 					}
+					markdown = Path.read_utf8!(Path.join(site, Str.replace_each(page.name, ".html", ".md")))?
 					for block in blocks {
+						if !markdown.contains(block.trim_end()) {
+							return Script.fail!("${page.name}: Markdown lost source bytes")
+						}
 						for line in block.split_on("\n").keep_if(|line| !Str.trim(line).is_empty()) {
 							if !text.contains(normalize(line)) {
 								return Script.fail!("PDF lost source text: ${line}")
@@ -68,7 +78,7 @@ Manual := [].{
 				}
 			}
 		}
-		Script.info!("PASS", "manual: ${pages.len().to_str()} HTML pages, local links/fragments, PDF chapters and source text")
+		Script.info!("PASS", "manual: ${pages.len().to_str()} HTML/Markdown pages, discovery links, local fragments, PDF chapters and source text")
 	}
 }
 

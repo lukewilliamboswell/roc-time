@@ -58,15 +58,35 @@ Text := [].{
 	## Whether `value` is a release version such as `0.10.0` or `1.2.3-rc1`:
 	## it starts with a digit and holds only ASCII letters, digits, `.` and `-`.
 	valid_version : Str -> Bool
-	valid_version = |value|
-		match Str.to_utf8(value) {
-			[first, .. as rest] => (first >= '0' and first <= '9') and rest.all(version_byte)
-			[] => Bool.False
+	valid_version = |value| {
+		base = match value.split_on("+") {
+			[plain] => plain
+			[plain, metadata] if metadata.split_on(".").all(version_identifier) => plain
+			_ => return Bool.False
 		}
+		parts = base.split_on("-")
+		core = parts.first() ?? ""
+		if !(
+			match core.split_on(".") {
+				[major, minor, patch] => [major, minor, patch].all(version_number)
+				_ => Bool.False
+			}
+		) {
+			return Bool.False
+		}
+		if parts.len() == 1 {
+			Bool.True
+		} else {
+			Str.join_with(parts.drop_first(1), "-").split_on(".").all(|identifier| version_identifier(identifier) and (!identifier.to_utf8().all(version_digit) or version_number(identifier)))
+		}
+	}
 }
 
-version_byte = |byte|
-	(byte >= '0' and byte <= '9') or (byte >= 'a' and byte <= 'z') or (byte >= 'A' and byte <= 'Z') or byte == '.' or byte == '-'
+version_digit = |byte| byte >= '0' and byte <= '9'
+
+version_identifier = |value| !value.is_empty() and value.to_utf8().all(|byte| version_digit(byte) or (byte >= 'a' and byte <= 'z') or (byte >= 'A' and byte <= 'Z') or byte == '-')
+
+version_number = |value| !value.is_empty() and value.to_utf8().all(version_digit) and (value == "0" or !value.starts_with("0"))
 
 is_dependency = |line, name| Str.trim_start(line).starts_with("${name}: \"")
 
@@ -86,6 +106,8 @@ expect Text.valid_version("1.2.3-rc1")
 expect !Text.valid_version("")
 expect !Text.valid_version("v1.0.0")
 expect !Text.valid_version("1.0.0/../x")
+expect !Text.valid_version("01.0.0") and !Text.valid_version("1.0") and !Text.valid_version("1.0.0-") and !Text.valid_version("1.0.0-01")
+expect Text.valid_version("1.0.0-rc.1+build.01") and !Text.valid_version("1.0.0+build..1")
 expect Text.pins_compiler("app [main!] {\n\troc: \"nightly-1\",\n}\n")
 expect Text.pins_compiler("package [Database] { roc: \"nightly-1\" }\n")
 expect Text.pins_compiler("package\n\t[A]\n\t{ roc: \"nightly-1\" }\n")

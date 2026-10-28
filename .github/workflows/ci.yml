@@ -1,44 +1,35 @@
 name: CI
 
-# The Python, Zig and Rust harness: oracles, fuzz smoke, resource measurements
-# and documentation checks. The Roc-only gate and the examples run in the
-# release dry run, which Release runs on every pull request.
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # A new nightly can fail this job with no fault in the change under test.
-  # Compare with the default branch before treating a failure as a regression.
-  harness:
+  test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - uses: ./.github/actions/setup-roc-nightly
-
-      - uses: ./.github/actions/setup-harness
-
       - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@a25b5129340b9b2ad1744d20330b8ee4d38a1849
         with:
+          install-nix: 'true'
           cache: 'true'
           cache-workload: ci
-
-      # Scripts run on roc-stable; the packages and tests use the nightly.
-      - run: blueprint run harness
-
+      - run: blueprint run native-versions
+      - run: blueprint run check
       - name: Preserve fuzz smoke evidence and reproducers
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

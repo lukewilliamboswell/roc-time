@@ -25,12 +25,11 @@ reporting a result, and keep `roc-stable` for automation rather than testing the
 package with it.
 
 Install the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
-0.8.0 CLI and a current nightly `roc`; Nix is not needed. Blueprint fetches
-`roc-stable` itself and expects the machine to provide the programs the scripts
-start: `base64`, `chmod`, `curl`, `date`, `gh`, `git`, `pdfinfo`, `pdftotext`,
-`sha256sum`, `uname`, `unzip` and `zip`, plus `tar` and `ln` for unpacking. The
-complete check also needs CPython 3.14.3, Zig 0.17.0 and Rust for the existing
-Python-driven harness; details are under [Tests](#tests). With those installed:
+0.8.0 CLI, Nix, and a current nightly `roc`. Blueprint fetches the fixed
+compiler and shared utilities and realizes Zig 0.17.0, CPython 3.14.3, Rust
+1.95.0 (including its musl target), and PDF readers from reviewed Nix inputs.
+The host supplies Git, the GitHub CLI, curl, archive tools and standard file
+utilities declared by `Expect`. With those installed:
 
 ```sh
 roc version
@@ -38,15 +37,13 @@ blueprint run check
 ```
 
 This is the same complete gate CI runs: package checks, examples, semantic tests,
-resource checks, documentation and a release dry run. For an interactive shell
+resource checks and documentation. The shared release workflow separately
+tests the exact publication artifacts. For an interactive shell
 with the automation dependencies, run `blueprint shell`.
 
 Scripts take the package compiler from `ROC_NIGHTLY`, falling back to `roc` on
-`PATH`. The environment provides `roc-stable` and checks that the programs the
-Roc scripts start are present. It does not provide the CPython 3.14.3, Zig
-0.17.0 and Rust that the remaining Python harness needs; install those as
-described under [Tests](#tests) and select them with `ROC_TIME_GENERATOR_PYTHON`
-and `ZIG` where they are not the defaults. For example,
+`PATH`. The environment provides the fixed tooling compiler and native toolchains.
+`blueprint run native-versions` verifies their selected versions. For example,
 `ROC_NIGHTLY=/path/to/roc blueprint run check` selects a particular package
 compiler. Commit `Blueprint.roc` and `Blueprint.lock`; only `blueprint update`
 writes the lock. Keep experiments and generated artifacts under ignored
@@ -83,17 +80,22 @@ depend on this repository's packages.
 
 | Script | Purpose |
 | --- | --- |
-| `check_all.roc` | `check`: tooling and layout checks, package check and tests, the check applications; `harness`: the Python-driven stages |
+| `check_all.roc` | Complete contributor gate; `check-source` runs the package and tooling subset |
+| `check_integration.roc` | Integration case driver with progress, timings and failure summaries |
+| `restore_api_docs.roc` | Restore immutable ZIP and legacy tarball API archives, validating identity and paths |
+| `check_api_docs.roc` | Audit documented API entries and nested-method search, including failure controls |
+| `prepare_site.roc` | Select the published release or build an explicit development preview |
 | `build_docs.roc` | Verify the released renderer and build/check the native HTML and PDF manual |
-| `assemble_site.roc` | Assemble a tested manual archive and restored immutable API versions |
+| `assemble_site.roc` | Render the tagged release manual and assemble restored immutable API versions |
 
-The oracle, fuzz, resource, measurement and documentation tooling is still Python 3
-with no third-party dependencies, driven by `python_harness.py`, which the gate
-calls with the package compiler as `ROC`.
+The Roc integration driver still calls legacy Python oracle, fuzz, resource and
+measurement drivers while those are migrated. Independent reference generators
+and Python benchmark subjects remain pinned evidence inputs. Every product
+command receives the selected package compiler explicitly.
 
 `release.yml` calls the shared release workflow of
 [roc-automation](https://github.com/lukewilliamboswell/roc-automation) at a full
-commit SHA. It runs `blueprint run check`, then builds, tests and publishes the
+commit SHA. CI runs `blueprint run check`; the shared workflow builds, tests and publishes the
 release with roc-automation's `release-package` utility; this repository keeps no
 bundling, archiving or publishing script. `nightly.yml` calls the shared
 compatibility workflow the same way. Author release notes in
@@ -103,7 +105,6 @@ A pull request's dry run renders the newest notes file.
 
 | Script | Purpose |
 | --- | --- |
-| `python_harness.py` | The Python-driven stages of the gate |
 | `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_gregorian.py` | Measure validated date construction and coordinate round trips with checked checksums |
@@ -135,16 +136,14 @@ supported profile. See the
 [shared authoring contract](https://lukewilliamboswell.github.io/roc-automation/documentation.html#experimental-native-docs-contract).
 
 ```sh
-RELEASE_VERSION=0.2.0 DOCS_OUTPUT=.roc-time-tmp/manual-preview blueprint run docs
+DOCS_OUTPUT=.roc-time-tmp/manual-preview blueprint run check-docs
 ```
 
 Use a new output directory. This builds both the HTML site and `roc-time.pdf`
-with roc-automation's released `tools-0.1.0-rc.1` renderer. `scripts/src/Docs.roc`
-records the reviewed SHA-256 for each supported executable (Linux x86-64,
-Linux ARM64 and Apple Silicon); every cached or supplied binary is checked
-before execution. `ROC_DOCS_BINARY` may select a binary with the same digest.
-Upgrade the release and all reviewed digests together. Rendering uses the
-shared theme and needs no compiler; Roc scripts run its preparation/assembly,
+with roc-automation's released `tools-0.6.0` renderer. Blueprint fetches each
+executable and verifies it against `Blueprint.lock`; update its recipe and
+review all per-system lock digests together. Rendering uses the shared theme
+and needs no compiler; Roc scripts run its preparation and assembly,
 and the Blueprint environment provides Poppler for independent PDF checks.
 
 The gate checks every local HTML link/fragment, legacy chapter route, chapter
@@ -156,22 +155,23 @@ narrow screens. These checks do not claim PDF/UA conformance.
 For a complete preview with immutable historical API references:
 
 ```sh
-python3 scripts/release_docs.py fetch --output .roc-time-tmp/api-history
+blueprint run restore-api-docs -- --output .roc-time-tmp/api-history
 blueprint run site -- --api-root .roc-time-tmp/api-history --output .roc-time-tmp/site-preview
 ```
 
-With `RELEASE_VERSION` set, site assembly downloads that release's tested manual
-archive instead of rebuilding it. `MANUAL_ARCHIVE` selects a local candidate.
+With `RELEASE_VERSION` set, site assembly renders that immutable tag's authored
+manual using the shared renderer; fetch the tag before a local release preview.
+Without it, the manual is labelled unreleased. `site-release` selects the latest
+final release and `site-preview` checks the current manual. Both write a new
+`.roc-time-tmp/pages-site`; use a clean worktree or move the previous output.
 API trees are restored separately, preserving `/<version>/` URLs byte for byte.
 
 API usage examples belong in module `##` comments, in fenced `roc` code blocks.
 Use complete imports through the `time` dependency and executable `expect`
-examples. `scripts/test_doc_examples.py` checks them together against the real
-package and runs in the default gate. The docs publisher adds
-`scripts/templates/api-overview.html` as the landing guide because the compiler-generated package
-index currently contains navigation and a logo only. Review generated API pages
-with `ROC=/path/to/roc python3 scripts/docs.py 0.0.0-dev --docs-root .roc-time-tmp/docs-review`.
-Here `0.0.0-dev` is a local preview label, not a published release.
+examples. `scripts/check_doc_examples.roc` checks them together against the real
+package and runs in the default gate. The shared release utility archives the compiler's original output without
+injecting HTML. Generate a local reference with
+`roc docs package/main.roc --output=.roc-time-tmp/api-main`.
 
 ## Tests
 
@@ -184,7 +184,7 @@ for integration.
 Run the gate with `blueprint run check`; set `ROC_NIGHTLY` to use a package
 compiler other than `roc` on `PATH`. `release-package test-examples` alone runs
 every example in place against the working tree. Generate local development API docs
-with `python3 scripts/docs.py 0.0.0-dev`. The gate also runs
+with `roc docs package/main.roc --output=.roc-time-tmp/api-main`. The gate also runs
 `tests/static_dispatch/main.roc` in the interpreter and natively to check public
 operators, dictionary keys and iterators.
 
@@ -643,11 +643,9 @@ in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
 
 ## Compilers and releases
 
-Nothing moves either compiler automatically. `Update Blueprint lock` proposes a
-weekly pull request that refreshes `Blueprint.lock` only; it cannot change the
-`roc-stable` tag. Pull requests opened by automation do not start pull request
-workflows, so it dispatches `CI` on its branch; close and reopen the pull request
-to run the release dry run before merging.
+Neither compiler is updated automatically. Refresh locked tooling with
+`blueprint update` in a maintainer pull request, review the source revisions and
+utility digests, then run the complete gate and release dry run before merging.
 
 The package compiler is the latest nightly. When a nightly breaks the packages or
 examples, fix them on `main`; when it breaks a published release, that release

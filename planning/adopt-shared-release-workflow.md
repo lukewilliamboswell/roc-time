@@ -9,46 +9,41 @@ establish product portability.
 
 ## Remaining deliverables
 
-- Provision native harness toolchains through Blueprint's locked Nix sources:
-  Zig 0.17.0, CPython 3.14.3, Rust 1.95.0 including the musl target, and external
-  tools. Remove CI-only setup after validating replacements.
-- Port test, fixture-host, oracle-replay, fuzz, zone-generation, measurement and
-  benchmark orchestration to Roc. Retain Python reference generators and measured
-  Python subjects with pinned dependencies and provenance. Preserve corpus bytes,
-  intended diagnostic checks, resource assertions and failing controls.
-- Make `blueprint run check` the complete contributor gate. Keep it in CI and
-  set the shared release check-task empty only once CI runs the complete gate.
-  Preserve bounded fuzz searches and replay; separate sustained campaigns.
-- Replace legacy documentation restoration with Roc preparation around the shared
-  renderer. Preserve historical API routes and safely read legacy tar.gz and new
-  ZIP archives. Add a read-only docs build and isolated Pages deployment, refreshed
-  for final releases but not prereleases. Remove old implementations only after
-  replacement checks pass.
-- Remove automated lock-update PR creation. Use executable script shebangs and
-  per-job permissions throughout. Reconcile contributor instructions and tracker
-  items with local policy: no compiler headers and ROC_NIGHTLY remains supported.
+- Port the remaining Python fixture-host, oracle-replay, fuzz, zone-generation,
+  measurement and benchmark drivers to Roc. The Roc integration inventory keeps
+  them executable during migration. Retain independent Python reference
+  generators and measured Python subjects, their dependency pins, corpus bytes,
+  provenance and failure controls.
+- Finish sustained fuzz workflow alignment: its default-branch event guard,
+  Blueprint entrypoint and evolving corpus cache must supplement the small
+  committed smoke corpus. Keep per-target budgets explicit.
+- Verify the complete gate and documentation workflow on the PR with the locked
+  native toolchains. Require `test`, `Build and verify documentation`,
+  `Release / Build and test the source` and `Release / Test the release candidate`.
 - Review repository settings with upstream's read-only checker. Prepare main/tag
-  protections, signed commits and current required checks; disable Actions PR
-  creation, enable private vulnerability reporting, restrict Pages to main.
-  Preserve immutable releases and the release environment. Maintainer applies
-  settings and reviews obsolete branch deletions.
+  protections and current required checks; disable Actions PR creation, enable
+  private vulnerability reporting, restrict Pages to main. Preserve immutable
+  releases and the release environment. Maintainer applies settings and reviews
+  obsolete branch deletions.
 
-## Acceptance
+## Acceptance and rollout
 
-- Review utility lock hashes and lengths against tools-0.6.0's manifest.
-- Gate, example specification, release build and archive test pass with recorded
-  compiler identities. Compare replacement drivers with their predecessors before
-  deletion, including missing/malformed outputs, timeouts and failing controls.
-- Validate HTML, PDF, Markdown exports, discovery index, API history and links.
-- Hosted PR and dispatched dry runs pass against both bundles. All 30 example
-  folders travel intact except rewritten dependency declarations.
+- Preserve intended compile diagnostics, oracle transport failures, resource
+  assertions and failing controls when replacing each remaining driver. Compare
+  with its predecessor before deletion; ordinary oracle replay stays offline.
+- Hosted PR and dispatched dry runs must pass against both bundles. The shared
+  archive contains every example folder except rewritten dependency declarations.
+- Validate the deployed HTML/PDF/Markdown publication and historical API routes.
+  Prereleases do not replace the default release documentation.
 - Maintainer publishes the next version allowed by strict bump checks on both
   packages. Existing releases remain immutable. Shared nightly with empty
-  selectors passes against the latest final release and issue lifecycle is tested.
-- Dashboard refresh shows every direct automation reference matching observed
+  selectors must pass against the latest final release. Rehearse opening,
+  updating and closing the owned tracking issue.
+- Dashboard refresh must show every direct automation reference matching observed
   upstream main and complete passing compatibility evidence under 48 hours old.
 
-Commits, publication, external issue updates and destructive branch cleanup are
-maintainer rollout steps unless separately authorized. Do not expand this task
-into temporal features or a separate SBOM project. Delete this plan when its
-remaining deliverables and acceptance criteria are satisfied.
+Keep local policy: no compiler headers; ROC_NIGHTLY remains supported. No temporal
+contract changes or separate SBOM project are part of this task. Publication,
+external issue updates and destructive branch cleanup are maintainer rollout
+steps unless separately authorized. Delete this plan when its remaining
+acceptance criteria are satisfied.

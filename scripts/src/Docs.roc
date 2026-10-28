@@ -12,18 +12,22 @@ Docs := [].{
 
 	## Build both formats inside the workspace, then copy the completed publication.
 	## The destination may be a release's temporary artifact directory.
-	build! = |destination, version| {
+	build! = |destination, version| build_from!(Path.utf8("."), destination, version)
+
+	## Render an explicit source checkout; restored APIs are never regenerated.
+	build_from! = |workspace, destination, version| {
 		if Path.exists!(destination)? {
 			return Script.fail!("manual output must be new: ${Path.display(destination)}")
 		}
-		Path.create_all!(".roc-time-tmp")?
-		temporary = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "manual-")?
+		work = Path.join(workspace, ".roc-time-tmp")
+		Path.create_all!(work)?
+		temporary = Env.create_temp_dir_in!(Path.absolute!(work)?, "manual-")?
 		staged = Path.join(temporary, "rendered")
 		renderer = renderer!()?
 		_ = renderer.cmd([
 			"build",
 			"--workspace",
-			Path.to_os_str(Path.absolute!(".")?),
+			Path.to_os_str(Path.absolute!(workspace)?),
 			"--docs-directory",
 			"docs",
 			"--entrypoint",
@@ -32,6 +36,8 @@ Docs := [].{
 			OsStr.from_str(".roc-time-tmp/${Files.name(temporary)}/rendered"),
 			"--pdf-filename",
 			"roc-time.pdf",
+			"--site-url",
+			"https://lukewilliamboswell.github.io/roc-time/",
 			"--docs-version",
 			OsStr.from_str(version),
 			"--author",

@@ -31,5 +31,14 @@ jobs:
     with:
       version: ${{ inputs.version || '' }}
       nightly-tag: ${{ inputs.nightly-tag || '' }}
-      check-task: check
+      check-task: ""
       manual: true
+
+  Documentation:
+    needs: Release
+    if: inputs.version != '' && !contains(inputs.version, '-')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml
