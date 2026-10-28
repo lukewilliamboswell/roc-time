@@ -1,5 +1,5 @@
 app [main!] {
-	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst",
+	pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.26.0/GddgvsGjiNXrHFW6au5i5dUDbTs8FinQdrgE2Gqmw53t.tar.zst",
 	time: "../../package/main.roc",
 }
 import pf.Utc
@@ -15,7 +15,7 @@ import Deadline
 main! = |args| {
 	now = match args.map(OsStr.display) {
 		[instant] => Deadline.at(instant)?
-		_ => Deadline.acquire_positive_nanoseconds(Utc.now!())?
+		_ => Deadline.acquire_nanoseconds(Utc.now!().to_nanos_since_epoch())?
 	}
 	record = Deadline.evaluate(now, "2030-01-01T00:00:00Z")?
 	Stdout.line!(Deadline.encode(record))?

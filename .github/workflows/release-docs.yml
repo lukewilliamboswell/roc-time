@@ -23,7 +23,7 @@ concurrency:
 jobs:
   publish-docs:
     name: Publish versioned docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
 
@@ -34,7 +34,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@7aff4132691ad4fc348abe9df146a57512b49bd6
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@a25b5129340b9b2ad1744d20330b8ee4d38a1849
         with:
           cache: 'true'
           cache-workload: docs
@@ -71,7 +71,7 @@ jobs:
   deploy-pages:
     name: Deploy versioned docs
     needs: publish-docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write

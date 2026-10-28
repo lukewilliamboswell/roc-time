@@ -45,7 +45,16 @@ Manual := [].{
 				if page.name != "index.html" {
 					stem = Str.replace_each(page.name, ".html", ".adoc")
 					source = Path.read_utf8!(Path.join("docs", stem))?
-					blocks = DocLinks.source_blocks(source)
+					var $blocks = DocLinks.source_blocks(source)
+					# Release listings live in included authored files. Check their
+					# bytes too, rather than treating the chapter as having none.
+					for line in source.split_on("\n") {
+						if line.starts_with("include::releases/") {
+							file = line.drop_prefix("include::").split_on("[").first() ?? ""
+							$blocks = $blocks.concat(DocLinks.source_blocks(Path.read_utf8!(Path.join("docs", file))?))
+						}
+					}
+					blocks = $blocks
 					if DocLinks.code_blocks(page.html) != blocks {
 						return Script.fail!("${page.name}: rendered source bytes differ")
 					}

@@ -1,5 +1,5 @@
 # Development environment and tasks for roc-time, realised by roc-blueprint
-# without Nix.
+# with released shared utilities; native toolchain migration is pending.
 #
 #     blueprint run check    # the Roc-only gate the release workflow runs first
 #     blueprint run harness  # the Python, Zig and Rust harness CI runs
@@ -37,16 +37,19 @@ config = [
 		],
 	),
 	# Tasks that build or verify the manual also read its PDF.
-	Environment("docs", [Extend("dev"), Expect(["pdfinfo", "pdftotext"])]),
+	Environment("docs", [Extend("renderer"), Expect(["pdfinfo", "pdftotext"])]),
 	# The shared release workflow runs this utility against the `roc` on PATH; a
 	# maintainer runs the same task locally, such as `-- test-examples --update`.
-	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.5.0/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
+	Environment("renderer", [Extend("dev"), Programs([Fetch("roc-docs", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.6.0/roc-docs-{system}"))]), Expect(["realpath", "sh"])]),
+	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.6.0/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
 	Shell("default", [Use("docs")]),
 	Task("check", [Use("dev"), Run(["roc-stable", "scripts/check_all.roc"])]),
 	Task("release-package", [Use("release"), Run(["release-package"])]),
 	Task("harness", [Use("docs"), Run(["roc-stable", "scripts/check_all.roc", "--", "--harness"])]),
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
 	Task("propose-lock-update", [Use("dev"), Run(["roc-stable", "scripts/propose_lock_update.roc"])]),
-	Task("docs", [Use("docs"), Run(["roc-stable", "scripts/build_docs.roc"])]),
+	Task("check-docs", [Use("docs"), Run(["roc-stable", "scripts/build_docs.roc"])]),
+	Task("docs-path", [Use("renderer"), Run(["sh", "-c", "realpath \"$(command -v roc-docs)\""])]),
+	Task("docs", [Use("renderer"), Run(["roc-docs", "build", "--workspace", ".", "--pdf-filename", "roc-time.pdf", "--site-url", "https://lukewilliamboswell.github.io/roc-time/"])]),
 	Task("site", [Use("docs"), Run(["roc-stable", "scripts/assemble_site.roc", "--"])]),
 ]
