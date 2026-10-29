@@ -7,6 +7,7 @@ import cli.OsStr
 import cli.Path
 import cli.Stderr
 import src/Files
+import src/FuzzEvidence
 import src/FuzzOptions
 import src/Script
 
@@ -16,7 +17,7 @@ Context : { compiler : Str, version : Str, target : Str, work : Path, dependency
 
 main! = |args| {
 	if args.map(OsStr.display) == ["--help"] {
-		return Script.info!("usage:", "blueprint run fuzz -- [--operation build|replay|run|lifecycle|all] [--targets NAME...] [--runs N] [--seconds N] [--seed N]")
+		return Script.info!("usage:", "blueprint run fuzz -- [--operation build|accept|replay|run|lifecycle|all] [--targets NAME...] [--runs N] [--seconds N] [--seed N]")
 	}
 	options = FuzzOptions.parse(args.map(OsStr.display))?
 	context = prepare!()?
@@ -24,7 +25,11 @@ main! = |args| {
 	if options.operation != "lifecycle" {
 		for name in options.names {
 			binary = build!(context, name)?
+			if options.operation == "accept" {
+				examples!(context, name, binary, Bool.True)?
+			}
 			if ["replay", "all"].contains(options.operation) {
+				examples!(context, name, binary, Bool.False)?
 				replay!(context, name, binary)?
 			}
 			if ["run", "all"].contains(options.operation) {
@@ -34,6 +39,7 @@ main! = |args| {
 	}
 	if ["lifecycle", "all"].contains(options.operation) {
 		lifecycle!(context)?
+		baseline_controls!(context)?
 	}
 	Ok({})
 }
@@ -145,8 +151,12 @@ check_input_admission! = |parent| {
 
 replay! = |context, name, binary| {
 	for raw in inputs!(Path.utf8("tests/fuzz/corpus/${name}"))? {
-		output = command!([Path.display(binary), "replay", Path.display(Path.absolute!(raw)?)], context.work, 10000, 0, Path.join(context.work, "${name}-replay-${Files.name(raw)}"))?
-		if !output.contains("Executed") {
+		report_dir = Env.create_temp_dir_in!(context.work, "${name}-replay-")?
+		_ = command!([Path.display(binary), "replay", Path.display(Path.absolute!(raw)?), "--report-dir=${Path.display(report_dir)}"], context.work, 10000, 0, Path.join(context.work, "${name}-replay-${Files.name(raw)}"))?
+		validate_report!(context, report_dir, "not_checked", Bool.False)?
+		replay : FuzzEvidence.Report
+		replay = Json.parse(Path.read_utf8!(Path.join(report_dir, "report.json"))?)?
+		if replay.examples.len() != 1 or replay.examples.first()?.input_sha256 != hash!(raw)? {
 			return Err(MissingReplayEvidence)
 		}
 	}
@@ -223,10 +233,10 @@ campaign! = |context, name, binary, options| {
 	Path.write_utf8!(Path.join(session, "metadata.json"), Json.to_str(metadata))?
 	# The engine's finite budget is separate from the process-tree deadline.
 	# Argument admission bounds this addition and multiplication within U64.
-	output = command!([Path.display(binary), "run", Path.display(corpus), "--runs=${options.runs.to_str()}", "--time=${options.seconds.to_str()}", "--seed=${options.seed.to_str()}", "--max-input-size=256", "--memory-limit=256", "--timeout=2"], session, (options.seconds + 30) * 1000, 0, Path.join(session, "run"))?
-	if !output.contains("inline 8-bit counters") or !output.contains("DONE") {
-		return Err(MissingSearchEvidence)
-	}
+	report_dir = Path.join(session, "quality")
+	baseline = Path.absolute!("tests/fuzz/baselines/${name}.json")?
+	_ = command!([Path.display(binary), "run", Path.display(corpus), "--report-dir=${Path.display(report_dir)}", "--baseline=${Path.display(baseline)}", "--profile=speed", "--source-revision=${Script.command("git").output!(["rev-parse", "HEAD"])?}", "--roc-version=${context.version}", "--platform-release=${context.dependency.version}", "--platform-sha256=${context.dependency.sha256}", "--runs=${options.runs.to_str()}", "--time=${options.seconds.to_str()}", "--seed=${options.seed.to_str()}", "--max-input-size=256", "--memory-limit=256", "--timeout=2"], session, (options.seconds + 30) * 1000, 0, Path.join(session, "run"))?
+	validate_report!(context, report_dir, "matched", Bool.True)?
 	_ = inputs!(corpus)?
 	if Path.exists!(persistent)? {
 		Path.delete_all!(persistent)?
@@ -243,19 +253,24 @@ lifecycle! = |context| {
 	corpus = Path.join(session, "corpus")
 	Path.create_all!(corpus)?
 	Path.write_bytes!(Path.join(corpus, "trigger"), "before*after".to_utf8())?
-	failed = command!([Path.display(bad), "run", Path.display(corpus), "--runs=100", "--time=1", "--seed=1", "--max-input-size=32", "--memory-limit=256", "--timeout=2"], session, 15000, 77, Path.join(session, "failure"))?
-	if !failed.contains("intentional lifecycle defect") {
+	failed = command!([Path.display(bad), "run", Path.display(corpus), "--runs=100", "--time=1", "--seed=1", "--max-input-size=32", "--memory-limit=256", "--timeout=2", "--report-dir=${Path.display(Path.join(session, "quality"))}"], session, 15000, 1, Path.join(session, "failure"))?
+	native_log = Path.read_utf8!(Path.join(session, "quality/run.log"))?
+	if !failed.contains("finding") or !native_log.contains("intentional lifecycle defect") {
 		return Err(UnrelatedLifecycleFailure)
 	}
-	artifacts = Files.sort_paths(Path.list!(Path.join(session, ".roc-fuzz"))?).keep_if(|path| Files.name(path).starts_with("crash-"))
-	raw = artifacts.first().map_err(|_| MissingReproducer)?
+	finding : { outcome : Str, exploration : { termination : { exit_code : U64 }, original_input_complete : Bool } }
+	finding = Json.parse(Path.read_utf8!(Path.join(session, "quality/report.json"))?)?
+	if finding.outcome != "finding" or finding.exploration.termination.exit_code != 77 or !finding.exploration.original_input_complete {
+		return Err(MissingReproducer)
+	}
+	raw = Path.join(session, "quality/original-input.bin")
 	shown = command!([Path.display(bad), "show", Path.display(raw)], session, 10000, 0, Path.join(session, "show"))?
 	if !shown.contains("42") {
 		return Err(MissingTrigger)
 	}
-	_ = command!([Path.display(bad), "replay", Path.display(raw)], session, 10000, 77, Path.join(session, "replay"))?
+	_ = command!([Path.display(bad), "replay", Path.display(raw)], session, 10000, 1, Path.join(session, "replay"))?
 	match command!([Path.display(bad), "replay", Path.display(raw)], session, 10000, 0, Path.join(session, "gate-control")) {
-		Err(UnexpectedExit(Exited(77))) => {}
+		Err(UnexpectedExit(Exited(1))) => {}
 		_ => return Err(BrokenFailureGate)
 	}
 	minimized = Path.join(session, "minimized")
@@ -264,13 +279,53 @@ lifecycle! = |context| {
 		return Err(UnexpectedMinimization)
 	}
 	_ = command!([Path.display(bad), "show", Path.display(minimized)], session, 10000, 0, Path.join(session, "show-minimized"))?
-	_ = command!([Path.display(bad), "replay", Path.display(minimized)], session, 10000, 77, Path.join(session, "replay-minimized"))?
+	_ = command!([Path.display(bad), "replay", Path.display(minimized)], session, 10000, 1, Path.join(session, "replay-minimized"))?
 	_ = command!([Path.display(fixed), "replay", Path.display(minimized)], session, 10000, 0, Path.join(session, "fixed"))?
 	regression = Path.absolute!("tests/fuzz/corpus/lifecycle_fixed/byte-42")?
 	_ = command!([Path.display(fixed), "replay", Path.display(regression)], session, 10000, 0, Path.join(session, "regression"))?
-	Script.info!("PASS", "failure lifecycle: saved/show/replay/minimize, exit 77, fixed regression; ${Path.display(session)}")
+	Script.info!("PASS", "failure lifecycle: saved/show/replay/minimize, supervisor exit 1 / engine exit 77, fixed regression; ${Path.display(session)}")
 }
 
 expect field("{ a: -9223372036854775808, b: 0, c: 1, d: 9223372036854775807 }", "a") == Ok(-9223372036854775808)
 expect field("{ a: -1, b: 0, c: 1, d: 9223372036854775807 }", "d") == Ok(9223372036854775807)
 expect field("{ a: broken }", "a") == Err(MalformedSpanObservation)
+
+examples! = |context, name, binary, accept| {
+	report_dir = Env.create_temp_dir_in!(context.work, "${name}-examples-")?
+	baseline = Path.absolute!("tests/fuzz/baselines/${name}.json")?
+	_ = command!([Path.display(binary), if (accept) "accept" else "check", "--baseline=${Path.display(baseline)}", "--profile=speed", "--report-dir=${Path.display(report_dir)}"], context.work, 60000, 0, Path.join(report_dir, "supervisor"))?
+	validate_report!(context, report_dir, if (accept) "accepted" else "matched", Bool.False)?
+	Script.info!("PASS", "${name}: named examples and ${if (accept) "explicitly accepted" else "matched"} allocation baseline; ${Path.display(report_dir)}")
+}
+
+validate_report! = |context, directory, baseline, search| {
+	report : FuzzEvidence.Report
+	report = Json.parse(Path.read_utf8!(Path.join(directory, "report.json"))?)?
+	FuzzEvidence.validate(report, context.target, baseline, search)
+}
+
+baseline_controls! = |context| {
+	binary = build!(context, "clock")?
+	work = Env.create_temp_dir_in!(context.work, "baseline-controls-")?
+	changed = Path.join(work, "changed.json")
+	source = Path.read_utf8!("tests/fuzz/baselines/clock.json")?
+	edited = Str.join_with(source.split_on("\"revision\":\"1\""), "\"revision\":\"control\"")
+	if edited == source {
+		return Err(BaselineControlFixture)
+	}
+	Path.write_utf8!(changed, edited)?
+	changed_report = Path.join(work, "changed")
+	_ = command!([Path.display(binary), "check", "--baseline=${Path.display(changed)}", "--profile=speed", "--report-dir=${Path.display(changed_report)}"], context.work, 30000, 1, Path.join(work, "changed-supervisor"))?
+	result : { outcome : Str, baseline_status : Str, exploration : { status : Str } }
+	result = Json.parse(Path.read_utf8!(Path.join(changed_report, "report.json"))?)?
+	if result.outcome != "baseline_changed" or result.baseline_status != "changed" or result.exploration.status != "skipped" {
+		return Err(BrokenBaselineGate)
+	}
+	missing_report = Path.join(work, "missing")
+	_ = command!([Path.display(binary), "check", "--baseline=${Path.display(Path.join(work, "missing.json"))}", "--profile=speed", "--report-dir=${Path.display(missing_report)}"], context.work, 30000, 0, Path.join(work, "missing-supervisor"))?
+	match validate_report!(context, missing_report, "matched", Bool.False) {
+		Err(FuzzEvidence) => {}
+		_ => return Err(BrokenBaselineGate)
+	}
+	Script.info!("PASS", "changed baseline fails and skips exploration; unbaselined success is rejected by repository policy")
+}

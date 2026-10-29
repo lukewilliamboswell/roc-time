@@ -29,6 +29,8 @@ import time.PosixBoundary
 # with 0..6 fractional digits. The date oracle counts whole years/months using
 # the Gregorian divisibility law, independently of Calendar.Date conversions.
 InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier : U8, seconds : U32, fraction : U32, digits : U8, offset : I16 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(InterchangeCase)
 	generator_for = |_| { year: Fuzz.map(Fuzz.u64_in(1900, 2100), |n| n.to_u16_wrap()), month: Fuzz.u8_in(1, 12), day: Fuzz.u8_in(0, 30), precision: Fuzz.u8_in(0, 2), qualifier: Fuzz.u8_in(0, 3), seconds: Fuzz.map(Fuzz.u64_in(0, 86399), |n| n.to_u32_wrap()), fraction: Fuzz.map(Fuzz.u64_in(0, 999999), |n| n.to_u32_wrap()), digits: Fuzz.u8_in(0, 6), offset: Fuzz.map(Fuzz.u64_in(0, 2878), |n| (n.to_i64_wrap() - 1439).to_i16_wrap()) }.Fuzz
 	check : InterchangeCase -> Fuzz.Outcome

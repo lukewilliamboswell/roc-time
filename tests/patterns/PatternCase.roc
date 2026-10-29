@@ -4,6 +4,8 @@ import time.GregorianDate
 
 # R11 calendar candidates: field walking and a 400-year weekday counter oracle.
 PatternCase := { year : I64, month : U8, interval : U8, index : U8, weekday : U8, ordinal : I8, month_day : I8 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(PatternCase)
 	generator_for = |_| {
 		year: Fuzz.map2(

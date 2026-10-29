@@ -9,16 +9,6 @@ establish product portability.
 
 ## Remaining deliverables
 
-- Port the remaining Python benchmark drivers to Roc. The Roc integration inventory keeps them executable during
-  migration. Retain
-  independent Python reference generators and measured Python subjects, their
-  dependency pins, corpus bytes,
-  provenance and failure controls. Remove the legacy fixture-host build helper
-  after its Chrono benchmark consumer uses FixtureHost.roc.
-- Review the newer roc-fuzz named-example/memory-baseline guidance at upstream
-  9940bb2. The current temporal targets deliberately retain the reviewed 0.4.3
-  pin; upgrade declarations and dependency integrity together, preserve curated
-  replay and lifecycle controls, and validate accepted-input/report semantics.
 - Verify the complete gate and documentation workflow on the PR with the locked
   native toolchains. Require `test`, `Build and verify documentation`,
   `Release / Build and test the source` and `Release / Test the release candidate`.
@@ -34,9 +24,6 @@ establish product portability.
 
 ## Acceptance and rollout
 
-- Preserve intended compile diagnostics, oracle transport failures, resource
-  assertions and failing controls when replacing each remaining driver. Compare
-  with its predecessor before deletion; ordinary oracle replay stays offline.
 - Hosted PR and dispatched dry runs must pass against both bundles. The shared
   archive contains every example folder except rewritten dependency declarations.
 - Validate the deployed HTML/PDF/Markdown publication and historical API routes.

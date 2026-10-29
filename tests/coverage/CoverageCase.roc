@@ -9,6 +9,8 @@ Spec : { lo : I64, width : U8 }
 spec = { lo: Fuzz.map(Fuzz.u8_in(0, 16), |n| U8.to_i64(n) - 8), width: Fuzz.u8_in(1, 17) }.Fuzz
 
 CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(CoverageCase)
 	generator_for = |_| { left: Fuzz.list(spec, 16), right: Fuzz.list(spec, 16), window: spec }.Fuzz
 

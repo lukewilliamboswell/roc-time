@@ -7,10 +7,20 @@ are described in [the local recurrence evidence](../local_recurrence/README.md).
 
 The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, `tests/clock/main.roc`, `tests/offsets/main.roc`, `tests/zones/main.roc`, `tests/events/main.roc`, `tests/patterns/main.roc`, and `tests/recurrence/main.roc`
 import the real public package and the content-addressed
-[roc-fuzz 0.4.3 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.4.3).
+[roc-fuzz 0.5.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.5.0).
 `dependency.json` records the release commit and independently verified SHA-256.
 The runner verifies the archive digest; targets keep the release URL directly.
 No local checkout or platform rebuild is required.
+
+All curated corpus inputs are declared using `Fuzz.saved`, preserving their raw
+bytes and storage-sensitive entropy form. Nominal input types expose derived
+platform codecs for the new typed input form; existing generators and semantic
+checks are unchanged. Named examples execute in fresh processes and compare the
+exact reviewed allocation observations under `baselines/` before exploration.
+Reports retain named input hashes, complete metrics, accepted/rejected counts and
+platform/compiler provenance. The runner rejects zero accepted inputs, missing
+baselines and incomplete evidence; it does not infer success from console text.
+See [baseline scope and reproduction](baselines/README.md).
 
 Each root wires the platform to a separate pure type module (`PrecisionCase`,
 `SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, or `CalendarCase`). Generators and semantic checks live in those

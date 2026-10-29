@@ -16,6 +16,8 @@ import time.ZoneRules
 # The oracle uses integer grid widths and two explicitly known offset segments;
 # it neither calls LocalDateTime.calendar_value_bounds nor the resolver to form expectations.
 DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(DescriptionCase)
 	generator_for = |_| { number: Fuzz.u64_in(0, 86399999999), digits: Fuzz.u8_in(1, 6), gap: Fuzz.map(Fuzz.u8_in(0, 1), |n| n == 1) }.Fuzz
 	check : DescriptionCase -> Fuzz.Outcome

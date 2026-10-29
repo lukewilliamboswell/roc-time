@@ -19,7 +19,7 @@ parse_loop = |args, options| match args {
 	} else {
 		Ok(options)
 	}
-	["--operation", operation, .. as rest] if ["build", "replay", "run", "lifecycle", "all"].contains(operation) => parse_loop(rest, { ..options, operation })
+	["--operation", operation, .. as rest] if ["build", "accept", "replay", "run", "lifecycle", "all"].contains(operation) => parse_loop(rest, { ..options, operation })
 	["--runs", value, .. as rest] => parse_loop(rest, { ..options, runs: positive(value)? })
 	["--seconds", value, .. as rest] => parse_loop(rest, { ..options, seconds: positive(value)? })
 	["--seed", value, .. as rest] => parse_loop(rest, { ..options, seed: positive(value)? })

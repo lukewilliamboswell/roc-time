@@ -6,6 +6,8 @@ import time.GregorianDate
 Fields : { year : I64, month : U8, day : U8 }
 
 ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64, days : I64 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(ArithmeticCase)
 	generator_for = |_| {
 		year: Fuzz.map2(

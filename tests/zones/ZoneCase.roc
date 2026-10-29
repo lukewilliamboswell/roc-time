@@ -11,6 +11,8 @@ import time.ResolvedBoundary
 import time.ResolvedSelection
 
 ZoneCase := { number : I64, first : I32, second : I32 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(ZoneCase)
 	generator_for = |_| {
 		number: Fuzz.map(Fuzz.u64_in(0, 14000000), |n| n.to_i64_wrap() - 7000000),

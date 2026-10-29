@@ -357,7 +357,7 @@ network service.
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
 neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
-use the content-addressed [roc-fuzz 0.4.3 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.4.3)
+use the content-addressed [roc-fuzz 0.5.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.5.0)
 URL directly; corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.roc` is their single runner. Set `ROC_NIGHTLY` to select a package compiler:
 
@@ -370,14 +370,27 @@ blueprint run fuzz -- --operation replay --targets precision
 blueprint run fuzz -- --operation lifecycle
 ```
 
-The full test command includes curated replay, 10,000-run/5-second searches for
-each semantic target, and the deliberately failing harness lifecycle. Searches
+The full integration gate includes curated replay and 100-run/1-second searches
+for each semantic target (seed 1); the standalone runner defaults to
+10,000 runs and 5 seconds. Both include named examples, exact allocation
+baselines, and the deliberately failing harness lifecycle. Searches
 also bound raw inputs to 256 bytes, RSS to 256 MB, and each target call to two
 seconds. Builds, corpora, failure artifacts, and logs stay under `.roc-time-tmp/`
 by default; `ROC_TIME_TMPDIR` selects a different disposable working directory.
-Apple Silicon macOS and Linux x86-64/musl have verified native fuzz execution.
-Other hosts explicitly report fuzzing as unverified.
+The current allocation baselines cover Linux x86-64/musl, LLVM speed with
+`--fuzz`. Apple Silicon has historical native execution evidence, but needs a
+reviewed host-specific baseline before this new gate can pass there. Other hosts
+explicitly report fuzzing as unverified.
 See [target domains and corpus provenance](tests/fuzz/README.md).
+
+Every curated input is also a source-declared named example. The runner requires
+complete metrics, passing trace rules, a matched baseline and nonzero accepted
+exploration counts from `roc-fuzz-quality/1` reports. Ordinary checks never update
+`tests/fuzz/baselines/`. For an intentional change, review the observations and run
+`blueprint run fuzz -- --operation accept --targets NAME`, then review the baseline
+diff and replay the gate. Missing baselines fail repository policy even when the
+platform reports an otherwise successful unbaselined check. Changed/missing
+baseline controls run with the failure lifecycle.
 
 For a saved failure, run these commands from a directory under `.roc-time-tmp/`
 so the runner's own `.roc-fuzz/` artifacts remain disposable. `TARGET` and
@@ -392,7 +405,7 @@ TARGET replay minimized
 ```
 
 `--operation lifecycle` exercises these commands automatically, checks failing
-exit status and artifact creation, minimizes to one byte, then verifies the
+supervisor status 1, the engine's retained status 77 and artifact creation, minimizes to one byte, then verifies the
 fixed harness against the saved regression.
 
 ## Generic codecs and literals

@@ -9,6 +9,8 @@ Spec : { start : U8, width : U8 }
 spec = { start: Fuzz.u8_in(0, 16), width: Fuzz.u8_in(1, 8) }.Fuzz
 
 EventCase := { spans : List(Spec) }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(EventCase)
 	generator_for = |_| Fuzz.map(
 		Fuzz.list(spec, 12),

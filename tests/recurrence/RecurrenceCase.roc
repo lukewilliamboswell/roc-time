@@ -28,6 +28,8 @@ import time.ICalDateRule
 # R11–R12: a finite calendar-table model, independent of CalendarPattern and
 # cursor execution. Enumerate 2024–2025 before applying count/union/exclusions.
 RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month : U8, exclude_anchor : Bool, work : U8 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(RecurrenceCase)
 	generator_for = |_| {
 		last_monday: Fuzz.map(Fuzz.u8_in(0, 1), |n| n == 1),

@@ -8,6 +8,8 @@ import time.EnglishGregorian
 
 # R06: full Julian coordinate range, overlap with Gregorian and explicit errors.
 CalendarCase := { number : I64 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(CalendarCase)
 	generator_for = |_| Fuzz.map(
 		Fuzz.map2(

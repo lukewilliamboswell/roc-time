@@ -5,6 +5,8 @@ import time.EnglishGregorian
 
 # R05: full provider day domain plus invalid day numbers and malformed fields.
 GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(GregorianCase)
 	generator_for = |_| {
 		number: Fuzz.map2(
