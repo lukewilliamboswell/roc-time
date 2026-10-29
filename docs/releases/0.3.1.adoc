@@ -12,3 +12,16 @@ identities are still rejected with the first repeated ID, and events keep their
 input order.
 
 The examples archive is bound to this release's packages.
+
+== Use this release
+
+[source,roc]
+----
+app [main!] {
+	time: "{package-url}",
+	zones: "{tzdb-url}",
+}
+----
+
+`zones` is optional: it carries the IANA time-zone data and imports no roc-time
+modules.

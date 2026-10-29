@@ -5,6 +5,8 @@ import time.EnglishGregorian
 
 # R01/R07/R08: local microsecond positions and malformed numeric positions.
 ClockCase := { number : I64 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(ClockCase)
 	generator_for = |_| Fuzz.map(Fuzz.u64_in(0, 86400000001), |number| { number: number.to_i64_wrap() - 1 })
 

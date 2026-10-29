@@ -11,7 +11,7 @@ StaticChecks := [].{
 		version_file = if (roc_version_exists) [".roc-version must not exist: the package compiler is not pinned"] else []
 		version_file.concat(
 			sources
-				.keep_if(|file| Text.pins_compiler(file.source))
+				.keep_if(|file| Text.has_compiler_pin(file.source))
 				.map(|file| "${file.path}: no header may pin a compiler with a roc field"),
 		)
 	}
@@ -54,14 +54,45 @@ StaticChecks := [].{
 
 shebang = "#!/usr/bin/env roc-stable"
 
+## Allow an application with no compiler header.
 expect StaticChecks.pin_problems(Bool.False, [{ path: "a.roc", source: "app [main!] {\n\tcli: platform \"u\",\n}\n" }]) == []
+
+## Reject a package compiler version file.
 expect StaticChecks.pin_problems(Bool.True, []) == [".roc-version must not exist: the package compiler is not pinned"]
+
+## Reject a compiler pin in an app header.
 expect StaticChecks.pin_problems(Bool.False, [{ path: "a.roc", source: "app [main!] {\n\troc: \"nightly-1\",\n}\n" }]) == ["a.roc: no header may pin a compiler with a roc field"]
+
+## Allow a relative working-tree package dependency.
 expect StaticChecks.example_problems([{ path: "e", source: "\ttime: \"../../package/main.roc\",\n" }]) == []
-expect StaticChecks.example_problems([{ path: "e", source: "\ttime: \"../../package/main.roc\",\n\tzones: \"../../tzdb/package/main.roc\",\n" }]) == []
+
+## Allow examples using both local package roots.
+expect StaticChecks.example_problems([
+	{
+		path: "e",
+		source: "\ttime: \"../../package/main.roc\",\n\tzones: \"../../tzdb/package/main.roc\",\n",
+	},
+]) == []
+
+## Reject an example pinned to a release URL.
 expect StaticChecks.example_problems([{ path: "e", source: "\ttime: \"https://example.com/x.tar.zst\",\n" }]) == ["e: the time dependency must be \"../../package/main.roc\""]
+
+## Require the core package dependency in examples.
 expect StaticChecks.example_problems([{ path: "e", source: "app [main!] {}\n" }]) == ["e: the time dependency must be \"../../package/main.roc\""]
-expect StaticChecks.example_problems([{ path: "e", source: "\ttime: \"../../package/main.roc\",\n\tzones: \"https://example.com/z.tar.zst\",\n" }]) == ["e: the zones dependency must be \"../../tzdb/package/main.roc\""]
+
+## Reject an incorrect companion package path.
+expect StaticChecks.example_problems([
+	{
+		path: "e",
+		source: "\ttime: \"../../package/main.roc\",\n\tzones: \"https://example.com/z.tar.zst\",\n",
+	},
+]) == ["e: the zones dependency must be \"../../tzdb/package/main.roc\""]
+
+## Require the stable script shebang.
 expect StaticChecks.shebang_problems([{ path: "s.roc", source: "#!/usr/bin/env roc-stable\napp [main!] {}\n" }]) == []
+
+## Reject scripts using the package compiler shebang.
 expect StaticChecks.shebang_problems([{ path: "s.roc", source: "#!/usr/bin/env roc\napp [main!] {}\n" }]) == ["s.roc: scripts must start with #!/usr/bin/env roc-stable"]
+
+## Reject a compiler pin in a package header.
 expect StaticChecks.pin_problems(Bool.False, [{ path: "p.roc", source: "package [Database] { roc: \"nightly-1\" }\n" }]) == ["p.roc: no header may pin a compiler with a roc field"]

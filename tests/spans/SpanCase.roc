@@ -18,6 +18,8 @@ endpoint = Fuzz.map2(
 )
 
 SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(SpanCase)
 	generator_for = |_| { a: endpoint, b: endpoint, c: endpoint, d: endpoint }.Fuzz
 

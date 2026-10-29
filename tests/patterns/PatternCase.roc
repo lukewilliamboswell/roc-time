@@ -4,6 +4,8 @@ import time.GregorianDate
 
 # R11 calendar candidates: field walking and a 400-year weekday counter oracle.
 PatternCase := { year : I64, month : U8, interval : U8, index : U8, weekday : U8, ordinal : I8, month_day : I8 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(PatternCase)
 	generator_for = |_| {
 		year: Fuzz.map2(
@@ -25,8 +27,21 @@ PatternCase := { year : I64, month : U8, interval : U8, index : U8, weekday : U8
 		month_day: Fuzz.map(Fuzz.u8_in(0, 62), |n| n.to_i8_wrap() - 31),
 	}.Fuzz
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : PatternCase -> Bool
+	is_in_domain = |input| {
+		anchor_is_in_range = input.year >= -2147483648 and input.year <= 2147483647 and input.month >= 1 and input.month <= 12
+		period_is_bounded = input.interval >= 1 and input.interval <= 3 and input.index <= 6
+		selectors_are_in_range = input.weekday <= 6 and input.ordinal >= -5 and input.ordinal <= 5 and input.month_day >= -31 and input.month_day <= 31
+		anchor_is_in_range and period_is_bounded and selectors_are_in_range
+	}
+
 	check : PatternCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		anchor = date(input.year, input.month, 1)
 		spec = { ..CalendarPattern.defaults(Monthly), interval: input.interval.to_i64(), by_month_day: [input.month_day], by_day: [{ ordinal: input.ordinal, weekday: weekday(input.weekday) }] }
 		if input.month_day == 0 {
@@ -150,4 +165,24 @@ weekday_oracle = |year, month, day| {
 		$m = $m + 1
 	}
 	I64.mod_by(5 + $elapsed + day.to_i64() - 1, 7)
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = PatternCase.{
+		year: 0,
+		month: 2,
+		interval: 3,
+		index: 6,
+		weekday: 6,
+		ordinal: -5,
+		month_day: 0,
+	}
+	{
+		boundary_is_tested: PatternCase.is_in_domain(boundary),
+		outside_is_rejected: !PatternCase.is_in_domain({ ..boundary, index: 7 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
+	}
 }

@@ -15,7 +15,6 @@ import random
 import sys
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parents[1]
 PINS = {
     'python_dateutil-2.9.0.post0-py2.py3-none-any.whl': 'a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427',
     'six-1.17.0-py2.py3-none-any.whl': '4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274',
@@ -38,9 +37,9 @@ FORMAT = '%Y%m%dT%H%M%SZ'
 EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 
 
-def generate(directory):
-    if platform.python_version() != '3.12.3' or platform.python_implementation() != 'CPython':
-        raise SystemExit('Use pinned CPython 3.12.3')
+def generate(directory: Path, output_root: Path) -> None:
+    if platform.python_version() != '3.14.3' or platform.python_implementation() != 'CPython':
+        raise SystemExit('Use pinned CPython 3.14.3')
     for filename, digest in PINS.items():
         path = directory / filename
         if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
@@ -89,10 +88,11 @@ def generate(directory):
                       ','.join(x.strftime(FORMAT) for x in exclusions) or '-', lower.strftime(FORMAT), upper.strftime(FORMAT)]
             cases.append(dict(id=str(len(cases)), operation='rfc_timed', input=inputs, expected=expected,
                               evidence='dateutil-2.9.0.post0-utc-rrulestr-and-rruleset'))
-    corpus = ROOT / 'tests/oracles/rfc_timed.jsonl'
+    corpus = output_root / 'tests/oracles/rfc_timed.jsonl'
+    corpus.parent.mkdir(parents=True, exist_ok=True)
     corpus.write_text(''.join(json.dumps(c, separators=(',', ':'))+'\n' for c in cases))
-    driver = ROOT / 'tests/oracle_rfc_timed'
-    driver.mkdir(exist_ok=True)
+    driver = output_root / 'tests/oracle_rfc_timed'
+    driver.mkdir(parents=True, exist_ok=True)
     selected = [cases[index*32] for index in range(len(TEMPLATES))]
     rows = ',\n'.join('{ input: '+json.dumps(c['input'])+', expected: '+json.dumps('\t'.join(c['expected']))+' }' for c in selected)
     smoke = driver / 'SmokeCases.roc'
@@ -101,16 +101,21 @@ def generate(directory):
                     corpus_sha256=hashlib.sha256(corpus.read_bytes()).hexdigest(),
                     smoke_case_count=len(selected), smoke_sha256=hashlib.sha256(smoke.read_bytes()).hexdigest(),
                     generator_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                    reference='python-dateutil 2.9.0.post0 with six 1.17.0, CPython 3.12.3', seed=20260906,
+                    reference='python-dateutil 2.9.0.post0 with six 1.17.0, CPython 3.14.3', seed=20260906,
                     source_wheels=list(PINS), source_sha256=list(PINS.values()),
                     sources=['https://pypi.org/project/python-dateutil/2.9.0.post0/', 'https://pypi.org/project/six/1.17.0/', 'https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10'],
                     license='Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT.',
                     independence='dateutil parses text and expands indexed calendar/clock masks; Roc uses native bounded cursors. Shared Gregorian and UTC conventions. Twelve synchronized templates, SECONDLY/MINUTELY/HOURLY/DAILY/MONTHLY, clock expansion/filtering and signed BYSETPOS, COUNT, inclusive UNTIL, duplicate RDATE/EXDATE and half-open windows. No local zones, leap seconds, PERIOD overrides, disputed yearly defaults or general RFC conformance claim.')
-    (ROOT / 'tests/oracles/rfc_timed-manifest.toml').write_text('\n'.join(f'{k} = {json.dumps(v)}' for k,v in manifest.items())+'\n')
+    (output_root / 'tests/oracles/rfc_timed-manifest.toml').write_text('\n'.join(f'{k} = {json.dumps(v)}' for k,v in manifest.items())+'\n')
     print(f'Generated {len(cases)} RFC timed observations')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('wheel_directory', type=Path)
-    generate(parser.parse_args().wheel_directory)
+    parser.add_argument('--output-root', type=Path, required=True, help='Isolated directory for generated reference files')
+    args = parser.parse_args()
+    output_root = args.output_root.resolve()
+    if output_root == Path(__file__).resolve().parents[1]:
+        parser.error('--output-root must not be the repository root')
+    generate(args.wheel_directory, output_root)

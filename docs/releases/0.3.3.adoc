@@ -1,0 +1,15 @@
+= roc-time 0.3.3
+
+This release moves package publication and published-example compatibility checks
+to the shared roc-automation workflows. The temporal package APIs are unchanged.
+
+== Use this release
+
+The core package is available at {package-url}.
+The optional zone database package is available at {tzdb-url}.
+
+Download the examples archive for complete applications using both immutable
+package URLs. The clock deadline example accepts an explicit timestamp for a
+repeatable check; without an argument it still reads the host clock.
+
+The release includes compiler-generated API documentation and the PDF manual.

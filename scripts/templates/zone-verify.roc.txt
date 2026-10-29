@@ -1,0 +1,37 @@
+app [main!] { db: @DATABASE@, time: @CORE@ }
+import db.Database
+import time.ZoneRules
+import time.PosixBoundary
+import time.FixedOffset
+main! = |_args| {
+ for name in @NAMES@ {
+  data = Database.get(name)?
+  if data.schema != 1 or data.axis != "posix-seconds-1970" or data.requested_name != name or data.source_version != @VERSION@ or data.profile != @PROFILE@ or data.start_second != @START@ or data.end_second != @END@ or data.future_handling != "expanded-through-validity" { return Err(WrongMetadata) }
+  expected = match data.canonical_name {
+@CASES@
+   _ => return Err(UnexpectedCanonicalName)
+  }
+  var $checksum = 0.I64
+  var $index = 1.I64
+  for transition in data.transitions {
+   $checksum = $checksum + $index * (transition.second + transition.offset.to_i64())
+   $index = $index + 1
+  }
+  if data.transitions.len() != expected.count or $checksum != expected.checksum { return Err(WrongTransitions) }
+  rules = ZoneRules.from_database(data)?
+  var $previous = data.initial_offset
+  for transition in data.transitions {
+   at_transition = PosixBoundary.from_microseconds(transition.second * 1000000)
+   before = PosixBoundary.from_microseconds(transition.second * 1000000 - 1)
+   actual = ZoneRules.offset_at(rules, at_transition)?
+   prior = ZoneRules.offset_at(rules, before)?
+   if FixedOffset.to_seconds(actual) != transition.offset or FixedOffset.to_seconds(prior) != $previous { return Err(WrongTransitionBoundary) }
+   $previous = transition.offset
+  }
+  at = PosixBoundary.from_microseconds(data.start_second * 1000000)
+  offset = ZoneRules.offset_at(rules, at)?
+  if FixedOffset.to_seconds(offset) != data.initial_offset { return Err(WrongOffset) }
+ }
+ echo!("PASS generated database\n")
+ Ok({})
+}

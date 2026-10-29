@@ -1,0 +1,11 @@
+main! = |args| {
+ var $name = "Australia/Melbourne"
+ for arg in args { $name = arg }
+ PAYLOAD
+ var $checksum = $name.count_utf8_bytes().to_i64_wrap()
+ for second in data.times { $checksum = I64.rem_by($checksum + I64.rem_by(second, 1000003), 1000003) }
+ for index in data.indices { $checksum = I64.rem_by($checksum + index.to_i64(), 1000003) }
+ for offset in data.offsets { $checksum = I64.rem_by($checksum + offset.to_i64(), 1000003) }
+ echo!("${data.times.len().to_str()}|${$checksum.to_str()}|${data.footer}\n")
+ Ok({})
+}

@@ -1,0 +1,36 @@
+import cli.Cmd
+import cli.Monotonic
+import cli.Path
+
+## Every compiler/interpreter stage has a process-group deadline and combined
+## capture limit. Logs survive nonzero exits, signals and budget failures.
+OracleStages := [].{
+	Request := {
+		command : List(Str),
+		cwd : Path,
+		logs : Path,
+		label : Str,
+		timeout_ms : U64 ?? 120000,
+	}
+	Output : { stdout : Str, stderr : Str, seconds : F64 }
+	run! : Request => Try(Output, _)
+	run! = |{ command, cwd, logs, label, timeout_ms }| {
+		before = Monotonic.now!()
+		outcome : Try(Cmd.RunOutput, Cmd.RunErr)
+		outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(cwd).timeout_ms(timeout_ms).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()
+		seconds = (Monotonic.now!() - before).to_f64() / 1000000000
+		(stdout, stderr) = match outcome {
+			Ok(output) => (output.stdout_bytes, output.stderr_bytes)
+			Err(Timeout(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
+			Err(OutputLimit(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
+			Err(_) => ([], [])
+		}
+		Path.write_bytes!(Path.join(logs, "${label}.stdout"), stdout)?
+		Path.write_bytes!(Path.join(logs, "${label}.stderr"), stderr)?
+		match outcome {
+			Ok({ status: Exited(0), .. }) => Ok({ stdout: Str.from_utf8(stdout)?, stderr: Str.from_utf8(stderr)?, seconds })
+			Ok(output) => Err(StageStatus(label, output.status))
+			Err(error) => Err(StageSupervision(label, Str.inspect(error)))
+		}
+	}
+}

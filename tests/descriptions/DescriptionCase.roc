@@ -16,10 +16,21 @@ import time.ZoneRules
 # The oracle uses integer grid widths and two explicitly known offset segments;
 # it neither calls LocalDateTime.calendar_value_bounds nor the resolver to form expectations.
 DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(DescriptionCase)
 	generator_for = |_| { number: Fuzz.u64_in(0, 86399999999), digits: Fuzz.u8_in(1, 6), gap: Fuzz.map(Fuzz.u8_in(0, 1), |n| n == 1) }.Fuzz
+
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : DescriptionCase -> Bool
+	is_in_domain = |input| input.number <= 86399999999 and input.digits >= 1 and input.digits <= 6
+
 	check : DescriptionCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		date = match epoch_date(input.digits) {
 			Ok(value) => value
 			Err(_) => crash "Valid epoch date"
@@ -555,5 +566,21 @@ check_explanation = |value, calendar, input, h, m, s, fraction| {
 	match Explanation.fact_at(source, U64.highest) {
 		End => {}
 		_ => crash "Out-of-range fact index must end without overflow"
+	}
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = DescriptionCase.{
+		number: 86399999999,
+		digits: 6,
+		gap: Bool.True,
+	}
+	{
+		boundary_is_tested: DescriptionCase.is_in_domain(boundary),
+		outside_is_rejected: !DescriptionCase.is_in_domain({ ..boundary, digits: 7 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
 	}
 }

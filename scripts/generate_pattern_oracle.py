@@ -12,7 +12,6 @@ import random
 import sys
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parents[1]
 PINS = {
     'python_dateutil-2.9.0.post0-py2.py3-none-any.whl': 'a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427',
     'six-1.17.0-py2.py3-none-any.whl': '4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274',
@@ -49,7 +48,7 @@ def week_rows(start, end, wkst, selected, weekdays):
     return result
 
 
-def generate(directory: Path) -> None:
+def generate(directory: Path, output_root: Path) -> None:
     if platform.python_version() != '3.14.3' or platform.python_implementation() != 'CPython':
         raise SystemExit('Use pinned CPython 3.14.3')
     for filename, digest in PINS.items():
@@ -128,12 +127,13 @@ def generate(directory: Path) -> None:
                     dateutil=sorted(d.date().isoformat() for d in reference_dates),
                     week_rows=sorted(d.date().isoformat() for d in dates)))
             cases.append(dict(id=str(len(cases)), operation='pattern', input=inputs, expected=expected, evidence=evidence))
-    data = ROOT / 'tests/oracles/calendar_pattern.jsonl'
+    data = output_root / 'tests/oracles/calendar_pattern.jsonl'
+    data.parent.mkdir(parents=True, exist_ok=True)
     data.write_text(''.join(json.dumps(case, separators=(',', ':'))+'\n' for case in cases))
-    gaps = ROOT / 'tests/oracles/calendar_pattern-reference-gaps.jsonl'
+    gaps = output_root / 'tests/oracles/calendar_pattern-reference-gaps.jsonl'
     gaps.write_text(''.join(json.dumps(case, separators=(',', ':'))+'\n' for case in disagreements))
-    driver = ROOT / 'tests/oracle_calendar_pattern'
-    driver.mkdir(exist_ok=True)
+    driver = output_root / 'tests/oracle_calendar_pattern'
+    driver.mkdir(parents=True, exist_ok=True)
     rows = ',\n'.join('{ input: '+json.dumps(case['input'])+', expected: '+json.dumps('\t'.join(case['expected']))+' }' for case in cases[:4])
     smoke = driver / 'SmokeCases.roc'
     smoke.write_text('SmokeCases :: [].{\n inputs : List({ input : List(Str), expected : Str })\n inputs = [\n'+rows+'\n]\n}\n')
@@ -147,11 +147,16 @@ def generate(directory: Path) -> None:
                     sources=['https://pypi.org/project/python-dateutil/2.9.0.post0/', 'https://pypi.org/project/six/1.17.0/', 'https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10', 'https://www.rfc-editor.org/rfc/rfc8984.html#section-4.3.3.1'],
                     license='Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT.',
                     independence='dateutil expands indexed day masks; Roc tests dates against calendar selectors. Week selectors instead enumerate calendar rows and majority-year assignment; retained dateutil differences expose its adjacent-year gaps. Shared Gregorian/week convention assumptions. Positive years only; no timezone, COUNT, BYSETPOS, exclusions or first-period truncation claim.')
-    (ROOT / 'tests/oracles/calendar_pattern-manifest.toml').write_text('\n'.join(f'{k} = {json.dumps(v)}' for k,v in manifest.items())+'\n')
+    (output_root / 'tests/oracles/calendar_pattern-manifest.toml').write_text('\n'.join(f'{k} = {json.dumps(v)}' for k,v in manifest.items())+'\n')
     print(f'Generated {len(cases)} pattern observations; {len(disagreements)} retained dateutil/week-row differences')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('wheel_directory', type=Path)
-    generate(parser.parse_args().wheel_directory)
+    parser.add_argument('--output-root', type=Path, required=True, help='Isolated directory for generated reference files')
+    args = parser.parse_args()
+    output_root = args.output_root.resolve()
+    if output_root == Path(__file__).resolve().parents[1]:
+        parser.error('--output-root must not be the repository root')
+    generate(args.wheel_directory, output_root)

@@ -13,6 +13,16 @@ Deadline :: [].{
 	acquire_nanoseconds : I128 -> Try(PosixBoundary, [OutOfRange, Submicrosecond])
 	acquire_nanoseconds = |nanos| PosixBoundary.from_nanoseconds_with_rounding(nanos, Floor)
 
+	## The boundary of a supplied instant, so a check can be reproduced exactly.
+	at : Str -> Try(PosixBoundary, [Instant(OffsetTimestamp.Error), OutOfRange])
+	at = |text| {
+		instant = match OffsetTimestamp.parse(text) {
+			Ok(value) => value
+			Err(error) => return Err(Instant(error))
+		}
+		OffsetTimestamp.boundary(instant)
+	}
+
 	## Store both positions as UTC timestamps with six fractional digits.
 	evaluate : PosixBoundary, Str -> Try(Record, [Expiry(OffsetTimestamp.Error), Output(OffsetTimestamp.Error), OutOfRange])
 	evaluate = |now, expiry_text| {

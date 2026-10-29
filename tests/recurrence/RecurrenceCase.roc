@@ -28,6 +28,8 @@ import time.ICalDateRule
 # R11–R12: a finite calendar-table model, independent of CalendarPattern and
 # cursor execution. Enumerate 2024–2025 before applying count/union/exclusions.
 RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month : U8, exclude_anchor : Bool, work : U8 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(RecurrenceCase)
 	generator_for = |_| {
 		last_monday: Fuzz.map(Fuzz.u8_in(0, 1), |n| n == 1),
@@ -38,8 +40,20 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 		work: Fuzz.u8_in(1, 128),
 	}.Fuzz
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : RecurrenceCase -> Bool
+	is_in_domain = |input| {
+		series_is_bounded = input.interval >= 1 and input.interval <= 3 and input.count >= 1 and input.count <= 6
+		query_is_bounded = input.query_month >= 1 and input.query_month <= 12 and input.work >= 1 and input.work <= 128
+		series_is_bounded and query_is_bounded
+	}
+
 	check : RecurrenceCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		# Independent two-segment local model composed with exclusions/endings.
 		LocalCases.check({
 			shift: if input.last_monday {
@@ -1551,4 +1565,23 @@ check_boundary_exclusions = |input| {
 		$calls = $calls + 1
 	}
 	crash "boundary exclusions failed finite resumption"
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = RecurrenceCase.{
+		last_monday: Bool.False,
+		interval: 3,
+		count: 6,
+		query_month: 12,
+		exclude_anchor: Bool.True,
+		work: 128,
+	}
+	{
+		boundary_is_tested: RecurrenceCase.is_in_domain(boundary),
+		outside_is_rejected: !RecurrenceCase.is_in_domain({ ..boundary, work: 0 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
+	}
 }

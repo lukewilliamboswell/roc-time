@@ -21,6 +21,8 @@ endpoint = Fuzz.map2(
 )
 
 OffsetCase := { number : I64, seconds : I32 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(OffsetCase)
 	generator_for = |_| { number: endpoint, seconds: Fuzz.map(Fuzz.u64, |n| n.to_i32_wrap()) }.Fuzz
 

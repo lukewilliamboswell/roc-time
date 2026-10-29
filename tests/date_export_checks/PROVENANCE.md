@@ -60,7 +60,7 @@ occupy 40 bytes, plus 4096 inclusion and 4091 exclusion DATE entries. Thus
 one additional exclusion gives 65544 bytes and must fail. Its expected summary
 is derived from this arithmetic, avoiding a large repetitive text fixture.
 
-The corpus hash in `scripts/test_date_export.py` pins reviewed expectations.
+The corpus hash in `scripts/check_fixture_oracles.roc` pins reviewed expectations.
 Changes require reviewing this derivation; replay never refreshes expectations.
 The same comparator checks interpreter smoke and dev/speed binaries. Wrong
 dates, missing results and malformed JSON are deliberate failure controls.

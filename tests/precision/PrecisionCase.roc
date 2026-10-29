@@ -20,6 +20,8 @@ endpoint = Fuzz.map2(
 )
 
 PrecisionCase := { a : I64, b : I64, nanos : U64 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(PrecisionCase)
 	generator_for = |_| { a: endpoint, b: endpoint, nanos: Fuzz.u64_in(0, 2000) }.Fuzz
 

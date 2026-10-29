@@ -4,19 +4,19 @@ This opt-in benchmark compares a narrow semantic intersection through real publi
 
 ```sh
 # Once: acquire the exact Cargo.lock dependencies and run a bounded setup check.
-ROC=/path/to/roc python3 scripts/benchmark_chrono.py --fetch --smoke
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-chrono -- --fetch --smoke
 # Subsequent runs use Cargo --offline --locked.
-ROC=/path/to/roc python3 scripts/benchmark_chrono.py
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-chrono --
 # Explicit alternative compiler backend; never combine these results with speed.
-ROC=/path/to/roc python3 scripts/benchmark_chrono.py --roc-opt dev --smoke
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-chrono -- --roc-opt dev --smoke
 ```
 
 The profiling mode verifies every output and records user-space CPU samples
 from the selected optimized build. Add `--debug` for Roc source locations:
 
 ```sh
-ROC=/path/to/roc python3 scripts/benchmark_chrono.py --profile parse --iterations 10000000 --samples 15
-ROC=/path/to/roc python3 scripts/benchmark_chrono.py --profile add_days --debug --iterations 10000000 --samples 15
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-chrono -- --profile parse --iterations 10000000 --samples 15
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-chrono -- --profile add_days --debug --iterations 10000000 --samples 15
 ```
 
 This requires Linux `perf` and permission to sample user-space events. Recordings
@@ -65,9 +65,10 @@ reuse can materially change formatting costs even when generated instructions,
 allocation counts and output are identical. `--argv0` allows deliberate sensitivity
 checks; its value is recorded with the results. A stable name controls this input,
 but does not establish performance independent of an application's heap state.
-Profiling uses a small Python launcher to set the same name before replacing
-itself with the Roc executable; ignore launcher startup samples when reading
-kernel hotspots.
+GNU coreutils `env --argv0` supplies the same name during measurements and
+profiling; Blueprint provides it on supported hosts. Ignore launcher startup
+samples when reading kernel hotspots. The isolated Zig host uses ReleaseFast
+with debug symbols retained.
 
 Each process loads the same runtime argv corpus and constructs its stored dates/timestamps before sampling. Kernels cycle over retained immutable inputs; outputs are transient, with no mutation or cursor sharing. Before sampling, both implementations project narrow input arrays: dates for date/control/conversion kernels, fields for construction, strings for parsing/end-to-end and timestamps for formatting. Date iterations therefore do not copy or retain unrelated strings from verification records. Input preparation is excluded from measurements; the separate `construct` workload measures checked date construction itself. Each sample contains the requested number of operations, including indexing, checked API calls, checksum accumulation and formatting output disposal. Workload selection occurs before warmups and timestamp reads; each branch calls the shared sampling loop with a fixed operation. No per-item string dispatch occurs. Rust uses generic closures and `black_box` on kernel inputs and its result. Roc brackets each kernel with opaque external hosted identity calls on the iteration count and checksum, preventing reuse across samples or moving computation outside the timestamps. These two calls per sample are included in measured time; they do not allocate. Both implementations also publish checksums through observable output. No checksum is discarded by the runner. Both text checksums iterate UTF-8 bytes directly; the observer does not create a byte-list allocation for short strings.
 

@@ -34,8 +34,8 @@ native I32 provider year, same-day domains, Julian export rejection and
 qualified reverse-looking labels.
 
 Mixed-calendar order checks reuse two independently sourced corpus anchors:
-`tests/oracles/julian.jsonl` id 100 (Julian 1582-10-05, Hinnant-derived reference)
-and `tests/oracles/gregorian.jsonl` id 112 (Gregorian 1582-10-15, Python datetime).
+the generated Julian corpus id 100 (Julian 1582-10-05, Hinnant-derived reference)
+and the generated Gregorian corpus id 112 (Gregorian 1582-10-15, Python datetime).
 Both have civil day -141427; their respective manifests pin the reference
 implementations and provenance. A next-day Julian endpoint must be rejected
 against that Gregorian end. Native tests also cover same-day and reversed

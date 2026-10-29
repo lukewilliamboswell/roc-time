@@ -1,0 +1,9 @@
+main! = |args| {
+ var $name = "Australia/Melbourne"
+ for arg in args { $name = arg }
+ PAYLOAD
+ var $checksum = $name.count_utf8_bytes().to_i64_wrap()
+ for byte in data.bytes { $checksum = I64.rem_by($checksum + byte.to_i64(), 1000003) }
+ echo!("${data.bytes.len().to_str()}|${$checksum.to_str()}\n")
+ Ok({})
+}

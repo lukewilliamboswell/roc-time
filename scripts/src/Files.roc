@@ -39,6 +39,7 @@ Files := [].{
 			.map(|(_, path)| path)
 }
 
+walk! : List(Path), List(Path) => Try(List(Path), _)
 walk! = |entries, found|
 	match entries {
 		[] => Ok(found)
@@ -50,6 +51,7 @@ walk! = |entries, found|
 			}
 	}
 
+compare_bytes : List(U8), List(U8) -> [Before, Same, After]
 compare_bytes = |left, right|
 	match (left, right) {
 		([a, .. as left_rest], [b, .. as right_rest]) =>

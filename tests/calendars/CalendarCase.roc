@@ -8,6 +8,8 @@ import time.EnglishGregorian
 
 # R06: full Julian coordinate range, overlap with Gregorian and explicit errors.
 CalendarCase := { number : I64 }.{
+	parser_for : _
+	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(CalendarCase)
 	generator_for = |_| Fuzz.map(
 		Fuzz.map2(
@@ -23,8 +25,16 @@ CalendarCase := { number : I64 }.{
 		|number| { number: number },
 	)
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : CalendarCase -> Bool
+	is_in_domain = |input| input.number >= -784369121962 and input.number <= 784367682901
+
 	check : CalendarCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		coordinate = CivilDay.from_day_number(input.number)
 		validated = match JulianDate.from_civil_day(coordinate) {
 			Ok(value) => value
@@ -180,5 +190,17 @@ check_description = |date| {
 				}
 			}
 		}
+	}
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = CalendarCase.{ number: 784367682901 }
+	{
+		boundary_is_tested: CalendarCase.is_in_domain(boundary),
+		outside_is_rejected: !CalendarCase.is_in_domain({ ..boundary, number: 784367682902 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
 	}
 }

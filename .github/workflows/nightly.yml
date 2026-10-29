@@ -2,94 +2,32 @@ name: Nightly compatibility
 
 # Run the latest release's examples archive, unchanged, on the latest Roc
 # nightly. A failure means that release no longer works for someone starting
-# today, and the fix is a patch release; `main` is covered by CI.
+# today, and the fix is a patch release; `main` is covered by the release dry
+# run. The shared workflow selects one immutable release/compiler pair and owns
+# execution, diagnostics and the tracking issue.
 on:
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
-      nightly_tag:
-        description: "Nightly release tag to test with; empty uses the latest"
+      nightly-tag:
+        description: "Exact nightly tag for a diagnostic rerun; empty resolves latest"
         type: string
         default: ""
-      release_tag:
-        description: "Release to test; empty uses the latest full release"
+      release-tag:
+        description: "Exact final release tag for a diagnostic rerun; empty resolves latest"
         type: string
         default: ""
 
-permissions:
-  contents: read
-
-concurrency:
-  group: nightly-${{ github.repository }}
-  cancel-in-progress: false
+permissions: {}
 
 jobs:
-  test:
-    name: Test the released examples
-    runs-on: ubuntu-24.04
-    outputs:
-      nightly: ${{ steps.nightly.outputs.tag }}
-      release: ${{ steps.release.outputs.tag }}
-      examples_url: ${{ steps.release.outputs.examples_url }}
-      # Empty when a setup step failed, which says nothing about compatibility.
-      outcome: ${{ steps.examples.outcome }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - id: nightly
-        uses: ./.github/actions/setup-roc-nightly
-        with:
-          tag: ${{ inputs.nightly_tag }}
-
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@7aff4132691ad4fc348abe9df146a57512b49bd6
-        with:
-          cache: 'true'
-          cache-workload: nightly
-
-      - name: Resolve the release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: blueprint run latest-release
-
-      - name: Report a release without an examples archive
-        if: steps.release.outputs.examples_url == ''
-        env:
-          TAG: ${{ steps.release.outputs.tag }}
-        run: echo "::notice::Release $TAG has no examples archive, so there is nothing to test"
-
-      - name: Download the examples archive
-        if: steps.release.outputs.examples_url != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag }}
-        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "roc-time-examples-$TAG.zip" --dir "$RUNNER_TEMP/release"
-
-      # The scripts come from this checkout; the examples, their package URLs
-      # and their expected output all come from the release.
-      - name: Run the released examples on the nightly
-        id: examples
-        if: steps.release.outputs.examples_url != ''
-        env:
-          TAG: ${{ steps.release.outputs.tag }}
-        run: EXAMPLES_ARCHIVE="$RUNNER_TEMP/release/roc-time-examples-$TAG.zip" blueprint run examples
-
-  # The only job that can write, and it runs no repository code.
-  report:
-    name: Maintain the tracking issue
-    needs: test
-    if: always() && (needs.test.outputs.outcome == 'success' || needs.test.outputs.outcome == 'failure')
-    runs-on: ubuntu-24.04
+  compatibility:
     permissions:
+      contents: read
       issues: write
-    steps:
-      - uses: lukewilliamboswell/roc-automation/actions/nightly-report@7aff4132691ad4fc348abe9df146a57512b49bd6
-        with:
-          outcome: ${{ needs.test.outputs.outcome }}
-          nightly-tag: ${{ needs.test.outputs.nightly }}
-          release-tag: ${{ needs.test.outputs.release }}
+    uses: lukewilliamboswell/roc-automation/.github/workflows/nightly-compatibility.yml@8acff758d5d73210f1731bed75adb9322f5e773d
+    with:
+      nightly-tag: ${{ inputs.nightly-tag || '' }}
+      release-tag: ${{ inputs.release-tag || '' }}
+      runners: '["ubuntu-24.04"]'

@@ -3,8 +3,8 @@ Text := [].{
 
 	## Replace the one `name: "..."` package dependency line in a Roc app header,
 	## keeping its indentation. Everything else in the source is left untouched.
-	rewrite_dependency : Str, Str, Str -> Try(Str, [ExpectedOneDependency(Str, U64)])
-	rewrite_dependency = |source, name, url| {
+	rewrite_dependency : { source : Str, name : Str, url : Str } -> Try(Str, [ExpectedOneDependency(Str, U64)])
+	rewrite_dependency = |{ source, name, url }| {
 		lines = Str.split_on(source, "\n")
 		count = lines.count_if(|line| is_dependency(line, name))
 		if count == 1 {
@@ -41,8 +41,8 @@ Text := [].{
 
 	## Whether a Roc source file's header pins a compiler with a `roc` field,
 	## on a line of its own or inside a one-line header.
-	pins_compiler : Str -> Bool
-	pins_compiler = |source|
+	has_compiler_pin : Str -> Bool
+	has_compiler_pin = |source|
 		Str.split_on(source, "\n").any(
 			|line|
 				match Str.split_on(line, "roc: \"") {
@@ -57,92 +57,114 @@ Text := [].{
 
 	## Whether `value` is a release version such as `0.10.0` or `1.2.3-rc1`:
 	## it starts with a digit and holds only ASCII letters, digits, `.` and `-`.
-	valid_version : Str -> Bool
-	valid_version = |value|
-		match Str.to_utf8(value) {
-			[first, .. as rest] => (first >= '0' and first <= '9') and rest.all(version_byte)
-			[] => Bool.False
+	is_valid_version : Str -> Bool
+	is_valid_version = |value| {
+		base = match value.split_on("+") {
+			[plain] => plain
+			[plain, metadata] if metadata.split_on(".").all(is_version_identifier) => plain
+			_ => return Bool.False
 		}
-
-	## Sort names bytewise.
-	sort_names : List(Str) -> List(Str)
-	sort_names = |names|
-		names
-			.map(|name| (Str.to_utf8(name), name))
-			.sort_with(|(left, _), (right, _)| compare_bytes(left, right))
-			.map(|(_, name)| name)
-
-	## Bytewise order of two strings. Fixed-width UTC timestamps sort
-	## chronologically under it.
-	compare : Str, Str -> [Before, Same, After]
-	compare = |left, right| compare_bytes(Str.to_utf8(left), Str.to_utf8(right))
-
-	## Native preparation emits explicit heading IDs for PDF navigation. GitHub's
-	## Markdown dialect displays those literally, so remove only that metadata,
-	## leaving paragraphs and fenced source unchanged.
-	github_markdown : Str -> Str
-	github_markdown = |prepared| {
-		var $inside_code = Bool.False
-		var $lines = []
-		for line in prepared.split_on("\n") {
-			if line.starts_with("```") {
-				$inside_code = !$inside_code
+		parts = base.split_on("-")
+		core = parts.first() ?? ""
+		if !(
+			match core.split_on(".") {
+				[major, minor, patch] => [major, minor, patch].all(is_version_number)
+				_ => Bool.False
 			}
-			rendered = if !$inside_code and line.starts_with("#") {
-				match line.split_on(" {#") {
-					[heading, id] if id.ends_with("}") => heading
-					_ => line
-				}
-			} else {
-				line
-			}
-			$lines = $lines.append(rendered)
+		) {
+			return Bool.False
 		}
-		Str.join_with($lines, "\n")
+		if parts.len() == 1 {
+			Bool.True
+		} else {
+			Str.join_with(parts.drop_first(1), "-").split_on(".").all(|identifier| is_version_identifier(identifier) and (!identifier.to_utf8().all(is_version_digit) or is_version_number(identifier)))
+		}
 	}
 }
 
-expect Text.github_markdown("# Title {#title}\n\nText {#literal}\n") == "# Title\n\nText {#literal}\n"
-expect Text.github_markdown("```roc\n# source {#literal}\n```\n## Topic {#topic}\n") == "```roc\n# source {#literal}\n```\n## Topic\n"
+is_version_digit : U8 -> Bool
+is_version_digit = |byte| byte >= '0' and byte <= '9'
 
-compare_bytes = |left, right|
-	match (left, right) {
-		([a, .. as left_rest], [b, .. as right_rest]) =>
-			if (a < b) Before else if (a > b) After else compare_bytes(left_rest, right_rest)
-		([], []) => Same
-		([], _) => Before
-		(_, []) => After
-	}
+is_version_identifier : Str -> Bool
+is_version_identifier = |value| !value.is_empty() and value.to_utf8().all(|byte| is_version_digit(byte) or (byte >= 'a' and byte <= 'z') or (byte >= 'A' and byte <= 'Z') or byte == '-')
 
-version_byte = |byte|
-	(byte >= '0' and byte <= '9') or (byte >= 'a' and byte <= 'z') or (byte >= 'A' and byte <= 'Z') or byte == '.' or byte == '-'
+is_version_number : Str -> Bool
+is_version_number = |value| !value.is_empty() and value.to_utf8().all(is_version_digit) and (value == "0" or !value.starts_with("0"))
 
+is_dependency : Str, Str -> Bool
 is_dependency = |line, name| Str.trim_start(line).starts_with("${name}: \"")
 
+indentation : Str -> Str
 indentation = |line| {
 	trimmed = Str.trim_start(line)
 	Str.from_utf8_lossy(Str.to_utf8(line).take_first(Str.to_utf8(line).len() - Str.to_utf8(trimmed).len()))
 }
 
-expect Text.rewrite_dependency("app [main!] {\n\tpf: platform \"p\",\n\ttime: \"../../package/main.roc\",\n}\n", "time", "http://x/y.tar.zst") == Ok("app [main!] {\n\tpf: platform \"p\",\n\ttime: \"http://x/y.tar.zst\",\n}\n")
-expect Text.rewrite_dependency("app [main!] {}\n", "time", "u") == Err(ExpectedOneDependency("time", 0))
-expect Text.rewrite_dependency("\ttime: \"a\",\n\ttime: \"b\",\n", "time", "u") == Err(ExpectedOneDependency("time", 2))
+## Rewrite only the requested dependency declaration.
+expect Text.rewrite_dependency({
+	source: "app [main!] {\n\tpf: platform \"p\",\n\ttime: \"../../package/main.roc\",\n}\n",
+	name: "time",
+	url: "http://x/y.tar.zst",
+}) == Ok("app [main!] {\n\tpf: platform \"p\",\n\ttime: \"http://x/y.tar.zst\",\n}\n")
+
+## Report a missing dependency declaration.
+expect Text.rewrite_dependency({
+	source: "app [main!] {}\n",
+	name: "time",
+	url: "u",
+}) == Err(ExpectedOneDependency("time", 0))
+
+## Report duplicate dependency declarations.
+expect Text.rewrite_dependency({
+	source: "\ttime: \"a\",\n\ttime: \"b\",\n",
+	name: "time",
+	url: "u",
+}) == Err(ExpectedOneDependency("time", 2))
+
+## Read matching dependency declarations.
 expect Text.dependency_values("\ttime: \"../../package/main.roc\",\n", "time") == ["../../package/main.roc"]
+
+## Ignore a different dependency name.
 expect Text.dependency_values("\troc: \"nightly-1\",\n", "time") == []
+
+## Ignore dependency-like text inside source strings.
 expect Text.dependency_values("text = \"roc: \\\"x\\\"\"\n", "roc") == []
-expect Text.valid_version("0.10.0")
-expect Text.valid_version("1.2.3-rc1")
-expect !Text.valid_version("")
-expect !Text.valid_version("v1.0.0")
-expect !Text.valid_version("1.0.0/../x")
-expect Text.compare("2026-10-12T00:00:00", "2026-10-12T00:00:01") == Before
-expect Text.compare("b", "a") == After
-expect Text.compare("a", "a") == Same
-expect Text.sort_names(["names.txt", "manifest.json", "LICENSE_APACHE.txt", "zones.txt", "LICENSE.txt", "LICENSE"]) == ["LICENSE", "LICENSE.txt", "LICENSE_APACHE.txt", "manifest.json", "names.txt", "zones.txt"]
-expect Text.sort_names([]) == []
-expect Text.pins_compiler("app [main!] {\n\troc: \"nightly-1\",\n}\n")
-expect Text.pins_compiler("package [Database] { roc: \"nightly-1\" }\n")
-expect Text.pins_compiler("package\n\t[A]\n\t{ roc: \"nightly-1\" }\n")
-expect !Text.pins_compiler("app [main!] {\n\ttime: \"../../package/main.roc\",\n}\n")
-expect !Text.pins_compiler("package [Database] {}\n")
-expect !Text.pins_compiler("\theroc: \"x\",\n")
+
+## Accept an ordinary release version.
+expect Text.is_valid_version("0.10.0")
+
+## Accept a release-candidate version.
+expect Text.is_valid_version("1.2.3-rc1")
+
+## Reject an empty version.
+expect !Text.is_valid_version("")
+
+## Reject a prefixed version.
+expect !Text.is_valid_version("v1.0.0")
+
+## Reject traversal in a version.
+expect !Text.is_valid_version("1.0.0/../x")
+
+## Reject malformed numeric and prerelease identifiers.
+expect !Text.is_valid_version("01.0.0") and !Text.is_valid_version("1.0") and !Text.is_valid_version("1.0.0-") and !Text.is_valid_version("1.0.0-01")
+
+## Validate build metadata separately from prerelease identifiers.
+expect Text.is_valid_version("1.0.0-rc.1+build.01") and !Text.is_valid_version("1.0.0+build..1")
+
+## Detect a compiler pin in an app header.
+expect Text.has_compiler_pin("app [main!] {\n\troc: \"nightly-1\",\n}\n")
+
+## Detect a compiler pin in a package header.
+expect Text.has_compiler_pin("package [Database] { roc: \"nightly-1\" }\n")
+
+## Detect a pin across a multiline header.
+expect Text.has_compiler_pin("package\n\t[A]\n\t{ roc: \"nightly-1\" }\n")
+
+## Do not confuse a package dependency with a compiler pin.
+expect !Text.has_compiler_pin("app [main!] {\n\ttime: \"../../package/main.roc\",\n}\n")
+
+## Allow an empty package header.
+expect !Text.has_compiler_pin("package [Database] {}\n")
+
+## Do not match a dependency whose name merely ends with roc.
+expect !Text.has_compiler_pin("\theroc: \"x\",\n")
