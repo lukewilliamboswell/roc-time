@@ -674,6 +674,13 @@ to lock the new archive's digests, and fix any script the new compiler breaks
 there, so the tag and the scripts move together. Native documentation
 rendering uses the separately verified released binary described below.
 
+Repository protection requires `test`, `Build and verify documentation`,
+`Release / Build and test the source` and `Release / Test the release candidate`
+on `main`. Protect release tags against updates and deletion. Keep the default
+workflow token read-only, disable Actions pull-request creation and approval,
+enable private vulnerability reporting, and restrict the `release` and
+`github-pages` environments to `main`.
+
 Releases are dispatched from `main` and are immutable. To release:
 
 1. Dispatch `Release` on `main` with a new package SemVer such as `0.2.0` or
