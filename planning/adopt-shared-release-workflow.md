@@ -9,11 +9,16 @@ establish product portability.
 
 ## Remaining deliverables
 
-- Port the remaining Python fixture verification, oracle-replay, zone-generation,
-  measurement and benchmark drivers to Roc. The Roc integration inventory keeps
+- Port the remaining Python oracle-replay, zone-generation and benchmark drivers
+  to Roc. The Roc integration inventory keeps
   them executable during migration. Retain independent Python reference
   generators and measured Python subjects, their dependency pins, corpus bytes,
-  provenance and failure controls.
+  provenance and failure controls. Remove the legacy fixture-host build helper
+  after its oracle and Chrono benchmark consumers use FixtureHost.roc.
+- Review the newer roc-fuzz named-example/memory-baseline guidance at upstream
+  9940bb2. The current temporal targets deliberately retain the reviewed 0.4.3
+  pin; upgrade declarations and dependency integrity together, preserve curated
+  replay and lifecycle controls, and validate accepted-input/report semantics.
 - Verify the complete gate and documentation workflow on the PR with the locked
   native toolchains. Require `test`, `Build and verify documentation`,
   `Release / Build and test the source` and `Release / Test the release candidate`.

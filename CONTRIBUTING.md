@@ -107,18 +107,19 @@ A pull request's dry run renders the newest notes file.
 | --- | --- |
 | `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
 | `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
-| `measure_gregorian.py` | Measure validated date construction and coordinate round trips with checked checksums |
-| `measure_zone_roc.py` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
-| `measure_zone_data.py` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
-| `measure_zone_package.py` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
-| `fixture_platform.py` | Build the instrumented test host and verify resource assertions/trace effects |
+| `measure_gregorian.roc` | Measure validated date construction and coordinate round trips with checked checksums |
+| `measure_zone_roc.roc` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
+| `reference_zone_payloads.py` | Retained pinned CPython TZif decoder; emits independent reference columns for the prototype |
+| `measure_zone_data.roc` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
+| `measure_zone_package.roc` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
+| `check_fixture_platform.roc` | Verify instrumented host resource assertions, trace effects and failing controls |
 | `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
 | `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
 | `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
 | `fuzz.roc` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
-| `test_compile_failures.py` | Domain separation and opaque representation checks |
-| `docs.py` | Generate API docs into an ignored build directory |
-| `test_doc_examples.py` | Compile and run Roc code blocks from public module documentation |
+| `check_compile_failures.roc` | Domain separation and opaque representation checks |
+| `build_docs.roc` | Generate API docs into an ignored build directory |
+| `check_doc_examples.roc` | Compile and run Roc code blocks from public module documentation |
 
 ## API documentation
 
@@ -275,7 +276,7 @@ Civil query evidence runs with `ROC=/path/to/roc python3 scripts/test_civil_quer
 It replays pinned [CPython fixtures and labelled cycle extensions](tests/civil_query_checks/provenance.md)
 and independently walks all 146097 days of a Gregorian cycle in native dev/speed
 builds. The Gregorian fuzz target supplements this with generated full-range
-queries and successor laws. `scripts/fixture_platform.py --verify` measures input
+queries and successor laws. `blueprint run fixture-platform` measures input
 construction separately from query allocations over owned, shared and sliced
 dates; these are requested-byte counters, not retained-memory measurements.
 
@@ -415,7 +416,7 @@ Install Zig 0.17.0 (`ZIG` can select its executable) alongside the package
 compiler. The default gate builds the host and verifies its controls:
 
 ```sh
-ROC=/path/to/roc python3 scripts/fixture_platform.py --verify
+ROC_NIGHTLY=/path/to/roc blueprint run fixture-platform
 ```
 
 The [resource probe](tests/platform_probe/main.roc) uses the copied roc-pdf host
@@ -725,7 +726,7 @@ RP_REPOSITORY=lukewilliamboswell/roc-time blueprint run release-package -- test-
 With the package compiler and CPython 3.14.3, run:
 
 ```sh
-ROC=/path/to/roc python3 scripts/measure_zone_roc.py .roc-time-tmp/tzdata.whl --samples 3
+ROC_NIGHTLY=/path/to/roc blueprint run measure-zone-roc -- .roc-time-tmp/tzdata.whl --samples 3
 ```
 
 Use the same pinned wheel as the zone oracle generator. The script verifies its
@@ -796,20 +797,20 @@ returned record, not core adaptation, parsing/formatting or retained memory.
 Trace marks bracket the operation. The host assertion remains active when
 optimized `expect` checks are removed. Bundled examples import the text assets
 through the downloaded package in interpreter and native execution.
-Bundle the companion separately:
+Build both release bundles and their example archive with the shared utility:
 
 ```sh
-python3 scripts/bundle.py --package-dir tzdb/package --output-dir .roc-time-tmp/zone-bundle
+RP_COMPILER=/path/to/roc blueprint run release-package -- build 0.0.1-dryrun
 ```
 
 Measure the actual package with
-`ROC=/path/to/roc python3 scripts/measure_zone_package.py --package tzdb/package`.
+`ROC_NIGHTLY=/path/to/roc blueprint run measure-zone-package -- --package tzdb/package`.
 Repeat `--package` to compare a historical pack checked out under `.roc-time-tmp/`.
 Reports retain commands, hashes, compiler/target, build samples and observable
 lookup results. Source encoding, compile-time evaluation and linked data retention
 are separate costs; a static name alone does not prove unused-zone elimination.
 
-Run `ROC=/path/to/roc python3 scripts/measure_gregorian.py` for the
+Run `ROC_NIGHTLY=/path/to/roc blueprint run measure-gregorian` for the
 Gregorian conversion microbenchmark (LLVM speed, one million dates, three
 warmups and fifteen samples). Run it without concurrent test or build jobs.
 The fields and roundtrip workloads include process startup and final formatting;
