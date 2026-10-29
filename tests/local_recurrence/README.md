@@ -5,20 +5,22 @@ losing its original identity, or receiving the wrong ending after a clock change
 These tests compose those operations through the public scheduling API.
 They cover R07, R09, R11–R12 and R15–R16.
 
-Run the deterministic gate with the package compiler selected explicitly:
+Run the development oracle comparison with the package compiler selected explicitly:
 
 ```text
-blueprint shell
-ROC_NIGHTLY=/path/to/roc roc-stable scripts/test_local_recurrence.roc
+ROC_NIGHTLY=/path/to/roc blueprint run local-recurrence
 ```
 
-`blueprint run check` includes this gate. It runs the interpreter,
-then builds each native fixture once for `dev` and `speed`. Replay reads the
-checked-in corpus; it does not generate or approve new expectations.
+This opt-in task materializes the independent model output in ignored storage,
+requires its reviewed digest, runs the interpreter, then builds each native
+fixture once for `dev` and `speed`. Routine `blueprint run check` uses
+`--resources-only`: allocation/work bounds and their failing controls run in CI
+without executing the external oracle comparison.
 
 ## What the corpus says
 
-`../oracles/local-recurrence-v1.tsv` contains 108 independently modeled cases:
+The generated reference TSV contains 108 independently modeled cases; its
+source and digest are pinned in `../oracles/local-recurrence-manifest.toml`:
 
 | Input | Values |
 | --- | --- |

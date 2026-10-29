@@ -13,3 +13,6 @@ source_sha256 = ["a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f74704
 sources = ["https://pypi.org/project/python-dateutil/2.9.0.post0/", "https://pypi.org/project/six/1.17.0/", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.8.5"]
 license = "Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT."
 independence = "dateutil parses and expands indexed calendar masks; Roc parses into DateRecurrence and scans bounded calendar periods. Shared Gregorian conventions. Synchronized DTSTART, DATE-valued rules only, 16 templates; no timed semantics, BYWEEKNO, disputed implicit yearly fields or complete RFC conformance claim."
+generator_source_revision = "54cc68a340c4e7eee361c34a55ffae980b00abac"
+generator_adapter_sha256 = "a907b4c717bf6d0e73995dcbd6c6ce1da71155dff63a940c14c1d7a8353bd76a"
+reproduction_runtime = "CPython 3.14.3"

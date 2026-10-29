@@ -26,8 +26,9 @@ package with it.
 
 Install the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
 0.8.0 CLI, Nix, and a current nightly `roc`. Blueprint fetches the fixed
-compiler and shared utilities and realizes Zig 0.17.0, CPython 3.14.3, Rust
-1.95.0 (including its musl target), and PDF readers from reviewed Nix inputs.
+compiler and shared utilities and realizes Zig and PDF readers from reviewed
+Nix inputs. Opt-in reference tasks add pinned CPython; benchmark tasks also add
+their Rust toolchain and target.
 The host supplies Git, the GitHub CLI, curl, archive tools and standard file
 utilities declared by `Expect`. With those installed:
 
@@ -36,10 +37,11 @@ roc version
 blueprint run check
 ```
 
-This is the same complete gate CI runs: package checks, examples, semantic tests,
+This is the routine gate CI runs: package checks, examples, invariant tests,
 resource checks and documentation. The shared release workflow separately
 tests the exact publication artifacts. For an interactive shell
-with the automation dependencies, run `blueprint shell`.
+with the core automation dependencies, run `blueprint shell`. Reference and
+benchmark tasks select their additional tools explicitly.
 
 Scripts take the package compiler from `ROC_NIGHTLY`, falling back to `roc` on
 `PATH`. The environment provides the fixed tooling compiler and native toolchains.
@@ -118,10 +120,10 @@ A pull request's dry run renders the newest notes file.
 | `check_fixture_oracles.roc` | Sourced civil-query and DATE/timed export fixtures with native failure controls |
 | `check_oracle_replay.roc` | Bounded JSONL admission, native process supervision and failure controls |
 | `oracles.roc` | Deterministic external/reference-model comparisons through public APIs |
-| `oracles.py` | Explicit independent Gregorian/Julian expectation refresh; never used for ordinary replay |
+| `oracles.py` | Independent calendar reference generator with an explicit output root |
 | `fuzz.roc` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `check_compile_failures.roc` | Domain separation and opaque representation checks |
-| `build_docs.roc` | Generate API docs into an ignored build directory |
+| `test_local_recurrence.roc` | Opt-in composed oracle comparison; CI uses its resource-only mode |
 | `check_doc_examples.roc` | Compile and run Roc code blocks from public module documentation |
 
 ## API documentation
@@ -202,19 +204,38 @@ compile-failure tests, and executable examples. It exercises semantic laws and
 independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
-At least one oracle is required for temporal implementation work. Run:
+External oracle comparisons are opt-in development tools, not routine PR CI.
+Use them when investigating temporal behavior or changing an algorithm; the PR
+gate runs invariant fuzz targets, retained regressions, public examples,
+compile-failure checks and resource assertions. Measurements and external
+comparisons remain opt-in development tasks. Independent bounded models in
+fuzz targets provide routine semantic evidence.
 
 ```sh
-ROC_NIGHTLY=/path/to/roc blueprint run oracles -- --workers 4
+# Explicitly acquire hash-pinned reference wheels, then generate and compare.
+ROC_NIGHTLY=/path/to/roc blueprint run oracles -- --fetch --workers 4
+# Reuse verified local inputs without network access.
+ROC_NIGHTLY=/path/to/roc blueprint run oracles -- --oracle gregorian
+# Exercise the development transport/comparison failure controls.
+blueprint run oracle-transport
 ```
 
-The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone, 448 calendar-pattern and 512 RFC date-rule
-observations stored as JSONL under `tests/oracles/`. Each native fixture is
-compiled once. Python validates the corpus, passes only inputs as arguments to
-bounded parallel processes, and compares exact observations in corpus order.
-Use `--oracle gregorian`, `julian`, `zones`, `calendar_pattern`, `rfc_date` or `rfc_timed` to select one corpus. Full-corpus expected
-results stay in the Python harness. Small typed scenarios retain
-interpreter coverage and comparator regression checks.
+Reference generators and tool pins are committed; bulk JSONL collections,
+interpreter smoke modules and other generated products are not. The task
+materializes them under `.roc-time-tmp/oracle-inputs/`, keyed by generator and
+dependency identities, and verifies their reviewed hashes before replay. Pinned
+runtimes come from Blueprint; wheel URLs and digests are in
+[`tests/oracles/dependencies.json`](tests/oracles/dependencies.json). Missing
+uncached dependencies require `--fetch`; generation itself uses only local,
+pinned tools. Cached data is hash-checked on every replay.
+
+Use `--oracle gregorian`, `julian`, `zones`, `calendar_pattern`, `rfc_date` or
+`rfc_timed` to select a profile. Each native comparator is compiled once. The
+Roc runner validates generated records, sends only case inputs to bounded native
+processes, and compares observations in deterministic order. Generated smoke
+modules cover the interpreter and comparator checks without compiling the full
+corpus into the fixture. Reviewed manifests retain source provenance, supported
+intersections, expected counts and digests; ordinary checks never update them.
 
 Corpora are hash-checked and schema-validated. Missing, duplicate or reordered
 identities, wrong values, malformed output, failed processes and missing host
@@ -235,19 +256,14 @@ case also corresponds to a TODO in dateutil's next-year week handling. Other
 differences expose its previous-year week-count calculation. Fixed Roc tests
 retain readable examples of both cases.
 
-Refresh with `python3 scripts/generate_pattern_oracle.py /path/to/wheel-directory`
-using the exact dateutil and six wheel names/hashes in the generator and
-`calendar_pattern-manifest.toml`. Wheels remain under `.roc-time-tmp/`; normal
-replay needs neither the reference dependencies nor network access. This corpus
-does not yet establish timed recurrence, COUNT, BYSETPOS, exclusion or cursor
-semantics. Do not infer those from a passing calendar-candidate check.
+Select `--oracle calendar_pattern` for this comparison. It does not establish
+timed recurrence, COUNT, BYSETPOS, exclusion or cursor semantics.
 
 The RFC date-rule corpus uses dateutil's text parser and recurrence-set evaluator
 for 16 date-only templates, with COUNT/UNTIL, signed selectors, inclusions,
 exclusions and query windows. Replay drives the public parser and native cursor
-with 17 work steps and one output slot per batch. Regenerate with
-`python3 scripts/generate_rfc_date_oracle.py /path/to/wheel-directory` using the
-same pinned dateutil/six wheels. The manifest records its semantic intersection;
+with 17 work steps and one output slot per batch. Select `--oracle rfc_date`.
+The manifest records its semantic intersection;
 it excludes timed rules, week-number selectors and disputed omitted yearly
 fields. Replay also lifts every case to UTC midnight through `ICalTimedRule`,
 checking the same independently generated dates and one-day occurrence widths.
@@ -260,9 +276,8 @@ minute, hour, day and month frequencies, clock selectors, signed BYSETPOS,
 COUNT, inclusive UNTIL, duplicate additions/exclusions and later query windows.
 It compares integer POSIX microseconds with dateutil results and checks one-second
 appointment widths, consuming one output per batch with 17 source-work steps.
-Regenerate with CPython 3.12.3 and
-`python3 scripts/generate_rfc_timed_oracle.py /path/to/wheel-directory`;
-wheel hashes, generator hash and seed are pinned in its manifest. This corpus
+Select `--oracle rfc_timed`; the reference runtime, wheel hashes, generator
+identity and seed are pinned. This corpus
 excludes local-zone transitions, leap seconds and PERIOD overrides. Those require
 separate sourced fixtures and models; UTC agreement does not establish them.
 
@@ -319,29 +334,26 @@ extend this evidence to zoned DTSTART with UTC EXDATE. They distinguish original
 source exclusions from selected-boundary exclusions across actual gaps/folds,
 colliding source labels and explicit RDATE/PERIOD inclusions. Original and saved
 definitions run with different finite budgets against fixed independent
-positions and identities. The gate runs the composed checks interpreted and
-natively, and the independently calculated UTC coordinates. The meeting exchange
+positions and identities. Development comparisons include the independent UTC
+coordinate reference; routine CI retains the invariant and resource checks. The meeting exchange
 application demonstrates a UTC cancellation for a local Paris meeting.
 
 Fixture provenance and hashes live in `tests/oracles/gregorian-manifest.toml` and
 `tests/oracles/julian-manifest.toml`. Julian fixtures are generated from
 Howard Hinnant’s attributed public-domain March-based formulas, independent of
 production January counting; the 1582 equal-day fixture anchors the epochs.
-To deliberately refresh expectations, use CPython 3.14.3 and run
-`python3 scripts/oracles.py --refresh`, then review the JSONL and manifest diff.
-Generation checks the table model against all 3,652,059 dates in Python's domain.
-Never regenerate expected values from roc-time output or bless a mismatch.
+Generation checks the Gregorian table model against all 3,652,059 dates in the
+reference runtime's supported domain. Select the relevant development profile;
+never generate expected values from roc-time output or bless a mismatch. For
+an intentional tool or model change, generate into a separate ignored output
+root, compare the independent evidence, and review manifest digest changes.
+The Python reference entry points require `--output-root`; they cannot overwrite
+the repository through their old implicit destination.
 
-Zone provenance is in `tests/oracles/zones-manifest.toml`, including the source
-release, pinned wheel URL and SHA-256.
-The generator uses `ZoneInfo.from_file`, never the host database, and writes
-`tests/oracles/zones.jsonl` plus small typed smoke/rule fixtures in
-`tests/oracle_zones/Cases.roc`. To refresh with CPython 3.14.3, download that exact
-wheel under `.roc-time-tmp/` and run:
-
-```bash
-python3 scripts/generate_zone_oracle.py .roc-time-tmp/tzdata.whl
-```
+Zone provenance is in `tests/oracles/zones-manifest.toml`. The generator uses
+`ZoneInfo.from_file` with the pinned wheel, never the host database. Its JSONL,
+smoke/rule fixtures and copied license notices are materialized in the ignored
+cache. Select `--oracle zones` to generate and replay them.
 
 The three ten-day fixtures cover Lord Howe's 2024 half-hour fold/gap and Apia's
 2011 skipped day. Generation validates exported offsets at every second of each
@@ -351,8 +363,7 @@ The corpus covers 15-minute labels at three microsecond positions on three days
 around each transition. This is selected-window evidence, not full tzdb support.
 Python's two-fold model does not validate arbitrary multi-fold behavior; synthetic
 Roc tests provide separate triple-fold evidence. Retain the copied tzdata license
-notices when refreshing. Normal replay requires neither Python tzdata nor a
-network service.
+notices in generated reference output. Cached replay uses no network service.
 
 
 Test applications live under `tests/<name>/main.roc`, with pure test logic in
@@ -643,16 +654,15 @@ Docker and the additional language runtimes are not required by the normal gate.
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
-The gate compiles both benchmark executables and runs
-`benchmark_chrono.roc --smoke --fetch`: 1,000 iterations, one warmup and three
+The opt-in `benchmark-chrono` task compiles both executables. Use
+`blueprint run benchmark-chrono -- --smoke --fetch` for 1,000 iterations, one warmup and three
 samples per kernel, checked against the independent corpus and checksums.
-Use the Rust version in `benchmarks/chrono/rust-version` and install the matching
-`x86_64-unknown-linux-musl` target on Linux, or `aarch64-apple-darwin` on Apple
-Silicon. For example, run `rustup toolchain install "$(cat benchmarks/chrono/rust-version)" --profile minimal --target x86_64-unknown-linux-musl`,
-then select it with `RUSTUP_TOOLCHAIN` when running the gate. CI installs and
-selects this exact version.
+The benchmark tasks provision the Rust toolchain and target recorded in
+`benchmarks/chrono/rust-version` through their dedicated Blueprint environment.
+Routine PR CI does not require Rust. Direct invocations outside Blueprint must
+provide that toolchain and the target listed in the benchmark guide.
 
-Missing toolchains, failed dependency acquisition and mismatches fail the gate.
+Missing toolchains, failed dependency acquisition and mismatches fail the benchmark task.
 Cargo dependencies use the checked-in lockfile; builds run offline after the
 locked fetch. Smoke timings are correctness evidence, not performance claims.
 

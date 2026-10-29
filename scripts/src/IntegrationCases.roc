@@ -1,11 +1,10 @@
-## The integration gate's execution inventory. Temporal expectations remain in
-## their independent corpora and fixture assertions, not in this command list.
+## Routine CI: invariant targets, regressions, public usage and resource gates.
+## External oracle comparisons are explicit development tasks.
 IntegrationCases := [].{
 	Case : { name : Str, program : Str, args : List(Str) }
 
-	all : { roc : Str, python : Str, work : Str } -> List(Case)
-	all = |{ roc, python, work }| {
-		py = |name, args| { name, program: python, args }
+	all : { roc : Str, work : Str } -> List(Case)
+	all = |{ roc, work }| {
 		[
 			{
 				name: "domain and representation diagnostics",
@@ -30,31 +29,10 @@ IntegrationCases := [].{
 			)
 			.concat([
 				{
-					name: "Chrono correctness smoke",
-					program: "scripts/benchmark_chrono.roc",
-					args: ["--", "--smoke", "--fetch", "--roc-opt", "dev"],
-				},
-				{
 					name: "parser and coverage allocation identities",
 					program: "scripts/check_resource_identities.roc",
 					args: [],
 				},
-				{
-					name: "independent Gregorian queries",
-					program: "scripts/check_fixture_oracles.roc",
-					args: ["--", "civil"],
-				},
-				{
-					name: "independent DATE export",
-					program: "scripts/check_fixture_oracles.roc",
-					args: ["--", "date"],
-				},
-				{
-					name: "independent timed export",
-					program: "scripts/check_fixture_oracles.roc",
-					args: ["--", "timed"],
-				},
-				py("independent UTC coordinates", ["tests/utc_cancellations_checks/reference.py"]),
 			])
 			.concat(
 				application({
@@ -71,30 +49,7 @@ IntegrationCases := [].{
 					args: ["--", "--operation", "all", "--runs", "100", "--seconds", "1", "--seed", "1"],
 				},
 				{ name: "instrumented fixture controls", program: "scripts/check_fixture_platform.roc", args: [] },
-				{ name: "oracle transport controls", program: "scripts/check_oracle_replay.roc", args: [] },
-				{ name: "independent temporal oracles", program: "scripts/oracles.roc", args: [] },
 				{ name: "optional zone database", program: "scripts/check_zone_database.roc", args: [] },
-				{
-					name: "Gregorian measurement smoke",
-					program: "scripts/measure_gregorian.roc",
-					args: ["--", "--smoke"],
-				},
-				{
-					name: "zone data measurement smoke",
-					program: "scripts/measure_zone_data.roc",
-					args: ["--", "--smoke"],
-				},
-				{
-					name: "column fixture smoke",
-					program: "scripts/measure_zone_roc.roc",
-					args: ["--", "--smoke", "--encoding", "columns"],
-				},
-				{
-					name: "TZif fixture smoke",
-					program: "scripts/measure_zone_roc.roc",
-					args: ["--", "--smoke", "--encoding", "tzif"],
-				},
-				{ name: "zone package smoke", program: "scripts/measure_zone_package.roc", args: ["--", "--smoke"] },
 				{ name: "API documentation evidence", program: "scripts/check_api_docs.roc", args: [] },
 				{ name: "public documentation examples", program: "scripts/check_doc_examples.roc", args: [] },
 				{
@@ -103,7 +58,7 @@ IntegrationCases := [].{
 					args: ["--", "--self-test"],
 				},
 				{ name: "native manual acceptance", program: "scripts/build_docs.roc", args: [] },
-				{ name: "composed recurrence evidence", program: "scripts/test_local_recurrence.roc", args: [] },
+				{ name: "local recurrence resource budgets", program: "scripts/test_local_recurrence.roc", args: ["--", "--resources-only"] },
 			])
 	}
 }

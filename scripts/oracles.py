@@ -15,9 +15,6 @@ from pathlib import Path
 import platform
 import random
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "tests/oracles"
-DRIVER = ROOT / "tests/oracle_gregorian"
 PROFILE = "gregorian-i32-years-civil-day-1970-v1"
 GENERATOR_VERSION = 1
 SEED = 20260905
@@ -28,10 +25,12 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def refresh() -> None:
+def refresh(output_root: Path) -> None:
     # Explicit refresh only. Normal replay does not invoke a reference library.
     if platform.python_implementation() != "CPython" or platform.python_version() != "3.14.3":
         raise SystemExit("Refresh requires CPython 3.14.3; update the reviewed pin deliberately")
+    data = output_root / "tests/oracles"
+    driver = output_root / "tests/oracle_gregorian"
     epoch = dt.date(1970, 1, 1).toordinal()
     base = dt.date(2000, 1, 1).toordinal()
     cycle = [(dt.date.fromordinal(base + n).year - 2000,
@@ -94,14 +93,13 @@ def refresh() -> None:
         else:
             pair(inverse(rng.randint(forward(-2147483648, 1, 1), forward(2147483647, 12, 31))), "cycle-model")
     assert len(cases) == MAX_CASES
-    DATA.mkdir(parents=True, exist_ok=True)
-    corpus = write_cases(cases, DRIVER, "GregorianOracle")
+    corpus = write_cases(cases, driver, "GregorianOracle")
     manifest = {
         "version": 2, "corpus_format": "jsonl-v1", "profile": PROFILE, "corpus_sha256": digest(corpus),
         "generator_version": GENERATOR_VERSION, "generator_sha256": digest(Path(__file__)),
         "smoke_case_count": 128, "smoke_sha256": digest(corpus.parent.parent / ("oracle_" + corpus.stem) / "SmokeCases.roc"),
         "reference": "CPython 3.14.3 datetime", "seed": SEED,
-        "command": "python3 scripts/oracles.py --refresh", "case_count": len(cases),
+        "command": "python3 scripts/oracles.py --refresh --output-root <output-root>", "case_count": len(cases),
         "overlap_dates_verified": dt.date.max.toordinal(),
         "sources": [
             "https://docs.python.org/3.14/library/datetime.html#date-objects",
@@ -111,11 +109,12 @@ def refresh() -> None:
         "license": "Reference runtime: PSF License; generated numerical observations, no implementation code copied",
         "independence": "A January-based table enumerated with CPython datetime supplies both directions; production uses arithmetic rather than this table. Cycle extension outside years1..9999 is derived model evidence, not direct datetime support.",
     }
-    (DATA / "gregorian-manifest.toml").write_text("\n".join(f"{key} = {json.dumps(value)}" for key, value in manifest.items()) + "\n")
+    (data / "gregorian-manifest.toml").write_text("\n".join(f"{key} = {json.dumps(value)}" for key, value in manifest.items()) + "\n")
     print(f"Refreshed {len(cases)} cases; verified {manifest['overlap_dates_verified']} shared-domain dates")
 
 
-def refresh_julian() -> None:
+def refresh_julian(output_root: Path) -> None:
+    data = output_root / "tests/oracles"
     # Adapted from Howard Hinnant, 2021-09-01, Julian calendar section at
     # https://howardhinnant.github.io/date_algorithms.html . Formulas explicitly
     # donated to the public domain in the source's Summary. March-based eras
@@ -159,7 +158,7 @@ def refresh_julian() -> None:
     rng = random.Random(SEED)
     while len(cases) < MAX_CASES:
         pair(inverse(rng.randint(-784369121962, 784367682901)))
-    corpus = write_cases(cases, ROOT / "tests/oracle_julian", "JulianOracle")
+    corpus = write_cases(cases, output_root / "tests/oracle_julian", "JulianOracle")
     manifest = {
         "version": 2, "corpus_format": "jsonl-v1", "profile": PROFILE.replace("gregorian", "julian"),
         "case_count": len(cases), "corpus_sha256": digest(corpus),
@@ -169,16 +168,18 @@ def refresh_julian() -> None:
         "sources": ["https://howardhinnant.github.io/date_algorithms.html",
                     "https://aa.usno.navy.mil/faq/calendars"],
         "license": "Hinnant formulas donated to public domain; attribution retained in generator",
-        "seed": SEED, "command": "python3 scripts/oracles.py --refresh",
+        "seed": SEED, "command": "python3 scripts/oracles.py --refresh --output-root <output-root>",
         "runtime": platform.python_implementation() + " " + platform.python_version(),
         "independence": "March-based four-year era formulas vs production January-based counting and binary search. Shared proleptic conventions; independently sourced reform equivalence anchors epoch.",
     }
-    (DATA / "julian-manifest.toml").write_text("\n".join(f"{key} = {json.dumps(value)}" for key, value in manifest.items()) + "\n")
+    (data / "julian-manifest.toml").write_text("\n".join(f"{key} = {json.dumps(value)}" for key, value in manifest.items()) + "\n")
     print(f"Refreshed {len(cases)} Julian observations from attributed reference formulas")
 
 
 def write_cases(cases: list[dict], driver: Path, oracle: str) -> Path:
-    corpus = DATA / (driver.name.removeprefix("oracle_") + ".jsonl")
+    corpus = driver.parent / "oracles" / (driver.name.removeprefix("oracle_") + ".jsonl")
+    corpus.parent.mkdir(parents=True, exist_ok=True)
+    driver.mkdir(parents=True, exist_ok=True)
     corpus.write_text("".join(json.dumps(case, sort_keys=True, separators=(",", ":")) + "\n" for case in cases))
     # A bounded interpreter sample retains endpoint/error-path coverage without
     # compiling the full, independently replayable corpus into either fixture.
@@ -196,8 +197,12 @@ def write_cases(cases: list[dict], driver: Path, oracle: str) -> Path:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refresh", action="store_true", help="Explicitly regenerate reviewed calendar expectations")
+    parser.add_argument("--output-root", type=Path, required=True, help="Isolated directory for generated reference files")
     args = parser.parse_args()
+    output_root = args.output_root.resolve()
+    if output_root == Path(__file__).resolve().parents[1]:
+        parser.error("--output-root must not be the repository root")
     if not args.refresh:
         parser.error("Replay moved to blueprint run oracles; --refresh explicitly regenerates reference expectations")
-    refresh()
-    refresh_julian()
+    refresh(output_root)
+    refresh_julian(output_root)

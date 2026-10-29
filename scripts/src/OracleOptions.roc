@@ -1,14 +1,26 @@
-## Explicit offline replay selection and narrow source-root adaptation. Only
+## Development reference selection and narrow source-root adaptation. Only
 ## external package/platform roots move; fixture-relative imports stay intact.
 OracleOptions := [].{
 	names = ["gregorian", "julian", "zones", "calendar_pattern", "rfc_date", "rfc_timed"]
-	Options : { names : List(Str), workers : U64 }
+	SourceMode : [CachedOnly, FetchMissing]
+	Options : {
+		names : List(Str),
+		workers : U64,
+		source_mode : SourceMode,
+	}
 	parse : List(Str) -> Try(Options, [Arguments])
 	parse = |args| {
 		if args.len() > 64 {
 			return Err(Arguments)
 		}
-		parse_loop(args, { names, workers: 4 })
+		parse_loop(
+			args,
+			{
+				names,
+				workers: 4,
+				source_mode: CachedOnly,
+			},
+		)
 	}
 	rewrite : { source : Str, core_path : Str, host_path : Str } -> Str
 	rewrite = |{ source, core_path, host_path }| Str.join_with(
@@ -24,6 +36,7 @@ OracleOptions := [].{
 parse_loop : List(Str), OracleOptions.Options -> Try(OracleOptions.Options, [Arguments])
 parse_loop = |args, options| match args {
 	[] => Ok(options)
+	["--fetch", .. as rest] => parse_loop(rest, { ..options, source_mode: FetchMissing })
 	["--workers", text, .. as rest] => {
 		workers = U64.from_str(text).map_err(|_| Arguments)?
 		if workers < 1 or workers > 16 {
@@ -51,7 +64,7 @@ expect OracleOptions.parse(["--workers", "17"]) == Err(Arguments)
 expect OracleOptions.parse(["--oracle", "unknown"]) == Err(Arguments)
 
 ## Preserve the selected profile and worker budget.
-expect OracleOptions.parse(["--oracle", "zones", "--workers", "3"]) == Ok({ names: ["zones"], workers: 3 })
+expect OracleOptions.parse(["--oracle", "zones", "--workers", "3"]) == Ok({ names: ["zones"], workers: 3, source_mode: CachedOnly })
 
 ## Rewrite only external fixture dependencies.
 expect OracleOptions.rewrite({
@@ -66,3 +79,6 @@ expect OracleOptions.rewrite({
 	core_path: "core",
 	host_path: "host",
 }) == "\"other/package/main.roc\" \"package/main.roc\""
+
+## Reference downloads require an explicit development flag.
+expect OracleOptions.parse(["--fetch", "--oracle", "zones"]).map_ok(|options| options.source_mode) == Ok(FetchMissing)

@@ -13,3 +13,6 @@ source_sha256 = ["a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f74704
 sources = ["https://pypi.org/project/python-dateutil/2.9.0.post0/", "https://pypi.org/project/six/1.17.0/", "https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10"]
 license = "Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT."
 independence = "dateutil parses text and expands indexed calendar/clock masks; Roc uses native bounded cursors. Shared Gregorian and UTC conventions. Twelve synchronized templates, SECONDLY/MINUTELY/HOURLY/DAILY/MONTHLY, clock expansion/filtering and signed BYSETPOS, COUNT, inclusive UNTIL, duplicate RDATE/EXDATE and half-open windows. No local zones, leap seconds, PERIOD overrides, disputed yearly defaults or general RFC conformance claim."
+generator_source_revision = "54cc68a340c4e7eee361c34a55ffae980b00abac"
+generator_adapter_sha256 = "c73f55f9728a301ab0e53b0d1108d33b7c9af975b833178b0c9592b03da89a98"
+reproduction_runtime = "CPython 3.14.3"

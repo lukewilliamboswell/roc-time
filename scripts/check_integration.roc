@@ -12,13 +12,11 @@ import src/Script
 main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	nightly = Script.roc_nightly!()?
-	python = Script.env_str!("PYTHON") ?? "python3"
 	Path.create_all!(".roc-time-tmp")?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "integration-")?
 	temporary = Path.to_os_str(Path.absolute!(".roc-time-tmp")?)
 	cases = IntegrationCases.all({
 		roc: OsStr.display(nightly.program()),
-		python,
 		work: Path.display(work),
 	})
 	start = Monotonic.now!()
@@ -33,7 +31,7 @@ main! = |_args| {
 		})?
 		before = Monotonic.now!()
 		result = Cmd.new_str(case.program).args_str(case.args)
-			.env("ROC", nightly.program())
+			.env("ROC_NIGHTLY", nightly.program())
 			.env("ROC_TIME_TMPDIR", temporary)
 			.env_str("DOCS_OUTPUT", "${Path.display(work)}/manual")
 			.timeout_ms(900000).stdout(Inherit).stderr(Inherit).run!()

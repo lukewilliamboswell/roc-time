@@ -4,31 +4,12 @@ app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/down
 import cli.Env
 import cli.OsStr
 import cli.Path
-import src/OracleCases
-import src/OracleManifest
 import src/OracleReplay
 import src/OracleStages
 import src/Script
 
 main! : List(OsStr) => Try({}, _)
 main! = |_args| {
-	for name in ["gregorian", "julian", "zones", "calendar_pattern", "rfc_date", "rfc_timed"] {
-		manifest = OracleManifest.parse(Path.read_utf8!(Path.utf8("tests/oracles/${name}-manifest.toml"))?, name)?
-		corpus = Path.utf8("tests/oracles/${name}.jsonl")
-		actual = Script.command("sha256sum").output!([Path.to_os_str(corpus)])?
-		if !actual.starts_with("${manifest.corpus_sha256} ") {
-			return Err(CorpusIntegrity(name))
-		}
-		cases = OracleCases.load({
-			text: Path.read_utf8!(corpus)?,
-			count: manifest.case_count,
-			name,
-		})?
-		Script.info!({
-			label: "RECORDS",
-			message: "${name}: ${cases.len().to_str()}",
-		})?
-	}
 	compiler = Script.roc_nightly!()?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "oracle-transport-")?
 	binary = Path.join(work, "native")

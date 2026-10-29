@@ -10,7 +10,6 @@ import random
 import sys
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parents[1]
 PINS = {
     'python_dateutil-2.9.0.post0-py2.py3-none-any.whl': 'a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427',
     'six-1.17.0-py2.py3-none-any.whl': '4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274',
@@ -35,7 +34,7 @@ TEMPLATES = [
 ]
 
 
-def generate(directory: Path) -> None:
+def generate(directory: Path, output_root: Path) -> None:
     if platform.python_version() != '3.14.3' or platform.python_implementation() != 'CPython':
         raise SystemExit('Use pinned CPython 3.14.3')
     for filename, digest in PINS.items():
@@ -87,10 +86,11 @@ def generate(directory: Path) -> None:
                       start.strftime('%Y%m%d'), end.strftime('%Y%m%d')]
             cases.append(dict(id=str(len(cases)), operation='rfc_date', input=inputs, expected=expected,
                               evidence='dateutil-2.9.0.post0-rrulestr-and-rruleset'))
-    data = ROOT / 'tests/oracles/rfc_date.jsonl'
+    data = output_root / 'tests/oracles/rfc_date.jsonl'
+    data.parent.mkdir(parents=True, exist_ok=True)
     data.write_text(''.join(json.dumps(case, separators=(',', ':'))+'\n' for case in cases))
-    driver = ROOT / 'tests/oracle_rfc_date'
-    driver.mkdir(exist_ok=True)
+    driver = output_root / 'tests/oracle_rfc_date'
+    driver.mkdir(parents=True, exist_ok=True)
     selected = [cases[index*32] for index in (0, 2, 4, 6, 9, 12, 14, 15)]
     rows = ',\n'.join('{ input: '+json.dumps(case['input'])+', expected: '+json.dumps('\t'.join(case['expected']))+' }' for case in selected)
     smoke = driver / 'SmokeCases.roc'
@@ -104,11 +104,16 @@ def generate(directory: Path) -> None:
                     sources=['https://pypi.org/project/python-dateutil/2.9.0.post0/', 'https://pypi.org/project/six/1.17.0/', 'https://www.rfc-editor.org/rfc/rfc5545.html#section-3.3.10', 'https://www.rfc-editor.org/rfc/rfc5545.html#section-3.8.5'],
                     license='Numerical observations only; no reference implementation code copied. dateutil: BSD/Apache-2.0; six: MIT.',
                     independence='dateutil parses and expands indexed calendar masks; Roc parses into DateRecurrence and scans bounded calendar periods. Shared Gregorian conventions. Synchronized DTSTART, DATE-valued rules only, 16 templates; no timed semantics, BYWEEKNO, disputed implicit yearly fields or complete RFC conformance claim.')
-    (ROOT / 'tests/oracles/rfc_date-manifest.toml').write_text('\n'.join(f'{k} = {json.dumps(v)}' for k,v in manifest.items())+'\n')
+    (output_root / 'tests/oracles/rfc_date-manifest.toml').write_text('\n'.join(f'{k} = {json.dumps(v)}' for k,v in manifest.items())+'\n')
     print(f'Generated {len(cases)} RFC date observations')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('wheel_directory', type=Path)
-    generate(parser.parse_args().wheel_directory)
+    parser.add_argument('--output-root', type=Path, required=True, help='Isolated directory for generated reference files')
+    args = parser.parse_args()
+    output_root = args.output_root.resolve()
+    if output_root == Path(__file__).resolve().parents[1]:
+        parser.error('--output-root must not be the repository root')
+    generate(args.wheel_directory, output_root)

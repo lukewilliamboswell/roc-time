@@ -12,8 +12,8 @@ OracleManifest := [].{
 		gap_sha256 : Str,
 		gap_count : U64,
 	}
-	parse : Str, Str -> Try(Manifest, [OracleMetadata])
-	parse = |source, name| {
+	parse_fields : Str -> Try(Dict(Str, Str), [OracleMetadata])
+	parse_fields = |source| {
 		if source.count_utf8_bytes() > 131072 {
 			return Err(OracleMetadata)
 		}
@@ -31,7 +31,13 @@ OracleManifest := [].{
 				$fields = $fields.insert(key, value)
 			}
 		}
-		fields = $fields
+
+		Ok($fields)
+	}
+
+	parse : Str, Str -> Try(Manifest, [OracleMetadata])
+	parse = |source, name| {
+		fields = parse_fields(source)?
 		text = |key| Json.parse(fields.get(key).map_err(|_| OracleMetadata)?).map_err(|_| OracleMetadata)
 		number = |key| U64.from_str(fields.get(key).map_err(|_| OracleMetadata)?).map_err(|_| OracleMetadata)
 		profile : Str

@@ -7,6 +7,7 @@ import cli.OsStr
 import cli.Path
 import src/Files
 import src/FixtureHost
+import src/OracleInputs
 import src/OracleCases
 import src/OracleManifest
 import src/OracleOptions
@@ -19,7 +20,7 @@ main! = |args| {
 	if args.map(OsStr.display) == ["--help"] {
 		return Script.info!({
 			label: "usage:",
-			message: "blueprint run oracles -- [--oracle gregorian|julian|zones|calendar_pattern|rfc_date|rfc_timed] [--workers 1..16]; reference refresh is a separate explicit generator command",
+			message: "blueprint run oracles -- [--oracle gregorian|julian|zones|calendar_pattern|rfc_date|rfc_timed] [--workers 1..16] [--fetch]; development-only comparisons generate hash-verified reference inputs in the ignored cache",
 		})
 	}
 	options = OracleOptions.parse(args.map(OsStr.display))?
@@ -29,32 +30,26 @@ main! = |args| {
 	Path.create_all!(Path.join(parent, "oracles"))?
 	for name in options.names {
 		manifest = OracleManifest.parse(Path.read_utf8!(Path.utf8("tests/oracles/${name}-manifest.toml"))?, name)?
-		corpus = Path.utf8("tests/oracles/${name}.jsonl")
-		require_hash!(corpus, manifest.corpus_sha256)?
+		inputs = OracleInputs.prepare!({
+			name,
+			manifest,
+			cache: Path.join(parent, "oracle-inputs"),
+			source_mode: options.source_mode,
+		})?
+		corpus = inputs.corpus
+		smoke = inputs.smoke
 		source = Path.utf8("tests/oracle_${name}")
-		smoke = Path.join(source, if (name == "zones") "Cases.roc" else "SmokeCases.roc")
-		require_hash!(smoke, manifest.smoke_sha256)?
-		generator = match name {
-			"gregorian" => "scripts/oracles.py"
-			"julian" => "scripts/oracles.py"
-			"zones" => "scripts/generate_zone_oracle.py"
-			"calendar_pattern" => "scripts/generate_pattern_oracle.py"
-			"rfc_date" => "scripts/generate_rfc_date_oracle.py"
-			"rfc_timed" => "scripts/generate_rfc_timed_oracle.py"
-			_ => ""
-		}
-		if !generator.is_empty() {
-			require_hash!(Path.utf8(generator), manifest.generator_adapter_sha256)?
-		}
-		if name == "calendar_pattern" {
-			gaps = Path.utf8("tests/oracles/calendar_pattern-reference-gaps.jsonl")
-			require_hash!(gaps, manifest.gap_sha256)?
-			text = Path.read_utf8!(gaps)?
-			rows = if (text.ends_with("\n")) text.drop_suffix("\n").split_on("\n") else text.split_on("\n")
-			if rows.len() != manifest.gap_count {
-				return Err(ReferenceGapCount)
+		match inputs.gaps {
+			NoReferenceGaps => {}
+			ReferenceGaps(gaps) => {
+				text = Path.read_utf8!(gaps)?
+				rows = if (text.ends_with("\n")) text.drop_suffix("\n").split_on("\n") else text.split_on("\n")
+				if rows.len() != manifest.gap_count {
+					return Err(ReferenceGapCount)
+				}
 			}
 		}
+
 		# Admit the file size before retaining its contents in the host.
 		size = U64.from_str(Script.command("wc").output!(["-c", Path.to_os_str(corpus)])?.trim().split_on(" ").first()?)?
 		if size > 4194304 {
@@ -67,7 +62,7 @@ main! = |args| {
 		})?
 		session = Env.create_temp_dir_in!(Path.join(parent, "oracles"), "${name}-")?
 		var $driver_hashes = []
-		for file in Files.sort_paths(Files.all_roc_files!(source)?) {
+		for file in Files.sort_paths(Files.all_roc_files!(source)?).keep_if(|file| Files.name(file) != Files.name(smoke)) {
 			relative = Script.command("realpath").output!([
 				OsStr.from_str("--relative-to=${Path.display(Path.absolute!(source)?)}"),
 				Path.to_os_str(Path.absolute!(file)?),
@@ -88,6 +83,8 @@ main! = |args| {
 			)?
 			$driver_hashes = $driver_hashes.append((relative, hash!(file)?))
 		}
+		Path.copy!(smoke, Path.join(session, Files.name(smoke)))?
+		$driver_hashes = $driver_hashes.append((Files.name(smoke), manifest.smoke_sha256))
 		program = OsStr.display(compiler.program())
 		version = OracleStages.run!({
 			command: [program, "version"],
@@ -187,6 +184,8 @@ main! = |args| {
 		for file in [
 			"scripts/oracles.roc",
 			"scripts/src/OracleCases.roc",
+			"scripts/src/OracleInputs.roc",
+			"tests/oracles/dependencies.json",
 			"scripts/src/OracleManifest.roc",
 			"scripts/src/OracleOptions.roc",
 			"scripts/src/OracleReplay.roc",
@@ -227,14 +226,6 @@ main! = |args| {
 
 hash! : Path => Try(Str, _)
 hash! = |path| Script.command("sha256sum").output!([Path.to_os_str(path)])?.split_on(" ").first()
-
-require_hash! : Path, Str => Try({}, _)
-require_hash! = |path, expected| {
-	if hash!(path)? != expected {
-		return Err(OracleIntegrity(Path.display(path)))
-	}
-	Ok({})
-}
 
 relative! : Path, Path => Try(Str, _)
 relative! = |directory, file| Script.command("realpath").output!([OsStr.from_str("--relative-to=${Path.display(directory)}"), Path.to_os_str(file)])
