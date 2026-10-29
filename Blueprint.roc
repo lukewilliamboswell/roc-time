@@ -61,6 +61,7 @@ config = [
 	Task("harness", [Use("native"), Run(["scripts/check_all.roc", "--", "--harness"])]),
 	Task("fuzz", [Use("dev"), Run(["scripts/fuzz.roc", "--"])]),
 	Task("native-versions", [Use("native"), Run(["scripts/check_native_tools.roc"])]),
+	Task("fixture-oracles", [Use("dev"), Run(["scripts/check_fixture_oracles.roc", "--"])]),
 	Task("oracles", [Use("native"), Run(["scripts/oracles.roc", "--"])]),
 	Task("oracle-transport", [Use("dev"), Run(["scripts/check_oracle_replay.roc"])]),
 	Task("measure-zone-roc", [Use("native"), Run(["scripts/measure_zone_roc.roc", "--"])]),

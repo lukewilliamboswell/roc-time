@@ -13,9 +13,9 @@ IntegrationCases := [].{
 			.concat([
 				py("Chrono correctness smoke", ["scripts/benchmark_chrono.py", "--smoke", "--fetch", "--roc-opt", "dev"]),
 				{ name: "parser and coverage allocation identities", program: "scripts/check_resource_identities.roc", args: [] },
-				py("independent Gregorian queries", ["scripts/test_civil_queries.py"]),
-				py("independent DATE export", ["scripts/test_date_export.py"]),
-				py("independent timed export", ["scripts/test_timed_export.py"]),
+				{ name: "independent Gregorian queries", program: "scripts/check_fixture_oracles.roc", args: ["--", "civil"] },
+				{ name: "independent DATE export", program: "scripts/check_fixture_oracles.roc", args: ["--", "date"] },
+				{ name: "independent timed export", program: "scripts/check_fixture_oracles.roc", args: ["--", "timed"] },
 				py("independent UTC coordinates", ["tests/utc_cancellations_checks/reference.py"]),
 			])
 			.concat(application(roc, work, "zoned_appointment_checks", ["dev", "speed"]))

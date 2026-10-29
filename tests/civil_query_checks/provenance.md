@@ -29,7 +29,7 @@ arithmetic formula. Month lengths and the Gregorian leap rule are shared
 calendar assumptions. It tests all 146097 dates of one complete cycle;
 it does not exhaust the I32 range or establish resource bounds.
 
-`ROC=/path/to/pinned/roc python3 scripts/test_civil_queries.py` performs offline
+`ROC_NIGHTLY=/path/to/pinned/roc blueprint run fixture-oracles -- civil` performs offline
 replay, one interpreter smoke, and native dev/speed builds. Native operations
 receive dates, never expected results. Four bounded workers preserve corpus
 order for comparison. Wrong/malformed output controls exercise the comparison,

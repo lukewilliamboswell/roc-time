@@ -9,9 +9,9 @@ establish product portability.
 
 ## Remaining deliverables
 
-- Port the remaining Python civil-query/DATE/timed fixture-oracle,
-  zone-generation, zone-verification and benchmark drivers to Roc. The Roc
-  integration inventory keeps them executable during migration. Retain
+- Port the remaining Python zone-generation, zone-verification and benchmark
+  drivers to Roc. The Roc integration inventory keeps them executable during
+  migration. Retain
   independent Python reference generators and measured Python subjects, their
   dependency pins, corpus bytes,
   provenance and failure controls. Remove the legacy fixture-host build helper

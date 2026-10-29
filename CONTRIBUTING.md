@@ -115,6 +115,7 @@ A pull request's dry run renders the newest notes file.
 | `check_fixture_platform.roc` | Verify instrumented host resource assertions, trace effects and failing controls |
 | `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
 | `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
+| `check_fixture_oracles.roc` | Sourced civil-query and DATE/timed export fixtures with native failure controls |
 | `check_oracle_replay.roc` | Bounded JSONL admission, native process supervision and failure controls |
 | `oracles.roc` | Deterministic external/reference-model comparisons through public APIs |
 | `oracles.py` | Explicit independent Gregorian/Julian expectation refresh; never used for ordinary replay |
@@ -274,7 +275,7 @@ a 400-year table model outside that range. The model extension is not direct
 Python support. The forward formula shares our year-counting approach, so
 sequential tests and sourced conventions remain necessary alongside agreement.
 
-Civil query evidence runs with `ROC=/path/to/roc python3 scripts/test_civil_queries.py`.
+Civil query evidence runs with `ROC_NIGHTLY=/path/to/roc blueprint run fixture-oracles -- civil`.
 It replays pinned [CPython fixtures and labelled cycle extensions](tests/civil_query_checks/provenance.md)
 and independently walks all 146097 days of a Gregorian cycle in native dev/speed
 builds. The Gregorian fuzz target supplements this with generated full-range
@@ -283,7 +284,7 @@ construction separately from query allocations over owned, shared and sliced
 dates; these are requested-byte counters, not retained-memory measurements.
 
 DATE recurrence export evidence runs with
-`ROC=/path/to/roc python3 scripts/test_date_export.py`. Its
+`ROC_NIGHTLY=/path/to/roc blueprint run fixture-oracles -- date`. Its
 [sourced/profile fixtures](tests/date_export_checks/PROVENANCE.md) distinguish
 RFC occurrence facts from our canonical spelling and native-profile limits.
 The recurrence fuzz target checks exported properties and restored cursors
@@ -295,7 +296,7 @@ controls run in both dev and speed builds. Normal replay never regenerates
 expected output from the package under test.
 
 Timed recurrence export evidence runs with
-`ROC=/path/to/roc python3 scripts/test_timed_export.py`. Its
+`ROC_NIGHTLY=/path/to/roc blueprint run fixture-oracles -- timed`. Its
 [independent fixtures](tests/timed_export_checks/README.md) compare canonical
 properties and bounded execution across explicit UTC, floating and synthetic
 zone contexts. The recurrence fuzz target also checks rebuilt and reimported

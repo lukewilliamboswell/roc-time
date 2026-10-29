@@ -1,6 +1,6 @@
 # Timed definition and export evidence
 
-`scripts/test_timed_export.py` replays `cases.jsonl` through the actual public
+`blueprint run fixture-oracles -- timed` replays `cases.jsonl` through the actual public
 `TimedRecurrence.definition/from_definition` and
 `ICalTimedRule.definition/new/to_parts/parse` APIs. Each native executable receives
 source inputs only. Expected output never enters the Roc operation under test.
