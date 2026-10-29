@@ -9,14 +9,12 @@ establish product portability.
 
 ## Remaining deliverables
 
-- Port the remaining Python zone-generation, zone-verification and benchmark
-  drivers to Roc. The Roc integration inventory keeps them executable during
+- Port the remaining Python benchmark drivers to Roc. The Roc integration inventory keeps them executable during
   migration. Retain
   independent Python reference generators and measured Python subjects, their
   dependency pins, corpus bytes,
   provenance and failure controls. Remove the legacy fixture-host build helper
-  after its zone-verification and Chrono benchmark consumers use FixtureHost.roc.
-  Remove the legacy Python metrics reader after the zone-verification port.
+  after its Chrono benchmark consumer uses FixtureHost.roc.
 - Review the newer roc-fuzz named-example/memory-baseline guidance at upstream
   9940bb2. The current temporal targets deliberately retain the reviewed 0.4.3
   pin; upgrade declarations and dependency integrity together, preserve curated

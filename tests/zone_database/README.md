@@ -7,7 +7,7 @@ These fixtures check the optional database through `Database.get`,
 Run the offline gate with the package compiler:
 
 ```sh
-ROC=/path/to/nightly python3 scripts/test_zone_database.py
+ROC_NIGHTLY=/path/to/nightly blueprint run check-zone-database
 ```
 
 The gate verifies every accepted name, metadata, transition checksum and both

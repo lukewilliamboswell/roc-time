@@ -2001,5 +2001,15 @@
     "names.txt": "d7f2601541004e40e108ee1bd18d9ab5ad6af4deb469355ce53c5ca047ef3832",
     "zones.txt": "7289695f7a29e02da1afcfd0c9a91dbcec45aa0ebf2f2157ad1747f1d7e717b3"
   },
-  "limitation": "Offset-only finite profile; no abbreviation/DST-status API. Python footer expansion compared with C ZoneInfo using common pinned data; not an independent tzdb authority."
+  "limitation": "Offset-only finite profile; no abbreviation/DST-status API. Python footer expansion compared with C ZoneInfo using common pinned data; not an independent tzdb authority.",
+  "generator_source_revision": "11b51ced4d122c97e71b028d857b8e80f881a9db",
+  "generator_adapter_sha256": "32bf44010ebc2f2558db82eadf2410f9da39d9c6ecc14cb514a7ad6fa3801aae",
+  "reference_adapter_sha256": "ab13cd8e9bc8c11180321a2dbf3f231fcbb7a49af2e99b733c6f52aa6b83d513",
+  "generator_adapter_sources": {
+    "scripts/generate_zone_database.roc": "32bf44010ebc2f2558db82eadf2410f9da39d9c6ecc14cb514a7ad6fa3801aae",
+    "scripts/reference_zone_database.py": "ab13cd8e9bc8c11180321a2dbf3f231fcbb7a49af2e99b733c6f52aa6b83d513",
+    "scripts/src/ZoneDistribution.roc": "b764464a64f0ebe357a978c76e9d3db0dae792254d53323f7b4a20f349b3993a",
+    "scripts/src/ZoneVerification.roc": "1204d5ed260625311e95a787252a08196650f6132c0e1c8652b7c9a9d4fa1205",
+    "scripts/templates/zone-verify.roc.txt": "071f9f66e22be42402c0b648a097aeb7df70421167c2ecc4422edea3fece1c9a"
+  }
 }

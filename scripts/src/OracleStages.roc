@@ -14,6 +14,7 @@ OracleStages := [].{
 	run_logged! : List(Str), Path, Path, Str, U64 => Try({ stdout : Str, stderr : Str, seconds : F64 }, _)
 	run_logged! = |command, cwd, logs, label, timeout| {
 		before = Monotonic.now!()
+		outcome : Try(Cmd.RunOutput, Cmd.RunErr)
 		outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(cwd).timeout_ms(timeout).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()
 		seconds = (Monotonic.now!() - before).to_f64() / 1000000000
 		(stdout, stderr) = match outcome {
@@ -25,7 +26,7 @@ OracleStages := [].{
 		Path.write_bytes!(Path.join(logs, "${label}.stdout"), stdout)?
 		Path.write_bytes!(Path.join(logs, "${label}.stderr"), stderr)?
 		match outcome {
-			Ok(output) if output.status == Exited(0) => Ok({ stdout: Str.from_utf8(stdout)?, stderr: Str.from_utf8(stderr)?, seconds })
+			Ok({ status: Exited(0), .. }) => Ok({ stdout: Str.from_utf8(stdout)?, stderr: Str.from_utf8(stderr)?, seconds })
 			Ok(output) => Err(StageStatus(label, output.status))
 			Err(error) => Err(StageSupervision(label, Str.inspect(error)))
 		}

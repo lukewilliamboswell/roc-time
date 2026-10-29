@@ -24,7 +24,7 @@ IntegrationCases := [].{
 				{ name: "instrumented fixture controls", program: "scripts/check_fixture_platform.roc", args: [] },
 				{ name: "oracle transport controls", program: "scripts/check_oracle_replay.roc", args: [] },
 				{ name: "independent temporal oracles", program: "scripts/oracles.roc", args: [] },
-				py("optional zone database", ["scripts/test_zone_database.py"]),
+				{ name: "optional zone database", program: "scripts/check_zone_database.roc", args: [] },
 				{ name: "Gregorian measurement smoke", program: "scripts/measure_gregorian.roc", args: ["--", "--smoke"] },
 				{ name: "zone data measurement smoke", program: "scripts/measure_zone_data.roc", args: ["--", "--smoke"] },
 				{ name: "column fixture smoke", program: "scripts/measure_zone_roc.roc", args: ["--", "--smoke", "--encoding", "columns"] },

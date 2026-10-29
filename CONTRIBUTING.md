@@ -105,8 +105,8 @@ A pull request's dry run renders the newest notes file.
 
 | Script | Purpose |
 | --- | --- |
-| `test_zone_database.py` | Offline committed-data integrity, all-name native imports and provider error checks |
-| `generate_zone_database.py` | Generate a pinned bounded companion package and verify imports through the core adapter |
+| `check_zone_database.roc` | Offline committed-data integrity, all-name native imports and provider error checks |
+| `generate_zone_database.roc` | Generate a pinned bounded companion package and verify imports through the core adapter |
 | `measure_gregorian.roc` | Measure validated date construction and coordinate round trips with checked checksums |
 | `measure_zone_roc.roc` | Generate prototype zone encodings and measure source/archive, compiler and native binary costs |
 | `reference_zone_payloads.py` | Retained pinned CPython TZif decoder; emits independent reference columns for the prototype |
@@ -753,11 +753,11 @@ Do not copy measurement transcripts into the architecture or active plan.
 Generate the optional bounded database into a new directory with:
 
 ```sh
-python3 scripts/generate_zone_database.py .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify-roc /path/to/roc
+ROC_NIGHTLY=/path/to/roc blueprint run generate-zone-database -- .roc-time-tmp/tzdata.whl .roc-time-tmp/generated-zone-package --verify
 ```
 
 Generation requires CPython 3.14.3 and the distribution wheel URL/hash pinned
-in `scripts/generate_zone_database.py` (currently tzdata 2026.5 / IANA 2026e).
+in `scripts/src/ZoneDistribution.roc` and `scripts/reference_zone_database.py` (currently tzdata 2026.5 / IANA 2026e).
 Download that wheel to the path supplied above; the historical oracle wheel is
 pinned independently in `scripts/generate_zone_oracle.py` and is not a substitute.
 Generation verifies integrity and both embedded IANA version declarations. The
