@@ -29,8 +29,20 @@ ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64,
 		days: Fuzz.map(Fuzz.u8_in(0, 120), |n| U8.to_i64(n) - 60),
 	}.Fuzz
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : ArithmeticCase -> Bool
+	is_in_domain = |input| {
+		date_is_in_range = input.year >= -2147483648 and input.year <= 2147483647 and input.month >= 1 and input.month <= 12 and input.day >= 1 and input.day <= 31
+		shift_is_bounded = input.years >= -2 and input.years <= 2 and input.months >= -24 and input.months <= 24 and input.days >= -60 and input.days <= 60
+		date_is_in_range and shift_is_bounded
+	}
+
 	check : ArithmeticCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		length = month_length(input.year, input.month)
 		fields = {
 			year: input.year,
@@ -155,5 +167,24 @@ month_length = |year, month| {
 		29
 	} else {
 		base
+	}
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = ArithmeticCase.{
+		year: 2000,
+		month: 2,
+		day: 31,
+		years: 1,
+		months: 1,
+		days: 1,
+	}
+	{
+		boundary_is_tested: ArithmeticCase.is_in_domain(boundary),
+		outside_is_rejected: !ArithmeticCase.is_in_domain({ ..boundary, months: 25 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
 	}
 }

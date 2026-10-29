@@ -33,8 +33,18 @@ ZoneArchive := [].{
 		Ok($entries)
 	}
 }
+
+## Read a bounded zone member from the archive inventory.
 expect ZoneArchive.entries("1103 Defl:N 586 47% 2025-03-23 13:54 3183bc6f tzdata/zoneinfo/CET\n") == Ok([{ name: "tzdata/zoneinfo/CET", expanded: 1103, compressed: 586 }])
+
+## Reject extra inventory columns.
 expect ZoneArchive.entries("1103 Defl:N 586 47% 2025-03-23 13:54 CRC tzdata/zoneinfo/CET extra\n") == Err(ArchiveInventory)
+
+## Reject negative archive member sizes.
 expect ZoneArchive.entries("-1 Defl:N 586 47% date time CRC tzdata/zoneinfo/CET\n") == Err(ArchiveInventory)
+
+## Reject oversized expanded archive members.
 expect ZoneArchive.entries("1048577 Defl:N 586 47% date time CRC tzdata/zoneinfo/CET\n") == Err(ArchiveInventory)
+
+## Require at least one inventory entry.
 expect ZoneArchive.entries("") == Err(ArchiveInventory)

@@ -39,12 +39,18 @@ Script := [].{
 	## The pinned tooling compiler: `ROC_STABLE`, falling back to `roc-stable`.
 	## It runs and tests the scripts, and never the package.
 	roc_stable! : () => Try(Command, _)
-	roc_stable! = || compiler!("ROC_STABLE", "roc-stable")
+	roc_stable! = || compiler!({
+		variable: "ROC_STABLE",
+		fallback: "roc-stable",
+	})
 
 	## The floating package compiler: `ROC_NIGHTLY`, falling back to `roc`.
 	## Every check, test, build and bundle of the package and examples uses it.
 	roc_nightly! : () => Try(Command, _)
-	roc_nightly! = || compiler!("ROC_NIGHTLY", "roc")
+	roc_nightly! = || compiler!({
+		variable: "ROC_NIGHTLY",
+		fallback: "roc",
+	})
 
 	## Read a UTF-8 environment variable, or `Err(NotSet)` when it is absent or empty.
 	env_str! : OsStr => Try(Str, _)
@@ -57,8 +63,8 @@ Script := [].{
 		}
 
 	## Print a labelled progress line.
-	info! : Str, Str => Try({}, _)
-	info! = |label, message| Stdout.line!("${label} ${message}")
+	info! : { label : Str, message : Str } => Try({}, _)
+	info! = |{ label, message }| Stdout.line!("${label} ${message}")
 
 	## Print a section heading.
 	section! : Str => Try({}, _)
@@ -72,7 +78,8 @@ Script := [].{
 	}
 }
 
-compiler! = |variable, fallback|
+compiler! : { variable : OsStr, fallback : OsStr } => Try(Script.Command, _)
+compiler! = |{ variable, fallback }|
 	match Env.var!(variable) {
 		Ok(value) => Ok(Script.command(value))
 		Err(VarNotFound(_)) => Ok(Script.command(fallback))

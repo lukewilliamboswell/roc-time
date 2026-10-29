@@ -4,11 +4,49 @@ app [target] {
 	time: "../../package/main.roc",
 }
 import fuzz.Fuzz
-import "../fuzz/corpus/recurrence/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/recurrence/boundary-exclusion-merge-buffer" as retained_1 : List(U8)
-import "../fuzz/corpus/recurrence/local-gap-boundary-exclusion" as retained_2 : List(U8)
-import "../fuzz/corpus/recurrence/ones" as retained_3 : List(U8)
-import "../fuzz/corpus/recurrence/ramp" as retained_4 : List(U8)
-import "../fuzz/corpus/recurrence/zero" as retained_5 : List(U8)
 import RecurrenceCase
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "boundary-exclusion-merge-buffer", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "local-gap-boundary-exclusion", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_3 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_4 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_5 })], name: "recurrence-v1", test: RecurrenceCase.check, show: |input| Str.inspect(input) })
+import "../fuzz/corpus/recurrence/boundary-exclusion-merge-buffer" as regression_0 : List(U8)
+import "../fuzz/corpus/recurrence/local-gap-boundary-exclusion" as regression_1 : List(U8)
+
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "recurrence-v1",
+	examples: [
+		Fuzz.saved({
+			name: "boundary-exclusion-merge-buffer",
+			revision: "1",
+			bytes: regression_0,
+		}),
+		Fuzz.saved({
+			name: "local-gap-boundary-exclusion",
+			revision: "1",
+			bytes: regression_1,
+		}),
+		Fuzz.example({
+			name: "month-end-small-budget",
+			revision: "1",
+			make: || RecurrenceCase.{
+				last_monday: Bool.False,
+				interval: 1,
+				count: 6,
+				query_month: 1,
+				exclude_anchor: Bool.True,
+				work: 1,
+			},
+		}),
+		Fuzz.example({
+			name: "last-monday-later-window",
+			revision: "1",
+			make: || RecurrenceCase.{
+				last_monday: Bool.True,
+				interval: 3,
+				count: 6,
+				query_month: 12,
+				exclude_anchor: Bool.False,
+				work: 128,
+			},
+		}),
+	],
+	test: RecurrenceCase.check,
+	show: Str.inspect,
+})

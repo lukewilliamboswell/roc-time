@@ -88,10 +88,10 @@ depend on this repository's packages.
 | `build_docs.roc` | Verify the released renderer and build/check the native HTML and PDF manual |
 | `assemble_site.roc` | Render the tagged release manual and assemble restored immutable API versions |
 
-The Roc integration driver still calls legacy Python oracle, fixture and
-measurement drivers while those are migrated. Independent reference generators
-and Python benchmark subjects remain pinned evidence inputs. Every product
-command receives the selected package compiler explicitly.
+The Roc integration driver runs the verification and measurement scripts.
+Independent reference generators and measured Python benchmark subjects remain
+pinned evidence inputs. Every product command receives the selected package
+compiler explicitly.
 
 `release.yml` calls the shared release workflow of
 [roc-automation](https://github.com/lukewilliamboswell/roc-automation) at a full
@@ -366,7 +366,7 @@ blueprint run fuzz -- --operation all
 blueprint run fuzz -- --operation build --targets precision
 blueprint run fuzz -- --operation run --targets precision --runs 10000 --seconds 5 --seed 1
 blueprint run fuzz -- --operation replay --targets precision
-.roc-time-tmp/fuzz/precision show tests/fuzz/corpus/precision/alternating
+.roc-time-tmp/fuzz/coverage show tests/fuzz/corpus/coverage/subtraction-inner-loop-stop
 blueprint run fuzz -- --operation lifecycle
 ```
 
@@ -383,7 +383,9 @@ reviewed host-specific baseline before this new gate can pass there. Other hosts
 explicitly report fuzzing as unverified.
 See [target domains and corpus provenance](tests/fuzz/README.md).
 
-Every curated input is also a source-declared named example. The runner requires
+Targets declare readable boundary examples in source and retain discovered
+regressions as named binary witnesses. Campaign seeds come from roc-fuzz's
+prepared named examples; synthetic starter files are unnecessary. The runner requires
 complete metrics, passing trace rules, a matched baseline and nonzero accepted
 exploration counts from `roc-fuzz-quality/1` reports. Ordinary checks never update
 `tests/fuzz/baselines/`. For an intentional change, review the observations and run

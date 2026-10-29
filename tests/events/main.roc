@@ -3,9 +3,34 @@ app [target] {
 	time: "../../package/main.roc",
 }
 import fuzz.Fuzz
-import "../fuzz/corpus/events/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/events/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/events/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/events/zero" as retained_3 : List(U8)
 import EventCase
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "events-v1", test: EventCase.check, show: |input| Str.inspect(input) })
+
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "events-v1",
+	examples: [
+		Fuzz.example({
+			name: "empty",
+			revision: "1",
+			make: || EventCase.{
+				spans: [],
+			},
+		}),
+		Fuzz.example({
+			name: "duplicate-extents",
+			revision: "1",
+			make: || EventCase.{
+				spans: [{ start: 0, width: 8 }, { start: 0, width: 8 }, { start: 4, width: 8 }],
+			},
+		}),
+		Fuzz.example({
+			name: "touching-and-disconnected",
+			revision: "1",
+			make: || EventCase.{
+				spans: [{ start: 0, width: 2 }, { start: 2, width: 2 }, { start: 16, width: 1 }],
+			},
+		}),
+	],
+	test: EventCase.check,
+	show: Str.inspect,
+})

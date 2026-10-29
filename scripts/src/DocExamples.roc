@@ -37,6 +37,11 @@ DocExamples := [].{
 	}
 }
 
+## Collect imports and executable Roc listings.
 expect DocExamples.collect([{ path: "A.roc", source: "## ```roc\n## import time.A\n## expect A.value == 1\n## ```\n" }]).map_ok(|value| (value.import_lines, value.bodies.len())) == Ok((["import time.A"], 1))
+
+## Reject an unterminated Roc listing.
 expect DocExamples.collect([{ path: "A.roc", source: "## ```roc\n## expect Bool.True\n" }]) == Err(UnclosedListing("A.roc"))
+
+## Leave non-Roc listings out of executable evidence.
 expect DocExamples.collect([{ path: "A.roc", source: "## ```text\n## uncompiled text\n## ```\n" }]) == Ok({ import_lines: [], bodies: [] })

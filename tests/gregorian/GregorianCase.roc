@@ -26,8 +26,16 @@ GregorianCase := { number : I64, raw : U64, month : U8, day : U8 }.{
 		day: Fuzz.u8,
 	}.Fuzz
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : GregorianCase -> Bool
+	is_in_domain = |input| input.number >= -784353015833 and input.number <= 784351576776
+
 	check : GregorianCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		coordinate = CivilDay.from_day_number(input.number)
 		date = match GregorianDate.from_civil_day(coordinate) {
 			Ok(value) => value
@@ -230,5 +238,22 @@ days_in_month = |year, month| {
 		base + 1
 	} else {
 		base
+	}
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = GregorianCase.{
+		number: 0,
+		raw: 0,
+		month: 0,
+		day: 0,
+	}
+	{
+		boundary_is_tested: GregorianCase.is_in_domain(boundary),
+		outside_is_rejected: !GregorianCase.is_in_domain({ ..boundary, number: 784351576777 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
 	}
 }

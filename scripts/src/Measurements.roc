@@ -35,6 +35,7 @@ Measurements := [].{
 	}
 }
 
+parse_loop : List(Str), Measurements.Options -> Try(Measurements.Options, [Arguments])
 parse_loop = |args, found| match args {
 	[] => Ok(found)
 	["--smoke", .. as rest] => parse_loop(rest, { ..found, smoke: Bool.True })
@@ -43,16 +44,33 @@ parse_loop = |args, found| match args {
 	["--warmups", text, .. as rest] => parse_loop(rest, { ..found, warmups: U64.from_str(text).map_err(|_| Arguments)? })
 	_ => Err(Arguments)
 }
+
+## Reject an unknown measurement option.
 expect Measurements.parse(["--runs", "1"]) == Err(Arguments)
+
+## Bound warmup counts before arithmetic.
 expect Measurements.parse(["--warmups", "18446744073709551615"]) == Err(Arguments)
+
+## Bound the number of measured iterations.
 expect Measurements.parse(["--iterations", "100000001"]) == Err(Arguments)
+
+## An empty workload has a zero checksum.
 expect Measurements.checksum(0) == 0
+
+## Pin the first independently checked checksum.
 expect Measurements.checksum(1) == 1972
+
+## Calculate sample mean and sample deviation.
 expect Measurements.statistics([1, 2, 3, 4, 5]) == Ok({ mean_seconds: 3, stdev_seconds: F64.sqrt(2.5) })
+
+## Identical samples have zero deviation.
 expect Measurements.statistics([2, 2]) == Ok({ mean_seconds: 2, stdev_seconds: 0 })
+
+## Require enough samples for sample deviation.
 expect Measurements.statistics([1]) == Err(TooFewSamples)
 
 # 337260 is the common period of 8030, 12 and 28. The multipliers
 # are coprime to their moduli, so each residue occurs equally often:
 # sum = period * (1970 + 8029/2 + 13/2 + 29/2).
+## Pin the complete Gregorian workload checksum.
 expect Measurements.checksum(337260) == 2025414930

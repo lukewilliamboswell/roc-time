@@ -10,6 +10,7 @@ import src/FixtureOracles
 import src/OracleStages
 import src/Script
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	kind = match args.map(OsStr.display) {
 		[selected] if ["civil", "date", "timed"].contains(selected) => selected
@@ -23,7 +24,10 @@ main! = |args| {
 	source = Path.absolute!(Path.utf8("tests/${root_name}/main.roc"))?
 	directory = Path.utf8("tests/${root_name}")
 	expected_hashes = match kind {
-		"civil" => Dict.from_list([("reference.py", "dbe36a1f7fc7cf65f4554285adaee50e5d2119c114a58316f95796f47ad6ba44"), ("cases.jsonl", "5cd11c1503af724c9ffa6dff9277f0454d0a6d381cabd76cf8a2c91b96042ba0")])
+		"civil" => Dict.from_list([
+			("reference.py", "dbe36a1f7fc7cf65f4554285adaee50e5d2119c114a58316f95796f47ad6ba44"),
+			("cases.jsonl", "5cd11c1503af724c9ffa6dff9277f0454d0a6d381cabd76cf8a2c91b96042ba0"),
+		])
 		"date" => Dict.from_list([("cases.jsonl", "a8144deb5fc5422ca6cabba7c17a31b7ad229ac29d0b05ed5dd28fb2a2c7647a")])
 		_ => Json.parse(Path.read_utf8!(Path.join(directory, "integrity.json"))?)?
 	}
@@ -37,38 +41,67 @@ main! = |args| {
 	first = cases.first()?
 	if kind != "civil" {
 		for wrong in ["", "null", "{}", "[]", "{broken"] {
-			if FixtureOracles.compare(first.expected, wrong) {
+			if FixtureOracles.is_matching_output(first.expected, wrong) {
 				return Err(BrokenOutputControl)
 			}
 		}
 	}
 	match first.expected {
-		Date(value) => if FixtureOracles.compare(first.expected, Json.to_str({ ..value, dates: [] })) {
+		Date(value) => if FixtureOracles.is_matching_output(first.expected, Json.to_str({ ..value, dates: [] })) {
 			return Err(BrokenSemanticOutputControl)
 		}
-		Timed(value) => if FixtureOracles.compare(first.expected, Json.to_str({ ..value, occurrences: [] })) {
+		Timed(value) => if FixtureOracles.is_matching_output(first.expected, Json.to_str({ ..value, occurrences: [] })) {
 			return Err(BrokenSemanticOutputControl)
 		}
 		_ => {}
 	}
-	if kind == "date" and FixtureOracles.compare(cases.get(6)?.expected, "OutOfRange(\"wrong-field\")") {
+	if kind == "date" and FixtureOracles.is_matching_output(cases.get(6)?.expected, "OutOfRange(\"wrong-field\")") {
 		return Err(BrokenErrorOutputControl)
 	}
 	compiler = Script.roc_nightly!()?
 	program = OsStr.display(compiler.program())
 	cwd = Path.absolute!(".")?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "fixture-oracles-${kind}-")?
-	_ = OracleStages.run_logged!([program, "check", Path.display(source)], cwd, work, "check", 180000)?
-	smoke = OracleStages.run_logged!([program, Path.display(source), "--"].concat(first.input), cwd, work, "interpret", 180000)?
-	if !FixtureOracles.compare(first.expected, smoke.stdout) {
+	_ = OracleStages.run!({
+		command: [program, "check", Path.display(source)],
+		cwd,
+		logs: work,
+		label: "check",
+		timeout_ms: 180000,
+	})?
+	smoke = OracleStages.run!({
+		command: [program, Path.display(source), "--"].concat(first.input),
+		cwd,
+		logs: work,
+		label: "interpret",
+		timeout_ms: 180000,
+	})?
+	if !FixtureOracles.is_matching_output(first.expected, smoke.stdout) {
 		return Err(InterpreterFixtureMismatch)
 	}
 	for mode in ["dev", "speed"] {
 		binary = Path.join(work, mode)
-		_ = OracleStages.run_logged!([program, "build", Path.display(source), "--opt=${mode}", "--output=${Path.display(binary)}"], cwd, work, "build-${mode}", 180000)?
-		FixtureBatch.replay!(binary, cases, work, mode)?
+		_ = OracleStages.run!({
+			command: [program, "build", Path.display(source), "--opt=${mode}", "--output=${Path.display(binary)}"],
+			cwd,
+			logs: work,
+			label: "build-${mode}",
+			timeout_ms: 180000,
+		})?
+		FixtureBatch.replay!({
+			binary,
+			cases,
+			work,
+			prefix: mode,
+		})?
 		if kind == "civil" {
-			output = OracleStages.run_logged!([Path.display(binary), "cycle"], cwd, work, "cycle-${mode}", 180000)?
+			output = OracleStages.run!({
+				command: [Path.display(binary), "cycle"],
+				cwd,
+				logs: work,
+				label: "cycle-${mode}",
+				timeout_ms: 180000,
+			})?
 			if output.stdout != "PASS 146097 Gregorian days\n" {
 				return Err(MissingCycle)
 			}
@@ -81,13 +114,22 @@ main! = |args| {
 		} else {
 			counterexamples = if (kind == "date") [(cases.get(1)?, first)] else [(cases.get(1)?, first), (cases.last()?, cases.get(cases.len() - 2)?)]
 			for ((actual, expected), index) in counterexamples.map_with_index(|pair, index| (pair, index)) {
-				output = OracleStages.run_logged!([Path.display(binary)].concat(actual.input), cwd, work, "wrong-${mode}-${index.to_str()}", 180000)?
-				if FixtureOracles.compare(expected.expected, output.stdout) {
+				output = OracleStages.run!({
+					command: [Path.display(binary)].concat(actual.input),
+					cwd,
+					logs: work,
+					label: "wrong-${mode}-${index.to_str()}",
+					timeout_ms: 180000,
+				})?
+				if FixtureOracles.is_matching_output(expected.expected, output.stdout) {
 					return Err(BrokenNativeComparisonControl)
 				}
 			}
 		}
-		Script.info!("PASS", "${kind}/${mode}: ${cases.len().to_str()} independent fixtures, interpreter smoke, native failure controls; ${Path.display(work)}")?
+		Script.info!({
+			label: "PASS",
+			message: "${kind}/${mode}: ${cases.len().to_str()} independent fixtures, interpreter smoke, native failure controls; ${Path.display(work)}",
+		})?
 	}
 	Ok({})
 }

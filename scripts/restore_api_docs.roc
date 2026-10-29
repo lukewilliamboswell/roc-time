@@ -13,12 +13,14 @@ Asset : { name : Str, browser_download_url : Str, digest : Str, size : U64 }
 
 Release : { tag_name : Str, draft : Bool, prerelease : Bool, assets : List(Asset) }
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| match args.map(OsStr.display) {
 	["--output", output] => restore_all!(Path.utf8(output))
 	["--self-test"] => self_test!()
 	_ => Script.fail!("usage: scripts/restore_api_docs.roc -- --output NEW_DIRECTORY")
 }
 
+restore_all! : Path => Try({}, _)
 restore_all! = |output| {
 	if Path.exists!(output)? {
 		return Script.fail!("documentation output must be new")
@@ -32,7 +34,7 @@ restore_all! = |output| {
 		for release in releases {
 			version = release.tag_name
 			if !release.draft {
-				if !Text.valid_version(version) {
+				if !Text.is_valid_version(version) {
 					return Script.fail!("unsupported published version ${version}")
 				}
 				names = ["roc-time-docs-${version}.zip", "roc-time-docs-${version}.tar.gz"]
@@ -48,14 +50,31 @@ restore_all! = |output| {
 				work = Path.join(output, ".restore-${version}")
 				Path.create_all!(work)?
 				archive = Path.join(work, asset.name)
-				Cmd.new("curl").args(["--fail", "--silent", "--show-error", "--location", "--max-time", "60", OsStr.from_str(url), "--output", Path.to_os_str(archive)]).exec_cmd!()?
+				Cmd.new("curl").args([
+					"--fail",
+					"--silent",
+					"--show-error",
+					"--location",
+					"--max-time",
+					"60",
+					OsStr.from_str(url),
+					"--output",
+					Path.to_os_str(archive),
+				]).exec_cmd!()?
 				digest = Script.command("sha256sum").output!([Path.to_os_str(archive)])?
 				if !digest.starts_with("${asset.digest.drop_prefix("sha256:")} ") or Path.size_in_bytes!(archive)? != asset.size {
 					return Script.fail!("documentation asset bytes differ for ${version}")
 				}
-				restore_archive!(archive, version, output)?
+				restore_archive!({
+					archive,
+					version,
+					output,
+				})?
 				Path.delete_all!(work)?
-				Script.info!("RESTORED", version)?
+				Script.info!({
+					label: "RESTORED",
+					message: version,
+				})?
 			}
 		}
 		if releases.len() < 100 {
@@ -65,7 +84,8 @@ restore_all! = |output| {
 	Script.fail!("release history exceeded 1000 entries; incomplete restoration")
 }
 
-restore_archive! = |archive, version, output| {
+restore_archive! : { archive : Path, version : Str, output : Path } => Try({}, _)
+restore_archive! = |{ archive, version, output }| {
 	if Path.exists!(Path.join(output, version))? {
 		return Err(DestinationExists)
 	}
@@ -80,12 +100,24 @@ restore_archive! = |archive, version, output| {
 	} else {
 		Script.command("tar").output!(["-tvzf", Path.to_os_str(archive)])?
 	}
-	ApiArchive.validate(version, listing.split_on("\n"), metadata, zip)?
+	ApiArchive.validate({
+		version,
+		entries: listing.split_on("\n"),
+		metadata,
+		zip,
+	})?
 	stage = Env.create_temp_dir_in!(output, "archive-")?
 	if zip {
 		Cmd.new("unzip").args(["-q", Path.to_os_str(archive), "-d", Path.to_os_str(stage)]).timeout_ms(60000).exec_cmd!()?
 	} else {
-		Cmd.new("tar").args(["-xzf", Path.to_os_str(archive), "--no-same-owner", "--no-same-permissions", "-C", Path.to_os_str(stage)]).timeout_ms(60000).exec_cmd!()?
+		Cmd.new("tar").args([
+			"-xzf",
+			Path.to_os_str(archive),
+			"--no-same-owner",
+			"--no-same-permissions",
+			"-C",
+			Path.to_os_str(stage),
+		]).timeout_ms(60000).exec_cmd!()?
 	}
 	if !Path.is_file!(Path.join(Path.join(stage, version), "index.html"))? {
 		return Script.fail!("archive index must be a regular file")
@@ -94,6 +126,7 @@ restore_archive! = |archive, version, output| {
 	Path.delete_all!(stage)
 }
 
+self_test! : () => Try({}, _)
 self_test! = || {
 	Path.create_all!(".roc-time-tmp")?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "archive-tests-")?
@@ -111,14 +144,29 @@ self_test! = || {
 		}
 		output = Path.join(work, "restored-${suffix}")
 		Path.create_all!(output)?
-		restore_archive!(archive, "0.1.0", output)?
+		restore_archive!({
+			archive,
+			version: "0.1.0",
+			output,
+		})?
 		if Path.read_utf8!(Path.join(output, "0.1.0/index.html"))? != "old exact bytes\r\n" or Path.read_utf8!(Path.join(output, "0.1.0/Module/index.html"))? != "module" {
 			return Script.fail!("archive restoration changed file bytes")
 		}
-		if restore_archive!(archive, "0.1.0", output).is_ok() or restore_archive!(archive, "0.2.0", output).is_ok() {
+		if restore_archive!({
+			archive,
+			version: "0.1.0",
+			output,
+		}).is_ok() or restore_archive!({
+			archive,
+			version: "0.2.0",
+			output,
+		}).is_ok() {
 			return Script.fail!("archive overwrite/root failure control did not fail")
 		}
 	}
 	Path.delete_all!(work)?
-	Script.info!("PASS", "ZIP and legacy tar restoration: exact bytes, overwrite and wrong-root controls")
+	Script.info!({
+		label: "PASS",
+		message: "ZIP and legacy tar restoration: exact bytes, overwrite and wrong-root controls",
+	})
 }

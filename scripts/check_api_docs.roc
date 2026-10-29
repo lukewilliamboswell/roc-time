@@ -7,6 +7,7 @@ import cli.Path
 import src/ApiInventory
 import src/Script
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	if Path.read_bytes!("tzdb/Database.roc")? != Path.read_bytes!("tzdb/package/Database.roc")? {
 		return Script.fail!("regenerate the distributable zone database module")
@@ -21,7 +22,10 @@ main! = |_args| {
 		if count == 0 {
 			return Script.fail!("no public entries generated for ${root}")
 		}
-		Script.info!("PASS", "${count.to_str()} documented API entries for ${root}")?
+		Script.info!({
+			label: "PASS",
+			message: "${count.to_str()} documented API entries for ${root}",
+		})?
 	}
 	for (owner, names) in [
 		("Calendar.Date", ["from_fields", "as_gregorian", "in_calendar", "same_day", "to_hash"]),
@@ -51,9 +55,13 @@ main! = |_args| {
 			return Script.fail!("missing-search control passed for ${method}")
 		}
 	}
-	Script.info!("PASS", "nested API methods, search entries and missing-entry controls")
+	Script.info!({
+		label: "PASS",
+		message: "nested API methods, search entries and missing-entry controls",
+	})
 }
 
+check_pages! : Path => Try(U64, _)
 check_pages! = |directory| {
 	var $count = 0.U64
 	for entry in Path.list!(directory)? {

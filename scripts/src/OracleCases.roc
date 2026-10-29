@@ -2,8 +2,8 @@
 ## the real public package and the independently generated expected corpus.
 OracleCases := [].{
 	Case : { id : Str, operation : Str, input : List(Str), expected : List(Str), evidence : Str }
-	load : Str, U64, Str -> Try(List(Case), [OracleRecord])
-	load = |text, count, name| {
+	load : { text : Str, count : U64, name : Str } -> Try(List(Case), [OracleRecord])
+	load = |{ text, count, name }| {
 		if text.count_utf8_bytes() > 4194304 or count == 0 or count > 4096 {
 			return Err(OracleRecord)
 		}
@@ -123,7 +123,7 @@ OracleCases := [].{
 					return Err(OracleRecord)
 				}
 				for index in [0.U64, 4, 5] {
-					if !date_text(get(values, index)?, timed) {
+					if !is_date_text(get(values, index)?, timed) {
 						return Err(OracleRecord)
 					}
 				}
@@ -133,7 +133,7 @@ OracleCases := [].{
 				}
 				for index in [2.U64, 3] {
 					list = get(values, index)?
-					if list != "-" and !list.split_on(",").all(|part| date_text(part, timed)) {
+					if list != "-" and !list.split_on(",").all(|part| is_date_text(part, timed)) {
 						return Err(OracleRecord)
 					}
 				}
@@ -141,7 +141,7 @@ OracleCases := [].{
 					["ok", .. as observations] => if timed {
 						ordered_integers(observations)?
 					} else {
-						if !observations.all(|part| date_text(part, Bool.False)) {
+						if !observations.all(|part| is_date_text(part, Bool.False)) {
 							return Err(OracleRecord)
 						}
 						# Fixed-width ASCII dates sort in chronological order.
@@ -154,10 +154,11 @@ OracleCases := [].{
 		}
 		Ok({})
 	}
-	compare : Case, Str -> Bool
-	compare = |case, output| output == "${Str.join_with([case.id].concat(case.expected), "\t")}\n"
+	is_matching_output : Case, Str -> Bool
+	is_matching_output = |case, output| output == "${Str.join_with([case.id].concat(case.expected), "\t")}\n"
 }
 
+integer : Str -> Try(I64, [OracleRecord])
 integer = |text| {
 	number = I64.from_str(text).map_err(|_| OracleRecord)?
 	if number.to_str() != text {
@@ -166,6 +167,7 @@ integer = |text| {
 	Ok(number)
 }
 
+unsigned : Str -> Try(U64, [OracleRecord])
 unsigned = |text| {
 	number = U64.from_str(text).map_err(|_| OracleRecord)?
 	if number.to_str() != text {
@@ -174,6 +176,7 @@ unsigned = |text| {
 	Ok(number)
 }
 
+byte : Str -> Try(U64, [OracleRecord])
 byte = |text| {
 	number = unsigned(text)?
 	if number > 255 {
@@ -182,8 +185,10 @@ byte = |text| {
 	Ok(number)
 }
 
+ordered_integers : List(Str) -> Try({}, [OracleRecord])
 ordered_integers = |texts| ordered_values(texts.map_try(integer)?)
 
+ordered_values : List(I64) -> Try({}, [OracleRecord])
 ordered_values = |values| {
 	var $prior = []
 	for value in values {
@@ -196,7 +201,8 @@ ordered_values = |values| {
 	Ok({})
 }
 
-date_text = |text, timed| {
+is_date_text : Str, Bool -> Bool
+is_date_text = |text, timed| {
 	bytes = text.to_utf8()
 	if !timed {
 		bytes.len() == 8 and bytes.all(|b| b >= '0' and b <= '9')
@@ -207,6 +213,7 @@ date_text = |text, timed| {
 
 # The built-in decoder handles JSON syntax/escapes. This bounded lexer records
 # outer keys before decoding can discard an unknown or repeated field.
+record_keys : Str -> Try(List(Str), [OracleRecord])
 record_keys = |text| {
 	bytes = text.to_utf8()
 	var $keys = []
@@ -251,31 +258,142 @@ record_keys = |text| {
 }
 
 sample : OracleCases.Case
-sample = { id: "0", operation: "forward", input: ["1970", "1", "1"], expected: ["ok", "0"], evidence: "control" }
-expect OracleCases.load(Json.to_str(sample), 1, "gregorian") == Ok([sample])
-expect OracleCases.compare(sample, "0\tok\t0\n") and !OracleCases.compare(sample, "0\tok\t1\n")
-expect !OracleCases.compare(sample, "0\tok\t0\n0\tok\t0\n")
-expect OracleCases.load("", 1, "gregorian") == Err(OracleRecord)
-expect OracleCases.load("{\"id\":\"0\",\"id\":\"1\"}", 1, "gregorian") == Err(OracleRecord)
-expect OracleCases.load("null", 1, "gregorian") == Err(OracleRecord)
-expect OracleCases.load("${Json.to_str(sample)}\n${Json.to_str(sample)}\n", 2, "gregorian") == Err(OracleRecord)
+sample = {
+	id: "0",
+	operation: "forward",
+	input: ["1970", "1", "1"],
+	expected: ["ok", "0"],
+	evidence: "control",
+}
+
+## Load an independently authored Gregorian record.
+expect OracleCases.load({
+	text: Json.to_str(sample),
+	count: 1,
+	name: "gregorian",
+}) == Ok([sample])
+
+## Distinguish a correct oracle observation from a changed value.
+expect OracleCases.is_matching_output(sample, "0\tok\t0\n") and !OracleCases.is_matching_output(sample, "0\tok\t1\n")
+
+## Reject duplicate native observations.
+expect !OracleCases.is_matching_output(sample, "0\tok\t0\n0\tok\t0\n")
+
+## Reject an empty JSONL corpus.
+expect OracleCases.load({
+	text: "",
+	count: 1,
+	name: "gregorian",
+}) == Err(OracleRecord)
+
+## Reject duplicate JSON object keys.
+expect OracleCases.load({
+	text: "{\"id\":\"0\",\"id\":\"1\"}",
+	count: 1,
+	name: "gregorian",
+}) == Err(OracleRecord)
+
+## Reject a non-record JSON value.
+expect OracleCases.load({
+	text: "null",
+	count: 1,
+	name: "gregorian",
+}) == Err(OracleRecord)
+
+## Reject repeated case identifiers.
+expect OracleCases.load({
+	text: "${Json.to_str(sample)}\n${Json.to_str(sample)}\n",
+	count: 2,
+	name: "gregorian",
+}) == Err(OracleRecord)
+
+## Admit expected structured Gregorian errors.
 expect OracleCases.validate({ ..sample, input: ["1970", "0", "0"], expected: ["error", "InvalidMonth"] }, "gregorian") == Ok({})
+
+## Reject a coordinate above I64 maximum.
 expect OracleCases.validate({ ..sample, input: ["9223372036854775808", "1", "1"] }, "gregorian") == Err(OracleRecord)
+
+## Reject a calendar field above U8 maximum.
 expect OracleCases.validate({ ..sample, input: ["1970", "256", "1"] }, "gregorian") == Err(OracleRecord)
+
+## Require canonical signed integer spelling.
 expect OracleCases.validate({ ..sample, input: ["+1", "1", "1"] }, "gregorian") == Err(OracleRecord)
+
+## Admit the I64 minimum coordinate.
 expect integer("-9223372036854775808") == Ok(-9223372036854775808)
+
+## Reject a noncanonical negative zero.
 expect integer("-0") == Err(OracleRecord)
+
+## Decode escaped outer keys without parsing nested keys twice.
 expect record_keys("{\"id\":\"0\",\"i\\u0064\":\"1\",\"input\":[\"x,\\\"y\"],\"nested\":{\"ignored\":1}}") == Ok(["id", "id", "input", "nested"])
-expect date_text("00010101", Bool.False)
+
+## Admit a fixed-width year-one DATE value.
+expect is_date_text("00010101", Bool.False)
+
+## Accept strictly ordered positive observations.
 expect ordered_values([10101.I64, 20240101]) == Ok({})
 
 timed : OracleCases.Case
-timed = { id: "0", operation: "rfc_timed", input: ["20240101T090000Z", "FREQ=HOURLY;COUNT=1", "-", "-", "20240101T000000Z", "20240102T000000Z"], expected: ["ok", "1704099600000000"], evidence: "control" }
-expect OracleCases.validate(timed, "rfc_timed") == Ok({})
-expect [["ok", "1", "1"], ["ok", "2", "1"], ["ok", "9223372036854775808"], ["ok", "1.5"], ["error"]].all(|expected| OracleCases.validate({ ..timed, expected }, "rfc_timed") == Err(OracleRecord))
-expect OracleCases.validate({ ..timed, operation: "rfc_date" }, "rfc_timed") == Err(OracleRecord)
-expect OracleCases.validate({ ..timed, input: ["20240101", "FREQ=HOURLY;COUNT=1", "-", "-", "20240101T000000Z", "20240102T000000Z"] }, "rfc_timed") == Err(OracleRecord)
-expect OracleCases.validate({ ..timed, input: ["20240101T090000Z", "FREQ=HOURLY\n", "-", "-", "20240101T000000Z", "20240102T000000Z"] }, "rfc_timed") == Err(OracleRecord)
-expect OracleCases.validate({ ..timed, input: ["20240101T090000Z", "FREQ=HOURLY;COUNT=1", "20240101T090000", "-", "20240101T000000Z", "20240102T000000Z"] }, "rfc_timed") == Err(OracleRecord)
+timed = {
+	id: "0",
+	operation: "rfc_timed",
+	input: ["20240101T090000Z", "FREQ=HOURLY;COUNT=1", "-", "-", "20240101T000000Z", "20240102T000000Z"],
+	expected: ["ok", "1704099600000000"],
+	evidence: "control",
+}
 
-expect OracleCases.validate({ id: "0", operation: "rfc_date", input: ["00010101", "FREQ=DAILY;COUNT=1", "-", "-", "00010101", "00010102"], expected: ["ok", "00010101"], evidence: "control" }, "rfc_date") == Ok({})
+## Admit an independently authored timed recurrence case.
+expect OracleCases.validate(timed, "rfc_timed") == Ok({})
+
+## Reject malformed, duplicated or unordered expected boundaries.
+expect [["ok", "1", "1"], ["ok", "2", "1"], ["ok", "9223372036854775808"], ["ok", "1.5"], ["error"]].all(|expected| OracleCases.validate({ ..timed, expected }, "rfc_timed") == Err(OracleRecord))
+
+## Require the operation to match its oracle profile.
+expect OracleCases.validate({ ..timed, operation: "rfc_date" }, "rfc_timed") == Err(OracleRecord)
+
+## Reject a DATE start in the timed profile.
+expect OracleCases.validate(
+	{
+		..timed,
+		input: ["20240101", "FREQ=HOURLY;COUNT=1", "-", "-", "20240101T000000Z", "20240102T000000Z"],
+	},
+	"rfc_timed",
+) == Err(OracleRecord)
+
+## Reject line breaks in recurrence inputs.
+expect OracleCases.validate(
+	{
+		..timed,
+		input: ["20240101T090000Z", "FREQ=HOURLY\n", "-", "-", "20240101T000000Z", "20240102T000000Z"],
+	},
+	"rfc_timed",
+) == Err(OracleRecord)
+
+## Reject an incomplete timed inclusion.
+expect OracleCases.validate(
+	{
+		..timed,
+		input: [
+			"20240101T090000Z",
+			"FREQ=HOURLY;COUNT=1",
+			"20240101T090000",
+			"-",
+			"20240101T000000Z",
+			"20240102T000000Z",
+		],
+	},
+	"rfc_timed",
+) == Err(OracleRecord)
+
+## Admit a year-one DATE recurrence fixture.
+expect OracleCases.validate(
+	{
+		id: "0",
+		operation: "rfc_date",
+		input: ["00010101", "FREQ=DAILY;COUNT=1", "-", "-", "00010101", "00010102"],
+		expected: ["ok", "00010101"],
+		evidence: "control",
+	},
+	"rfc_date",
+) == Ok({})

@@ -9,6 +9,7 @@ import src/Script
 import src/ZoneDistribution
 import src/ZoneVerification
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	(wheel_arg, output_arg, verify) = match args.map(OsStr.display) {
 		[wheel, output] => (wheel, output, Bool.False)
@@ -62,15 +63,29 @@ main! = |args| {
 	for file in ZoneDistribution.source_files {
 		$sources = $sources.append((file, hash!(Path.utf8(file))?))
 	}
-	manifest = ZoneDistribution.manifest(reference.metadata, hash!(Path.utf8("scripts/generate_zone_database.roc"))?, hash!(Path.utf8("scripts/reference_zone_database.py"))?, Dict.from_list($files), Dict.from_list($sources))
+	manifest = ZoneDistribution.manifest({
+		data: reference.metadata,
+		generator_sha256: hash!(Path.utf8("scripts/generate_zone_database.roc"))?,
+		reference_sha256: hash!(Path.utf8("scripts/reference_zone_database.py"))?,
+		files: Dict.from_list($files),
+		sources: Dict.from_list($sources),
+	})
 	ZoneDistribution.validate_metadata(manifest)?
 	Path.write_utf8!(Path.join(output, "manifest.json"), Json.to_str(manifest))?
 	_ = ZoneVerification.integrity!(output)?
 	if verify {
 		compiler = Script.roc_nightly!()?
-		ZoneVerification.verify!(output, manifest, compiler)?
+		ZoneVerification.verify!({
+			directory: output,
+			manifest,
+			compiler,
+		})?
 	}
-	Script.info!("GENERATED", "${manifest.zone_names.to_str()} names, ${manifest.canonical_zones.to_str()} canonical zones, ${manifest.offset_comparisons.to_str()} independent offset comparisons; ${Path.display(output)}")
+	Script.info!({
+		label: "GENERATED",
+		message: "${manifest.zone_names.to_str()} names, ${manifest.canonical_zones.to_str()} canonical zones, ${manifest.offset_comparisons.to_str()} independent offset comparisons; ${Path.display(output)}",
+	})
 }
 
+hash! : Path => Try(Str, _)
 hash! = |path| Script.command("sha256sum").output!([Path.to_os_str(path)])?.split_on(" ").first()

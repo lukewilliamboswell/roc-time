@@ -10,6 +10,7 @@ import src/ResourceMatrix
 import src/ResourceMetrics
 import src/Script
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	target = FixtureHost.build!()?
 	nightly = Script.roc_nightly!()?
@@ -22,7 +23,14 @@ main! = |_args| {
 		}
 		for mode in ["dev", "speed"] {
 			binary = Path.join(work, "${fixture.name}-${mode}")
-			args = ["build", fixture.source, "--opt=${mode}", "--target=${target}", "--output=${Path.display(binary)}", "--no-cache"]
+			args = [
+				"build",
+				fixture.source,
+				"--opt=${mode}",
+				"--target=${target}",
+				"--output=${Path.display(binary)}",
+				"--no-cache",
+			]
 			build_args = if fixture.debug {
 				args.append("--debug")
 			} else {
@@ -93,7 +101,10 @@ main! = |_args| {
 				if !check.reference_group.is_empty() {
 					match $references.get(check.reference_group) {
 						Ok(prior) => for index in check.growth {
-							if !ResourceMetrics.within_growth(prior.get(index)?, metrics.get(index)?) {
+							if !ResourceMetrics.is_within_growth({
+								small: prior.get(index)?,
+								large: metrics.get(index)?,
+							}) {
 								return Err(NonlinearTraffic(fixture.name, index))
 							}
 						}
@@ -104,7 +115,10 @@ main! = |_args| {
 					}
 				}
 			}
-			Path.write_utf8!(Path.join(work, "${fixture.name}-${mode}.json"), Json.to_str({ compiler: version, target, mode, observations: $observations }))?
+			Path.write_utf8!(
+				Path.join(work, "${fixture.name}-${mode}.json"),
+				Json.to_str({ compiler: version, target, mode, observations: $observations }),
+			)?
 			for failure in fixture.failures {
 				if failure.mode.is_empty() or failure.mode == mode {
 					result = Cmd.new(Path.to_os_str(binary)).args_str(failure.args).timeout_ms(if (fixture.name == "probe") 10000 else 5000).stdout(Capture).stderr(Capture).run!()?
@@ -115,7 +129,11 @@ main! = |_args| {
 							Exited(code) if code != 0 and stderr.contains(failure.diagnostic) => {}
 							_ => return Script.fail!("${fixture.name}/${mode}: failure control ${Str.inspect(failure.args)} returned ${Str.inspect(result.status)}:\n${stderr}")
 						}
-						if !failure.before.is_empty() and !ResourceMetrics.failure_in_scope(stderr, failure.before, failure.after) {
+						if !failure.before.is_empty() and !ResourceMetrics.has_failure_in_scope({
+							stderr,
+							before: failure.before,
+							after: failure.after,
+						}) {
 							return Script.fail!("${fixture.name}/${mode}: misplaced failure ${Str.inspect(failure.args)}:\n${stderr}")
 						}
 					} else if result.status != Exited(0) {
@@ -123,8 +141,14 @@ main! = |_args| {
 					}
 				}
 			}
-			Script.info!("PASS", "${fixture.name}/${mode}: ${fixture.checks.len().to_str()} resource scenarios, independent laws and failure controls")?
+			Script.info!({
+				label: "PASS",
+				message: "${fixture.name}/${mode}: ${fixture.checks.len().to_str()} resource scenarios, independent laws and failure controls",
+			})?
 		}
 	}
-	Script.info!("EVIDENCE", Path.display(work))
+	Script.info!({
+		label: "EVIDENCE",
+		message: Path.display(work),
+	})
 }

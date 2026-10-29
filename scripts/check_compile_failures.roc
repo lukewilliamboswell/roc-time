@@ -7,6 +7,7 @@ import src/Script
 
 Case : { name : Str, fragments : List(Str) }
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	nightly = Script.roc_nightly!()?
 	# Package loading must work before a rejected program can establish domain
@@ -27,7 +28,13 @@ main! = |_args| {
 		if result.status != Exited(1) or !output.contains("1 error and 0 warnings") or !case.fragments.all(|fragment| output.contains(fragment)) {
 			return Script.fail!("${case.name}: intended diagnostic missing or additional errors:\n${output}")
 		}
-		Script.info!("PASS", "${case.name}: intended compile failure")?
+		Script.info!({
+			label: "PASS",
+			message: "${case.name}: intended compile failure",
+		})?
 	}
-	Script.info!("PASS", "${cases.len().to_str()} intended diagnostics; positive package-loading control")
+	Script.info!({
+		label: "PASS",
+		message: "${cases.len().to_str()} intended diagnostics; positive package-loading control",
+	})
 }

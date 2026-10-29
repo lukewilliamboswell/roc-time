@@ -5,17 +5,19 @@ import cli.Path
 ## Every compiler/interpreter stage has a process-group deadline and combined
 ## capture limit. Logs survive nonzero exits, signals and budget failures.
 OracleStages := [].{
-	run! : List(Str), Path, Str => Try({ stdout : Str, stderr : Str, seconds : F64 }, _)
-	run! = |command, cwd, label| run_with_deadline!(command, cwd, label, 120000)
-
-	run_with_deadline! : List(Str), Path, Str, U64 => Try({ stdout : Str, stderr : Str, seconds : F64 }, _)
-	run_with_deadline! = |command, cwd, label, timeout| run_logged!(command, cwd, cwd, label, timeout)
-
-	run_logged! : List(Str), Path, Path, Str, U64 => Try({ stdout : Str, stderr : Str, seconds : F64 }, _)
-	run_logged! = |command, cwd, logs, label, timeout| {
+	Request := {
+		command : List(Str),
+		cwd : Path,
+		logs : Path,
+		label : Str,
+		timeout_ms : U64 ?? 120000,
+	}
+	Output : { stdout : Str, stderr : Str, seconds : F64 }
+	run! : Request => Try(Output, _)
+	run! = |{ command, cwd, logs, label, timeout_ms }| {
 		before = Monotonic.now!()
 		outcome : Try(Cmd.RunOutput, Cmd.RunErr)
-		outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(cwd).timeout_ms(timeout).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()
+		outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(cwd).timeout_ms(timeout_ms).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()
 		seconds = (Monotonic.now!() - before).to_f64() / 1000000000
 		(stdout, stderr) = match outcome {
 			Ok(output) => (output.stdout_bytes, output.stderr_bytes)

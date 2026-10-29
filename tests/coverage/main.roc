@@ -4,14 +4,46 @@ app [target] {
 }
 
 import fuzz.Fuzz
-import "../fuzz/corpus/coverage/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/coverage/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/coverage/pattern64-ascending" as retained_2 : List(U8)
-import "../fuzz/corpus/coverage/pattern64-ones" as retained_3 : List(U8)
-import "../fuzz/corpus/coverage/pattern64-zeros" as retained_4 : List(U8)
-import "../fuzz/corpus/coverage/ramp" as retained_5 : List(U8)
-import "../fuzz/corpus/coverage/subtraction-inner-loop-stop" as retained_6 : List(U8)
-import "../fuzz/corpus/coverage/zero" as retained_7 : List(U8)
 import CoverageCase
+import "../fuzz/corpus/coverage/subtraction-inner-loop-stop" as regression_0 : List(U8)
 
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "pattern64-ascending", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "pattern64-ones", revision: "1", bytes: retained_3 }), Fuzz.saved({ name: "pattern64-zeros", revision: "1", bytes: retained_4 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_5 }), Fuzz.saved({ name: "subtraction-inner-loop-stop", revision: "1", bytes: retained_6 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_7 })], name: "coverage-v2", test: CoverageCase.check, show: |input| Str.inspect(input) })
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "coverage-v2",
+	examples: [
+		Fuzz.saved({
+			name: "subtraction-inner-loop-stop",
+			revision: "1",
+			bytes: regression_0,
+		}),
+		Fuzz.example({
+			name: "empty",
+			revision: "1",
+			make: || CoverageCase.{
+				left: [],
+				right: [],
+				window: { lo: -8, width: 17 },
+			},
+		}),
+		Fuzz.example({
+			name: "duplicates-and-overlap",
+			revision: "1",
+			make: || CoverageCase.{
+				left: [{ lo: -3, width: 5 }, { lo: -3, width: 5 }],
+				right: [{ lo: 1, width: 4 }],
+				window: { lo: -8, width: 17 },
+			},
+		}),
+		Fuzz.example({
+			name: "touching-and-disconnected",
+			revision: "1",
+			make: || CoverageCase.{
+				left: [{ lo: -8, width: 2 }, { lo: -6, width: 2 }],
+				right: [{ lo: 4, width: 3 }],
+				window: { lo: -8, width: 17 },
+			},
+		}),
+	],
+	test: CoverageCase.check,
+	show: Str.inspect,
+})

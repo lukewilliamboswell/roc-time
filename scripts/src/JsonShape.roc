@@ -25,6 +25,12 @@ JsonShape := [].{
 		$count
 	}
 }
+
+## Count nested keys without counting colons in strings.
 expect JsonShape.keys("{\"a\":\"b:c\",\"d\":{\"e\":[]}}") == 3
+
+## Ignore escaped quotes and colons inside strings.
 expect JsonShape.keys("{\"a\":\"quoted \\\" : value\"}") == 1
+
+## Arrays without objects have no keys.
 expect JsonShape.keys("[]") == 0

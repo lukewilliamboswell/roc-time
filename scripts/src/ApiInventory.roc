@@ -73,8 +73,18 @@ ApiInventory := [].{
 }
 
 parent = "<article id=\"Family\"><div class=\"entry-doc\"><p>Family meaning.</p></div>"
+
+## Require documentation for a declared API entry.
 expect ApiInventory.read("${parent}<article id=\"Family.new\"></article></article>") == Err(MissingDocs("Family.new"))
+
+## Reject empty API documentation.
 expect ApiInventory.read("${parent}<article id=\"Family.new\"><div class=\"entry-doc\"> </div></article></article>") == Err(MissingDocs("Family.new"))
+
+## Count documented parents and methods.
 expect ApiInventory.read("${parent}<article id=\"Family.new\"><div class=\"entry-doc\"><p>Construct a value.</p></div></article></article>").map_ok(|inventory| inventory.entries.len()) == Ok(2)
+
+## Reject an unclosed API article.
 expect ApiInventory.read("<article id=\"Unclosed\">") == Err(MalformedHtml)
+
+## Require each requested method anchor.
 expect ApiInventory.methods("${parent}</article>", "Family", ["new"]) == Err(MissingMethod("Family.new"))

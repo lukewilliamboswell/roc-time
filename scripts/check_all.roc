@@ -13,6 +13,7 @@ import src/Script
 import src/StaticChecks
 import src/Text
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	# Two compilers, two jobs. roc-stable is pinned by Blueprint.lock and runs
 	# this repository's scripts, so tooling keeps working when a nightly breaks
@@ -40,6 +41,7 @@ main! = |args| {
 	}
 }
 
+check! : Script.Command, Script.Command => Try({}, _)
 check! = |roc_stable, roc_nightly| {
 	check_tooling!(roc_stable)?
 	check_layout!()?
@@ -50,19 +52,47 @@ check! = |roc_stable, roc_nightly| {
 	roc_nightly.run!(["check", "tzdb/package/main.roc"])?
 
 	Env.with_temp_dir!(|temporary| check_applications!(roc_nightly, temporary))?
-	Script.info!("\nPASS", "all checks")
+	Script.info!({
+		label: "\nPASS",
+		message: "all checks",
+	})
 }
 
+harness! : Script.Command => Try({}, _)
 harness! = |roc_nightly| {
 	Script.section!("INTEGRATION CASES")?
 	Cmd.new("scripts/check_integration.roc").env("ROC_NIGHTLY", roc_nightly.program()).exec_cmd!()?
-	Script.info!("\nPASS", "harness")
+	Script.info!({
+		label: "\nPASS",
+		message: "harness",
+	})
 }
 
+check_tooling! : Script.Command => Try({}, _)
 check_tooling! = |roc_stable| {
 	Script.section!("TOOLING")?
 	roc_stable.run!(["fmt", "--check", "scripts", "Blueprint.roc"])?
-	for file in ["Text", "StaticChecks", "ApiArchive", "ApiInventory", "DocExamples", "ResourceMetrics", "Measurements", "ZoneArchive", "NativeMetrics", "ZoneMeasurement", "ZonePrototype", "OracleCases", "OracleManifest", "OracleOptions", "FixtureOracles", "ZoneDistribution", "BenchmarkOptions", "ComparisonOptions", "FuzzEvidence"] {
+	for file in [
+		"Text",
+		"StaticChecks",
+		"ApiArchive",
+		"ApiInventory",
+		"DocExamples",
+		"ResourceMetrics",
+		"Measurements",
+		"ZoneArchive",
+		"NativeMetrics",
+		"ZoneMeasurement",
+		"ZonePrototype",
+		"OracleCases",
+		"OracleManifest",
+		"OracleOptions",
+		"FixtureOracles",
+		"ZoneDistribution",
+		"BenchmarkOptions",
+		"ComparisonOptions",
+		"FuzzEvidence",
+	] {
 		roc_stable.run!(["test", Path.to_os_str(Path.join("scripts/src", "${file}.roc"))])?
 	}
 	for script in Files.direct_roc_files!("scripts")? {
@@ -72,6 +102,7 @@ check_tooling! = |roc_stable| {
 	roc_stable.run!(["test", "scripts/fuzz.roc"])
 }
 
+check_layout! : () => Try({}, _)
 check_layout! = || {
 	Script.section!("LAYOUT")?
 	read! = |paths| paths.map_try!(|path| Ok({ path: Path.display(path), source: Path.read_utf8!(path)? }))
@@ -88,7 +119,10 @@ check_layout! = || {
 		Stderr.line!("error: ${problem}")?
 	}
 	if problems.is_empty() {
-		Script.info!("PASS", "no compiler pins in ${$sources.len().to_str()} Roc files; ${mains.len().to_str()} examples use relative package paths; ${scripts.len().to_str()} scripts run on roc-stable")
+		Script.info!({
+			label: "PASS",
+			message: "no compiler pins in ${$sources.len().to_str()} Roc files; ${mains.len().to_str()} examples use relative package paths; ${scripts.len().to_str()} scripts run on roc-stable",
+		})
 	} else {
 		Err(LayoutProblems(problems.len()))
 	}
@@ -100,6 +134,7 @@ check_layout! = || {
 # application's directory, so a copy is staged with that module beside it and
 # the package named by absolute path. Each runs interpreted and as a native
 # build, from an empty working directory.
+check_applications! : Script.Command, Path => Try({}, _)
 check_applications! = |roc_nightly, temporary| {
 	Script.section!("CHECK APPLICATIONS")?
 	core = Path.display(Path.absolute!("package/main.roc")?)
@@ -109,12 +144,22 @@ check_applications! = |roc_nightly, temporary| {
 	for name in ["schedule_definition_checks", "utc_cancellations_checks"] {
 		$checks = $checks.append({ name, directory: Path.join("tests", name) })
 	}
-	for (name, file) in [("clock_deadline_checks", "examples/clock_deadline/Deadline.roc"), ("invoice_report_checks", "examples/invoice_report/InvoiceReport.roc")] {
+	for (name, file) in [
+		("clock_deadline_checks", "examples/clock_deadline/Deadline.roc"),
+		("invoice_report_checks", "examples/invoice_report/InvoiceReport.roc"),
+	] {
 		directory = Path.join(staged, name)
 		Path.copy_dir!(Path.join("tests", name), directory)?
 		Path.copy!(file, Path.join(directory, Files.name(file)))?
 		main = Path.join(directory, "main.roc")
-		Path.write_utf8!(main, Text.rewrite_dependency(Path.read_utf8!(main)?, "time", core)?)?
+		Path.write_utf8!(
+			main,
+			Text.rewrite_dependency({
+				source: Path.read_utf8!(main)?,
+				name: "time",
+				url: core,
+			})?,
+		)?
 		$checks = $checks.append({ name, directory })
 	}
 	build = Path.join(temporary, "build")
@@ -122,19 +167,36 @@ check_applications! = |roc_nightly, temporary| {
 	Path.create_all!(build)?
 	Path.create_all!(empty)?
 	for check in $checks {
-		Script.info!("APP", check.name)?
+		Script.info!({
+			label: "APP",
+			message: check.name,
+		})?
 		expected = Path.read_utf8!(Path.join("tests/examples", "${check.name}.txt"))?
 		roc = |args| roc_nightly.cmd(args).cwd(check.directory)
 		roc(["check", "main.roc", "--no-cache"]).exec_cmd!()?
-		verify!(check.name, "interpreted", roc(["main.roc", "--no-cache"]).exec_output!()?.stdout_utf8, expected)?
+		verify!({
+			name: check.name,
+			mode: "interpreted",
+			actual: roc(["main.roc", "--no-cache"]).exec_output!()?.stdout_utf8,
+			expected,
+		})?
 		binary = Path.join(build, check.name)
 		roc(["build", "main.roc", "--opt=dev", OsStr.from_str("--output=${Path.display(binary)}"), "--no-cache"]).exec_cmd!()?
-		verify!(check.name, "native", Cmd.new(Path.to_os_str(binary)).cwd(empty).exec_output!()?.stdout_utf8, expected)?
+		verify!({
+			name: check.name,
+			mode: "native",
+			actual: Cmd.new(Path.to_os_str(binary)).cwd(empty).exec_output!()?.stdout_utf8,
+			expected,
+		})?
 	}
-	Script.info!("PASS", "${$checks.len().to_str()} check applications match their recorded output")
+	Script.info!({
+		label: "PASS",
+		message: "${$checks.len().to_str()} check applications match their recorded output",
+	})
 }
 
-verify! = |name, mode, actual, expected|
+verify! : { name : Str, mode : Str, actual : Str, expected : Str } => Try({}, _)
+verify! = |{ name, mode, actual, expected }|
 	if actual == expected {
 		Ok({})
 	} else {

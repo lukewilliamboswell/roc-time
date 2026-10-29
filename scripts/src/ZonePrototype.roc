@@ -15,7 +15,11 @@ ZonePrototype := [].{
 		}
 		Ok(if (found.smoke) { ..found, samples: 1 } else found)
 	}
-	export : List(Entry), Str -> Try({ files : List({ name : Str, source : Str }), names : Dict(Str, (Str, Payload)) }, [ReferencePayload])
+	export : List(Entry),
+	Str -> Try(
+		{ files : List({ name : Str, source : Str }), names : Dict(Str, (Str, Payload)) },
+		[ReferencePayload],
+	)
 	export = |entries, encoding| {
 		if entries.is_empty() or entries.len() > 1000 or !["columns", "tzif"].contains(encoding) {
 			return Err(ReferencePayload)
@@ -36,7 +40,10 @@ ZonePrototype := [].{
 					name = "Z${"0".repeat(3 - index.count_utf8_bytes())}${index}"
 					fields = if (encoding == "tzif") "bytes: ${Json.to_str(data.bytes)}" else "times: ${Json.to_str(data.times)}, indices: ${Json.to_str(data.indices)}, offsets: ${Json.to_str(data.offsets)}, footer: ${Json.to_str(data.footer)}"
 					annotation = if (encoding == "tzif") "{ bytes : List(U8) }" else "{ times : List(I64), indices : List(U8), offsets : List(I32), footer : Str }"
-					$files = $files.append({ name: "${name}.roc", source: "${name} :: [].{\n data : ${annotation}\n data = { ${fields} }\n}\n" })
+					$files = $files.append({
+						name: "${name}.roc",
+						source: "${name} :: [].{\n data : ${annotation}\n data = { ${fields} }\n}\n",
+					})
 					$unique = $unique.insert(entry.sha256, (name, data))
 					name
 				}
@@ -45,15 +52,24 @@ ZonePrototype := [].{
 		}
 		imports_text = Str.join_with($files.map(|file| "import ${file.name.drop_suffix(".roc")}\n"), "")
 		names = $names
-		matches = Str.join_with(names.to_list().sort_with(|a, b| compare(a.0.to_utf8(), b.0.to_utf8())).map(|(name, (module_name, _))| "  ${Json.to_str(name)} => Ok(${module_name}.data)\n"), "")
-		$files = $files.append({ name: "Lookup.roc", source: "${imports_text}Lookup :: [].{\n get = |name| match name {\n${matches}  _ => Err(UnknownZone(name))\n }\n}\n" })
+		matches = Str.join_with(
+			names.to_list().sort_with(|a, b| compare(a.0.to_utf8(), b.0.to_utf8())).map(|(name, (module_name, _))| "  ${Json.to_str(name)} => Ok(${module_name}.data)\n"),
+			"",
+		)
+		$files = $files.append({
+			name: "Lookup.roc",
+			source: "${imports_text}Lookup :: [].{\n get = |name| match name {\n${matches}  _ => Err(UnknownZone(name))\n }\n}\n",
+		})
 		melbourne = names.get("Australia/Melbourne").map_err(|_| ReferencePayload)?.0
-		$files = $files.append({ name: "Melbourne.roc", source: "import ${melbourne}\nMelbourne :: [].{ data = ${melbourne}.data }\n" })
+		$files = $files.append({
+			name: "Melbourne.roc",
+			source: "import ${melbourne}\nMelbourne :: [].{ data = ${melbourne}.data }\n",
+		})
 		$files = $files.append({ name: "main.roc", source: "package [Lookup, Melbourne] {}\n" })
 		Ok({ files: $files, names })
 	}
-	expected : Str, Payload, Str -> Try(Str, _)
-	expected = |name, data, encoding| {
+	expected : { name : Str, data : Payload, encoding : Str } -> Try(Str, _)
+	expected = |{ name, data, encoding }| {
 		var $checksum = I64.from_str(name.count_utf8_bytes().to_str())?
 		if encoding == "tzif" {
 			for byte in data.bytes {
@@ -75,6 +91,7 @@ ZonePrototype := [].{
 	}
 }
 
+parse_loop : List(Str), ZonePrototype.Options -> Try(ZonePrototype.Options, [Arguments])
 parse_loop = |args, found| match args {
 	[] => Ok(found)
 	["--smoke", .. as rest] => parse_loop(rest, { ..found, smoke: Bool.True })
@@ -83,11 +100,20 @@ parse_loop = |args, found| match args {
 	[wheel, .. as rest] if found.wheel.is_empty() and !wheel.starts_with("--") => parse_loop(rest, { ..found, wheel })
 	_ => Err(Arguments)
 }
+
+## Require a wheel or the explicit smoke workload.
 expect ZonePrototype.parse([]) == Err(Arguments)
+
+## Reject an unknown representation encoding.
 expect ZonePrototype.parse(["--smoke", "--encoding", "invalid"]) == Err(Arguments)
+
+## Require a positive sample count.
 expect ZonePrototype.parse(["fixture.whl", "--samples", "0"]) == Err(Arguments)
+
+## Use one sample for an explicit TZif smoke workload.
 expect ZonePrototype.parse(["--smoke", "--encoding", "tzif"]).map_ok(|o| (o.samples, o.encoding)) == Ok((1, "tzif"))
 
+compare : List(U8), List(U8) -> [Before, Same, After]
 compare = |left, right| match (left, right) {
 	([a, .. as aa], [b, .. as bb]) => if (a < b) Before else if (a > b) After else compare(aa, bb)
 	([], []) => Same
@@ -95,14 +121,36 @@ compare = |left, right| match (left, right) {
 	(_, []) => After
 }
 
-sample = { times: [-1000004.I64], indices: [0.U8], offsets: [0.I32], footer: "fixed", bytes: ['T'.U8, 'Z', 'i', 'f'] }
-expect ZonePrototype.expected("x", sample, "columns") == Ok("1|0|fixed\n")
-expect ZonePrototype.expected("x", sample, "tzif") == Ok("4|382\n")
+sample = {
+	times: [-1000004.I64],
+	indices: [0.U8],
+	offsets: [0.I32],
+	footer: "fixed",
+	bytes: ['T'.U8, 'Z', 'i', 'f'],
+}
+
+## Pin the observable column representation.
+expect ZonePrototype.expected({
+	name: "x",
+	data: sample,
+	encoding: "columns",
+}) == Ok("1|0|fixed\n")
+
+## Pin the observable TZif byte checksum.
+expect ZonePrototype.expected({
+	name: "x",
+	data: sample,
+	encoding: "tzif",
+}) == Ok("4|382\n")
+
+## Share byte-identical zone payloads across aliases.
 expect {
 	first = { name: "Australia/Melbourne", sha256: "a".repeat(64), data: sample }
 	alias = { ..first, name: "Fixture/MelbourneAlias" }
 	ZonePrototype.export([first, alias], "columns").map_ok(|result| (result.files.len(), result.names.get(first.name), result.names.get(alias.name))) == Ok((4, Ok(("Z000", sample)), Ok(("Z000", sample))))
 }
+
+## Reject duplicate source names.
 expect {
 	first = { name: "Australia/Melbourne", sha256: "a".repeat(64), data: sample }
 	ZonePrototype.export([first, first], "columns") == Err(ReferencePayload)

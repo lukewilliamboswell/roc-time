@@ -12,11 +12,13 @@ import src/Manual
 import src/Script
 import src/Text
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| match args.map(OsStr.display) {
 	["--api-root", api_root, "--output", output] => assemble!(Path.utf8(api_root), Path.utf8(output))
 	_ => Script.fail!("usage: blueprint run site -- --api-root DIRECTORY --output NEW_DIRECTORY; received ${Str.inspect(args.map(OsStr.display))}")
 }
 
+assemble! : Path, Path => Try({}, _)
 assemble! = |api_root, destination| {
 	output = Path.absolute!(destination)?
 	if Path.exists!(output)? {
@@ -30,15 +32,25 @@ assemble! = |api_root, destination| {
 		if version == "unreleased" {
 			Docs.build!(manual, version)?
 		} else {
-			if !Text.valid_version(version) {
+			if !Text.is_valid_version(version) {
 				return Script.fail!("invalid release version")
 			}
 			source = Path.join(temporary, "source")
 			Path.create_all!(source)?
 			archive = Path.join(temporary, "source.tar")
-			Cmd.new("git").args(["archive", "--format=tar", OsStr.from_str("--output=${Path.display(archive)}"), OsStr.from_str(version), "docs"]).exec_cmd!()?
+			Cmd.new("git").args([
+				"archive",
+				"--format=tar",
+				OsStr.from_str("--output=${Path.display(archive)}"),
+				OsStr.from_str(version),
+				"docs",
+			]).exec_cmd!()?
 			Cmd.new("tar").args(["-xf", Path.to_os_str(archive), "-C", Path.to_os_str(source)]).exec_cmd!()?
-			Docs.build_from!(source, manual, version)?
+			Docs.build_from!({
+				workspace: source,
+				destination: manual,
+				version,
+			})?
 		}
 		site = Path.join(manual, "site")
 		Manual.verify!(site, version == "unreleased")?
@@ -46,7 +58,7 @@ assemble! = |api_root, destination| {
 		var $versions = 0.U64
 		for entry in Path.list!(api_root)? {
 			name = Files.name(entry)
-			if Text.valid_version(name) and Path.is_dir!(entry)? {
+			if Text.is_valid_version(name) and Path.is_dir!(entry)? {
 				if !Path.exists!(Path.join(entry, "index.html"))? {
 					return Script.fail!("API archive lacks ${name}/index.html")
 				}
@@ -66,6 +78,9 @@ assemble! = |api_root, destination| {
 				}
 			}
 		}
-		Script.info!("PASS", "assembled native manual and ${$versions.to_str()} immutable API versions")
+		Script.info!({
+			label: "PASS",
+			message: "assembled native manual and ${$versions.to_str()} immutable API versions",
+		})
 	}
 }

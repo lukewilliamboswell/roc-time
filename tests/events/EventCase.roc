@@ -17,8 +17,16 @@ EventCase := { spans : List(Spec) }.{
 		|spans| { spans: spans },
 	)
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : EventCase -> Bool
+	is_in_domain = |input| input.spans.len() <= 12 and input.spans.all(|span| span.start <= 16 and span.width >= 1 and span.width <= 8)
+
 	check : EventCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		entries = input.spans.map_with_index(
 			|value, id| {
 				{ id, span: make_span(value.start.to_i64() - 8, value.start.to_i64() - 8 + value.width.to_i64()) }
@@ -106,4 +114,16 @@ point = |n| PosixBoundary.from_microseconds(n)
 make_span = |a, b| match PosixSpan.new(point(a), point(b)) {
 	Ok(value) => value
 	Err(_) => crash "Invalid generated span"
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = EventCase.{ spans: [{ start: 16, width: 8 }] }
+	{
+		boundary_is_tested: EventCase.is_in_domain(boundary),
+		outside_is_rejected: !EventCase.is_in_domain({ ..boundary, spans: [{ start: 16, width: 0 }] }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
+	}
 }

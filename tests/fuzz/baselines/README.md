@@ -1,8 +1,10 @@
 # Allocation observations
 
-These roc-fuzz 0.5.0 baselines cover the complete source-declared retained input
-inventory for all fourteen semantic targets. Each input retains its original
-corpus bytes and name; hashes are checked in baseline entries and replay reports.
+These roc-fuzz 0.5.0 baselines cover source-declared boundary examples and
+retained regressions for all fourteen semantic targets. Typed example makers
+produce the platform's logical input encoding; regression witnesses retain
+their exact original bytes. Input hashes are checked in baseline entries and
+replay reports.
 The platform/dependency revision and archive SHA-256 are in [dependency.json](../dependency.json).
 
 Scope: `x64musl`, LLVM `--opt=speed --fuzz`, profile `speed`, compiler

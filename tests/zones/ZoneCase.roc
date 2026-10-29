@@ -20,8 +20,16 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		second: Fuzz.map(Fuzz.u8_in(0, 4), |n| n.to_i32() - 2),
 	}.Fuzz
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : ZoneCase -> Bool
+	is_in_domain = |input| input.number >= -7000000 and input.number <= 7000000 and input.first >= -2 and input.first <= 2 and input.second >= -2 and input.second <= 2
+
 	check : ZoneCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		date_fields = if input.number < 0 {
 			{ year: 1969.I64, month: 12.U8, day: 31.U8 }
 		} else {
@@ -323,4 +331,20 @@ make_rules = |first, second, lower, upper| match ZoneRules.from_database({
 epoch_date = |year| match Calendar.Date.from_fields(Gregorian, { year, month: 1, day: 1 }) {
 	Ok(value) => value
 	Err(_) => crash "epoch fixture"
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = ZoneCase.{
+		number: 7000000,
+		first: -2,
+		second: 2,
+	}
+	{
+		boundary_is_tested: ZoneCase.is_in_domain(boundary),
+		outside_is_rejected: !ZoneCase.is_in_domain({ ..boundary, number: 7000001 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
+	}
 }

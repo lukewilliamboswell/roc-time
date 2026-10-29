@@ -113,8 +113,18 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		Ok(Coverage.coordinate_width(a)? == PosixDelta.from_microseconds($width) and Coverage.member_count(a) == $count)
 	}
 
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : CoverageCase -> Bool
+	is_in_domain = |input|
+		input.left.len() <= 16 and input.right.len() <= 16 and
+			input.left.all(is_model_span) and input.right.all(is_model_span) and is_model_span(input.window)
+
 	check : CoverageCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		match evaluate(input) {
 			Ok(Bool.True) => Fuzz.keep
 			Ok(Bool.False) => crash "R04 coverage differs from membership oracle or algebraic law"
@@ -164,3 +174,22 @@ check_runs = |coverage, input| {
 		crash "Coverage differs from independent maximal unit-cell runs"
 	}
 }
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = CoverageCase.{
+		left: [],
+		right: [],
+		window: { lo: -8, width: 17 },
+	}
+	{
+		boundary_is_tested: CoverageCase.is_in_domain(boundary),
+		outside_is_rejected: !CoverageCase.is_in_domain({ ..boundary, window: { lo: -8, width: 0 } }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
+	}
+}
+
+is_model_span : Spec -> Bool
+is_model_span = |span| span.lo >= -8 and span.lo <= 8 and span.width >= 1 and span.width <= 17

@@ -1,7 +1,17 @@
 ## Admission of this repository's authored single-line TOML metadata profile.
 ## Values remain JSON-compatible scalars/arrays; this is not a TOML parser.
 OracleManifest := [].{
-	Manifest : { profile : Str, corpus_sha256 : Str, smoke_sha256 : Str, generator_sha256 : Str, generator_adapter_sha256 : Str, case_count : U64, smoke_case_count : U64, gap_sha256 : Str, gap_count : U64 }
+	Manifest : {
+		profile : Str,
+		corpus_sha256 : Str,
+		smoke_sha256 : Str,
+		generator_sha256 : Str,
+		generator_adapter_sha256 : Str,
+		case_count : U64,
+		smoke_case_count : U64,
+		gap_sha256 : Str,
+		gap_count : U64,
+	}
 	parse : Str, Str -> Try(Manifest, [OracleMetadata])
 	parse = |source, name| {
 		if source.count_utf8_bytes() > 131072 {
@@ -49,14 +59,31 @@ OracleManifest := [].{
 		generator_adapter_sha256 = if (fields.contains("generator_adapter_sha256")) text("generator_adapter_sha256")? else generator_sha256
 		gap_sha256 = if (name == "calendar_pattern") text("reference_gap_sha256")? else ""
 		gap_count = if (name == "calendar_pattern") number("reference_gap_count")? else 0
-		if ![corpus_sha256, smoke_sha256, generator_sha256, generator_adapter_sha256].all(hash) or (name == "calendar_pattern" and !hash(gap_sha256)) {
+		if ![corpus_sha256, smoke_sha256, generator_sha256, generator_adapter_sha256].all(is_sha256) or (name == "calendar_pattern" and !is_sha256(gap_sha256)) {
 			return Err(OracleMetadata)
 		}
-		Ok({ profile, corpus_sha256, smoke_sha256, generator_sha256, generator_adapter_sha256, case_count, smoke_case_count, gap_sha256, gap_count })
+		Ok({
+			profile,
+			corpus_sha256,
+			smoke_sha256,
+			generator_sha256,
+			generator_adapter_sha256,
+			case_count,
+			smoke_case_count,
+			gap_sha256,
+			gap_count,
+		})
 	}
 }
 
-hash = |text| text.count_utf8_bytes() == 64 and text.to_utf8().all(|b| (b >= '0' and b <= '9') or (b >= 'a' and b <= 'f'))
+is_sha256 : Str -> Bool
+is_sha256 = |text| text.count_utf8_bytes() == 64 and text.to_utf8().all(|b| (b >= '0' and b <= '9') or (b >= 'a' and b <= 'f'))
+
+## Reject duplicate metadata keys.
 expect OracleManifest.parse("version = 2\nversion = 2", "gregorian") == Err(OracleMetadata)
+
+## Reject unsupported metadata tables.
 expect OracleManifest.parse("[unsupported]\n", "gregorian") == Err(OracleMetadata)
-expect !hash("a".repeat(63)) and !hash("z".repeat(64)) and hash("a".repeat(64))
+
+## Require a complete lowercase SHA-256 digest.
+expect !is_sha256("a".repeat(63)) and !is_sha256("z".repeat(64)) and is_sha256("a".repeat(64))

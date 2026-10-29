@@ -3,9 +3,52 @@ app [target] {
 	time: "../../package/main.roc",
 }
 import fuzz.Fuzz
-import "../fuzz/corpus/patterns/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/patterns/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/patterns/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/patterns/zero" as retained_3 : List(U8)
 import PatternCase
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "patterns-v1", test: PatternCase.check, show: |input| Str.inspect(input) })
+
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "patterns-v1",
+	examples: [
+		Fuzz.example({
+			name: "invalid-zero-selector",
+			revision: "1",
+			make: || PatternCase.{
+				year: 2000,
+				month: 1,
+				interval: 1,
+				index: 0,
+				weekday: 0,
+				ordinal: 0,
+				month_day: 0,
+			},
+		}),
+		Fuzz.example({
+			name: "last-weekday",
+			revision: "1",
+			make: || PatternCase.{
+				year: 0,
+				month: 2,
+				interval: 3,
+				index: 6,
+				weekday: 6,
+				ordinal: -1,
+				month_day: -1,
+			},
+		}),
+		Fuzz.example({
+			name: "provider-end",
+			revision: "1",
+			make: || PatternCase.{
+				year: 2147483647,
+				month: 12,
+				interval: 3,
+				index: 6,
+				weekday: 0,
+				ordinal: 1,
+				month_day: 31,
+			},
+		}),
+	],
+	test: PatternCase.check,
+	show: Str.inspect,
+})

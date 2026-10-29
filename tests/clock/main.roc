@@ -4,10 +4,41 @@ app [target] {
 }
 
 import fuzz.Fuzz
-import "../fuzz/corpus/clock/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/clock/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/clock/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/clock/zero" as retained_3 : List(U8)
 import ClockCase
 
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "clock-v1", test: ClockCase.check, show: |input| Str.inspect(input) })
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "clock-v1",
+	examples: [
+		Fuzz.example({
+			name: "before-midnight",
+			revision: "1",
+			make: || ClockCase.{
+				number: -1,
+			},
+		}),
+		Fuzz.example({
+			name: "midnight",
+			revision: "1",
+			make: || ClockCase.{
+				number: 0,
+			},
+		}),
+		Fuzz.example({
+			name: "last-microsecond",
+			revision: "1",
+			make: || ClockCase.{
+				number: 86399999999,
+			},
+		}),
+		Fuzz.example({
+			name: "exclusive-end",
+			revision: "1",
+			make: || ClockCase.{
+				number: 86400000000,
+			},
+		}),
+	],
+	test: ClockCase.check,
+	show: Str.inspect,
+})

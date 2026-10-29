@@ -9,11 +9,67 @@ ZoneDistribution := [].{
 	wheel_url = "https://files.pythonhosted.org/packages/94/21/1e5995a1c920cce14e4bffae20c665ec10e7ed03ab25e006cd741092b718/tzdata-2026.5-py2.py3-none-any.whl"
 	header = "package [Database] {}\n"
 	Expectations : Dict(Str, { count : U64, checksum : I64 })
-	Metadata : { profile : Str, source_version : Str, source_revision : Str, encoding : Str, wheel_url : Str, wheel_sha256 : Str, zi_sha256 : Str, zone_names : U64, canonical_zones : U64, offset_comparisons : U64, start_second : I64, end_second : I64, transition_expectations : Expectations, names : Dict(Str, Str), limitation : Str }
-	source_files = ["scripts/generate_zone_database.roc", "scripts/reference_zone_database.py", "scripts/src/ZoneDistribution.roc", "scripts/src/ZoneVerification.roc", "scripts/templates/zone-verify.roc.txt"]
-	Manifest : { profile : Str, source_version : Str, source_revision : Str, encoding : Str, wheel_url : Str, wheel_sha256 : Str, generator_sha256 : Str, generator_adapter_sha256 : Try(Str, [Missing]), reference_adapter_sha256 : Try(Str, [Missing]), generator_source_revision : Try(Str, [Missing]), generator_adapter_sources : Try(Dict(Str, Str), [Missing]), zi_sha256 : Str, zone_names : U64, canonical_zones : U64, offset_comparisons : U64, start_second : I64, end_second : I64, transition_expectations : Expectations, names : Dict(Str, Str), files : Dict(Str, Str), limitation : Str }
-	Row : { canonical_name : Str, sha256 : Str, initial : I32, minimum : I32, maximum : I32, transitions : List({ second : I64, offset : I32 }) }
-	Reference : { metadata : Metadata, rows : List(Row), identities : List({ name : Str, index : U64 }), licenses : List({ name : Str, bytes : List(U8) }) }
+	Metadata : {
+		profile : Str,
+		source_version : Str,
+		source_revision : Str,
+		encoding : Str,
+		wheel_url : Str,
+		wheel_sha256 : Str,
+		zi_sha256 : Str,
+		zone_names : U64,
+		canonical_zones : U64,
+		offset_comparisons : U64,
+		start_second : I64,
+		end_second : I64,
+		transition_expectations : Expectations,
+		names : Dict(Str, Str),
+		limitation : Str,
+	}
+	source_files = [
+		"scripts/generate_zone_database.roc",
+		"scripts/reference_zone_database.py",
+		"scripts/src/ZoneDistribution.roc",
+		"scripts/src/ZoneVerification.roc",
+		"scripts/templates/zone-verify.roc.txt",
+	]
+	Manifest : {
+		profile : Str,
+		source_version : Str,
+		source_revision : Str,
+		encoding : Str,
+		wheel_url : Str,
+		wheel_sha256 : Str,
+		generator_sha256 : Str,
+		generator_adapter_sha256 : Try(Str, [Missing]),
+		reference_adapter_sha256 : Try(Str, [Missing]),
+		generator_source_revision : Try(Str, [Missing]),
+		generator_adapter_sources : Try(Dict(Str, Str), [Missing]),
+		zi_sha256 : Str,
+		zone_names : U64,
+		canonical_zones : U64,
+		offset_comparisons : U64,
+		start_second : I64,
+		end_second : I64,
+		transition_expectations : Expectations,
+		names : Dict(Str, Str),
+		files : Dict(Str, Str),
+		limitation : Str,
+	}
+	Row : {
+		canonical_name : Str,
+		sha256 : Str,
+		initial : I32,
+		minimum : I32,
+		maximum : I32,
+		transitions : List({ second : I64, offset : I32 }),
+	}
+	Reference : {
+		metadata : Metadata,
+		rows : List(Row),
+		identities : List({ name : Str, index : U64 }),
+		licenses : List({ name : Str, bytes : List(U8) }),
+	}
 
 	# Blueprint provisions Unix hosts. Keep native path spelling (including
 	# spaces) while removing only trailing separators and the final component.
@@ -33,7 +89,7 @@ ZoneDistribution := [].{
 			return Err(DistributionMetadata)
 		}
 		for (name, canonical) in manifest.names.to_list() {
-			if !column(name) or !column(canonical) or !manifest.transition_expectations.contains(canonical) {
+			if !is_safe_column(name) or !is_safe_column(canonical) or !manifest.transition_expectations.contains(canonical) {
 				return Err(DistributionMetadata)
 			}
 		}
@@ -48,7 +104,7 @@ ZoneDistribution := [].{
 		var $seen = []
 		var $lines = []
 		for row in reference.rows {
-			if !column(row.canonical_name) or $seen.contains(row.canonical_name) or !hash(row.sha256) or row.minimum > row.initial or row.maximum < row.initial or row.minimum > row.maximum or row.transitions.len() > 10000 {
+			if !is_safe_column(row.canonical_name) or $seen.contains(row.canonical_name) or !is_sha256(row.sha256) or row.minimum > row.initial or row.maximum < row.initial or row.minimum > row.maximum or row.transitions.len() > 10000 {
 				return Err(ReferenceData)
 			}
 			$seen = $seen.append(row.canonical_name)
@@ -73,7 +129,7 @@ ZoneDistribution := [].{
 		var $names = []
 		var $seen_names = []
 		for identity in reference.identities {
-			if !column(identity.name) or $seen_names.contains(identity.name) {
+			if !is_safe_column(identity.name) or $seen_names.contains(identity.name) {
 				return Err(ReferenceData)
 			}
 			canonical = reference.rows.get(identity.index).map_err(|_| ReferenceData)?.canonical_name
@@ -83,26 +139,75 @@ ZoneDistribution := [].{
 			$seen_names = $seen_names.append(identity.name)
 			$names = $names.append("${identity.name}\t${identity.index.to_str()}")
 		}
-		Ok({ zones: "roc-time-tzdb-v1\t${version}\t${profile}\t${data.start_second.to_str()}\t${data.end_second.to_str()}\n${Str.join_with($lines, "\n")}\n", names: "${Str.join_with($names, "\n")}\n" })
+		Ok({
+			zones: "roc-time-tzdb-v1\t${version}\t${profile}\t${data.start_second.to_str()}\t${data.end_second.to_str()}\n${Str.join_with($lines, "\n")}\n",
+			names: "${Str.join_with($names, "\n")}\n",
+		})
 	}
-	manifest : Metadata, Str, Str, Dict(Str, Str), Dict(Str, Str) -> Manifest
-	manifest = |data, generator_sha256, reference_sha256, files, sources| { profile: data.profile, source_version: data.source_version, source_revision: data.source_revision, encoding: data.encoding, wheel_url: data.wheel_url, wheel_sha256: data.wheel_sha256, generator_sha256, generator_adapter_sha256: Ok(generator_sha256), reference_adapter_sha256: Ok(reference_sha256), generator_source_revision: Err(Missing), generator_adapter_sources: Ok(sources), zi_sha256: data.zi_sha256, zone_names: data.zone_names, canonical_zones: data.canonical_zones, offset_comparisons: data.offset_comparisons, start_second: data.start_second, end_second: data.end_second, transition_expectations: data.transition_expectations, names: data.names, limitation: data.limitation, files }
+	manifest : { data : Metadata, generator_sha256 : Str, reference_sha256 : Str, files : Dict(Str, Str), sources : Dict(Str, Str) } -> Manifest
+	manifest = |{ data, generator_sha256, reference_sha256, files, sources }| {
+		profile: data.profile,
+		source_version: data.source_version,
+		source_revision: data.source_revision,
+		encoding: data.encoding,
+		wheel_url: data.wheel_url,
+		wheel_sha256: data.wheel_sha256,
+		generator_sha256,
+		generator_adapter_sha256: Ok(generator_sha256),
+		reference_adapter_sha256: Ok(reference_sha256),
+		generator_source_revision: Err(Missing),
+		generator_adapter_sources: Ok(sources),
+		zi_sha256: data.zi_sha256,
+		zone_names: data.zone_names,
+		canonical_zones: data.canonical_zones,
+		offset_comparisons: data.offset_comparisons,
+		start_second: data.start_second,
+		end_second: data.end_second,
+		transition_expectations: data.transition_expectations,
+		names: data.names,
+		limitation: data.limitation,
+		files,
+	}
 }
 
-column = |text| !text.is_empty() and text.count_utf8_bytes() <= 256 and !text.to_utf8().any(|byte| byte == '\n' or byte == '\r' or byte == '\t' or byte == 0)
+is_safe_column : Str -> Bool
+is_safe_column = |text| !text.is_empty() and text.count_utf8_bytes() <= 256 and !text.to_utf8().any(|byte| byte == '\n' or byte == '\r' or byte == '\t' or byte == 0)
 
-hash = |text| text.count_utf8_bytes() == 64 and text.to_utf8().all(|b| (b >= '0' and b <= '9') or (b >= 'a' and b <= 'f'))
+is_sha256 : Str -> Bool
+is_sha256 = |text| text.count_utf8_bytes() == 64 and text.to_utf8().all(|b| (b >= '0' and b <= '9') or (b >= 'a' and b <= 'f'))
+
+## Accept the exact generated package header.
 expect ZoneDistribution.validate_header(ZoneDistribution.header) == Ok({})
+
+## Reject an extra exported package module.
 expect ZoneDistribution.validate_header("package [Database, Extra] {}\n") == Err(PackageHeader)
+
+## Reject an extra package dependency.
 expect ZoneDistribution.validate_header("package [Database] { other: \"../x/main.roc\" }\n") == Err(PackageHeader)
+
+## Reject declarations after the package header.
 expect ZoneDistribution.validate_header("${ZoneDistribution.header}extra = 1\n") == Err(PackageHeader)
+
+## Reject the wrong IANA data version.
 expect ZoneDistribution.validate_source("# version 2025b\n", "IANA_VERSION = \"2026e\"") == Err(SourceVersion)
+
+## Reject the wrong reference-decoder version.
 expect ZoneDistribution.validate_source("# version 2026e\n", "IANA_VERSION = \"2025b\"") == Err(SourceVersion)
+
+## Accept matching pinned source versions.
 expect ZoneDistribution.validate_source("# version 2026e\n", "IANA_VERSION = \"2026e\"") == Ok({})
 
+trim_separators : Str -> Str
 trim_separators = |path| if (path.ends_with("/") and path != "/") trim_separators(path.drop_suffix("/")) else path
+
+## Find the parent of a new absolute directory.
 expect ZoneDistribution.parent_path("/tmp/new") == "/tmp"
+
+## Normalize trailing separators at the filesystem root.
 expect ZoneDistribution.parent_path("/new/") == "/"
+
+## Preserve spaces in parent directory names.
 expect ZoneDistribution.parent_path("/tmp/parent /new") == "/tmp/parent "
 
+## Reject a compiler pin in the generated package.
 expect ZoneDistribution.validate_header("package [Database] { roc: \"nightly-invalid\" }\n") == Err(PackageHeader)

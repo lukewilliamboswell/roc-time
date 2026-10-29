@@ -8,10 +8,23 @@ Manual := [].{
 
 	## Validate actual HTML/PDF output. Source comparison is a candidate-build gate;
 	## restored immutable archives are checked without comparing to today's sources.
+	verify! : Path, Bool => Try({}, _)
 	verify! = |site, compare_sources| {
 		entries = Path.list!(site)?
 		files = entries.map(Files.name)
-		for required in ["index.html", "index.md", "llms.txt", "getting-started.html", "booking.html", "calendar-zones.html", "schedules.html", "profiles.html", "api.html", "versions.html", "roc-time.pdf"] {
+		for required in [
+			"index.html",
+			"index.md",
+			"llms.txt",
+			"getting-started.html",
+			"booking.html",
+			"calendar-zones.html",
+			"schedules.html",
+			"profiles.html",
+			"api.html",
+			"versions.html",
+			"roc-time.pdf",
+		] {
 			if !files.contains(required) {
 				return Script.fail!("manual is missing ${required}")
 			}
@@ -41,7 +54,16 @@ Manual := [].{
 				return Script.fail!("PDF lacks chapter destination for ${page.name}")
 			}
 		}
-		for title in ["Time for real applications", "Run your first application", "Find free booking windows", "Work with dates and clock changes", "Generate and exchange schedules", "Know the supported scope", "Find the right API", "Keep examples and versions together"] {
+		for title in [
+			"Time for real applications",
+			"Run your first application",
+			"Find free booking windows",
+			"Work with dates and clock changes",
+			"Generate and exchange schedules",
+			"Know the supported scope",
+			"Find the right API",
+			"Keep examples and versions together",
+		] {
 			if !text.contains(title) {
 				return Script.fail!("PDF lost chapter text: ${title}")
 			}
@@ -78,8 +100,15 @@ Manual := [].{
 				}
 			}
 		}
-		Script.info!("PASS", "manual: ${pages.len().to_str()} HTML/Markdown pages, discovery links, local fragments, PDF chapters and source text")
+		Script.info!({
+			label: "PASS",
+			message: "manual: ${pages.len().to_str()} HTML/Markdown pages, discovery links, local fragments, PDF chapters and source text",
+		})
 	}
 }
 
-normalize = |text| Str.join_with(text.replace_each("\n", " ").replace_each("\r", " ").replace_each("\t", " ").split_on(" ").keep_if(|word| !word.is_empty()), " ")
+normalize : Str -> Str
+normalize = |text| Str.join_with(
+	text.replace_each("\n", " ").replace_each("\r", " ").replace_each("\t", " ").split_on(" ").keep_if(|word| !word.is_empty()),
+	" ",
+)

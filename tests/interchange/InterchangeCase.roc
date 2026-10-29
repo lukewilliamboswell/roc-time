@@ -33,8 +33,23 @@ InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier
 	encoder_for : _
 	generator_for : Fuzz.FuzzEncoding -> Fuzz.Generator(InterchangeCase)
 	generator_for = |_| { year: Fuzz.map(Fuzz.u64_in(1900, 2100), |n| n.to_u16_wrap()), month: Fuzz.u8_in(1, 12), day: Fuzz.u8_in(0, 30), precision: Fuzz.u8_in(0, 2), qualifier: Fuzz.u8_in(0, 3), seconds: Fuzz.map(Fuzz.u64_in(0, 86399), |n| n.to_u32_wrap()), fraction: Fuzz.map(Fuzz.u64_in(0, 999999), |n| n.to_u32_wrap()), digits: Fuzz.u8_in(0, 6), offset: Fuzz.map(Fuzz.u64_in(0, 2878), |n| (n.to_i64_wrap() - 1439).to_i16_wrap()) }.Fuzz
+
+	## Typed seed mutations must stay inside the bounded model's input domain.
+	## Malformed public values generated within that domain remain test cases.
+	is_in_domain : InterchangeCase -> Bool
+	is_in_domain = |input| {
+		date_is_in_range = input.year >= 1900 and input.year <= 2100 and input.month >= 1 and input.month <= 12 and input.day <= 30
+		description_is_in_range = input.precision <= 2 and input.qualifier <= 3
+		clock_is_in_range = input.seconds <= 86399 and input.fraction <= 999999 and input.digits <= 6
+		offset_is_in_range = input.offset >= -1439 and input.offset <= 1439
+		date_is_in_range and description_is_in_range and clock_is_in_range and offset_is_in_range
+	}
+
 	check : InterchangeCase -> Fuzz.Outcome
 	check = |input| {
+		if !is_in_domain(input) {
+			return Fuzz.reject
+		}
 		day = 1 + input.day % month_days(input.year, input.month)
 		date_text = "${input.year.to_str()}-${pad(input.month.to_u64(), 2)}-${pad(day.to_u64(), 2)}"
 		check_edtf(input, day, date_text)
@@ -991,5 +1006,27 @@ check_edtf_interval = |input, _day, date_text| {
 	if limited.status != Limited(FactLimit) or limited.visited_facts != 1 or zero.visited_facts != 0 or
 		Explanation.fact_at(source, U64.highest) != End {
 		crash "EDTF interval explanation escaped its fact budget"
+	}
+}
+
+## Model-domain admission keeps boundary cases and rejects unsupported mutations.
+expect {
+	boundary = InterchangeCase.{
+		year: 2100,
+		month: 12,
+		day: 30,
+		precision: 2,
+		qualifier: 3,
+		seconds: 86399,
+		fraction: 999999,
+		digits: 6,
+		offset: 1439,
+	}
+	{
+		boundary_is_tested: InterchangeCase.is_in_domain(boundary),
+		outside_is_rejected: !InterchangeCase.is_in_domain({ ..boundary, offset: 1440 }),
+	} == {
+		boundary_is_tested: Bool.True,
+		outside_is_rejected: Bool.True,
 	}
 }

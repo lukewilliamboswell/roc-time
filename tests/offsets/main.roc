@@ -4,10 +4,37 @@ app [target] {
 }
 
 import fuzz.Fuzz
-import "../fuzz/corpus/offsets/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/offsets/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/offsets/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/offsets/zero" as retained_3 : List(U8)
 import OffsetCase
 
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "offsets-v1", test: OffsetCase.check, show: |input| Str.inspect(input) })
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "offsets-v1",
+	examples: [
+		Fuzz.example({
+			name: "negative-limits",
+			revision: "1",
+			make: || OffsetCase.{
+				number: I64.lowest,
+				seconds: I32.lowest,
+			},
+		}),
+		Fuzz.example({
+			name: "positive-limits",
+			revision: "1",
+			make: || OffsetCase.{
+				number: I64.highest,
+				seconds: I32.highest,
+			},
+		}),
+		Fuzz.example({
+			name: "utc-epoch",
+			revision: "1",
+			make: || OffsetCase.{
+				number: 0,
+				seconds: 0,
+			},
+		}),
+	],
+	test: OffsetCase.check,
+	show: Str.inspect,
+})

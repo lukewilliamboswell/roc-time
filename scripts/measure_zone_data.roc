@@ -8,10 +8,14 @@ import cli.Stdout
 import src/Script
 import src/ZoneArchive
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	texts = args.map(OsStr.display)
 	if texts == ["--help"] {
-		return Script.info!("usage:", "blueprint run measure-zone-data -- [WHEEL] [--smoke]")
+		return Script.info!({
+			label: "usage:",
+			message: "blueprint run measure-zone-data -- [WHEEL] [--smoke]",
+		})
 	}
 	smoke = texts.contains("--smoke")
 	positional = texts.keep_if(|text| text != "--smoke")
@@ -21,7 +25,17 @@ main! = |args| {
 			file = Path.absolute!(".roc-time-tmp/measurement-smoke/tzdata.whl")?
 			Path.create_all!(".roc-time-tmp/measurement-smoke")?
 			if !Path.exists!(file)? {
-				Cmd.new("curl").args(["--fail", "--location", "--max-time", "30", "--max-filesize", "1048576", OsStr.from_str(ZoneArchive.url), "--output", Path.to_os_str(file)]).timeout_ms(40000).exec_cmd!()?
+				Cmd.new("curl").args([
+					"--fail",
+					"--location",
+					"--max-time",
+					"30",
+					"--max-filesize",
+					"1048576",
+					OsStr.from_str(ZoneArchive.url),
+					"--output",
+					Path.to_os_str(file),
+				]).timeout_ms(40000).exec_cmd!()?
 			}
 			file
 		}
@@ -64,6 +78,17 @@ main! = |args| {
 	if $selected.len() != 4 or $selected.values().any(|size| size == 0) or $count < 4 or $distinct.len() > $count {
 		return Err(ReportInvariant)
 	}
-	report = { source: "tzdata 2025.2 / IANA 2025b", wheel_sha256: ZoneArchive.sha256, wheel_bytes, tzif_entry_count: $count, tzif_uncompressed_bytes: $expanded, tzif_zip_payload_bytes: $compressed, byte_distinct_payload_count: $distinct.len(), byte_distinct_payload_bytes: $distinct.fold(0.U64, |total, data| total + data.len()), selected_tzif_bytes: $selected, limits: "ZIP entry payload sizes exclude archive metadata. Byte-distinct payload count is not canonical zone count. No Roc source, compiler, linked binary or runtime memory measurements." }
+	report = {
+		source: "tzdata 2025.2 / IANA 2025b",
+		wheel_sha256: ZoneArchive.sha256,
+		wheel_bytes,
+		tzif_entry_count: $count,
+		tzif_uncompressed_bytes: $expanded,
+		tzif_zip_payload_bytes: $compressed,
+		byte_distinct_payload_count: $distinct.len(),
+		byte_distinct_payload_bytes: $distinct.fold(0.U64, |total, data| total + data.len()),
+		selected_tzif_bytes: $selected,
+		limits: "ZIP entry payload sizes exclude archive metadata. Byte-distinct payload count is not canonical zone count. No Roc source, compiler, linked binary or runtime memory measurements.",
+	}
 	Stdout.line!(Json.to_str(report))
 }

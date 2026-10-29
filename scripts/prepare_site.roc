@@ -8,6 +8,7 @@ import cli.Path
 import src/Script
 import src/Text
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	preview = match args.map(OsStr.display) {
 		[] => Bool.False
@@ -25,7 +26,7 @@ main! = |args| {
 		latest = Script.command("gh").output!(["release", "view", "--repo", OsStr.from_str(repository), "--json", "tagName,isPrerelease,isDraft"])?
 		selected : { tagName : Str, isPrerelease : Bool, isDraft : Bool }
 		selected = Json.parse(latest)?
-		if selected.isDraft or selected.isPrerelease or !Text.valid_version(selected.tagName) {
+		if selected.isDraft or selected.isPrerelease or !Text.is_valid_version(selected.tagName) {
 			return Script.fail!("latest product release must be a final version")
 		}
 		selected.tagName

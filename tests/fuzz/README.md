@@ -12,15 +12,16 @@ import the real public package and the content-addressed
 The runner verifies the archive digest; targets keep the release URL directly.
 No local checkout or platform rebuild is required.
 
-All curated corpus inputs are declared using `Fuzz.saved`, preserving their raw
-bytes and storage-sensitive entropy form. Nominal input types expose derived
-platform codecs for the new typed input form; existing generators and semantic
-checks are unchanged. Named examples execute in fresh processes and compare the
-exact reviewed allocation observations under `baselines/` before exploration.
-Reports retain named input hashes, complete metrics, accepted/rejected counts and
-platform/compiler provenance. The runner rejects zero accepted inputs, missing
-baselines and incomplete evidence; it does not infer success from console text.
-See [baseline scope and reproduction](baselines/README.md).
+Targets encode semantic laws against independently written bounded models.
+Readable boundary examples use `Fuzz.example` beside each app declaration;
+`Fuzz.saved` is reserved for discovered binary regressions whose exact entropy
+or storage shape matters. Nominal input types expose the platform codecs, so
+named logical inputs and generated entropy exercise the same property.
+Named examples execute in fresh processes and compare reviewed allocation
+observations under `baselines/` before exploration. Reports retain input hashes,
+complete metrics, accepted/rejected counts and platform/compiler provenance.
+The runner rejects zero accepted inputs, missing baselines and incomplete
+evidence. See [baseline scope and reproduction](baselines/README.md).
 
 Each root wires the platform to a separate pure type module (`PrecisionCase`,
 `SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, or `CalendarCase`). Generators and semantic checks live in those
@@ -117,7 +118,7 @@ Each traversal must preserve the same dates and respect work/output budgets.
 
 Bounds apply before production calls. None of the targets discards expected
 structured error paths. The small-domain coverage oracle complements full-range
-boundary/span checks and deterministic extreme-width tests in `CoverageTests`.
+boundary/span checks and deterministic extreme-width package unit tests.
 It is not an allocation measurement or evidence of Wasm support.
 
 The calendar interoperability target also checks year/month description bounds
@@ -144,29 +145,18 @@ Replay with `blueprint run fuzz -- --operation replay --targets coverage`.
 The readable endpoint regression lives beside `Coverage.difference`'s unit
 tests; this raw input additionally exercises the fuzz host's leak detector.
 
-Each semantic corpus includes four intentionally constructed 128-byte inputs:
-`zero` (all 0), `ones` (all 255), `ramp` (0 through 127), and `alternating`
-(`[0,255,1,127,128,2,254,42]` repeated sixteen times). They were curated on
-2026-09-05 to exercise complete records, list lengths, shared/sliced construction,
-signed-limit selectors, and arbitrary numeric payloads. They are starter cases,
-not discoveries of a library defect. The descriptions corpus applies the same four
-byte patterns, curated on 2026-09-06 with the pinned compiler and roc-fuzz 0.3.0. The runner copies them into disposable
-campaign directories before mutation; searches never modify the curated files.
+Named boundary inputs state caller meaning directly: signed limits, adjacent
+endpoints, invalid bounds, empty or duplicate collections, touching spans,
+provider limits, gap/fold transitions and small resumption budgets. The span
+root declares all thirteen Allen relations around the anchor [0, 3); the
+property compares public predicates with independent endpoint inequalities.
+These examples are not substitutes for generated exploration.
 
-Consolidation also retained 64-byte zero, one-byte-value-255, and ascending
-patterns from the second implementation (`pattern64-*`). Its thirteen named
-Allen examples were migrated into the retained span generator as `relation-*`:
-`span_cases.json` records their semantic inputs and the runner checks their
-decoded `show` values before accepting the migration. They retain the anchor
-[0, 3) and the corresponding relation case, rather than reusing bytes that
-decode differently under the full-range generator. In roc-fuzz 0.3.0 the
-retained encoding stores the fields in reverse order, each as eight
-little-endian two's-complement bytes followed by selector 5.
-
-`coverage-v2` deliberately broadens list length from 8 to 16 and width from 8
-to 17 to preserve the second implementation's broader input domain. Starter
-inputs were re-curated under that decoder; none was a discovered semantic
-regression. The span and precision decoder versions are unchanged.
+Campaigns seed their disposable corpus from the exact prepared named inputs
+reported by roc-fuzz, after checking their hashes and byte limits. Additional
+findings live in the ignored evolving corpus until minimized and deliberately
+retained. Ordinary replay and searches never rewrite source examples or
+regression witnesses.
 
 Raw-to-typed decoding depends on the target generator and roc-fuzz revision.
 Changing field order, generator choice, or the platform can change its meaning.
@@ -190,18 +180,19 @@ on the days immediately before and after the epoch. An independent integer-secon
 grid checks UTC boundaries, local values must require context, canonical text
 retains UTC/local form, and numeric-offset suffixes are rejected.
 
-## Verified execution
+## Execution scope
 
-Apple Silicon macOS and Linux x86-64/musl have verified execution through the
-pinned release platform. The Linux gate covers all fourteen semantic targets,
-curated replay and the failure lifecycle using LLVM speed with `--fuzz`, compiler
-`nightly-2026-09-04-c125b82` and roc-fuzz 0.3.0
-(`ec137edcf0fa2530e3dbb175fec4ddff5281cc6d`). Searches use seed 1, at most
-10,000 runs or 5 seconds, a 256-byte input maximum, 256 MB RSS limit and a
-2-second per-input timeout. A time-limited campaign may execute fewer than
-10,000 inputs; these finite searches do not establish exhaustive correctness.
-Exact runnable commands live in CONTRIBUTING.md and `scripts/fuzz.roc`.
-Other host/architecture combinations explicitly report fuzz checks as unverified.
+The default gate verifies Linux x86-64/musl using LLVM speed with `--fuzz` and
+the pinned platform. Named allocation baselines identify their compiler, target
+and profile. Other host/profile combinations need their own reviewed baseline
+and execution evidence; historical runs do not establish current portability.
+
+Typed seed mutations are admitted against each bounded model's declared input
+domain before the property executes. Generated malformed public inputs within
+that domain are still checked for their structured errors. Domain-admission
+unit checks live beside their properties. Searches must report
+nonzero accepted inputs; finite budgets do not establish exhaustive correctness.
+Runnable commands live in CONTRIBUTING.md and `scripts/fuzz.roc`.
 
 Selection explanation properties use those independent fold/gap preimages to
 check stored boundary policies, canonical members and source calendar identity.
@@ -239,8 +230,8 @@ corpus and platform identities beside each search. Unsupported hosts, launch
 errors, signals, output limits and process deadlines fail explicitly.
 
 Local searches reuse `.roc-time-tmp/fuzz/persistent`. Each target starts from
-that evolving corpus plus the committed seeds;
-committed files win name collisions and are never changed. A successful search
+that evolving corpus plus its prepared named examples. Named examples refresh
+their seed slots and are never changed by exploration. A successful search
 replaces its persistent corpus after validating at most 10,000 ordinary files of
 at most 256 bytes each. Missing corpora start fresh. Failure artifacts and raw
 command logs remain separate from this corpus.

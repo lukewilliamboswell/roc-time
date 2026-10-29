@@ -79,9 +79,21 @@ DocLinks := [].{
 }
 
 sample = "<title>T</title><h1 id=\"start\">T</h1><main id=\"content\"><a href=\"#content\">Skip</a></main>"
+
+## Accept links to existing local anchors.
 expect DocLinks.problems([{ name: "index.html", html: sample }], ["index.html"]) == []
+
+## Report missing local files.
 expect !DocLinks.problems([{ name: "index.html", html: "${sample}<a href=\"missing.html\">Bad</a>" }], ["index.html"]).is_empty()
+
+## Report missing local fragments.
 expect !DocLinks.problems([{ name: "index.html", html: "${sample}<a href=\"#absent\">Bad</a>" }], ["index.html"]).is_empty()
+
+## Report duplicate anchors.
 expect !DocLinks.problems([{ name: "index.html", html: "${sample}<p id=\"start\">Bad</p>" }], ["index.html"]).is_empty()
+
+## Decode rendered code text without markup.
 expect DocLinks.code_blocks("<pre><code><span>roc</span> main.roc &amp; x\n</code></pre>") == ["roc main.roc & x\n"]
+
+## Extract source blocks without surrounding prose.
 expect DocLinks.source_blocks("[source,sh]\n----\nroc main.roc\n----\nAfter\n") == ["roc main.roc\n"]

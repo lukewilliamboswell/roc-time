@@ -2,9 +2,9 @@
 ## contains six fields per occurrence: source minute, UTC start/end minute,
 ## ending kind and start/end gap adjustments. Rows are compared in their original order.
 LocalOracle := [].{
-	verify : Str, Str -> Try({}, [Malformed, MissingOrChanged])
-	verify = |expected, actual| {
-		if !well_formed(expected) or !well_formed(actual) {
+	verify : { expected : Str, actual : Str } -> Try({}, [Malformed, MissingOrChanged])
+	verify = |{ expected, actual }| {
+		if !is_well_formed(expected) or !is_well_formed(actual) {
 			return Err(Malformed)
 		}
 		if expected.trim() == actual.trim() {
@@ -21,7 +21,19 @@ LocalOracle := [].{
 		lines = expected.trim().split_on("\n")
 		missing = Str.join_with(lines.drop_first(1), "\n")
 		wrong = Str.join_with(expected.split_on(":0:"), ":1:")
-		if verify(expected, expected) != Ok({}) or verify(expected, missing) != Err(MissingOrChanged) or verify(expected, wrong) != Err(MissingOrChanged) or verify(expected, "malformed") != Err(Malformed) {
+		if verify({
+			expected,
+			actual: expected,
+		}) != Ok({}) or verify({
+			expected,
+			actual: missing,
+		}) != Err(MissingOrChanged) or verify({
+			expected,
+			actual: wrong,
+		}) != Err(MissingOrChanged) or verify({
+			expected,
+			actual: "malformed",
+		}) != Err(Malformed) {
 			Err(FailedControl)
 		} else {
 			Ok({})
@@ -29,7 +41,8 @@ LocalOracle := [].{
 	}
 }
 
-well_formed = |text| {
+is_well_formed : Str -> Bool
+is_well_formed = |text| {
 	lines = text.trim().split_on("\n")
 	!lines.is_empty() and lines.all(
 		|line| match line.split_on("\t") {
@@ -45,7 +58,26 @@ well_formed = |text| {
 	)
 }
 
-expect LocalOracle.verify("30/0/0/0\t90:90:150:0:0:0\n", "30/0/0/0\t90:90:150:0:0:0\n") == Ok({})
-expect LocalOracle.verify("30/0/0/0\t90:90:150:0:0:0\n", "") == Err(Malformed)
-expect LocalOracle.verify("30/0/0/0\t90:90:150:0:0:0\n", "30/0/0/0\t90:91:150:0:0:0\n") == Err(MissingOrChanged)
-expect LocalOracle.verify("30/0/0/0\t90:90:150:0:0:0\n", "30/0/0/0\t90:90:150:0:0:garbage\n") == Err(Malformed)
+## Accept an exact independent observation.
+expect LocalOracle.verify({
+	expected: "30/0/0/0\t90:90:150:0:0:0\n",
+	actual: "30/0/0/0\t90:90:150:0:0:0\n",
+}) == Ok({})
+
+## Reject a missing local recurrence observation.
+expect LocalOracle.verify({
+	expected: "30/0/0/0\t90:90:150:0:0:0\n",
+	actual: "",
+}) == Err(Malformed)
+
+## Reject a changed recurrence boundary.
+expect LocalOracle.verify({
+	expected: "30/0/0/0\t90:90:150:0:0:0\n",
+	actual: "30/0/0/0\t90:91:150:0:0:0\n",
+}) == Err(MissingOrChanged)
+
+## Reject malformed recurrence output.
+expect LocalOracle.verify({
+	expected: "30/0/0/0\t90:90:150:0:0:0\n",
+	actual: "30/0/0/0\t90:90:150:0:0:garbage\n",
+}) == Err(Malformed)

@@ -5,6 +5,7 @@ import cli.Path
 import cli.OsStr
 import src/Script
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	for (program, args, expected) in [
 		("zig", ["version"], "0.17.0"),
@@ -15,7 +16,10 @@ main! = |_args| {
 		if !actual.starts_with(expected) {
 			return Script.fail!("${program}: expected ${expected}, found ${actual}")
 		}
-		Script.info!("TOOL", actual)?
+		Script.info!({
+			label: "TOOL",
+			message: actual,
+		})?
 	}
 	Script.command("cargo").run!(["--version"])?
 	Script.command("pdfinfo").run!(["-v"])

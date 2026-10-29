@@ -1,13 +1,34 @@
 ## Explicit comparison bounds, rotation and Linux affinity admission. No
 ## subject timing or expected temporal value is synthesized by these helpers.
 ComparisonOptions := [].{
-	Options : { fetch : Bool, smoke : Bool, iterations : U64, warmups : U64, samples : U64, rounds : U64, profile : Str, cpu : List(U64) }
+	Options : {
+		fetch : Bool,
+		smoke : Bool,
+		iterations : U64,
+		warmups : U64,
+		samples : U64,
+		rounds : U64,
+		profile : Str,
+		cpu : List(U64),
+	}
 	parse : List(Str) -> Try(Options, [Arguments])
 	parse = |args| {
 		if args.len() > 128 {
 			return Err(Arguments)
 		}
-		raw = parse_loop(args, { fetch: Bool.False, smoke: Bool.False, iterations: 100000, warmups: 3, samples: 9, rounds: 3, profile: "both", cpu: [] })?
+		raw = parse_loop(
+			args,
+			{
+				fetch: Bool.False,
+				smoke: Bool.False,
+				iterations: 100000,
+				warmups: 3,
+				samples: 9,
+				rounds: 3,
+				profile: "both",
+				cpu: [],
+			},
+		)?
 		options = if (raw.smoke) { ..raw, iterations: 1000, warmups: 1, samples: 3, rounds: 1 } else raw
 		if options.iterations < 1 or options.iterations > 10000000 or options.warmups > 10 or options.samples < 1 or options.samples > 50 or options.rounds < 1 or options.rounds > 10 {
 			return Err(Arguments)
@@ -45,8 +66,8 @@ ComparisonOptions := [].{
 		}
 		Ok($cpus)
 	}
-	order : List(Str), U64, U64 -> List(Str)
-	order = |names, round, index| {
+	order : { names : List(Str), round : U64, index : U64 } -> List(Str)
+	order = |{ names, round, index }| {
 		if names.is_empty() {
 			return []
 		}
@@ -56,6 +77,7 @@ ComparisonOptions := [].{
 	}
 }
 
+parse_loop : List(Str), ComparisonOptions.Options -> Try(ComparisonOptions.Options, [Arguments])
 parse_loop = |args, options| match args {
 	[] => Ok(options)
 	["--fetch", .. as rest] => parse_loop(rest, { ..options, fetch: Bool.True })
@@ -68,8 +90,26 @@ parse_loop = |args, options| match args {
 	["--cpu", value, .. as rest] => parse_loop(rest, { ..options, cpu: [U64.from_str(value).map_err(|_| Arguments)?] })
 	_ => Err(Arguments)
 }
+
+## Require a positive comparison round count.
 expect ComparisonOptions.parse(["--rounds", "0"]) == Err(Arguments)
+
+## Expand the admitted Linux CPU ranges.
 expect ComparisonOptions.affinity("Name:\troc\nCpus_allowed_list:\t0-2,5\n") == Ok([0, 1, 2, 5])
+
+## Reject a reversed Linux CPU range.
 expect ComparisonOptions.affinity("Cpus_allowed_list:\t2-1\n") == Err(Affinity)
-expect ComparisonOptions.order(["a", "b", "c"], 0, 1) == ["b", "c", "a"]
-expect ComparisonOptions.order(["a", "b", "c"], 1, 0) == ["a", "c", "b"]
+
+## Rotate subject order by workload.
+expect ComparisonOptions.order({
+	names: ["a", "b", "c"],
+	round: 0,
+	index: 1,
+}) == ["b", "c", "a"]
+
+## Reverse the rotated order on alternating rounds.
+expect ComparisonOptions.order({
+	names: ["a", "b", "c"],
+	round: 1,
+	index: 0,
+}) == ["a", "c", "b"]

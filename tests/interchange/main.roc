@@ -4,10 +4,58 @@ app [target] {
 }
 
 import fuzz.Fuzz
-import "../fuzz/corpus/interchange/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/interchange/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/interchange/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/interchange/zero" as retained_3 : List(U8)
 import InterchangeCase
 
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "interchange-v1", test: InterchangeCase.check, show: |input| Str.inspect(input) })
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "interchange-v1",
+	examples: [
+		Fuzz.example({
+			name: "lower-domain",
+			revision: "1",
+			make: || InterchangeCase.{
+				year: 1900,
+				month: 1,
+				day: 0,
+				precision: 0,
+				qualifier: 0,
+				seconds: 0,
+				fraction: 0,
+				digits: 0,
+				offset: -1439,
+			},
+		}),
+		Fuzz.example({
+			name: "upper-domain",
+			revision: "1",
+			make: || InterchangeCase.{
+				year: 2100,
+				month: 12,
+				day: 30,
+				precision: 2,
+				qualifier: 3,
+				seconds: 86399,
+				fraction: 999999,
+				digits: 6,
+				offset: 1439,
+			},
+		}),
+		Fuzz.example({
+			name: "leap-day",
+			revision: "1",
+			make: || InterchangeCase.{
+				year: 2000,
+				month: 2,
+				day: 28,
+				precision: 2,
+				qualifier: 1,
+				seconds: 43200,
+				fraction: 123456,
+				digits: 3,
+				offset: 0,
+			},
+		}),
+	],
+	test: InterchangeCase.check,
+	show: Str.inspect,
+})

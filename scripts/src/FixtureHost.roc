@@ -7,6 +7,7 @@ import Script
 ## link inputs inside the ignored platform targets directory; canonical build
 ## artifacts and verified downloads stay under .roc-time-tmp/fixture-platform.
 FixtureHost := [].{
+	build! : () => Try(Str, _)
 	build! = || {
 		host = (Script.command("uname").output!(["-s"])?, Script.command("uname").output!(["-m"])?)
 		target = match host {
@@ -20,7 +21,16 @@ FixtureHost := [].{
 		}
 		work = Path.absolute!(".roc-time-tmp/fixture-platform")?
 		Path.create_all!(work)?
-		args = ["build", "--build-file", Path.display(Path.absolute!("tests/platform/build.zig")?), "--prefix", "${Path.display(work)}/build", "--cache-dir", "${Path.display(work)}/cache", "-Doptimize=ReleaseFast"]
+		args = [
+			"build",
+			"--build-file",
+			Path.display(Path.absolute!("tests/platform/build.zig")?),
+			"--prefix",
+			"${Path.display(work)}/build",
+			"--cache-dir",
+			"${Path.display(work)}/cache",
+			"-Doptimize=ReleaseFast",
+		]
 		build_args = if target == "x64musl" {
 			args.append("-Dtarget=x86_64-linux-musl")
 		} else {
@@ -38,7 +48,17 @@ FixtureHost := [].{
 				file = Path.join(destination, name)
 				if !Path.exists!(file)? {
 					url = "https://raw.githubusercontent.com/lukewilliamboswell/roc-platform-template-zig/d4db636a2f606edf5ae4803f84588f7a5207d53a/platform/targets/x64musl/${name}"
-					Cmd.new("curl").args(["--fail", "--location", "--max-time", "60", "--max-filesize", "16777216", OsStr.from_str(url), "--output", Path.to_os_str(file)]).exec_cmd!()?
+					Cmd.new("curl").args([
+						"--fail",
+						"--location",
+						"--max-time",
+						"60",
+						"--max-filesize",
+						"16777216",
+						OsStr.from_str(url),
+						"--output",
+						Path.to_os_str(file),
+					]).exec_cmd!()?
 				}
 				actual = Script.command("sha256sum").output!([Path.to_os_str(file)])?
 				if !actual.starts_with("${expected} ") {
@@ -55,7 +75,10 @@ FixtureHost := [].{
 		} {
 			Path.copy!(Path.join(destination, name), Path.join(platform_directory, name))?
 		}
-		Script.info!("HOST", "Zig 0.17.0 ReleaseFast, debug symbols retained; ${target}")?
+		Script.info!({
+			label: "HOST",
+			message: "Zig 0.17.0 ReleaseFast, debug symbols retained; ${target}",
+		})?
 		Ok(target)
 	}
 }

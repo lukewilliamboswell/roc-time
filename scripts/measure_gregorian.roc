@@ -8,9 +8,13 @@ import cli.Path
 import src/Measurements
 import src/Script
 
+# nightly-2026-10-23-18478ff crashes when main! is annotated here.
 main! = |args| {
 	if args.map(OsStr.display) == ["--help"] {
-		return Script.info!("usage:", "blueprint run measure-gregorian -- [--smoke] [--iterations N] [--runs N] [--warmups N]")
+		return Script.info!({
+			label: "usage:",
+			message: "blueprint run measure-gregorian -- [--smoke] [--iterations N] [--runs N] [--warmups N]",
+		})
 	}
 	options = Measurements.parse(args.map(OsStr.display))?
 	compiler = Script.roc_nightly!()?
@@ -18,7 +22,12 @@ main! = |args| {
 	output = Path.absolute!(".roc-time-tmp/gregorian-performance")?
 	Path.create_all!(output)?
 	binary = Path.join(output, "date-bench")
-	compiler.cmd(["build", "--opt=speed", OsStr.from_str("--output=${Path.display(binary)}"), "tests/gregorian_performance/main.roc"]).timeout_ms(180000).exec_cmd!()?
+	compiler.cmd([
+		"build",
+		"--opt=speed",
+		OsStr.from_str("--output=${Path.display(binary)}"),
+		"tests/gregorian_performance/main.roc",
+	]).timeout_ms(180000).exec_cmd!()?
 	expected = Measurements.checksum(options.iterations).to_str()
 	var $workloads = Dict.empty()
 	for mode in ["fields", "roundtrip"] {
@@ -38,10 +47,28 @@ main! = |args| {
 		}
 		stats = Measurements.statistics($samples)?
 		$workloads = $workloads.insert(mode, { mean_seconds: stats.mean_seconds, stdev_seconds: stats.stdev_seconds, seconds: $samples })
-		Script.info!(mode, "${(stats.mean_seconds * 1000).to_str()} ms +/- ${(stats.stdev_seconds * 1000).to_str()} ms")?
+		Script.info!({
+			label: mode,
+			message: "${(stats.mean_seconds * 1000).to_str()} ms +/- ${(stats.stdev_seconds * 1000).to_str()} ms",
+		})?
 	}
-	report = { smoke: options.smoke, compiler: version, backend: "LLVM speed", machine: Script.command("uname").output!(["-m"])?, platform_info: Script.command("uname").output!(["-s", "-r"])?, iterations: options.iterations, warmups: options.warmups, runs: options.runs, checksum: expected, scope: "Process wall time including startup and checksum formatting; scalar dates, no shared input lists. No allocation or retained-memory measurement.", workloads: $workloads }
+	report = {
+		smoke: options.smoke,
+		compiler: version,
+		backend: "LLVM speed",
+		machine: Script.command("uname").output!(["-m"])?,
+		platform_info: Script.command("uname").output!(["-s", "-r"])?,
+		iterations: options.iterations,
+		warmups: options.warmups,
+		runs: options.runs,
+		checksum: expected,
+		scope: "Process wall time including startup and checksum formatting; scalar dates, no shared input lists. No allocation or retained-memory measurement.",
+		workloads: $workloads,
+	}
 	path = Path.join(output, "results.json")
 	Path.write_utf8!(path, Json.to_str_try(report)?)?
-	Script.info!("REPORT", Path.display(path))
+	Script.info!({
+		label: "REPORT",
+		message: Path.display(path),
+	})
 }

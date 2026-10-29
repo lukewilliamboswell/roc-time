@@ -1,11 +1,13 @@
 #!/usr/bin/env roc-stable
 app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+import cli.OsStr
 import cli.Path
 import cli.Cmd
 import src/LocalOracle
 import src/FixtureHost
 import src/Script
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	nightly = Script.roc_nightly!()?
 	stable = Script.roc_stable!()?
@@ -24,12 +26,30 @@ main! = |_args| {
 	nightly.run!(["--opt=interpreter", "tests/local_recurrence/main.roc"])?
 	for mode in ["dev", "speed"] {
 		binary = Path.display(Path.absolute!(Path.utf8(".roc-time-tmp/local-recurrence/${mode}"))?)
-		nightly.run!(["build", "tests/local_recurrence/native/main.roc", "--opt=${mode}", "--target=${target}", "--output=${binary}"])?
+		nightly.run!([
+			"build",
+			"tests/local_recurrence/native/main.roc",
+			"--opt=${mode}",
+			"--target=${target}",
+			"--output=${binary}",
+		])?
 		actual = Cmd.new_str(binary).timeout_ms(10000).exec_output!()?.stdout_utf8
-		LocalOracle.verify(expected, actual)?
-		Script.info!("PASS", "108 composed local recurrence cases: ${mode}/${target}; oracle negative controls")?
+		LocalOracle.verify({
+			expected,
+			actual,
+		})?
+		Script.info!({
+			label: "PASS",
+			message: "108 composed local recurrence cases: ${mode}/${target}; oracle negative controls",
+		})?
 		resource = Path.display(Path.absolute!(Path.utf8(".roc-time-tmp/local-recurrence/resource-${mode}"))?)
-		nightly.run!(["build", "tests/local_recurrence/resource/main.roc", "--opt=${mode}", "--target=${target}", "--output=${resource}"])?
+		nightly.run!([
+			"build",
+			"tests/local_recurrence/resource/main.roc",
+			"--opt=${mode}",
+			"--target=${target}",
+			"--output=${resource}",
+		])?
 		short = Cmd.new_str(resource).args(["1971", "4096"]).timeout_ms(5000).exec_output!()?.stdout_utf8
 		vast = Cmd.new_str(resource).args(["200000", "4096"]).timeout_ms(5000).exec_output!()?.stdout_utf8
 		if short != vast {
@@ -41,7 +61,10 @@ main! = |_args| {
 				_ => return Script.fail!("local recurrence ${stage} allocation negative control did not fail as intended")
 			}
 		}
-		Script.info!("PASS", "local prefix ${mode}/${target} construction/first/resume bytes and work: ${short.trim()}; 4 KiB per stage; failing control")?
+		Script.info!({
+			label: "PASS",
+			message: "local prefix ${mode}/${target} construction/first/resume bytes and work: ${short.trim()}; 4 KiB per stage; failing control",
+		})?
 	}
 	Ok({})
 }

@@ -4,10 +4,49 @@ app [target] {
 }
 
 import fuzz.Fuzz
-import "../fuzz/corpus/zones/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/zones/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/zones/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/zones/zero" as retained_3 : List(U8)
 import ZoneCase
 
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "zones-v1", test: ZoneCase.check, show: |input| Str.inspect(input) })
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "zones-v1",
+	examples: [
+		Fuzz.example({
+			name: "forward-gap",
+			revision: "1",
+			make: || ZoneCase.{
+				number: 1,
+				first: -2,
+				second: 2,
+			},
+		}),
+		Fuzz.example({
+			name: "backward-fold",
+			revision: "1",
+			make: || ZoneCase.{
+				number: -1,
+				first: 2,
+				second: -2,
+			},
+		}),
+		Fuzz.example({
+			name: "unchanged-offset",
+			revision: "1",
+			make: || ZoneCase.{
+				number: 0,
+				first: 0,
+				second: 0,
+			},
+		}),
+		Fuzz.example({
+			name: "domain-edge",
+			revision: "1",
+			make: || ZoneCase.{
+				number: 7000000,
+				first: -1,
+				second: 1,
+			},
+		}),
+	],
+	test: ZoneCase.check,
+	show: Str.inspect,
+})

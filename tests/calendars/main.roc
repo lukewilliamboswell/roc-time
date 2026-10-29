@@ -4,10 +4,34 @@ app [target] {
 }
 
 import fuzz.Fuzz
-import "../fuzz/corpus/calendars/alternating" as retained_0 : List(U8)
-import "../fuzz/corpus/calendars/ones" as retained_1 : List(U8)
-import "../fuzz/corpus/calendars/ramp" as retained_2 : List(U8)
-import "../fuzz/corpus/calendars/zero" as retained_3 : List(U8)
 import CalendarCase
 
-target = Fuzz.target({ examples: [Fuzz.saved({ name: "alternating", revision: "1", bytes: retained_0 }), Fuzz.saved({ name: "ones", revision: "1", bytes: retained_1 }), Fuzz.saved({ name: "ramp", revision: "1", bytes: retained_2 }), Fuzz.saved({ name: "zero", revision: "1", bytes: retained_3 })], name: "calendars-v1", test: CalendarCase.check, show: |input| Str.inspect(input) })
+# Generated inputs exercise the invariant; these named cases pin its boundaries.
+target = Fuzz.target({
+	name: "calendars-v1",
+	examples: [
+		Fuzz.example({
+			name: "provider-start",
+			revision: "1",
+			make: || CalendarCase.{
+				number: -784369121962,
+			},
+		}),
+		Fuzz.example({
+			name: "provider-end",
+			revision: "1",
+			make: || CalendarCase.{
+				number: 784367682901,
+			},
+		}),
+		Fuzz.example({
+			name: "shared-epoch",
+			revision: "1",
+			make: || CalendarCase.{
+				number: 0,
+			},
+		}),
+	],
+	test: CalendarCase.check,
+	show: Str.inspect,
+})

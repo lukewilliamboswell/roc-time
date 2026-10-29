@@ -12,6 +12,7 @@ import src/Script
 import src/ZoneDistribution
 import src/ZoneVerification
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	directory = Path.absolute!("tzdb/package")?
 	manifest = ZoneVerification.integrity!(directory)?
@@ -25,17 +26,60 @@ main! = |_args| {
 		name = Path.filename(file)?.to_str()?
 		Path.copy!(file, Path.join(copied, name))?
 	}
-	ZoneVerification.verify!(copied, manifest, compiler)?
+	ZoneVerification.verify!({
+		directory: copied,
+		manifest,
+		compiler,
+	})?
 	app_source = "tests/zone_database/main.roc"
-	_ = OracleStages.run_logged!([program, "check", app_source], cwd, work, "provider-check", 180000)?
-	_ = OracleStages.run_logged!([program, "--opt=interpreter", app_source], cwd, work, "provider-interpret", 180000)?
+	_ = OracleStages.run!({
+		command: [program, "check", app_source],
+		cwd,
+		logs: work,
+		label: "provider-check",
+		timeout_ms: 180000,
+	})?
+	_ = OracleStages.run!({
+		command: [program, "--opt=interpreter", app_source],
+		cwd,
+		logs: work,
+		label: "provider-interpret",
+		timeout_ms: 180000,
+	})?
 	provider = Path.join(work, "provider")
-	_ = OracleStages.run_logged!([program, "build", app_source, "--output=${Path.display(provider)}"], cwd, work, "provider-build", 180000)?
-	_ = OracleStages.run_logged!([Path.display(provider)], cwd, work, "provider-run", 180000)?
+	_ = OracleStages.run!({
+		command: [program, "build", app_source, "--output=${Path.display(provider)}"],
+		cwd,
+		logs: work,
+		label: "provider-build",
+		timeout_ms: 180000,
+	})?
+	_ = OracleStages.run!({
+		command: [Path.display(provider)],
+		cwd,
+		logs: work,
+		label: "provider-run",
+		timeout_ms: 180000,
+	})?
 	target = FixtureHost.build!()?
 	for mode in ["dev", "speed"] {
 		binary = Path.join(work, "lookup-${mode}")
-		_ = OracleStages.run_logged!([program, "build", "tests/zone_database/resource/main.roc", "--opt=${mode}", "--debug", "--target=${target}", "--output=${Path.display(binary)}", "--no-cache"], cwd, work, "resource-build-${mode}", 180000)?
+		_ = OracleStages.run!({
+			command: [
+				program,
+				"build",
+				"tests/zone_database/resource/main.roc",
+				"--opt=${mode}",
+				"--debug",
+				"--target=${target}",
+				"--output=${Path.display(binary)}",
+				"--no-cache",
+			],
+			cwd,
+			logs: work,
+			label: "resource-build-${mode}",
+			timeout_ms: 180000,
+		})?
 		for (name, index) in ["Australia/Melbourne", "US/Eastern", "Pacific/Apia", "Etc/UTC"].map_with_index(|name, index| (name, index)) {
 			canonical = manifest.names.get(name)?
 			expected = manifest.transition_expectations.get(canonical)?
@@ -57,7 +101,10 @@ main! = |_args| {
 			if second - first != metrics.work.get(0)? {
 				return Err(TraceAllocationDisagreement)
 			}
-			Script.info!("PASS", "${mode} ${name}: ${stderr.trim()}")?
+			Script.info!({
+				label: "PASS",
+				message: "${mode} ${name}: ${stderr.trim()}",
+			})?
 		}
 	}
 	# A real corrupted wheel must fail integrity before archive decoding.
@@ -65,7 +112,12 @@ main! = |_args| {
 	Path.write_utf8!(invalid, "corrupted wheel")?
 	stable = Script.roc_stable!()?
 	invalid_output = Path.join(work, "invalid-output")
-	rejected = stable.cmd(["scripts/generate_zone_database.roc", "--", Path.to_os_str(invalid), Path.to_os_str(invalid_output)]).timeout_ms(30000).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+	rejected = stable.cmd([
+		"scripts/generate_zone_database.roc",
+		"--",
+		Path.to_os_str(invalid),
+		Path.to_os_str(invalid_output),
+	]).timeout_ms(30000).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
 	diagnostic = "${Str.from_utf8(rejected.stdout_bytes)?}${Str.from_utf8(rejected.stderr_bytes)?}"
 	match rejected.status {
 		Exited(code) if code != 0 and diagnostic.contains("Program exited with error: WheelIntegrity") => {}
@@ -74,5 +126,8 @@ main! = |_args| {
 	if Path.exists!(invalid_output)? {
 		return Err(InvalidWheelCreatedOutput)
 	}
-	Script.info!("EVIDENCE", Path.display(work))
+	Script.info!({
+		label: "EVIDENCE",
+		message: Path.display(work),
+	})
 }

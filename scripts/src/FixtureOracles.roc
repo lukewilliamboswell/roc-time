@@ -3,11 +3,32 @@ import JsonShape
 ## Existing authored fixture protocols. There is no calendar computation here:
 ## expected fields come from pinned independent JSONL, never the library.
 FixtureOracles := [].{
-	DateOutput : { parts : { start : Str, rule : Str, inclusions : List(Str), exclusions : List(Str) }, dates : List(Str) }
+	DateOutput : {
+		parts : { start : Str, rule : Str, inclusions : List(Str), exclusions : List(Str) },
+		dates : List(Str),
+	}
 	CapOutput : { bytes : U64, start : Str, rule : Str, inclusions : U64, exclusions : U64 }
-	TimedOutput : { parts : { start : Str, rule : Str, mode : Str, duration : Str, inclusions : List(Str), exclusions : List(Str), periods : List(Str) }, occurrences : List({ source : Str, start : I64, end : I64 }) }
+	TimedOutput : {
+		parts : {
+			start : Str,
+			rule : Str,
+			mode : Str,
+			duration : Str,
+			inclusions : List(Str),
+			exclusions : List(Str),
+			periods : List(Str),
+		},
+		occurrences : List({ source : Str, start : I64, end : I64 }),
+	}
 	TimedCapOutput : { bytes : U64, exclusions : U64 }
-	Expected : [Civil(List(I64)), Date(DateOutput), Cap(CapOutput), Timed(TimedOutput), TimedCap(TimedCapOutput), Error(Str)]
+	Expected : [
+		Civil(List(I64)),
+		Date(DateOutput),
+		Cap(CapOutput),
+		Timed(TimedOutput),
+		TimedCap(TimedCapOutput),
+		Error(Str),
+	]
 	Case : { input : List(Str), label : Str, expected : Expected }
 	load : Str, Str -> Try(List(Case), [FixtureRecord])
 	load = |kind, source| {
@@ -96,36 +117,89 @@ FixtureOracles := [].{
 			},
 		)
 	}
-	compare : Expected, Str -> Bool
-	compare = |expected, output| match expected {
+	is_matching_output : Expected, Str -> Bool
+	is_matching_output = |expected, output| match expected {
 		Civil(values) => match output.trim().split_on(",").map_try(I64.from_str) {
 			Ok(observed) => observed.len() == 5 and observed == values
 			Err(_) => Bool.False
 		}
 		Error(error) => output.trim() == error
-		Date(value) => same_output(value, output)
-		Cap(value) => same_output(value, output)
-		Timed(value) => same_output(value, output)
-		TimedCap(value) => same_output(value, output)
+		Date(value) => is_same_output(value, output)
+		Cap(value) => is_same_output(value, output)
+		Timed(value) => is_same_output(value, output)
+		TimedCap(value) => is_same_output(value, output)
 	}
 }
 
-same_output = |expected, output| match Json.parse(output) {
+is_same_output : _, Str -> Bool
+is_same_output = |expected, output| match Json.parse(output) {
 	Ok(actual) => actual == expected and JsonShape.keys(output) == JsonShape.keys(Json.to_str(expected))
 	Err(_) => Bool.False
 }
-expect FixtureOracles.compare(Civil([6, 1, 1999, 52, 6]), "6,1,1999,52,6\n")
-expect ["", "null", "6,1,1999,52", "6,1,1999,52,6,7", "6,1,1999,52,x", "6,1,1999,53,6"].all(|wrong| !FixtureOracles.compare(Civil([6, 1, 1999, 52, 6]), wrong))
-expect !FixtureOracles.compare(Error("OutOfRange(\"count\")"), "OutOfRange(\"wrong-field\")")
+
+## Accept exact civil fixture output.
+expect FixtureOracles.is_matching_output(Civil([6, 1, 1999, 52, 6]), "6,1,1999,52,6\n")
+
+## Reject malformed or changed civil fixture output.
+expect ["", "null", "6,1,1999,52", "6,1,1999,52,6,7", "6,1,1999,52,x", "6,1,1999,53,6"].all(|wrong| !FixtureOracles.is_matching_output(Civil([6, 1, 1999, 52, 6]), wrong))
+
+## Preserve the exact structured error field.
+expect !FixtureOracles.is_matching_output(Error("OutOfRange(\"count\")"), "OutOfRange(\"wrong-field\")")
 
 empty_date : FixtureOracles.DateOutput
-empty_date = { parts: { start: "20250101", rule: "FREQ=DAILY;COUNT=1", inclusions: [], exclusions: [] }, dates: [] }
-expect FixtureOracles.compare(Date(empty_date), "{\"dates\":[],\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}")
-expect !FixtureOracles.compare(Date(empty_date), "{\"unknown\":[],\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}")
-expect !FixtureOracles.compare(Date(empty_date), "{\"dates\":[],\"extra\":0,\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}")
-expect !FixtureOracles.compare(Date(empty_date), "{\"dates\":[],\"dates\":[],\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}")
-expect ["", "null", "{}", "[]", "{broken"].all(|output| !FixtureOracles.compare(Date(empty_date), output))
+empty_date = {
+	parts: { start: "20250101", rule: "FREQ=DAILY;COUNT=1", inclusions: [], exclusions: [] },
+	dates: [],
+}
+
+## Ignore harmless JSON object key order.
+expect FixtureOracles.is_matching_output(
+	Date(empty_date),
+	"{\"dates\":[],\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}",
+)
+
+## Reject a renamed required JSON member.
+expect !FixtureOracles.is_matching_output(
+	Date(empty_date),
+	"{\"unknown\":[],\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}",
+)
+
+## Reject an extra JSON member.
+expect !FixtureOracles.is_matching_output(
+	Date(empty_date),
+	"{\"dates\":[],\"extra\":0,\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}",
+)
+
+## Reject a duplicate JSON member.
+expect !FixtureOracles.is_matching_output(
+	Date(empty_date),
+	"{\"dates\":[],\"dates\":[],\"parts\":{\"exclusions\":[],\"rule\":\"FREQ=DAILY;COUNT=1\",\"start\":\"20250101\",\"inclusions\":[]}}",
+)
+
+## Reject malformed DATE fixture output.
+expect ["", "null", "{}", "[]", "{broken"].all(|output| !FixtureOracles.is_matching_output(Date(empty_date), output))
 boundary_timed : FixtureOracles.TimedOutput
-boundary_timed = { parts: { start: "19700101T000000Z", rule: "FREQ=DAILY;COUNT=1", mode: "Utc", duration: "PT1S", inclusions: [], exclusions: [], periods: [] }, occurrences: [{ source: "1970-01-01T00:00:00", start: -9223372036854775808, end: 9223372036854775807 }] }
-expect FixtureOracles.compare(Timed(boundary_timed), "{\"parts\":{\"start\":\"19700101T000000Z\",\"rule\":\"FREQ=DAILY;COUNT=1\",\"mode\":\"Utc\",\"duration\":\"PT1S\",\"inclusions\":[],\"exclusions\":[],\"periods\":[]},\"occurrences\":[{\"source\":\"1970-01-01T00:00:00\",\"start\":-9223372036854775808,\"end\":9223372036854775807}]}")
-expect !FixtureOracles.compare(Timed(boundary_timed), "{\"parts\":{\"start\":\"19700101T000000Z\",\"rule\":\"FREQ=DAILY;COUNT=1\",\"mode\":\"Utc\",\"duration\":\"PT1S\",\"inclusions\":[],\"exclusions\":[],\"periods\":[]},\"occurrences\":[{\"source\":\"1970-01-01T00:00:00\",\"start\":-9223372036854775808,\"end\":9223372036854775806}]}")
+boundary_timed = {
+	parts: {
+		start: "19700101T000000Z",
+		rule: "FREQ=DAILY;COUNT=1",
+		mode: "Utc",
+		duration: "PT1S",
+		inclusions: [],
+		exclusions: [],
+		periods: [],
+	},
+	occurrences: [{ source: "1970-01-01T00:00:00", start: -9223372036854775808, end: 9223372036854775807 }],
+}
+
+## Preserve exact I64 endpoint observations.
+expect FixtureOracles.is_matching_output(
+	Timed(boundary_timed),
+	"{\"parts\":{\"start\":\"19700101T000000Z\",\"rule\":\"FREQ=DAILY;COUNT=1\",\"mode\":\"Utc\",\"duration\":\"PT1S\",\"inclusions\":[],\"exclusions\":[],\"periods\":[]},\"occurrences\":[{\"source\":\"1970-01-01T00:00:00\",\"start\":-9223372036854775808,\"end\":9223372036854775807}]}",
+)
+
+## Reject a changed endpoint at the signed limit.
+expect !FixtureOracles.is_matching_output(
+	Timed(boundary_timed),
+	"{\"parts\":{\"start\":\"19700101T000000Z\",\"rule\":\"FREQ=DAILY;COUNT=1\",\"mode\":\"Utc\",\"duration\":\"PT1S\",\"inclusions\":[],\"exclusions\":[],\"periods\":[]},\"occurrences\":[{\"source\":\"1970-01-01T00:00:00\",\"start\":-9223372036854775808,\"end\":9223372036854775806}]}",
+)

@@ -9,19 +9,36 @@ import src/ChronoBenchmark
 import src/ComparisonBenchmark
 import src/ComparisonOptions
 import src/Script
+# nightly-2026-10-23-18478ff crashes when main! is annotated here.
 main! = |args| {
 	if args.map(OsStr.display) == ["--help"] {
-		return Script.info!("usage:", "blueprint run benchmark-comparison -- [--fetch] [--smoke] [--iterations N] [--warmups N] [--samples N] [--rounds N] [--profile microseconds|seconds|both] [--cpu N]; PYTHON_BENCH selects pinned CPython")
+		return Script.info!({
+			label: "usage:",
+			message: "blueprint run benchmark-comparison -- [--fetch] [--smoke] [--iterations N] [--warmups N] [--samples N] [--rounds N] [--profile microseconds|seconds|both] [--cpu N]; PYTHON_BENCH selects pinned CPython",
+		})
 	}
 	options = ComparisonOptions.parse(args.map(OsStr.display))?
 	context = ComparisonBenchmark.prepare!(options)?
-	profiles = [("microseconds", "benchmarks/chrono/corpus.jsonl"), ("seconds", "benchmarks/comparison/seconds.jsonl")].keep_if(|(name, _)| options.profile == "both" or options.profile == name)
+	profiles = [
+		("microseconds", "benchmarks/chrono/corpus.jsonl"),
+		("seconds", "benchmarks/comparison/seconds.jsonl"),
+	].keep_if(|(name, _)| options.profile == "both" or options.profile == name)
 	var $results = []
 	var $limitations = []
 	for (profile, corpus) in profiles {
-		reference = ChronoBenchmark.reference!(Path.utf8(corpus), options.iterations, context.work)?
+		reference = ChronoBenchmark.reference!({
+			corpus: Path.utf8(corpus),
+			iterations: options.iterations,
+			logs: context.work,
+		})?
 		active = if profile == "microseconds" {
-			command = ComparisonBenchmark.command(context, "tempo", ["verify", "1", "0", "0", "1900-02-28T01:13:17.027183-03:30"])?
+			command = ComparisonBenchmark.command(
+				context,
+				{
+					library: "tempo",
+					args: ["verify", "1", "0", "0", "1900-02-28T01:13:17.027183-03:30"],
+				},
+			)?
 			outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(context.root).manage_tree(Bool.True).timeout_ms(30000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
 			stderr = Str.from_utf8(outcome.stderr_bytes)?
 			Path.write_bytes!(Path.join(context.work, "tempo-fractional-offset.stderr"), outcome.stderr_bytes)?
@@ -43,35 +60,83 @@ main! = |args| {
 				},
 			)
 			expected = Str.join_with(expected_lines, "")
-			output = execute!(context, name, "verify", 1, 0, 0, reference.cases, "${profile}-${name}-verify")?
+			output = execute!(
+				context,
+				{
+					name,
+					mode: "verify",
+					iterations: 1,
+					warmups: 0,
+					samples: 0,
+					cases: reference.cases,
+					label: "${profile}-${name}-verify",
+				},
+			)?
 			if output.stdout != expected {
 				return Err(ComparisonOracleMismatch(profile, name))
 			}
 		}
-		Script.info!("PASS", "${profile}: independent per-case oracle and harness negative controls")?
+		Script.info!({
+			label: "PASS",
+			message: "${profile}: independent per-case oracle and harness negative controls",
+		})?
 		modes = BenchmarkOptions.modes.keep_if(|mode| profile == "microseconds" or !["format", "end_to_end"].contains(mode))
 		for round in (0.U64).to(options.rounds - 1) {
 			for (mode, index) in modes.map_with_index(|mode, index| (mode, index)) {
-				names = ComparisonOptions.order(active.keep_if(|name| ComparisonBenchmark.supports(name, mode)), round, index)
+				names = ComparisonOptions.order({
+					names: active.keep_if(
+						|name| ComparisonBenchmark.is_supported_workload({
+							library: name,
+							workload: mode,
+						}),
+					),
+					round,
+					index,
+				})
 				for name in names {
-					output = execute!(context, name, mode, options.iterations, options.warmups, options.samples, reference.cases, "${profile}-${round.to_str()}-${mode}-${name}")?
+					output = execute!(
+						context,
+						{
+							name,
+							mode,
+							iterations: options.iterations,
+							warmups: options.warmups,
+							samples: options.samples,
+							cases: reference.cases,
+							label: "${profile}-${round.to_str()}-${mode}-${name}",
+						},
+					)?
 					elapsed = BenchmarkOptions.samples(output.stdout, options.samples, reference.checksums.get(mode)?)?
 					value = BenchmarkOptions.median(elapsed)? / options.iterations.to_f64()
-					$results = $results.append({ profile, round: round + 1, library: name, workload: mode, nanoseconds: elapsed, median_ns_per_operation: value })
-					Script.info!(name, "${profile} ${mode}: ${value.to_str()} ns/op${if (options.smoke) " (smoke; not performance evidence)" else ""}")?
+					$results = $results.append({
+						profile,
+						round: round + 1,
+						library: name,
+						workload: mode,
+						nanoseconds: elapsed,
+						median_ns_per_operation: value,
+					})
+					Script.info!({
+						label: name,
+						message: "${profile} ${mode}: ${value.to_str()} ns/op${if (options.smoke) " (smoke; not performance evidence)" else ""}",
+					})?
 				}
 			}
 		}
 	}
 	var $binaries = Dict.empty()
-	for (name, path) in ComparisonBenchmark.native(context) {
-		$binaries = $binaries.insert(name, hash!(path)?)
+	for { library, binary } in ComparisonBenchmark.native_binaries(context) {
+		$binaries = $binaries.insert(library, hash!(binary)?)
 	}
 	var $sources = Dict.empty()
 	for folder in ["benchmarks/comparison", "benchmarks/chrono", "scripts/src"] {
 		$sources = collect_sources!(Path.utf8(folder), $sources)?
 	}
-	for file in ["scripts/benchmark_comparison.roc", "scripts/benchmark_chrono.roc", "scripts/reference_benchmarks.py"] {
+	for file in [
+		"scripts/benchmark_comparison.roc",
+		"scripts/benchmark_chrono.roc",
+		"scripts/reference_benchmarks.py",
+	] {
 		$sources = $sources.insert(file, hash!(Path.utf8(file))?)
 	}
 	var $corpora = Dict.empty()
@@ -85,22 +150,80 @@ main! = |args| {
 			$governors = $governors.insert(cpu.to_str(), Path.read_utf8!(path)?.trim())
 		}
 	}
-	extension = BenchmarkProcess.run!([context.python, "-c", "import ciso8601; print(ciso8601.__file__)"], context.root, context.work, "ciso-extension", context.environment, 30000)?.stdout.trim()
-	report = { scope: "bounded Gregorian/fixed-offset throughput; no library-wide ranking or memory claims", options, versions: context.versions, dependencies: context.pins, build_targets: { roc_target: "x64musl/speed", rust: "x86_64-unknown-linux-musl/release", go: "linux/amd64 CGO_ENABLED=0" }, binary_sha256: $binaries, python_extension_sha256: hash!(Path.utf8(extension))?, zig: Script.command(OsStr.from_str(Script.env_str!("ZIG") ?? "zig")).output!(["version"])?, host_platform: Script.command("uname").output!(["-a"])?, cpuinfo: Path.read_utf8!("/proc/cpuinfo")?.split_on("\n\n").first()?, affinity: context.affinity, loadavg_after: Path.read_utf8!("/proc/loadavg")?.trim(), cpu_governors: $governors, git_revision: Script.command("git").output!(["rev-parse", "HEAD"])?, working_tree: Script.command("git").output!(["status", "--short"])?, source_sha256: $sources, corpus_sha256: $corpora, limitations: $limitations, results: $results }
+	extension = BenchmarkProcess.run!({
+		args: [context.python, "-c", "import ciso8601; print(ciso8601.__file__)"],
+		cwd: context.root,
+		logs: context.work,
+		label: "ciso-extension",
+		environment: context.environment,
+		timeout_ms: 30000,
+	})?.stdout.trim()
+	report = {
+		scope: "bounded Gregorian/fixed-offset throughput; no library-wide ranking or memory claims",
+		options,
+		versions: context.versions,
+		dependencies: context.pins,
+		build_targets: {
+			roc_target: "x64musl/speed",
+			rust: "x86_64-unknown-linux-musl/release",
+			go: "linux/amd64 CGO_ENABLED=0",
+		},
+		binary_sha256: $binaries,
+		python_extension_sha256: hash!(Path.utf8(extension))?,
+		zig: Script.command(OsStr.from_str(Script.env_str!("ZIG") ?? "zig")).output!(["version"])?,
+		host_platform: Script.command("uname").output!(["-a"])?,
+		cpuinfo: Path.read_utf8!("/proc/cpuinfo")?.split_on("\n\n").first()?,
+		affinity: context.affinity,
+		loadavg_after: Path.read_utf8!("/proc/loadavg")?.trim(),
+		cpu_governors: $governors,
+		git_revision: Script.command("git").output!(["rev-parse", "HEAD"])?,
+		working_tree: Script.command("git").output!(["status", "--short"])?,
+		source_sha256: $sources,
+		corpus_sha256: $corpora,
+		limitations: $limitations,
+		results: $results,
+	}
 	stamp = Script.command("date").output!(["-u", "+%Y%m%dT%H%M%S.%NZ"])?
 	destination = Path.join(context.work, "results-${stamp}.json")
 	Path.write_utf8!(destination, Json.to_str_try(report)?)?
-	Script.info!("EVIDENCE", Path.display(destination))
+	Script.info!({
+		label: "EVIDENCE",
+		message: Path.display(destination),
+	})
 }
 
-execute! : ComparisonBenchmark.Context, Str, Str, U64, U64, U64, List(ChronoBenchmark.Case), Str => Try({ stdout : Str, stderr : Str }, _)
-execute! = |context, name, mode, iterations, warmups, samples, cases, label| {
-	command = ComparisonBenchmark.command(context, name, [mode, iterations.to_str(), warmups.to_str(), samples.to_str()].concat(cases.map(|case| case.text)))?
-	BenchmarkProcess.run!(command, context.root, context.work, label, context.environment, 300000)
+execute! : ComparisonBenchmark.Context,
+{
+	name : Str,
+	mode : Str,
+	iterations : U64,
+	warmups : U64,
+	samples : U64,
+	cases : List(ChronoBenchmark.Case),
+	label : Str,
+} => Try(BenchmarkProcess.Output, _)
+execute! = |context, { name, mode, iterations, warmups, samples, cases, label }| {
+	command = ComparisonBenchmark.command(
+		context,
+		{
+			library: name,
+			args: [mode, iterations.to_str(), warmups.to_str(), samples.to_str()].concat(cases.map(|case| case.text)),
+		},
+	)?
+	BenchmarkProcess.run!({
+		args: command,
+		cwd: context.root,
+		logs: context.work,
+		label,
+		environment: context.environment,
+		timeout_ms: 300000,
+	})
 }
 
+hash! : Path => Try(Str, _)
 hash! = |path| Script.command("sha256sum").output!([Path.to_os_str(path)])?.split_on(" ").first()
 
+collect_sources! : Path, Dict(Str, Str) => Try(Dict(Str, Str), _)
 collect_sources! = |folder, sources| {
 	var $sources = sources
 	for path in Path.list!(folder)? {

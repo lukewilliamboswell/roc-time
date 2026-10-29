@@ -10,6 +10,7 @@ import src/Script
 
 Fixture : { name : Str, source : Str, stdout : Str, cases : List(List(Str)), failure_args : List(Str) }
 
+main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	target = FixtureHost.build!()?
 	nightly = Script.roc_nightly!()?
@@ -25,7 +26,13 @@ main! = |_args| {
 		}
 		for mode in ["dev", "speed"] {
 			binary = Path.join(work, "${fixture.name}-${mode}")
-			nightly.cmd(["build", OsStr.from_str(fixture.source), OsStr.from_str("--opt=${mode}"), OsStr.from_str("--target=${target}"), OsStr.from_str("--output=${Path.display(binary)}")]).timeout_ms(180000).exec_cmd!()?
+			nightly.cmd([
+				"build",
+				OsStr.from_str(fixture.source),
+				OsStr.from_str("--opt=${mode}"),
+				OsStr.from_str("--target=${target}"),
+				OsStr.from_str("--output=${Path.display(binary)}"),
+			]).timeout_ms(180000).exec_cmd!()?
 			for args in fixture.cases {
 				result = Cmd.new(Path.to_os_str(binary)).args_str(args).timeout_ms(10000).stdout(Capture).stderr(Capture).run!()?
 				stdout = Str.from_utf8(result.stdout_bytes)?
@@ -41,7 +48,10 @@ main! = |_args| {
 				Exited(code) if code != 0 and failure_text.contains("ROC_ASSERT_FAILED") => {}
 				_ => return Script.fail!("${fixture.name}/${mode}: allocation failure control did not fail normally")
 			}
-			Script.info!("PASS", "${fixture.name} ${mode}: ${fixture.cases.len().to_str()} runtime cases, zero scoped allocation, failing control")?
+			Script.info!({
+				label: "PASS",
+				message: "${fixture.name} ${mode}: ${fixture.cases.len().to_str()} runtime cases, zero scoped allocation, failing control",
+			})?
 		}
 	}
 	Ok({})

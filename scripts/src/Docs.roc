@@ -8,14 +8,21 @@ import Script
 Docs := [].{
 
 	## Blueprint verifies the released executable before exposing it on PATH.
-	renderer! = || Ok(Script.command("roc-docs"))
+	renderer : Script.Command
+	renderer = Script.command("roc-docs")
 
 	## Build both formats inside the workspace, then copy the completed publication.
 	## The destination may be a release's temporary artifact directory.
-	build! = |destination, version| build_from!(Path.utf8("."), destination, version)
+	build! : Path, Str => Try({}, _)
+	build! = |destination, version| build_from!({
+		workspace: Path.utf8("."),
+		destination,
+		version,
+	})
 
 	## Render an explicit source checkout; restored APIs are never regenerated.
-	build_from! = |workspace, destination, version| {
+	build_from! : { workspace : Path, destination : Path, version : Str } => Try({}, _)
+	build_from! = |{ workspace, destination, version }| {
 		if Path.exists!(destination)? {
 			return Script.fail!("manual output must be new: ${Path.display(destination)}")
 		}
@@ -23,7 +30,6 @@ Docs := [].{
 		Path.create_all!(work)?
 		temporary = Env.create_temp_dir_in!(Path.absolute!(work)?, "manual-")?
 		staged = Path.join(temporary, "rendered")
-		renderer = renderer!()?
 		_ = renderer.cmd([
 			"build",
 			"--workspace",
@@ -50,8 +56,8 @@ Docs := [].{
 
 	## Let the native parser prepare authored AsciiDoc as Markdown for GitHub notes.
 	## No downstream AsciiDoc-to-Markdown interpretation is maintained here.
+	notes! : Path => Try(Str, _)
 	notes! = |source| {
-		renderer = renderer!()?
 		Env.with_temp_dir!(
 			|temporary| {
 				Path.create_all!(Path.join(temporary, "docs"))?

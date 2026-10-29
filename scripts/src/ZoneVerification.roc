@@ -60,8 +60,8 @@ ZoneVerification := [].{
 		}
 		Ok(manifest)
 	}
-	verify! : Path, ZoneDistribution.Manifest, Script.Command => Try({}, _)
-	verify! = |directory, manifest, compiler| {
+	verify! : { directory : Path, manifest : ZoneDistribution.Manifest, compiler : Script.Command } => Try({}, _)
+	verify! = |{ directory, manifest, compiler }| {
 		work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "zone-provider-")?
 		core = relative!(work, Path.absolute!("package/main.roc")?)?
 		database = relative!(work, Path.join(Path.absolute!(directory)?, "main.roc"))?
@@ -75,7 +75,16 @@ ZoneVerification := [].{
 			$cases = $cases.append("   ${Json.to_str(name)} => { count: ${expected.count.to_str()}.U64, checksum: ${expected.checksum.to_str()}.I64 }")
 		}
 		var $source = Path.read_utf8!("scripts/templates/zone-verify.roc.txt")?
-		for (marker, value) in [("@DATABASE@", Json.to_str(database)), ("@CORE@", Json.to_str(core)), ("@NAMES@", Json.to_str(names)), ("@VERSION@", Json.to_str(manifest.source_version)), ("@PROFILE@", Json.to_str(manifest.profile)), ("@START@", manifest.start_second.to_str()), ("@END@", manifest.end_second.to_str()), ("@CASES@", Str.join_with($cases, "\n"))] {
+		for (marker, value) in [
+			("@DATABASE@", Json.to_str(database)),
+			("@CORE@", Json.to_str(core)),
+			("@NAMES@", Json.to_str(names)),
+			("@VERSION@", Json.to_str(manifest.source_version)),
+			("@PROFILE@", Json.to_str(manifest.profile)),
+			("@START@", manifest.start_second.to_str()),
+			("@END@", manifest.end_second.to_str()),
+			("@CASES@", Str.join_with($cases, "\n")),
+		] {
 			if $source.split_on(marker).len() != 2 {
 				return Err(VerificationTemplate(marker))
 			}
@@ -83,19 +92,42 @@ ZoneVerification := [].{
 		}
 		Path.write_utf8!(Path.join(work, "main.roc"), $source)?
 		program = OsStr.display(compiler.program())
-		_ = OracleStages.run_with_deadline!([program, "check", "main.roc"], work, "check", 180000)?
+		_ = OracleStages.run!({
+			command: [program, "check", "main.roc"],
+			cwd: work,
+			logs: work,
+			label: "check",
+			timeout_ms: 180000,
+		})?
 		binary = Path.join(work, "verify")
-		_ = OracleStages.run_with_deadline!([program, "build", "main.roc", "--output=${Path.display(binary)}"], work, "build", 180000)?
-		result = OracleStages.run_with_deadline!([Path.display(binary)], work, "run", 180000)?
+		_ = OracleStages.run!({
+			command: [program, "build", "main.roc", "--output=${Path.display(binary)}"],
+			cwd: work,
+			logs: work,
+			label: "build",
+			timeout_ms: 180000,
+		})?
+		result = OracleStages.run!({
+			command: [Path.display(binary)],
+			cwd: work,
+			logs: work,
+			label: "run",
+			timeout_ms: 180000,
+		})?
 		if result.stdout != "PASS generated database\n" {
 			return Err(MissingGeneratedProviderResult)
 		}
-		Script.info!("PASS", "${manifest.zone_names.to_str()} names, all retained transitions and adjacent microsecond boundaries; ${Path.display(work)}")
+		Script.info!({
+			label: "PASS",
+			message: "${manifest.zone_names.to_str()} names, all retained transitions and adjacent microsecond boundaries; ${Path.display(work)}",
+		})
 	}
 }
 
+hash! : Path => Try(Str, _)
 hash! = |path| Script.command("sha256sum").output!([Path.to_os_str(path)])?.split_on(" ").first()
 
+relative! : Path, Path => Try(Str, _)
 relative! = |directory, file| Script.command("realpath").output!([OsStr.from_str("--relative-to=${Path.display(directory)}"), Path.to_os_str(file)])
 
 sort_names : List(Str) -> List(Str)

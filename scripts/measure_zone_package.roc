@@ -13,9 +13,13 @@ import src/ZoneMeasurement
 
 Manifest : { names : Dict(Str, Str), transition_expectations : Dict(Str, { count : U64, checksum : I64 }) }
 
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	if args.map(OsStr.display) == ["--help"] {
-		return Script.info!("usage:", "blueprint run measure-zone-package -- [--smoke] [--package DIR]... [--samples 1..10] [--opt dev|speed]")
+		return Script.info!({
+			label: "usage:",
+			message: "blueprint run measure-zone-package -- [--smoke] [--package DIR]... [--samples 1..10] [--opt dev|speed]",
+		})
 	}
 	options = ZoneMeasurement.parse(args.map(OsStr.display))?
 	compiler = Script.roc_nightly!()?
@@ -35,13 +39,30 @@ main! = |args| {
 			workspace = Path.join(work, "${number.to_str()}-${mode}")
 			Path.create_all!(workspace)?
 			host_import = Script.command("realpath").output!([OsStr.from_str("--relative-to=${Path.display(workspace)}"), OsStr.from_str(host)])?
-			provider_import = Script.command("realpath").output!([OsStr.from_str("--relative-to=${Path.display(workspace)}"), Path.to_os_str(Path.join(package_directory, "main.roc"))])?
-			source = ZoneMeasurement.source(original, host_import, provider_import, mode == "static", options.smoke)?
+			provider_import = Script.command("realpath").output!([
+				OsStr.from_str("--relative-to=${Path.display(workspace)}"),
+				Path.to_os_str(Path.join(package_directory, "main.roc")),
+			])?
+			source = ZoneMeasurement.source({
+				original,
+				host: host_import,
+				package_directory: provider_import,
+				static: mode == "static",
+				smoke: options.smoke,
+			})?
 			Path.write_utf8!(Path.join(workspace, "main.roc"), source)?
 			binary = Path.join(workspace, "native")
 			var $builds = []
 			for sample in (0.U64).until(options.samples) {
-				build_args = ["build", "main.roc", "--no-cache", "--debug", "--target=${target}", "--opt=${options.optimize}", "--output=${Path.display(binary)}"]
+				build_args = [
+					"build",
+					"main.roc",
+					"--no-cache",
+					"--debug",
+					"--target=${target}",
+					"--opt=${options.optimize}",
+					"--output=${Path.display(binary)}",
+				]
 				command = if (system == "Darwin") ["/usr/bin/time", "-l", OsStr.display(compiler.program())].concat(build_args) else [OsStr.display(compiler.program())].concat(build_args)
 				before = Monotonic.now!()
 				output = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(workspace).timeout_ms(180000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
@@ -69,15 +90,40 @@ main! = |args| {
 				}
 				$observed = $observed.insert(name, { stdout, metrics })
 			}
-			$measurements = $measurements.append({ package_directory: Path.display(package_directory), mode, manifest_sha256: hash!(manifest_path)?, builds: $builds, observed: $observed })
-			report = { smoke: options.smoke, compiler: version, target, backend: "native", optimize: options.optimize, host: Script.command("uname").output!(["-s", "-r", "-m"])?, samples: options.samples, script_sha256: hash!(Path.utf8("scripts/measure_zone_package.roc"))?, limits: "Uncached builds, no warmup; OS caches may be warm. Compiler wall time/RSS and binary size only, not runtime latency or retained memory. Lookup counters exclude argument preparation, core adaptation and output formatting. Immutable source data may be shared. Each process performs one lookup and consumes its transitions.", measurements: $measurements }
+			$measurements = $measurements.append({
+				package_directory: Path.display(package_directory),
+				mode,
+				manifest_sha256: hash!(manifest_path)?,
+				builds: $builds,
+				observed: $observed,
+			})
+			report = {
+				smoke: options.smoke,
+				compiler: version,
+				target,
+				backend: "native",
+				optimize: options.optimize,
+				host: Script.command("uname").output!(["-s", "-r", "-m"])?,
+				samples: options.samples,
+				script_sha256: hash!(Path.utf8("scripts/measure_zone_package.roc"))?,
+				limits: "Uncached builds, no warmup; OS caches may be warm. Compiler wall time/RSS and binary size only, not runtime latency or retained memory. Lookup counters exclude argument preparation, core adaptation and output formatting. Immutable source data may be shared. Each process performs one lookup and consumes its transitions.",
+				measurements: $measurements,
+			}
 			Path.write_utf8!(Path.join(work, "report.json"), Json.to_str_try(report)?)?
-			Script.info!("MEASURED", "${Path.display(package_directory)} ${mode}")?
+			Script.info!({
+				label: "MEASURED",
+				message: "${Path.display(package_directory)} ${mode}",
+			})?
 		}
 	}
-	Script.info!("EVIDENCE", "${Path.display(work)}/report.json")
+	Script.info!({
+		label: "EVIDENCE",
+		message: "${Path.display(work)}/report.json",
+	})
 }
 
+size! : Path => Try(U64, _)
 size! = |path| U64.from_str(Script.command("wc").output!(["-c", Path.to_os_str(path)])?.trim().split_on(" ").first()?)
 
+hash! : Path => Try(Str, _)
 hash! = |path| Script.command("sha256sum").output!([Path.to_os_str(path)])?.split_on(" ").first()
