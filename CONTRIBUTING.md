@@ -113,8 +113,8 @@ A pull request's dry run renders the newest notes file.
 | `measure_zone_data.roc` | Reproduce pinned zone archive/data size measurements, separately from compiler/runtime costs |
 | `measure_zone_package.roc` | Measure real provider builds, binary sizes and observable static/dynamic lookup allocations |
 | `check_fixture_platform.roc` | Verify instrumented host resource assertions, trace effects and failing controls |
-| `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
-| `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
+| `benchmark_chrono.roc` | Compare selected date/timestamp operations with pinned Rust Chrono |
+| `benchmark_comparison.roc` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
 | `check_fixture_oracles.roc` | Sourced civil-query and DATE/timed export fixtures with native failure controls |
 | `check_oracle_replay.roc` | Bounded JSONL admission, native process supervision and failure controls |
 | `oracles.roc` | Deterministic external/reference-model comparisons through public APIs |
@@ -623,13 +623,13 @@ are in [tests/platform/NOTICE](tests/platform/NOTICE).
 The [cross-language benchmark guide](benchmarks/comparison/README.md) adds
 Go, Python, Jiff and Tempo adapters, dependency pins, upstream workload references
 and explicit compatibility profiles. Run its opt-in setup with
-`ROC=/path/to/roc python3 scripts/benchmark_comparison.py --fetch --smoke`.
+`ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --fetch --smoke`.
 Docker and the additional language runtimes are not required by the normal gate.
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
 The gate compiles both benchmark executables and runs
-`benchmark_chrono.py --smoke --fetch`: 1,000 iterations, one warmup and three
+`benchmark_chrono.roc --smoke --fetch`: 1,000 iterations, one warmup and three
 samples per kernel, checked against the independent corpus and checksums.
 Use the Rust version in `benchmarks/chrono/rust-version` and install the matching
 `x86_64-unknown-linux-musl` target on Linux, or `aarch64-apple-darwin` on Apple

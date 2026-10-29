@@ -11,7 +11,7 @@ IntegrationCases := [].{
 		].concat(application(roc, work, "static_dispatch", ["dev"]))
 			.concat(application(roc, work, "codecs", ["dev", "speed"]))
 			.concat([
-				py("Chrono correctness smoke", ["scripts/benchmark_chrono.py", "--smoke", "--fetch", "--roc-opt", "dev"]),
+				{ name: "Chrono correctness smoke", program: "scripts/benchmark_chrono.roc", args: ["--", "--smoke", "--fetch", "--roc-opt", "dev"] },
 				{ name: "parser and coverage allocation identities", program: "scripts/check_resource_identities.roc", args: [] },
 				{ name: "independent Gregorian queries", program: "scripts/check_fixture_oracles.roc", args: ["--", "civil"] },
 				{ name: "independent DATE export", program: "scripts/check_fixture_oracles.roc", args: ["--", "date"] },

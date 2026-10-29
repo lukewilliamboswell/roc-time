@@ -7,18 +7,23 @@ establish a fastest-library ranking.
 
 ```sh
 # Requires a current Roc nightly, Zig 0.17.0, Rust 1.95.0
-# with x86_64-unknown-linux-musl, Go 1.26.5, CPython 3.12.3 + pip, and Docker.
-ROC=/path/to/roc python3 scripts/benchmark_comparison.py --fetch --smoke
+# with x86_64-unknown-linux-musl, Go 1.26.5, CPython 3.12.3, and Docker.
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --fetch --smoke
 # Offline dependency reuse; builds finish before comparative measurements.
-ROC=/path/to/roc python3 scripts/benchmark_comparison.py --cpu 2
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --cpu 2
 # A single explicitly selected domain:
-ROC=/path/to/roc python3 scripts/benchmark_comparison.py --profile seconds --cpu 2
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --profile seconds --cpu 2
 ```
 
-Choose an available CPU (`os.sched_getaffinity(0)`), preferably with an idle SMT
+`PYTHON_BENCH` selects the measured CPython executable (default `/usr/bin/python3`);
+its version must match the pin. Blueprint supplies the build/reference tools.
+The hash-verified ciso8601 wheel is extracted directly without pip.
+
+Choose an available CPU (`Cpus_allowed_list` in `/proc/self/status`), preferably with an idle SMT
 sibling. CPU affinity does not establish exclusive CPU access, fixed frequency,
 or freedom from thermal throttling. Do not run other builds/tests during timings.
-The runner never changes governor settings or system configuration.
+The runner applies affinity to each measured child and Tempo container. It never
+changes governor settings or system configuration.
 
 `--fetch` downloads the hash-pinned CPython wheel, exact Tempo source and locked
 Hex/Cargo dependencies. Everything downloaded/built and every raw result stays
