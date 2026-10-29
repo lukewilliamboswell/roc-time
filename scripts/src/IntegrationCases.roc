@@ -22,8 +22,8 @@ IntegrationCases := [].{
 			.concat([
 				{ name: "fuzz replay and bounded search", program: "scripts/fuzz.roc", args: ["--", "--operation", "all", "--runs", "100", "--seconds", "1", "--seed", "1"] },
 				{ name: "instrumented fixture controls", program: "scripts/check_fixture_platform.roc", args: [] },
-				py("oracle transport controls", ["scripts/test_oracle_replay.py"]),
-				py("independent temporal oracles", ["scripts/oracles.py"]),
+				{ name: "oracle transport controls", program: "scripts/check_oracle_replay.roc", args: [] },
+				{ name: "independent temporal oracles", program: "scripts/oracles.roc", args: [] },
 				py("optional zone database", ["scripts/test_zone_database.py"]),
 				{ name: "Gregorian measurement smoke", program: "scripts/measure_gregorian.roc", args: ["--", "--smoke"] },
 				{ name: "zone data measurement smoke", program: "scripts/measure_zone_data.roc", args: ["--", "--smoke"] },

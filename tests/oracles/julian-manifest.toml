@@ -14,3 +14,5 @@ seed = 20260905
 command = "python3 scripts/oracles.py --refresh"
 runtime = "CPython 3.14.3"
 independence = "March-based four-year era formulas vs production January-based counting and binary search. Shared proleptic conventions; independently sourced reform equivalence anchors epoch."
+generator_source_revision = "5618020e7edf783df1ebfcb2217aa9a8db5a0533"
+generator_adapter_sha256 = "6ab44b2b821037e0b225e279ff9d6d79e1336dfe6539961750b1004a06a2414a"

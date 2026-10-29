@@ -115,7 +115,9 @@ A pull request's dry run renders the newest notes file.
 | `check_fixture_platform.roc` | Verify instrumented host resource assertions, trace effects and failing controls |
 | `benchmark_chrono.py` | Compare selected date/timestamp operations with pinned Rust Chrono |
 | `benchmark_comparison.py` | Opt-in comparison with Chrono, Jiff, Go time, Python datetime/ciso8601 and Tempo |
-| `oracles.py` | Deterministic external/reference-model comparisons through public APIs |
+| `check_oracle_replay.roc` | Bounded JSONL admission, native process supervision and failure controls |
+| `oracles.roc` | Deterministic external/reference-model comparisons through public APIs |
+| `oracles.py` | Explicit independent Gregorian/Julian expectation refresh; never used for ordinary replay |
 | `fuzz.roc` | Pinned target builds, bounded searches, curated replay and failure lifecycle |
 | `check_compile_failures.roc` | Domain separation and opaque representation checks |
 | `build_docs.roc` | Generate API docs into an ignored build directory |
@@ -202,7 +204,7 @@ See the [contributor method](AGENTS.md#property-based-testing).
 At least one oracle is required for temporal implementation work. Run:
 
 ```sh
-ROC=/path/to/roc python3 scripts/oracles.py --workers 4
+ROC_NIGHTLY=/path/to/roc blueprint run oracles -- --workers 4
 ```
 
 The default gate includes 4,096 Gregorian, 4,096 Julian, 2,592 zone, 448 calendar-pattern and 512 RFC date-rule

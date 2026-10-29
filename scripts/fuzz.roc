@@ -79,7 +79,7 @@ prepare! = || {
 command! = |args, cwd, timeout, expected, log| {
 	program = args.first().map_err(|_| EmptyCommand)?
 	Script.info!("+", Str.join_with(args, " "))?
-	result = Cmd.new_str(program).args_str(args.drop_first(1)).cwd(cwd).timeout_ms(timeout).output_limit(16000000).stdout(Capture).stderr(Capture).run!()?
+	result = Cmd.new_str(program).args_str(args.drop_first(1)).cwd(cwd).timeout_ms(timeout).manage_tree(Bool.True).output_limit(16000000).stdout(Capture).stderr(Capture).run!()?
 	Path.write_bytes!(Path.utf8("${Path.display(log)}.stdout"), result.stdout_bytes)?
 	Path.write_bytes!(Path.utf8("${Path.display(log)}.stderr"), result.stderr_bytes)?
 	output = "${Str.from_utf8(result.stdout_bytes)?}${Str.from_utf8(result.stderr_bytes)?}"

@@ -62,7 +62,7 @@ harness! = |roc_nightly| {
 check_tooling! = |roc_stable| {
 	Script.section!("TOOLING")?
 	roc_stable.run!(["fmt", "--check", "scripts", "Blueprint.roc"])?
-	for file in ["Text", "StaticChecks", "ApiArchive", "ApiInventory", "DocExamples", "ResourceMetrics", "Measurements", "ZoneArchive", "NativeMetrics", "ZoneMeasurement", "ZonePrototype"] {
+	for file in ["Text", "StaticChecks", "ApiArchive", "ApiInventory", "DocExamples", "ResourceMetrics", "Measurements", "ZoneArchive", "NativeMetrics", "ZoneMeasurement", "ZonePrototype", "OracleCases", "OracleManifest", "OracleOptions"] {
 		roc_stable.run!(["test", Path.to_os_str(Path.join("scripts/src", "${file}.roc"))])?
 	}
 	for script in Files.direct_roc_files!("scripts")? {
