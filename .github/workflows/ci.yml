@@ -23,7 +23,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-roc-nightly
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@9940bb2ed5a91d768d8195c4ce8fb460f3587b0b
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@8acff758d5d73210f1731bed75adb9322f5e773d
         with:
           install-nix: 'true'
           cache: 'true'
