@@ -57,7 +57,7 @@ Use the [contributor verification workflow](../CONTRIBUTING.md#tests) and [oracl
 
 - Full ISO normative clauses are needed for clause-level conformance claims; catalogue summaries and Tempo support claims are insufficient. Independently specified foundations can proceed without them.
 - Select exact external serialization and reasoning profiles before exposing those APIs. Unsupported scopes must remain explicit.
-- Verify scheduled fuzz execution from actual workflow runs. Establish supported Wasm execution separately.
+- Establish supported Wasm execution separately.
 - Measure complexity, allocations, final layouts and retained slices, recording the compiler used. Current functional evidence does not establish those resource claims.
 - Extend hosted resource gates with coordinate-extent-independent span operations; member-count scaling for coverage and events; bounded zone selection and inspection. Separate construction from consumption, include early-stop/resume and failing controls in dev/speed builds, and instrument live/peak requested bytes before making retained-memory claims.
 - Retain the compiler reproduction under `tests/compiler_repro/result_widening/` until the pinned interpreter supports the affected error propagation; validate before removing the explicit mapping in calendar arithmetic.
