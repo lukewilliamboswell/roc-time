@@ -96,3 +96,11 @@ For code changes, run `roc check package/main.roc`, `roc test package/main.roc` 
 For documentation-only changes, review contracts and examples, check local links and Mermaid structure, and use the package compiler's formatter to validate new Roc sketch syntax. Do not run unrelated benchmarks or claim unimplemented sketches were typechecked. Keep unresolved API choices explicit; do not fill the package with scaffolding to make documentation appear executable.
 
 Keep changes scoped. When commits are requested, create clean, coherent commits at verified milestones as work progresses; do not defer all changes to one final commit. Do not commit, publish, or contact upstream contributors unless requested. A final handoff states what changed, what was verified, and which material questions remain open.
+
+## Documentation
+
+Documentation serves current users and contributors. Every paragraph must help a
+current task; delete obsolete or duplicated material. Keep implementation history
+in Git, unfinished work in issues, and release changes in release records. Preserve
+required public anchors without explaining their history. Follow the
+[shared documentation guidance](https://lukewilliamboswell.github.io/roc-automation/documentation.html#write-project-documentation).
