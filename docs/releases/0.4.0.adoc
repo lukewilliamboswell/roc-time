@@ -1,9 +1,25 @@
 = roc-time 0.4.0
 
 This release moves package publication and published-example compatibility checks
-to the shared roc-automation workflows. It also adopts the current Roc iterator size-hint contract and basic-cli 0.27.0 for the applications that use the CLI platform. Temporal behavior is unchanged.
+to the shared roc-automation workflows. It also adopts the current Roc iterator
+size-hint contract and basic-cli 0.27.0 for applications that use the CLI platform.
+Temporal behavior is unchanged.
 
-The 0.4 minor release requires the current compiler contract. The previous immutable core bundle cannot compile on that compiler, so publication uses the reviewed pre-1.0 breaking-version gate rather than claiming an unavailable automatic API comparison.
+The 0.4 minor release requires the current compiler contract. The previous
+immutable core bundle cannot compile on that compiler, so publication uses the
+reviewed pre-1.0 breaking-version gate rather than claiming an unavailable
+automatic API comparison.
+
+The reviewed allocation observations use the November 7 compiler on x64musl,
+LLVM speed with libFuzzer instrumentation. Most changed observations decrease.
+The `last-monday-later-window` recurrence property instead moves from 2069 to
+2190 allocations and from 836734 to 925719 cumulative requested bytes, with
+reallocations falling from 472 to 216 and unchanged peak live bytes. These
+whole-property counters include independent models and assertions; they do not
+establish isolated API costs or general memory bounds. Old/new compiler controls
+reproduce the difference, but the mechanism for every recurrence counter remains
+unproven. Semantic checks, trace rules, work limits and native resource
+assertions are retained.
 
 == Use this release
 

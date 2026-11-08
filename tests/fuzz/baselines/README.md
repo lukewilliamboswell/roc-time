@@ -8,7 +8,7 @@ replay reports.
 The platform/dependency revision and archive SHA-256 are in [dependency.json](../dependency.json).
 
 Scope: `x64musl`, LLVM `--opt=speed --fuzz`, profile `speed`, compiler
-`nightly-2026-10-28-bad769b`, metric version `roc-fuzz-allocations/1`. Each named
+`nightly-2026-11-07-ad3a5d2`, metric version `roc-fuzz-allocations/1`. Each named
 property executes once in a fresh process. Counters cover the platform's
 `$property` region, including the property's independent models and assertions;
 they are not isolated production API costs. Requested bytes are cumulative,
