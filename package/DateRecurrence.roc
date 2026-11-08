@@ -377,7 +377,7 @@ DateRecurrence :: {
 		chunks : Cursor, Limits -> Iter(Try(Batch, [OutOfRange]))
 		chunks = |initial, limits| Iter.custom(
 			Active(initial),
-			Unknown,
+			Err(Unknown),
 			|state| match state {
 				Finished => Err(NoMore)
 				Active(current) => {

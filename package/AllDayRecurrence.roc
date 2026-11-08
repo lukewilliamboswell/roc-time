@@ -148,7 +148,7 @@ AllDayRecurrence(id) :: {
 	outcomes : AllDayRecurrence(id), Limits -> Iter(Try(Next(id), [OutOfRange, OutsideValidity]))
 	outcomes = |initial, limits| Iter.custom(
 		Some(initial),
-		Unknown,
+		Err(Unknown),
 		|state| match state {
 			None => Err(NoMore)
 			Some(current) => {

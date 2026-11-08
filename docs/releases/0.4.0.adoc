@@ -1,7 +1,9 @@
-= roc-time 0.3.3
+= roc-time 0.4.0
 
 This release moves package publication and published-example compatibility checks
-to the shared roc-automation workflows. The temporal package APIs are unchanged.
+to the shared roc-automation workflows. It also adopts the current Roc iterator size-hint contract and basic-cli 0.27.0 for the applications that use the CLI platform. Temporal behavior is unchanged.
+
+The 0.4 minor release requires the current compiler contract. The previous immutable core bundle cannot compile on that compiler, so publication uses the reviewed pre-1.0 breaking-version gate rather than claiming an unavailable automatic API comparison.
 
 == Use this release
 

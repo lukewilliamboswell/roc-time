@@ -319,7 +319,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	outcomes : TimedSchedule(id), Limits -> Iter(Try(Next(id), Error))
 	outcomes = |initial, limits| Iter.custom(
 		Some(initial),
-		Unknown,
+		Err(Unknown),
 		|state| match state {
 			None => Err(NoMore)
 			Some(current) => {
