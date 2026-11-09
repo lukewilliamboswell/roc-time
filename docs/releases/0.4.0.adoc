@@ -11,7 +11,9 @@ reviewed pre-1.0 breaking-version gate rather than claiming an unavailable
 automatic API comparison.
 
 The reviewed allocation observations use the November 7 compiler on x64musl,
-LLVM speed with libFuzzer instrumentation. Most changed observations decrease.
+LLVM speed with libFuzzer instrumentation and `--no-cache` compilation. Cold
+profile checks keep compiler-cache history outside the measured executable
+selection. Most changed observations decrease.
 The `last-monday-later-window` recurrence property instead moves from 2069 to
 2190 allocations and from 836734 to 925719 cumulative requested bytes, with
 reallocations falling from 472 to 216 and unchanged peak live bytes. These
