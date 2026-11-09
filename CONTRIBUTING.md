@@ -25,7 +25,7 @@ reporting a result, and keep `roc-stable` for automation rather than testing the
 package with it.
 
 Install the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
-0.8.0 CLI, Nix, and a current nightly `roc`. Blueprint fetches the fixed
+0.12.0 CLI, Nix, and a current nightly `roc`. Blueprint fetches the fixed
 compiler and shared utilities and realizes Zig and PDF readers from reviewed
 Nix inputs. Opt-in reference tasks add pinned CPython; benchmark tasks also add
 their Rust toolchain and target.
