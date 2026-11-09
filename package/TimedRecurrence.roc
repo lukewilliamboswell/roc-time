@@ -497,7 +497,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		outcomes : Cursor, Limits -> Iter(Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart]))
 		outcomes = |initial, limits| Iter.custom(
 			Some(initial),
-			Unknown,
+			Err(Unknown),
 			|state| match state {
 				None => Err(NoMore)
 				Some(current) => {
@@ -577,13 +577,17 @@ buffer_at = |buffer, index| match List.get(buffer, index) {
 	Err(_) => crash "Timed buffer index invariant"
 }
 
-buffered_count = |state| state.buffer.len() + (match state.pending {
-	None => 0
-	Some(_) => 1
-}) + (match state.inclusion_pending {
-	None => 0
-	Some(_) => 1
-}) + (
+buffered_count = |state| state.buffer.len() + (
+	match state.pending {
+		None => 0
+		Some(_) => 1
+	}
+) + (
+	match state.inclusion_pending {
+		None => 0
+		Some(_) => 1
+	}
+) + (
 	if state.buffer.is_empty() {
 		match state.held {
 			None => 0
@@ -1148,10 +1152,12 @@ expect {
 		Err(TooManySelectors) => Bool.True
 		_ => Bool.False
 	}
-	too_many and removed.occurrences.is_empty() and (match removed.status {
-		Complete => Bool.True
-		Limited(_) => Bool.False
-	}) and original_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start] and cleared_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start]
+	too_many and removed.occurrences.is_empty() and (
+		match removed.status {
+			Complete => Bool.True
+			Limited(_) => Bool.False
+		}
+	) and original_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start] and cleared_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start]
 }
 
 expect {
@@ -1309,30 +1315,30 @@ next_rule = |initial, limits| {
 							if $state.clock_index == $state.clock_end {
 								$state = next_day($state)
 							}
-								else {
-									source = local_at($state.day, clock_at($state.rule.clocks, $state.clock_index))?
-									if $state.rule.positions.is_empty() {
-										if !before(source, $state.window.end) {
+							else {
+								source = local_at($state.day, clock_at($state.rule.clocks, $state.clock_index))?
+								if $state.rule.positions.is_empty() {
+									if !before(source, $state.window.end) {
+										return Ok(ended($state, $steps, $zone_segments))
+									}
+									match $state.rule.termination {
+										Until(end) => if before(end, source) {
 											return Ok(ended($state, $steps, $zone_segments))
 										}
-										match $state.rule.termination {
-											Until(end) => if before(end, source) {
-												return Ok(ended($state, $steps, $zone_segments))
-											}
-											_ => {}
-										}
+										_ => {}
 									}
-									if $state.rule.positions.is_empty() and before(source, $state.rule.anchor) {
-										$state = { ..$state, clock_index: $state.clock_index + 1 }
-									}
-										else {
-											if $state.buffer.len() == limits.max_buffered {
-												return Ok(limited($state, $steps, $zone_segments, BufferLimit))
-											}
-											pending = ZoneRules.classification_cursor($state.context.rules, source)?
-											$state = { ..$state, clock_index: $state.clock_index + 1, pending: Some({ source, cursor: pending }) }
-										}
 								}
+								if $state.rule.positions.is_empty() and before(source, $state.rule.anchor) {
+									$state = { ..$state, clock_index: $state.clock_index + 1 }
+								}
+								else {
+									if $state.buffer.len() == limits.max_buffered {
+										return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+									}
+									pending = ZoneRules.classification_cursor($state.context.rules, source)?
+									$state = { ..$state, clock_index: $state.clock_index + 1, pending: Some({ source, cursor: pending }) }
+								}
+							}
 						}
 					}
 				}

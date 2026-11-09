@@ -118,7 +118,7 @@ prepare! = || {
 	}
 	Script.info!({
 		label: "FUZZ",
-		message: "${version}; LLVM speed --fuzz; target=${target}; roc-fuzz=${dependency.version} (${dependency.revision})",
+		message: "${version}; LLVM speed --fuzz --no-cache; target=${target}; roc-fuzz=${dependency.version} (${dependency.revision})",
 	})?
 	Ok(context)
 }
@@ -162,7 +162,7 @@ build! = |context, name| {
 	})?
 	binary = Path.join(context.work, name)
 	_ = run_command!({
-		args: [context.compiler, "build", "--fuzz", "--opt=speed", "--target=${context.target}", source, "--output=${Path.display(binary)}"],
+		args: [context.compiler].concat(FuzzOptions.build_args({ target: context.target, source, output: Path.display(binary) })),
 		cwd: Path.utf8("."),
 		timeout_ms: 300000,
 		expected_exit: 0,
@@ -295,7 +295,7 @@ campaign! = |context, { name, binary, options }| {
 		runner_sha256: hash_file!("scripts/fuzz.roc")?,
 		options_sha256: hash_file!("scripts/src/FuzzOptions.roc")?,
 		target: context.target,
-		backend: "LLVM speed --fuzz",
+		backend: "LLVM speed --fuzz --no-cache",
 		runs: options.runs,
 		seconds: options.seconds,
 		seed: options.seed,

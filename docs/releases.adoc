@@ -1,16 +1,7 @@
 [#releases]
 = Release notes
 
-The https://github.com/lukewilliamboswell/roc-time/releases[release assets]
-carry the exact package URLs and tested compiler versions. Historical API
-archives remain available under their original versioned URLs.
-
-include::releases/0.3.3.adoc[leveloffset=+1]
-
-include::releases/0.3.2.adoc[leveloffset=+1]
-
-include::releases/0.3.1.adoc[leveloffset=+1]
-
-include::releases/0.3.0.adoc[leveloffset=+1]
-
-include::releases/0.2.0.adoc[leveloffset=+1]
+The https://github.com/lukewilliamboswell/roc-time/releases[published releases]
+provide exact core and zone-data package URLs, tested compiler versions and
+upgrade instructions. Download the examples and API archive from the same
+release as your package.

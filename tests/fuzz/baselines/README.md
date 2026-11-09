@@ -7,8 +7,8 @@ their exact original bytes. Input hashes are checked in baseline entries and
 replay reports.
 The platform/dependency revision and archive SHA-256 are in [dependency.json](../dependency.json).
 
-Scope: `x64musl`, LLVM `--opt=speed --fuzz`, profile `speed`, compiler
-`nightly-2026-10-28-bad769b`, metric version `roc-fuzz-allocations/1`. Each named
+Scope: `x64musl`, LLVM `--opt=speed --fuzz --no-cache`, profile `speed`, compiler
+`nightly-2026-11-07-ad3a5d2`, metric version `roc-fuzz-allocations/1`. Each named
 property executes once in a fresh process. Counters cover the platform's
 `$property` region, including the property's independent models and assertions;
 they are not isolated production API costs. Requested bytes are cumulative,
@@ -19,6 +19,15 @@ with the same live count. All accepted examples end with zero tracked live
 allocations. These observations do not establish general allocation bounds, retained process
 memory, portability, or performance. Existing native fixture resource assertions
 remain a separate gate.
+
+The runner checks each root and then builds its measured executable with the
+compiler cache disabled. Cached compiler artifacts can change allocation
+observations or make a build fail after a preceding check;
+independent compilation removes that history from the measured executable's
+inputs. Raw compiler arguments and diagnostics remain in the retained logs.
+See [Roc issue #12930](https://github.com/roc-lang/roc/issues/12930) for the
+check/build cache crash. This policy does not replace the fresh runtime process
+or baseline comparison.
 
 Intentional acceptance, after reviewing property inputs and observations:
 

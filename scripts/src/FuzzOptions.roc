@@ -1,4 +1,4 @@
-## Finite command-line budgets for the one temporal fuzz runner.
+## Finite invocation budgets and compiler arguments for temporal fuzzing.
 FuzzOptions := [].{
 	Operation : [Build, Accept, Replay, Run, Lifecycle, All]
 	Options : { operation : Operation, names : List(Str), runs : U64, seconds : U64, seed : U64 }
@@ -20,6 +20,18 @@ FuzzOptions := [].{
 		"interchange",
 	]
 
+	## Compile each measured executable independently of earlier checks/builds.
+	build_args : { target : Str, source : Str, output : Str } -> List(Str)
+	build_args = |{ target, source, output }| [
+		"build",
+		"--fuzz",
+		"--opt=speed",
+		"--no-cache",
+		"--target=${target}",
+		source,
+		"--output=${output}",
+	]
+
 	parse : List(Str) -> Try(Options, [Arguments])
 	parse = |args| {
 		if args.len() > 512 {
@@ -27,6 +39,28 @@ FuzzOptions := [].{
 		}
 		parse_loop(args, { operation: All, names, runs: 10000, seconds: 5, seed: 1 })
 	}
+}
+
+## The executed compiler argv must enforce the reviewed measurement policy.
+## Paths remain single argv values, including when they contain spaces.
+expect {
+	FuzzOptions.build_args({
+		target: "x64musl",
+		source: "tests/recurrence/main.roc",
+		output: "/tmp/time profiles/recurrence",
+	}) == [
+		"build",
+		"--fuzz",
+		"--opt=speed",
+		"--no-cache",
+		"--target=x64musl",
+		"tests/recurrence/main.roc",
+		"--output=/tmp/time profiles/recurrence",
+	] and FuzzOptions.build_args({
+		target: "arm64mac",
+		source: "tests/clock/main.roc",
+		output: "/tmp/clock",
+	}).contains("--target=arm64mac")
 }
 
 parse_loop : List(Str), FuzzOptions.Options -> Try(FuzzOptions.Options, [Arguments])

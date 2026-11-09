@@ -61,7 +61,7 @@ ClockPattern :: { hours : List(U8), minutes : List(U8), seconds : List(U8), micr
 	iter : ClockPattern -> Iter(ClockTime)
 	iter = |pattern| Iter.custom(
 		0.U64,
-		Known(count(pattern)),
+		Ok(count(pattern)),
 		|index| if index >= count(pattern) {
 			Err(NoMore)
 		} else {

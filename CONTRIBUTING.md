@@ -25,7 +25,7 @@ reporting a result, and keep `roc-stable` for automation rather than testing the
 package with it.
 
 Install the [blueprint](https://github.com/lukewilliamboswell/roc-blueprint)
-0.8.0 CLI, Nix, and a current nightly `roc`. Blueprint fetches the fixed
+0.12.0 CLI, Nix, and a current nightly `roc`. Blueprint fetches the fixed
 compiler and shared utilities and realizes Zig and PDF readers from reviewed
 Nix inputs. Opt-in reference tasks add pinned CPython; benchmark tasks also add
 their Rust toolchain and target.
@@ -146,7 +146,7 @@ DOCS_OUTPUT=.roc-time-tmp/manual-preview blueprint run check-docs
 ```
 
 Use a new output directory. This builds both the HTML site and `roc-time.pdf`
-with roc-automation's released `tools-0.6.0` renderer. Blueprint fetches each
+with the released renderer locked by `Blueprint.roc` and `Blueprint.lock`. Blueprint fetches each
 executable and verifies it against `Blueprint.lock`; update its recipe and
 review all per-system lock digests together. Rendering uses the shared theme
 and needs no compiler; Roc scripts run its preparation and assembly,
@@ -389,9 +389,8 @@ also bound raw inputs to 256 bytes, RSS to 256 MB, and each target call to two
 seconds. Builds, corpora, failure artifacts, and logs stay under `.roc-time-tmp/`
 by default; `ROC_TIME_TMPDIR` selects a different disposable working directory.
 The current allocation baselines cover Linux x86-64/musl, LLVM speed with
-`--fuzz`. Apple Silicon has historical native execution evidence, but needs a
-reviewed host-specific baseline before this new gate can pass there. Other hosts
-explicitly report fuzzing as unverified.
+`--fuzz`. Apple Silicon needs a reviewed host-specific baseline before this
+gate can pass there. Other hosts explicitly report fuzzing as unverified.
 See [target domains and corpus provenance](tests/fuzz/README.md).
 
 Targets declare readable boundary examples in source and retain discovered
@@ -851,3 +850,9 @@ warmups and fifteen samples). Run it without concurrent test or build jobs.
 The fields and roundtrip workloads include process startup and final formatting;
 raw timings and machine/compiler metadata stay under `.roc-time-tmp/`. This is
 not an allocation measurement or a general library ranking.
+
+## Write documentation
+
+Write for a current user or contributor task. Remove superseded explanations
+and keep release changes with their release. Follow the
+[shared documentation guidance](https://lukewilliamboswell.github.io/roc-automation/documentation.html#write-project-documentation).

@@ -20,6 +20,8 @@ named logical inputs and generated entropy exercise the same property.
 Named examples execute in fresh processes and compare reviewed allocation
 observations under `baselines/` before exploration. Reports retain input hashes,
 complete metrics, accepted/rejected counts and platform/compiler provenance.
+Measured executables are built with `--no-cache` after the source check to
+exclude persistent compiler-cache artifacts from the allocation profile.
 The runner rejects zero accepted inputs, missing baselines and incomplete
 evidence. See [baseline scope and reproduction](baselines/README.md).
 

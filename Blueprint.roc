@@ -13,7 +13,7 @@
 # here provides a bare `roc`. Building, testing and publishing a release is the
 # shared roc-automation workflow that .github/workflows/release.yml calls; it
 # tests the exact publication artifacts separately from the contributor gate.
-app [config] { pf: platform "https://github.com/lukewilliamboswell/roc-blueprint/releases/download/0.8.0/FbJymjYdCxx9vqMcau7r4tQfeAbnVGqqJoYrLGqPCqKu.tar.zst" }
+app [config] { pf: platform "https://github.com/lukewilliamboswell/roc-blueprint/releases/download/0.12.0/GSb71LxYHqLohZz8jMfawWEwQcyev9ZdVC26sfsDwfq8.tar.zst" }
 
 import pf.Recipes
 
@@ -44,7 +44,7 @@ config = [
 		"native",
 		[
 			Extend("docs"),
-			Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.6.0/release-package-{system}"))]),
+			Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.10.1/release-package-{system}"))]),
 			Tools([
 				"nix#coreutils",
 				"nix#zig_0_17",
@@ -65,8 +65,8 @@ config = [
 	),
 	# The shared release workflow runs this utility against the `roc` on PATH; a
 	# maintainer runs the same task locally, such as `-- test-examples --update`.
-	Environment("renderer", [Extend("dev"), Programs([Fetch("roc-docs", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.6.0/roc-docs-{system}"))]), Expect(["realpath", "sh"])]),
-	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.6.0/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
+	Environment("renderer", [Extend("dev"), Programs([Fetch("roc-docs", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.10.1/roc-docs-{system}"))]), Expect(["realpath", "sh"])]),
+	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.10.1/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
 	Shell("default", [Use("native")]),
 	Task("check", [Use("native"), Run(["scripts/check_all.roc"])]),
 	Task("check-source", [Use("dev"), Run(["scripts/check_all.roc", "--", "--source"])]),
