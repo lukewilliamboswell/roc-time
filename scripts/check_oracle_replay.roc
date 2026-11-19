@@ -1,8 +1,9 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Env
 import cli.OsStr
+import cli.Duration
 import cli.Path
 import src/OracleReplay
 import src/OracleStages
@@ -13,13 +14,13 @@ main! = |_args| {
 	compiler = Script.roc_nightly!()?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "oracle-transport-")?
 	binary = Path.join(work, "native")
-	compiler.cmd(["check", "tests/oracle_transport/main.roc"]).exec_cmd!()?
+	compiler.cmd(["check", "tests/oracle_transport/main.roc"]).call!()?
 	compiler.cmd([
 		"build",
 		"tests/oracle_transport/main.roc",
 		"--debug",
 		OsStr.from_str("--output=${Path.display(binary)}"),
-	]).timeout_ms(180000).exec_cmd!()?
+	]).timeout(Duration.millis(180000)).call!()?
 	match OracleStages.run!({
 		command: [Path.display(binary), "0", "invalid_operation", "0"],
 		cwd: work,

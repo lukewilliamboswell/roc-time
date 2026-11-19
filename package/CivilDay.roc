@@ -1,6 +1,7 @@
 ## A civil-day coordinate: zero labels Gregorian 1970-01-01.
 ## This is not a timestamp, a UTC midnight, or an elapsed quantity.
 CivilDay :: [Day(I64)].{
+
 	## Construct a civil-day coordinate from any signed I64 day number.
 	## Zero is Gregorian 1970-01-01; negative numbers denote preceding days.
 	## Converting to a calendar date can fail outside that calendar's range.

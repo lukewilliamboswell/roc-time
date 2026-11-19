@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -32,16 +33,16 @@ main! = |_args| {
 				OsStr.from_str("--opt=${mode}"),
 				OsStr.from_str("--target=${target}"),
 				OsStr.from_str("--output=${Path.display(binary)}"),
-			]).timeout_ms(180000).exec_cmd!()?
+			]).timeout(Duration.millis(180000)).call!()?
 			for args in fixture.cases {
-				result = Cmd.new(Path.to_os_str(binary)).args_str(args).timeout_ms(10000).stdout(Capture).stderr(Capture).run!()?
+				result = Cmd.new(Path.to_os_str(binary)).args((args).map(OsStr.from_str)).timeout(Duration.millis(10000)).stdout(Capture).stderr(Capture).run!()?
 				stdout = Str.from_utf8(result.stdout_bytes)?
 				stderr = Str.from_utf8(result.stderr_bytes)?
 				if result.status != Exited(0) or stdout != fixture.stdout or !stderr.ends_with(" work=0,0\n") {
 					return Script.fail!("${fixture.name}/${mode}: changed output or allocation traffic: ${Str.inspect(result)}")
 				}
 			}
-			failed = Cmd.new(Path.to_os_str(binary)).args_str(fixture.failure_args).timeout_ms(10000).stdout(Capture).stderr(Capture).run!()?
+			failed = Cmd.new(Path.to_os_str(binary)).args((fixture.failure_args).map(OsStr.from_str)).timeout(Duration.millis(10000)).stdout(Capture).stderr(Capture).run!()?
 			_ = Str.from_utf8(failed.stdout_bytes)?
 			failure_text = Str.from_utf8(failed.stderr_bytes)?
 			match failed.status {

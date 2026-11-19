@@ -359,6 +359,12 @@ whose range, precision, qualifiers or interpretation policies cannot be preserve
 by the selected profile. Standard JSON syntax alone does not make a private
 object schema an external temporal standard.
 
+Composed format codecs use the format's error protocol: a temporal validation
+failure in JSON decoding is a JSON decoding error. The direct temporal text
+parser remains the interface for distinguishing malformed, unsupported,
+incomplete and out-of-range declarations. Both paths validate through the same
+constructor or parser; format composition must not bypass validation.
+
 Not every native object has a persistence representation. Arbitrary execution
 policies, query cursors and complete interpretation snapshots have no automatic
 serialization promise. A zone name or data-version label is not a stored rule

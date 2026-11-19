@@ -1,4 +1,6 @@
 import cli.Cmd
+import cli.OsStr
+import cli.Duration
 import cli.Path
 import FixtureOracles
 
@@ -28,8 +30,8 @@ FixtureBatch := [].{
 			first.child.close!().map_err(|error| FixtureCleanup(error))?
 			(stdout_bytes, stderr_bytes) = match outcome {
 				Ok(output) => (output.stdout_bytes, output.stderr_bytes)
-				Err(Timeout(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
-				Err(OutputLimit(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
+				Err(CmdErr(TimedOut(partial))) => (partial.stdout_bytes, partial.stderr_bytes)
+				Err(CmdErr(OutputLimitExceeded(partial))) => (partial.stdout_bytes, partial.stderr_bytes)
 				Err(_) => ([], [])
 			}
 			Path.write_bytes!(Path.join(work, "${first.label}.stdout"), stdout_bytes)?
@@ -75,6 +77,6 @@ FixtureBatch := [].{
 
 start! : { binary : Path, case : FixtureOracles.Case, label : Str } => Try(Pending, _)
 start! = |{ binary, case, label }| {
-	child = Cmd.new(Path.to_os_str(binary)).args_str(case.input).timeout_ms(180000).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).spawn!().map_err(|error| FixtureSpawn(error))?
+	child = Cmd.new(Path.to_os_str(binary)).args((case.input).map(OsStr.from_str)).timeout(Duration.millis(180000)).manage_tree(Bool.True).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).spawn!().map_err(|error| FixtureSpawn(error))?
 	Ok({ child, case, label })
 }

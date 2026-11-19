@@ -1,0 +1,41 @@
+= roc-time 0.5.0
+
+This release supports Roc `nightly-2026-11-18-a520eed`. It updates the examples
+and repository automation to basic-cli 0.28.1 and groups the fourteen temporal
+fuzz properties into three roc-fuzz 0.7.0 suites. Each property keeps its own
+examples, saved inputs, allocation baseline and report identity.
+
+== Upgrade
+
+Nested nominal types remain available through public aliases, with their
+methods and temporal behavior preserved. Some metadata type aliases move one
+level up because this compiler cannot resolve types nested beneath aliases:
+
+[cols="1,1",options="header"]
+|===
+|Previous name |Current name
+|`Calendar.Arithmetic.Policy` |`Calendar.ArithmeticPolicy`
+|`Calendar.Date.Fields` |`Calendar.DateFields`
+|`Calendar.Delta.Components` |`Calendar.DeltaComponents`
+|`Calendar.Value.Resolution` |`Calendar.Resolution`
+|`Calendar.Value.Description` |`Calendar.Description`
+|`CalendarPattern.Filter.Spec` |`CalendarPattern.FilterSpec`
+|`TimedSchedule.Endings.Entry` |`TimedSchedule.EndingEntry`
+|`TimedSchedule.Endings.ConstructionError` |`TimedSchedule.EndingsError`
+|===
+
+Generic codec parsers now use the encoding's error type so temporal values
+compose inside derived record and list parsers. JSON decoding returns
+`InvalidJson` for an invalid temporal string. Use the temporal type's direct
+`parse` operation for detailed errors such as `InvalidDate`, `OutOfRange` or
+`UnsupportedLeapSecond`. Both paths validate through the same temporal parser;
+serialization continues to emit canonical semantic text.
+
+== Use this release
+
+The core package is available at {package-url}.
+The optional zone database package is available at {tzdb-url}.
+
+Download the examples archive from the same release for applications using the
+immutable package URLs. The release includes compiler-generated API documentation
+and the PDF manual.

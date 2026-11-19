@@ -21,6 +21,9 @@ import PosixSpan
 ## At most 4096 input alternatives, before deduplication. Construction validates
 ## fields and exclusive civil bounds once, then sorts/deduplicates in O(n log n), without zone interpretation or
 ## enumeration. Canonical order is local position, not resolved timeline order.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List({ value : Calendar.Value, end : LocalDateTime }) }.{
 
 	## Point membership across admissible alternatives: Definite means all, Possible
@@ -36,18 +39,18 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	## components, and alternatives whose exclusive civil end cannot be represented.
 	## Indexed errors refer to the original input list, starting at zero.
 	new : QualifiedCalendarValue, List(Calendar.Value) -> Try(CalendarEvidence, [InconsistentEvidence, TooManyAlternatives, CalendarMismatch(U64), ResolutionMismatch(U64), UnqualifiedComponent({ index : U64, scope : QualifiedCalendarValue.Scope }), CandidateOutOfRange(U64)])
-	new = |description, alternatives| {
-		if alternatives.is_empty() {
+	new = |description_value, alternatives_value| {
+		if alternatives_value.is_empty() {
 			return Err(InconsistentEvidence)
 		}
-		if alternatives.len() > 4096 {
+		if alternatives_value.len() > 4096 {
 			return Err(TooManyAlternatives)
 		}
-		base = QualifiedCalendarValue.described_value(description)
-		allowed = QualifiedCalendarValue.qualifications(description).map(|item| item.scope)
+		base = QualifiedCalendarValue.described_value(description_value)
+		allowed = QualifiedCalendarValue.qualifications(description_value).map(|item| item.scope)
 		var $validated = []
 		var $index = 0.U64
-		for candidate in alternatives {
+		for candidate in alternatives_value {
 			if Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(base))) != Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(candidate))) {
 				return Err(CalendarMismatch($index))
 			}
@@ -93,7 +96,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 				$canonical = $canonical.append(candidate)
 			}
 		}
-		Ok({ description, alternatives: $canonical })
+		Ok({ description: description_value, alternatives: $canonical })
 	}
 
 	## Return the qualified description to which these alternatives apply.
@@ -111,7 +114,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	## Rules, point and model are immutable across resumptions. No coverage list
 	## is built. Construction rejects an unrepresentable exclusive civil bound
 	## before any query can stop early on sufficient witnesses.
-	query : CalendarEvidence, ZoneRules, PosixBoundary -> Try(Query, [OutsideValidity, OutOfRange])
+	query : CalendarEvidence, ZoneRules, PosixBoundary -> Try(CalendarEvidenceQuery, [OutsideValidity, OutOfRange])
 	query = |evidence, rules, point| {
 		offset = ZoneRules.offset_at(rules, point)?
 		calendar = Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(QualifiedCalendarValue.described_value(evidence.description))))
@@ -121,49 +124,11 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 
 	## Work performed by one collect call and either a conclusive truth value or
 	## the cursor to resume. Limited does not imply Possible or Impossible.
-	Batch : { examined : U64, status : [Complete(Truth), Limited(Query)] }
+	Batch : { examined : U64, status : [Complete(Truth), Limited(CalendarEvidenceQuery)] }
 
 	## An immutable point query retaining its evidence, zone context and progress.
 	## Use collect to examine alternatives under a per-call work budget.
-	Query :: { evidence : CalendarEvidence, rules : ZoneRules, point : PosixBoundary, local : LocalDateTime, index : U64, yes : Bool, no : Bool }.{
-
-		## Examine at most max_alternatives additional alternatives. Stop early once
-		## both an inclusion and an exclusion witness establish Possible; otherwise
-		## return a resumable Limited result until every alternative has been checked.
-		collect : Query, { max_alternatives : U64 } -> Batch
-		collect = |initial, limits| {
-			var $state = initial
-			var $examined = 0.U64
-			while Bool.True {
-				if $state.yes and $state.no {
-					return { examined: $examined, status: Complete(Possible) }
-				}
-				if $state.index == $state.evidence.alternatives.len() {
-					truth = if $state.yes {
-						Definite
-					} else {
-						Impossible
-					}
-					return { examined: $examined, status: Complete(truth) }
-				}
-				if $examined == limits.max_alternatives {
-					return { examined: $examined, status: Limited($state) }
-				}
-				candidate = match $state.evidence.alternatives.get($state.index) {
-					Ok(value) => value
-					Err(_) => crash "Validated evidence cursor index"
-				}
-				bounds = { start: LocalDateTime.from_calendar_value(candidate.value), end: candidate.end }
-				inside = LocalDateTime.compare_position(bounds.start, $state.local) != GT and LocalDateTime.compare_position($state.local, bounds.end) == LT
-				$state = { ..$state, index: $state.index + 1, yes: $state.yes or inside, no: $state.no or !inside }
-				$examined = $examined + 1
-			}
-		}
-
-		## Summarize the query point and progress without examining more alternatives.
-		to_inspect : Query -> Str
-		to_inspect = |state| "CalendarEvidence.Query(examined=${state.index.to_str()}, point=${Str.inspect(state.point)})"
-	}
+	Query : CalendarEvidenceQuery
 
 	## Compare the description and canonical alternatives, preserving model identity
 	## rather than comparing only the result of a particular point query.
@@ -231,9 +196,9 @@ expect {
 	alternatives = CalendarEvidence.new(description, [first, second])?
 	singleton = CalendarEvidence.new(description, [first])?
 	rules = test_rules()?
-	a = CalendarEvidence.Query.collect(CalendarEvidence.query(alternatives, rules, PosixBoundary.from_microseconds(0))?, { max_alternatives: 2 })
-	b = CalendarEvidence.Query.collect(CalendarEvidence.query(alternatives, rules, PosixBoundary.from_microseconds(172800000000))?, { max_alternatives: 2 })
-	c = CalendarEvidence.Query.collect(CalendarEvidence.query(singleton, rules, PosixBoundary.from_microseconds(0))?, { max_alternatives: 1 })
+	a = CalendarEvidenceQuery.collect(CalendarEvidence.query(alternatives, rules, PosixBoundary.from_microseconds(0))?, { max_alternatives: 2 })
+	b = CalendarEvidenceQuery.collect(CalendarEvidence.query(alternatives, rules, PosixBoundary.from_microseconds(172800000000))?, { max_alternatives: 2 })
+	c = CalendarEvidenceQuery.collect(CalendarEvidence.query(singleton, rules, PosixBoundary.from_microseconds(0))?, { max_alternatives: 1 })
 	match (a.status, b.status, c.status) {
 		(Complete(Possible), Complete(Impossible), Complete(Definite)) => True
 		_ => False
@@ -251,4 +216,44 @@ expect {
 test_rules = || {
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
 	ZoneRules.new_bounded("UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })
+}
+
+CalendarEvidenceQuery :: { evidence : CalendarEvidence, rules : ZoneRules, point : PosixBoundary, local : LocalDateTime, index : U64, yes : Bool, no : Bool }.{
+
+	## Examine at most max_alternatives additional alternatives. Stop early once
+	## both an inclusion and an exclusion witness establish Possible; otherwise
+	## return a resumable Limited result until every alternative has been checked.
+	collect : CalendarEvidenceQuery, { max_alternatives : U64 } -> CalendarEvidence.Batch
+	collect = |initial, limits| {
+		var $state = initial
+		var $examined = 0.U64
+		while Bool.True {
+			if $state.yes and $state.no {
+				return { examined: $examined, status: Complete(Possible) }
+			}
+			if $state.index == $state.evidence.alternatives.len() {
+				truth = if $state.yes {
+					Definite
+				} else {
+					Impossible
+				}
+				return { examined: $examined, status: Complete(truth) }
+			}
+			if $examined == limits.max_alternatives {
+				return { examined: $examined, status: Limited($state) }
+			}
+			candidate = match $state.evidence.alternatives.get($state.index) {
+				Ok(value) => value
+				Err(_) => crash "Validated evidence cursor index"
+			}
+			bounds = { start: LocalDateTime.from_calendar_value(candidate.value), end: candidate.end }
+			inside = LocalDateTime.compare_position(bounds.start, $state.local) != GT and LocalDateTime.compare_position($state.local, bounds.end) == LT
+			$state = { ..$state, index: $state.index + 1, yes: $state.yes or inside, no: $state.no or !inside }
+			$examined = $examined + 1
+		}
+	}
+
+	## Summarize the query point and progress without examining more alternatives.
+	to_inspect : CalendarEvidenceQuery -> Str
+	to_inspect = |state| "CalendarEvidence.Query(examined=${state.index.to_str()}, point=${Str.inspect(state.point)})"
 }

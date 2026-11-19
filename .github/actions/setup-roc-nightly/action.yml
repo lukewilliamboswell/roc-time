@@ -33,7 +33,7 @@ runs:
       with:
         version: nightly
         nightly-tag: ${{ steps.resolve.outputs.tag }}
-        download-method: asset-api
+        download-method: browser
 
     - name: Print the package compiler version
       shell: bash

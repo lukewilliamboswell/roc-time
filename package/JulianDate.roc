@@ -4,6 +4,7 @@ import CivilDay
 ## Valid years are -2147483648 through 2147483647, inclusive.
 ## No timezone or resolved timeline is implied by a date.
 JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
+
 	## Astronomical year and one-based month/day fields for a Julian date.
 	## Year zero means 1 BCE; from_fields validates combinations and provider range.
 	Fields : { year : I64, month : U8, day : U8 }

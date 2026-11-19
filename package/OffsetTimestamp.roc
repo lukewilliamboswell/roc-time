@@ -26,30 +26,34 @@ import PosixBoundary
 ## materializing a byte list. Construction, conversion and
 ## formatting have constant bounded work. Canonical standard text can be stored directly.
 OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }.{
+
 	## UnassertedUtc represents Z or -00:00 without an asserted local offset. Asserted retains a numeric offset, including explicit +00:00.
 	Offset : [UnassertedUtc, Asserted(FixedOffset)]
+
 	## Validated Gregorian date and clock, supplied fractional width, and offset assertion. Use new to validate an edited record.
 	Parts : { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }
+
 	## Separates malformed/incomplete input, invalid date/time/offset, size/range limits, and unsupported precision, leap seconds or annotations.
 	Error : [Malformed, Incomplete, InvalidDate, InvalidTime, InvalidOffset, OutOfRange, TooLarge, UnsupportedPrecision, UnsupportedLeapSecond, UnsupportedAnnotations]
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : OffsetTimestamp, rest : state }, [InvalidOffsetTimestamp(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : OffsetTimestamp, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidOffsetTimestamp(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -78,19 +82,19 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 
 	## Checks a four-digit Gregorian timestamp declaration, exact fractional width 0–6, and whole-minute numeric offset within +/-23:59. Precision loss is rejected.
 	new : Parts -> Try(OffsetTimestamp, Error)
-	new = |parts| {
-		year = GregorianDate.to_fields(parts.date).year
+	new = |parts_value| {
+		year = GregorianDate.to_fields(parts_value.date).year
 		if year < 0 or year > 9999 {
 			return Err(OutOfRange)
 		}
-		if parts.fraction_digits > 6 {
+		if parts_value.fraction_digits > 6 {
 			return Err(UnsupportedPrecision)
 		}
-		unit = fraction_unit(parts.fraction_digits)
-		if U32.rem_by(ClockTime.to_fields(parts.clock).microsecond, unit) != 0 {
+		unit = fraction_unit(parts_value.fraction_digits)
+		if U32.rem_by(ClockTime.to_fields(parts_value.clock).microsecond, unit) != 0 {
 			return Err(UnsupportedPrecision)
 		}
-		match parts.offset {
+		match parts_value.offset {
 			UnassertedUtc => {}
 			Asserted(offset) => {
 				seconds = FixedOffset.to_seconds(offset)
@@ -99,12 +103,13 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 				}
 			}
 		}
-		Ok({ date: parts.date, clock: parts.clock, fraction_digits: parts.fraction_digits, offset: parts.offset })
+		Ok({ date: parts_value.date, clock: parts_value.clock, fraction_digits: parts_value.fraction_digits, offset: parts_value.offset })
 	}
 
 	## Returns the retained date, clock, fractional width and offset assertion for inspection or checked editing through new.
 	parts : OffsetTimestamp -> Parts
 	parts = |value| { date: value.date, clock: value.clock, fraction_digits: value.fraction_digits, offset: value.offset }
+
 	## Returns the supplied Gregorian clock label without applying its offset. Use boundary for a resolved POSIX coordinate.
 	local_label : OffsetTimestamp -> LocalDateTime
 	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
@@ -214,16 +219,16 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 							if $offset_count == 3 {
 								$offset_malformed = $offset_malformed or byte != 58
 							}
-								else if digit(byte) {
-									if $offset_count < 3 {
-										$hours = $hours * 10 + (byte - 48).to_u32()
-									}
-										else {
-											$minutes = $minutes * 10 + (byte - 48).to_u32()
-										}
-								} else {
-									$offset_malformed = Bool.True
+							else if digit(byte) {
+								if $offset_count < 3 {
+									$hours = $hours * 10 + (byte - 48).to_u32()
 								}
+								else {
+									$minutes = $minutes * 10 + (byte - 48).to_u32()
+								}
+							} else {
+								$offset_malformed = Bool.True
+							}
 							$offset_count = $offset_count + 1
 						} else {
 							$trailing = Some(byte)
@@ -292,7 +297,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			Some(value) => value
 		}
 		var $offset = UnassertedUtc
-		if marker == 90 or marker == 122 {
+		if (marker == 90 or marker == 122) {
 			# UTC has no numeric fields.
 		} else if marker == 43 or marker == 45 {
 			if tail.offset_malformed {
@@ -385,6 +390,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	## Compares the retained declaration, including fractional width and offset assertion. Use boundary when comparing resolved positions.
 	is_eq : OffsetTimestamp, OffsetTimestamp -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock and a.fraction_digits == b.fraction_digits and a.offset == b.offset
+
 	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : OffsetTimestamp, Hasher -> Hasher
 	to_hash = |value, hasher| {
@@ -399,6 +405,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	## assertion. Reading facts never resolves a zone or materializes coverage.
 	fact_count : OffsetTimestamp -> U64
 	fact_count = |_| 1
+
 	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| if index == 0 {
@@ -406,6 +413,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	} else {
 		End
 	}
+
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : OffsetTimestamp -> Str
 	to_inspect = |value| match fact_at(value, 0) {

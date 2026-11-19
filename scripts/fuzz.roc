@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -26,51 +27,74 @@ main! = |args| {
 	options = FuzzOptions.parse(args.map(OsStr.display))?
 	context = prepare!()?
 	check_input_admission!(context.work)?
+	var $failed = []
 	if options.operation != Lifecycle {
+		build_names = if (options.operation == All) options.names.concat(["clock"]) else options.names
+		for suite in FuzzOptions.builds(build_names) {
+			_ = build!(context, suite)?
+		}
 		for name in options.names {
-			binary = build!(context, name)?
-			if options.operation == Accept {
-				_ = run_examples!(
-					context,
-					{
-						name,
-						binary,
-						action: AcceptBaseline,
-					},
-				)?
-			}
-			if [Replay, All].contains(options.operation) {
-				_ = run_examples!(
-					context,
-					{
-						name,
-						binary,
-						action: CheckBaseline,
-					},
-				)?
-				replay!(
-					context,
-					{
-						name,
-						binary,
-					},
-				)?
-			}
-			if [Run, All].contains(options.operation) {
-				campaign!(
-					context,
-					{
-						name,
-						binary,
-						options,
-					},
-				)?
+			binary = Path.join(context.work, FuzzOptions.suite(name))
+			match check_target!(context, { name, binary, options }) {
+				Ok({}) => {}
+				Err(error) => {
+					Script.info!({ label: "FAIL", message: "${name}: ${Str.inspect(error)}" })?
+					$failed = $failed.append(name)
+				}
 			}
 		}
 	}
 	if [Lifecycle, All].contains(options.operation) {
 		check_failure_lifecycle!(context)?
+		if options.operation == Lifecycle {
+			_ = build!(context, "civil_suite")?
+		}
 		check_baseline_controls!(context)?
+	}
+	if !$failed.is_empty() {
+		return Script.fail!("fuzz members failed: ${Str.join_with($failed, ", ")}")
+	}
+	Ok({})
+}
+
+check_target! : Context, { name : Str, binary : Path, options : FuzzOptions.Options } => Try({}, _)
+check_target! = |context, { name, binary, options }| {
+	if options.operation == Accept {
+		_ = run_examples!(
+			context,
+			{
+				name,
+				binary,
+				action: AcceptBaseline,
+			},
+		)?
+	}
+	if [Replay, All].contains(options.operation) {
+		_ = run_examples!(
+			context,
+			{
+				name,
+				binary,
+				action: CheckBaseline,
+			},
+		)?
+		replay!(
+			context,
+			{
+				name,
+				binary,
+			},
+		)?
+	}
+	if [Run, All].contains(options.operation) {
+		campaign!(
+			context,
+			{
+				name,
+				binary,
+				options,
+			},
+		)?
 	}
 	Ok({})
 }
@@ -109,10 +133,16 @@ prepare! = || {
 	if hash_file!(archive)? != dependency.sha256 {
 		return Err(PlatformIntegrity)
 	}
-	for name in FuzzOptions.names.concat(["lifecycle", "lifecycle_fixed"]) {
+	for name in FuzzOptions.builds(FuzzOptions.names).concat(["lifecycle", "lifecycle_fixed"]) {
 		source = Path.read_utf8!(Path.utf8("tests/${name}/main.roc"))?
 		urls = source.split_on("fuzz: platform \"").drop_first(1).map(|part| part.split_on("\"").first() ?? "")
 		if urls != [dependency.url] {
+			return Script.fail!("${name}: expected exact pinned roc-fuzz URL")
+		}
+	}
+	for name in FuzzOptions.names {
+		source = Path.read_utf8!(Path.utf8("tests/${name}/package.roc"))?
+		if !source.contains("fuzz: platform \"${dependency.url}\"") {
 			return Script.fail!("${name}: expected exact pinned roc-fuzz URL")
 		}
 	}
@@ -130,7 +160,7 @@ run_command! = |{ args, cwd, timeout_ms, expected_exit, log }| {
 		label: "+",
 		message: Str.join_with(args, " "),
 	})?
-	result = Cmd.new_str(program).args_str(args.drop_first(1)).cwd(cwd).timeout_ms(timeout_ms).manage_tree(Bool.True).output_limit(16000000).stdout(Capture).stderr(Capture).run!()?
+	result = Cmd.new(OsStr.from_str(program)).args((args.drop_first(1)).map(OsStr.from_str)).cwd(cwd).timeout(Duration.millis(timeout_ms)).manage_tree(Bool.True).output_limit(MaxBytes(16000000)).stdout(Capture).stderr(Capture).run!()?
 	Path.write_bytes!(Path.utf8("${Path.display(log)}.stdout"), result.stdout_bytes)?
 	Path.write_bytes!(Path.utf8("${Path.display(log)}.stderr"), result.stderr_bytes)?
 	output = "${Str.from_utf8(result.stdout_bytes)?}${Str.from_utf8(result.stderr_bytes)?}"
@@ -168,6 +198,19 @@ build! = |context, name| {
 		expected_exit: 0,
 		log: Path.join(context.work, "${name}-build"),
 	})?
+	if name.ends_with("_suite") {
+		listed = run_command!({
+			args: [Path.display(binary), "--list-targets"],
+			cwd: context.work,
+			timeout_ms: 10000,
+			expected_exit: 0,
+			log: Path.join(context.work, "${name}-members"),
+		})?
+		expected = FuzzOptions.names.keep_if(|member| FuzzOptions.suite(member) == name).map(FuzzOptions.member)
+		if listed.trim().split_on("\n") != expected {
+			return Err(SuiteMembers)
+		}
+	}
 	Ok(binary)
 }
 
@@ -220,7 +263,7 @@ replay! = |context, { name, binary }| {
 	for raw in retained {
 		report_dir = Env.create_temp_dir_in!(context.work, "${name}-replay-")?
 		_ = run_command!({
-			args: [Path.display(binary), "replay", Path.display(Path.absolute!(raw)?), "--report-dir=${Path.display(report_dir)}"],
+			args: [Path.display(binary)].concat(FuzzOptions.selection(name)).concat(["replay", Path.display(Path.absolute!(raw)?), "--report-dir=${Path.display(report_dir)}"]),
 			cwd: context.work,
 			timeout_ms: 10000,
 			expected_exit: 0,
@@ -230,6 +273,7 @@ replay! = |context, { name, binary }| {
 			context,
 			{
 				directory: report_dir,
+				target: FuzzOptions.member(name),
 				baseline: NotChecked,
 				exploration: NotRequested,
 			},
@@ -239,6 +283,7 @@ replay! = |context, { name, binary }| {
 		if replay.examples.len() != 1 or replay.examples.first()?.input_sha256 != hash_file!(raw)? {
 			return Err(MissingReplayEvidence)
 		}
+		remove_completed_ipc!(report_dir)?
 	}
 	Script.info!({
 		label: "PASS",
@@ -281,7 +326,11 @@ campaign! = |context, { name, binary, options }| {
 		Path.copy!(raw, destination)?
 	}
 	var $source_hashes = []
-	for raw in Files.direct_roc_files!(Path.utf8("tests/${name}"))?.concat(Files.direct_roc_files!("package")?) {
+	var $sources = Files.direct_roc_files!(Path.utf8("tests/${FuzzOptions.suite(name)}"))?.concat(Files.direct_roc_files!("package")?)
+	for member in FuzzOptions.names.keep_if(|member| FuzzOptions.suite(member) == FuzzOptions.suite(name)) {
+		$sources = $sources.concat(Files.direct_roc_files!(Path.utf8("tests/${member}"))?)
+	}
+	for raw in $sources {
 		$source_hashes = $source_hashes.append((Path.display(raw), hash_file!(raw)?))
 	}
 	var $corpus_hashes = []
@@ -311,7 +360,7 @@ campaign! = |context, { name, binary, options }| {
 	report_dir = Path.join(session, "quality")
 	baseline = Path.absolute!("tests/fuzz/baselines/${name}.json")?
 	_ = run_command!({
-		args: [Path.display(binary), "run", Path.display(corpus), "--report-dir=${Path.display(report_dir)}", "--baseline=${Path.display(baseline)}", "--profile=speed", "--source-revision=${Script.command("git").output!(["rev-parse", "HEAD"])?}", "--roc-version=${context.version}", "--platform-release=${context.dependency.version}", "--platform-sha256=${context.dependency.sha256}", "--runs=${options.runs.to_str()}", "--time=${options.seconds.to_str()}", "--seed=${options.seed.to_str()}", "--max-input-size=256", "--memory-limit=256", "--timeout=2"],
+		args: [Path.display(binary)].concat(FuzzOptions.selection(name)).concat(["run", Path.display(corpus), "--report-dir=${Path.display(report_dir)}", "--baseline=${Path.display(baseline)}", "--profile=speed", "--source-revision=${Script.command("git").output!(["rev-parse", "HEAD"])?}", "--roc-version=${context.version}", "--platform-release=${context.dependency.version}", "--platform-sha256=${context.dependency.sha256}", "--runs=${options.runs.to_str()}", "--time=${options.seconds.to_str()}", "--seed=${options.seed.to_str()}", "--max-input-size=256", "--memory-limit=256", "--timeout=2"]),
 		cwd: session,
 		timeout_ms: (options.seconds + 30) * 1000,
 		expected_exit: 0,
@@ -321,10 +370,12 @@ campaign! = |context, { name, binary, options }| {
 		context,
 		{
 			directory: report_dir,
+			target: FuzzOptions.member(name),
 			baseline: Matched,
 			exploration: RequireAcceptedInput,
 		},
 	)?
+	remove_completed_ipc!(report_dir)?
 	_ = read_corpus!(corpus)?
 	if Path.exists!(persistent)? {
 		Path.delete_all!(persistent)?
@@ -440,8 +491,7 @@ run_examples! = |context, { name, binary, action }| {
 	report_dir = Env.create_temp_dir_in!(context.work, "${name}-examples-")?
 	baseline = Path.absolute!("tests/fuzz/baselines/${name}.json")?
 	_ = run_command!({
-		args: [
-			Path.display(binary),
+		args: [Path.display(binary)].concat(FuzzOptions.selection(name)).concat([
 			match action {
 				AcceptBaseline => "accept"
 				CheckBaseline => "check"
@@ -449,7 +499,7 @@ run_examples! = |context, { name, binary, action }| {
 			"--baseline=${Path.display(baseline)}",
 			"--profile=speed",
 			"--report-dir=${Path.display(report_dir)}",
-		],
+		]),
 		cwd: context.work,
 		timeout_ms: 60000,
 		expected_exit: 0,
@@ -459,6 +509,7 @@ run_examples! = |context, { name, binary, action }| {
 		context,
 		{
 			directory: report_dir,
+			target: FuzzOptions.member(name),
 			baseline: match action {
 				AcceptBaseline => Accepted
 				CheckBaseline => Matched
@@ -466,6 +517,7 @@ run_examples! = |context, { name, binary, action }| {
 			exploration: NotRequested,
 		},
 	)?
+	remove_completed_ipc!(report_dir)?
 	Script.info!({
 		label: "PASS",
 		message: "${name}: named examples and ${
@@ -478,16 +530,31 @@ run_examples! = |context, { name, binary, action }| {
 	Ok(report_dir)
 }
 
-validate_report! : Context, { directory : Path, baseline : FuzzEvidence.Baseline, exploration : FuzzEvidence.Exploration } => Try({}, _)
-validate_report! = |context, { directory, baseline, exploration }| {
+# Complete quality reports retain decoded metrics, traces, logs and exact inputs.
+# Release each finished worker's shared-memory transport after evidence admission.
+remove_completed_ipc! : Path => Try({}, _)
+remove_completed_ipc! = |directory| {
+	for path in Path.list!(directory)? {
+		if Path.display(path).ends_with(".shared") and !Path.is_sym_link!(path)? and Path.type!(path)? == IsFile {
+			Path.delete!(path)?
+		}
+	}
+	Ok({})
+}
+
+validate_report! : Context, { directory : Path, target : Str, baseline : FuzzEvidence.Baseline, exploration : FuzzEvidence.Exploration } => Try({}, _)
+validate_report! = |context, { directory, target, baseline, exploration }| {
 	report : FuzzEvidence.Report
 	report = Json.parse(Path.read_utf8!(Path.join(directory, "report.json"))?)?
+	if report.target != target {
+		return Err(WrongSuiteMember)
+	}
 	FuzzEvidence.validate(report, { host: context.target, baseline, exploration })
 }
 
 check_baseline_controls! : Context => Try({}, _)
 check_baseline_controls! = |context| {
-	binary = build!(context, "clock")?
+	binary = Path.join(context.work, "civil_suite")
 	work = Env.create_temp_dir_in!(context.work, "baseline-controls-")?
 	changed = Path.join(work, "changed.json")
 	source = Path.read_utf8!("tests/fuzz/baselines/clock.json")?
@@ -498,7 +565,7 @@ check_baseline_controls! = |context| {
 	Path.write_utf8!(changed, edited)?
 	changed_report = Path.join(work, "changed")
 	_ = run_command!({
-		args: [Path.display(binary), "check", "--baseline=${Path.display(changed)}", "--profile=speed", "--report-dir=${Path.display(changed_report)}"],
+		args: [Path.display(binary)].concat(FuzzOptions.selection("clock")).concat(["check", "--baseline=${Path.display(changed)}", "--profile=speed", "--report-dir=${Path.display(changed_report)}"]),
 		cwd: context.work,
 		timeout_ms: 30000,
 		expected_exit: 1,
@@ -511,7 +578,7 @@ check_baseline_controls! = |context| {
 	}
 	missing_report = Path.join(work, "missing")
 	_ = run_command!({
-		args: [Path.display(binary), "check", "--baseline=${Path.display(Path.join(work, "missing.json"))}", "--profile=speed", "--report-dir=${Path.display(missing_report)}"],
+		args: [Path.display(binary)].concat(FuzzOptions.selection("clock")).concat(["check", "--baseline=${Path.display(Path.join(work, "missing.json"))}", "--profile=speed", "--report-dir=${Path.display(missing_report)}"]),
 		cwd: context.work,
 		timeout_ms: 30000,
 		expected_exit: 0,
@@ -521,6 +588,7 @@ check_baseline_controls! = |context| {
 		context,
 		{
 			directory: missing_report,
+			target: FuzzOptions.member("clock"),
 			baseline: Matched,
 			exploration: NotRequested,
 		},

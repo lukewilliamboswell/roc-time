@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -83,14 +84,17 @@ main! = |_args| {
 		for (name, index) in ["Australia/Melbourne", "US/Eastern", "Pacific/Apia", "Etc/UTC"].map_with_index(|name, index| (name, index)) {
 			canonical = manifest.names.get(name)?
 			expected = manifest.transition_expectations.get(canonical)?
-			output = Cmd.new(Path.to_os_str(binary)).args_str([name]).timeout_ms(10000).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+			output = Cmd.new(Path.to_os_str(binary)).args(([name]).map(OsStr.from_str)).timeout(Duration.millis(10000)).manage_tree(Bool.True).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
 			Path.write_bytes!(Path.join(work, "lookup-${mode}-${index.to_str()}.stdout"), output.stdout_bytes)?
 			Path.write_bytes!(Path.join(work, "lookup-${mode}-${index.to_str()}.stderr"), output.stderr_bytes)?
 			stdout = Str.from_utf8(output.stdout_bytes)?
 			stderr = Str.from_utf8(output.stderr_bytes)?
+			if output.status != Exited(0) {
+				return Script.fail!("zone resource ${mode}/${name}: ${Str.inspect(output.status)}\n${stderr}")
+			}
 			metrics = NativeMetrics.parse(stderr)?
 			budget = if (mode == "dev") 0.U64 else 1
-			if output.status != Exited(0) or stdout != "${canonical}|${expected.checksum.to_str()}\n" or metrics.work.len() != 2 or metrics.work.get(0)? > budget or metrics.work.get(1)? != expected.count or metrics.traces.map(|trace| trace.mark) != [1, 2] {
+			if stdout != "${canonical}|${expected.checksum.to_str()}\n" or metrics.work.len() != 2 or metrics.work.get(0)? > budget or metrics.work.get(1)? != expected.count or metrics.traces.map(|trace| trace.mark) != [1, 2] {
 				return Err(ZoneResourceObservation(name, mode))
 			}
 			first = metrics.traces.first()?.allocations
@@ -114,10 +118,9 @@ main! = |_args| {
 	invalid_output = Path.join(work, "invalid-output")
 	rejected = stable.cmd([
 		"scripts/generate_zone_database.roc",
-		"--",
 		Path.to_os_str(invalid),
 		Path.to_os_str(invalid_output),
-	]).timeout_ms(30000).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+	]).timeout(Duration.millis(30000)).manage_tree(Bool.True).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
 	diagnostic = "${Str.from_utf8(rejected.stdout_bytes)?}${Str.from_utf8(rejected.stderr_bytes)?}"
 	match rejected.status {
 		Exited(code) if code != 0 and diagnostic.contains("Program exited with error: WheelIntegrity") => {}

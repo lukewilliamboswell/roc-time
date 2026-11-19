@@ -17,10 +17,10 @@ ResolvedBoundary :: {
 	## and actual offset. Reject gaps, unresolved ambiguity, offset conflicts,
 	## and labels whose interpretation exceeds the rules or numeric range.
 	resolve : ZoneRules, LocalDateTime, ZoneRules.OccurrencePolicy -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
-	resolve = |rules, source, policy| {
-		boundary = ZoneRules.resolve_occurrence(rules, source, policy)?
-		offset = ZoneRules.offset_at(rules, boundary)?
-		Ok({ source, policy, rules, boundary, offset })
+	resolve = |rules_value, source_value, policy_value| {
+		boundary_value = ZoneRules.resolve_occurrence(rules_value, source_value, policy_value)?
+		offset_value = ZoneRules.offset_at(rules_value, boundary_value)?
+		Ok({ source: source_value, policy: policy_value, rules: rules_value, boundary: boundary_value, offset: offset_value })
 	}
 
 	## Return the stored resolved POSIX coordinate without reinterpreting the source.

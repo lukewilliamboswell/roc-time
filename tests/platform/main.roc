@@ -6,18 +6,18 @@ platform ""
 	packages {}
 	provides { "roc_main": main_for_host! }
 	hosted {
-		"fixture_opaque_u64": Host.opaque_u64!,
-		"fixture_allocation_count": Host.allocation_count!,
 		"fixture_allocated_bytes": Host.allocated_bytes!,
-		"fixture_deallocation_count": Host.deallocation_count!,
-		"fixture_monotonic_ns": Host.monotonic_ns!,
-		"fixture_mark": Host.mark!,
+		"fixture_allocation_count": Host.allocation_count!,
 		"fixture_assert": Host.assert!,
+		"fixture_deallocation_count": Host.deallocation_count!,
+		"fixture_mark": Host.mark!,
+		"fixture_monotonic_ns": Host.monotonic_ns!,
+		"fixture_opaque_u64": Host.opaque_u64!,
 	}
 	targets: {
 		inputs_dir: "targets/",
 		arm64mac: { inputs: ["libhost.a", app] },
-		x64musl: { inputs: ["crt1.o", "libhost.a", app, "libc.a"] },
+		x64musl: { inputs: ["rcrt1.o", "libhost.a", app, "libc.a"] },
 	}
 import Host
 main_for_host! : List(Str) => { bytes : List(U8), work : List(U64) }

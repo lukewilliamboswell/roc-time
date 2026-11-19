@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -17,9 +18,9 @@ main! = |_args| {
 	version = nightly.output!(["version"])?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "fixture-verification-")?
 	for fixture in ResourceMatrix.all {
-		nightly.cmd(["check", OsStr.from_str(fixture.source)]).timeout_ms(120000).exec_cmd!()?
+		nightly.cmd(["check", OsStr.from_str(fixture.source)]).timeout(Duration.millis(120000)).call!()?
 		if fixture.unit_test {
-			nightly.cmd(["test", OsStr.from_str(fixture.source)]).timeout_ms(120000).exec_cmd!()?
+			nightly.cmd(["test", OsStr.from_str(fixture.source)]).timeout(Duration.millis(120000)).call!()?
 		}
 		for mode in ["dev", "speed"] {
 			binary = Path.join(work, "${fixture.name}-${mode}")
@@ -36,12 +37,12 @@ main! = |_args| {
 			} else {
 				args
 			}
-			nightly.cmd(build_args.map(OsStr.from_str)).timeout_ms(120000).exec_cmd!()?
+			nightly.cmd(build_args.map(OsStr.from_str)).timeout(Duration.millis(120000)).call!()?
 			var $observations = []
 			var $equal = Dict.empty()
 			var $references = Dict.empty()
 			for check in fixture.checks {
-				result = Cmd.new(Path.to_os_str(binary)).args_str(check.args).timeout_ms(if (fixture.name == "probe") 10000 else 5000).stdout(Capture).stderr(Capture).run!()?
+				result = Cmd.new(Path.to_os_str(binary)).args((check.args).map(OsStr.from_str)).timeout(Duration.millis(if (fixture.name == "probe") 10000 else 5000)).stdout(Capture).stderr(Capture).run!()?
 				stdout = Str.from_utf8(result.stdout_bytes)?
 				stderr = Str.from_utf8(result.stderr_bytes)?
 				if result.status != Exited(0) {
@@ -121,7 +122,7 @@ main! = |_args| {
 			)?
 			for failure in fixture.failures {
 				if failure.mode.is_empty() or failure.mode == mode {
-					result = Cmd.new(Path.to_os_str(binary)).args_str(failure.args).timeout_ms(if (fixture.name == "probe") 10000 else 5000).stdout(Capture).stderr(Capture).run!()?
+					result = Cmd.new(Path.to_os_str(binary)).args((failure.args).map(OsStr.from_str)).timeout(Duration.millis(if (fixture.name == "probe") 10000 else 5000)).stdout(Capture).stderr(Capture).run!()?
 					_ = Str.from_utf8(result.stdout_bytes)?
 					stderr = Str.from_utf8(result.stderr_bytes)?
 					if failure.must_fail {

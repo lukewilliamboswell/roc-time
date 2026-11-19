@@ -32,8 +32,8 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 	## scopes and scopes finer than the value supplies. Whole and component scopes
 	## may coexist; this constructor does not choose an interpretation model.
 	new : Calendar.Value, List(Qualification) -> Try(QualifiedCalendarValue, [TooManyQualifications, DuplicateScope(Scope), UnsuppliedComponent(Scope)])
-	new = |value, qualifications| {
-		if qualifications.len() > 9 {
+	new = |value, qualifications_value| {
+		if qualifications_value.len() > 9 {
 			return Err(TooManyQualifications)
 		}
 		supplied = match Calendar.Value.resolution(value) {
@@ -46,7 +46,7 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 			Fraction(_) => 7
 		}
 		var $seen = []
-		for item in qualifications {
+		for item in qualifications_value {
 			required = if item.scope == YearMonth {
 				2.U8
 			} else {
@@ -60,7 +60,7 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 			}
 			$seen = $seen.append(item.scope)
 		}
-		canonical = qualifications.sort_with(
+		canonical = qualifications_value.sort_with(
 			|a, b| {
 				left = scope_rank(a.scope)
 				right = scope_rank(b.scope)

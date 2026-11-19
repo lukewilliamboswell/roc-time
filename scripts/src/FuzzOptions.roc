@@ -20,6 +20,24 @@ FuzzOptions := [].{
 		"interchange",
 	]
 
+	## Properties keep independent corpus/baseline identities inside three builds.
+	suite : Str -> Str
+	suite = |name| match name {
+		"precision" | "spans" | "coverage" | "events" => "core_suite"
+		"gregorian" | "arithmetic" | "calendars" | "clock" | "offsets" => "civil_suite"
+		"zones" | "patterns" | "recurrence" | "descriptions" | "interchange" => "interpretation_suite"
+		_ => name
+	}
+
+	member : Str -> Str
+	member = |name| if (name == "coverage") "coverage-v2" else "${name}-v1"
+
+	selection : Str -> List(Str)
+	selection = |name| if (names.contains(name)) ["--target=${member(name)}"] else []
+
+	builds : List(Str) -> List(Str)
+	builds = |selected| selected.map(suite).fold([], |found, name| if (found.contains(name)) found else found.append(name))
+
 	## Compile each measured executable independently of earlier checks/builds.
 	build_args : { target : Str, source : Str, output : Str } -> List(Str)
 	build_args = |{ target, source, output }| [
@@ -41,12 +59,18 @@ FuzzOptions := [].{
 	}
 }
 
+## Selecting several members never duplicates a compiler invocation, and the
+## coverage regression keeps its existing v2 binary encoding/report identity.
+expect FuzzOptions.builds(["coverage", "precision", "clock", "offsets", "recurrence"]) == ["core_suite", "civil_suite", "interpretation_suite"]
+expect FuzzOptions.selection("coverage") == ["--target=coverage-v2"]
+expect FuzzOptions.selection("lifecycle") == []
+
 ## The executed compiler argv must enforce the reviewed measurement policy.
 ## Paths remain single argv values, including when they contain spaces.
 expect {
 	FuzzOptions.build_args({
 		target: "x64musl",
-		source: "tests/recurrence/main.roc",
+		source: "tests/interpretation_suite/main.roc",
 		output: "/tmp/time profiles/recurrence",
 	}) == [
 		"build",
@@ -54,11 +78,11 @@ expect {
 		"--opt=speed",
 		"--no-cache",
 		"--target=x64musl",
-		"tests/recurrence/main.roc",
+		"tests/interpretation_suite/main.roc",
 		"--output=/tmp/time profiles/recurrence",
 	] and FuzzOptions.build_args({
 		target: "arm64mac",
-		source: "tests/clock/main.roc",
+		source: "tests/civil_suite/main.roc",
 		output: "/tmp/clock",
 	}).contains("--target=arm64mac")
 }

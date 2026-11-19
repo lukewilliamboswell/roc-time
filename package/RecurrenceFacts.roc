@@ -8,7 +8,7 @@ import SemanticFact
 ## normalized values, including defaults, not original source spelling.
 RecurrenceFacts := [].{
 	frequency : CalendarPattern.Frequency -> SemanticFact.RecurrenceFrequency
-	frequency = |frequency| match frequency {
+	frequency = |frequency_value| match frequency_value {
 		Daily => Daily
 		Weekly => Weekly
 		Monthly => Monthly

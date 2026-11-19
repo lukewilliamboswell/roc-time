@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.Monotonic
 import cli.OsStr
@@ -65,8 +66,8 @@ main! = |args| {
 				]
 				command = if (system == "Darwin") ["/usr/bin/time", "-l", OsStr.display(compiler.program())].concat(build_args) else [OsStr.display(compiler.program())].concat(build_args)
 				before = Monotonic.now!()
-				output = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(workspace).timeout_ms(180000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
-				seconds = (Monotonic.now!() - before).to_f64() / 1000000000
+				output = Cmd.new(OsStr.from_str(command.first()?)).args((command.drop_first(1)).map(OsStr.from_str)).cwd(workspace).timeout(Duration.millis(180000)).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
+				seconds = before.elapsed!().to_nanos().to_f64() / 1000000000
 				stdout = Str.from_utf8(output.stdout_bytes)?
 				stderr = Str.from_utf8(output.stderr_bytes)?
 				Path.write_utf8!(Path.join(workspace, "build-${sample.to_str()}.log"), "${stdout}${stderr}")?
@@ -80,7 +81,7 @@ main! = |args| {
 			var $observed = Dict.empty()
 			names = if (mode == "static") ["Australia/Melbourne"] else ["Australia/Melbourne", "US/Eastern", "Pacific/Apia", "Etc/UTC"]
 			for name in names {
-				output = Cmd.new(Path.to_os_str(binary)).args_str([name]).timeout_ms(10000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+				output = Cmd.new(Path.to_os_str(binary)).args(([name]).map(OsStr.from_str)).timeout(Duration.millis(10000)).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
 				stdout = Str.from_utf8(output.stdout_bytes)?
 				metrics = NativeMetrics.parse(Str.from_utf8(output.stderr_bytes)?)?
 				canonical = manifest.names.get(name)?

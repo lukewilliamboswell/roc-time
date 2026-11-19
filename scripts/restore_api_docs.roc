@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -60,7 +61,7 @@ restore_all! = |output| {
 					OsStr.from_str(url),
 					"--output",
 					Path.to_os_str(archive),
-				]).exec_cmd!()?
+				]).call!()?
 				digest = Script.command("sha256sum").output!([Path.to_os_str(archive)])?
 				if !digest.starts_with("${asset.digest.drop_prefix("sha256:")} ") or Path.size_in_bytes!(archive)? != asset.size {
 					return Script.fail!("documentation asset bytes differ for ${version}")
@@ -108,7 +109,7 @@ restore_archive! = |{ archive, version, output }| {
 	})?
 	stage = Env.create_temp_dir_in!(output, "archive-")?
 	if zip {
-		Cmd.new("unzip").args(["-q", Path.to_os_str(archive), "-d", Path.to_os_str(stage)]).timeout_ms(60000).exec_cmd!()?
+		Cmd.new("unzip").args(["-q", Path.to_os_str(archive), "-d", Path.to_os_str(stage)]).timeout(Duration.millis(60000)).call!()?
 	} else {
 		Cmd.new("tar").args([
 			"-xzf",
@@ -117,7 +118,7 @@ restore_archive! = |{ archive, version, output }| {
 			"--no-same-permissions",
 			"-C",
 			Path.to_os_str(stage),
-		]).timeout_ms(60000).exec_cmd!()?
+		]).timeout(Duration.millis(60000)).call!()?
 	}
 	if !Path.is_file!(Path.join(Path.join(stage, version), "index.html"))? {
 		return Script.fail!("archive index must be a regular file")
@@ -138,9 +139,9 @@ self_test! = || {
 		suffix = if (zip) "zip" else "tar.gz"
 		archive = Path.join(work, "docs.${suffix}")
 		if zip {
-			Cmd.new("zip").args(["-q", "-r", Path.to_os_str(archive), "0.1.0"]).cwd(source).exec_cmd!()?
+			Cmd.new("zip").args(["-q", "-r", Path.to_os_str(archive), "0.1.0"]).cwd(source).call!()?
 		} else {
-			Cmd.new("tar").args(["-czf", Path.to_os_str(archive), "-C", Path.to_os_str(source), "0.1.0"]).exec_cmd!()?
+			Cmd.new("tar").args(["-czf", Path.to_os_str(archive), "-C", Path.to_os_str(source), "0.1.0"]).call!()?
 		}
 		output = Path.join(work, "restored-${suffix}")
 		Path.create_all!(output)?

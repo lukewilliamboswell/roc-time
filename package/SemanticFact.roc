@@ -25,7 +25,7 @@ SemanticFact :: { value : Kind }.{
 	## Fields/clock carry the canonical lower label; resolution identifies which
 	## components were supplied. Lower components filled by native construction
 	## are not additional source assertions and must not be rendered as such.
-	CalendarData : { kind : [CalendarValue, QualifiedCalendarValue, EdtfDate], calendar : Calendar, fields : Calendar.Date.Fields, clock : ClockTime.Fields, resolution : Resolution, qualification_count : U64 }
+	CalendarData : { kind : [CalendarValue, QualifiedCalendarValue, EdtfDate], calendar : Calendar, fields : Calendar.DateFields, clock : ClockTime.Fields, resolution : Resolution, qualification_count : U64 }
 
 	## Stored timestamp label, fractional precision and offset assertion, plus
 	## zone/annotation counts. These fields alone do not bind a named zone.
@@ -139,7 +139,7 @@ SemanticFact :: { value : Kind }.{
 	## Wrap a typed observation without validating its fields or resolving its meaning.
 	## Use native values and their fact visitors when validation guarantees are needed.
 	new : Kind -> SemanticFact
-	new = |kind| { value: kind }
+	new = |kind_value| { value: kind_value }
 
 	## Return the typed observation for custom rendering or structured inspection.
 	kind : SemanticFact -> Kind

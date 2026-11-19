@@ -5,7 +5,7 @@ import time.PosixBoundary
 ## validity, not a monotonic timer or a physical elapsed-time measurement.
 Deadline :: [].{
 	Record : { checked_at : OffsetTimestamp, expires_at : OffsetTimestamp, expired : Bool }
-	DecodeError : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidOffsetTimestamp(OffsetTimestamp.Error), OutOfRange, InconsistentStatus]
+	DecodeError : [InvalidJson(Str), MissingRequiredField(Str), OutOfRange, InconsistentStatus]
 
 	## basic-cli 0.26.0 reports signed epoch nanoseconds, negative before 1970,
 	## and saturates an unrepresentable clock at the I128 limit, which is rejected

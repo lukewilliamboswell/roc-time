@@ -86,69 +86,23 @@ import ZoneRules
 ## When a batch returns `Limited`, process its partial output and resume the returned
 ## cursor with sufficient budgets. Increasing only the output cap does not fix a
 ## work or buffer limit.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrides : List(EndOverride), starts : TimedRecurrence.Cursor, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, pending : [None, Some(TimedOccurrence.Cursor({ series : id, source : LocalDateTime }))] }.{
+	# TODO: Restore Endings.Entry/ConstructionError after nested alias lookup
+	# works on our compiler: https://github.com/roc-lang/roc/issues/11464
 
 	## Checked normalized ending definitions for advanced prepared scheduling.
 	## Construction validates duration and normalizes at most 4096 overrides once;
 	## no zone resolution or recurrence expansion. This is not a storage format.
-	Endings :: { duration : TimedOccurrence.Duration, overrides : List(Entry) }.{
+	EndingEntry : { source : LocalDateTime, ending : TimedOccurrence.Ending }
 
-		## One source-label-specific ending. The original source identifies the override,
-		## even when another source resolves to the same boundary.
-		Entry : { source : LocalDateTime, ending : TimedOccurrence.Ending }
+	## Invalid duration, excessive overrides or conflicting endings for one source label.
+	EndingsError : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)]
 
-		## Rejected default duration, excessive entries or conflicting endings for a source.
-		ConstructionError : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)]
-
-		## Check and normalize up to 4096 source-specific ending overrides. Duplicate equal endings
-		## collapse; conflicting endings for one source return ConflictingEnding.
-		normalize : List(Entry) -> Try(List(Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
-		normalize = schedule_endings_normalize_endings
-
-		## Validate the positive default duration and normalize ending overrides once for reuse
-		## across queries. Does not resolve zones or enumerate starts.
-		new : TimedOccurrence.Duration, List(Entry) -> Try(Endings, [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
-		new = |duration, inputs| {
-			overrides = schedule_endings_normalize_endings(inputs)?
-			TimedOccurrence.validate_duration(duration)?
-			Ok({ duration, overrides })
-		}
-
-		## Compare retained duration and normalized source-ending intent. This is declaration
-		## equality, not equivalence of resulting appointment spans.
-		is_eq : Endings, Endings -> Bool
-		is_eq = |a, b| {
-			if !schedule_endings_same_duration_definition(a.duration, b.duration) or a.overrides.len() != b.overrides.len() {
-				return Bool.False
-			}
-			var $index = 0.U64
-			while $index < a.overrides.len() {
-				left = a.overrides.get($index) ?? crash "validated equal list lengths"
-				right = b.overrides.get($index) ?? crash "validated equal list lengths"
-				if left.source != right.source or !schedule_endings_same_ending_definition(left.ending, right.ending) {
-					return Bool.False
-				}
-				$index = $index + 1
-			}
-			Bool.True
-		}
-
-		## Hash the same declaration fields used by equality, including policies and original
-		## override sources, for dictionary keys.
-		to_hash : Endings, Hasher -> Hasher
-		to_hash = |value, hasher| {
-			var $hash = value.overrides.len().to_hash(schedule_endings_hash_duration(value.duration, hasher))
-			for entry in value.overrides {
-				$hash = schedule_endings_hash_ending(entry.ending, entry.source.to_hash($hash))
-			}
-			$hash
-		}
-
-		## Read the checked default duration and normalized overrides for editing or inspection. The
-		## returned fields are not a persistence format.
-		definition : Endings -> { duration : TimedOccurrence.Duration, overrides : List(Entry) }
-		definition = |value| { duration: value.duration, overrides: value.overrides }
-	}
+	## Checked normalized default duration and source-specific ending overrides.
+	Endings : TimedScheduleEndings
 
 	## Replace the ending of one original source label with duration, explicit boundary or
 	## explicit local-end intent. Equal resolved boundaries do not merge source identities.
@@ -208,7 +162,7 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Endpoint order is checked after the start and end are interpreted.
 	new_with_endings : id, TimedRecurrence, TimedRecurrence.Window, TimedOccurrence.Duration, List(EndOverride), TimedRecurrence.Context -> Try(TimedSchedule(id), [InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 	new_with_endings = |series, rule, window, duration, inputs, context| {
-		endings = TimedSchedule.Endings.new(duration, inputs)?
+		endings = TimedScheduleEndings.new(duration, inputs)?
 		from_prepared(series, rule, window, endings, context)
 	}
 
@@ -216,9 +170,9 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## and override normalization are not repeated; query state is fresh.
 	## This carries no persistence semantics. Use ScheduleDefinition for ordinary
 	## reusable declarations that also retain their explicit context and origin.
-	from_prepared : id, TimedRecurrence, TimedRecurrence.Window, TimedSchedule.Endings, TimedRecurrence.Context -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
+	from_prepared : id, TimedRecurrence, TimedRecurrence.Window, TimedScheduleEndings, TimedRecurrence.Context -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
 	from_prepared = |series, rule, window, endings, context| {
-		{ duration, overrides } = TimedSchedule.Endings.definition(endings)
+		{ duration, overrides } = TimedScheduleEndings.definition(endings)
 		starts = TimedRecurrence.cursor(rule, window, context)?
 		Ok({ series, duration, overrides, starts, start_buffered: 0, start_zone_buffered: 0, end_buffered: 0, pending: None })
 	}
@@ -465,7 +419,7 @@ normalize_overrides = |inputs| {
 	if inputs.len() > 4096 {
 		return Err(TooManyOverrides)
 	}
-	match TimedSchedule.Endings.normalize(inputs.map(|input| { source: input.source, ending: After(input.duration) })) {
+	match TimedScheduleEndings.normalize(inputs.map(|input| { source: input.source, ending: After(input.duration) })) {
 		Ok(value) => Ok(value)
 		Err(InvalidDuration) => Err(InvalidDuration)
 		Err(TooManyOverrides) => Err(TooManyOverrides)
@@ -626,23 +580,23 @@ expect {
 	boundary = PosixBoundary.from_microseconds(86400000000)
 	# Definitions stay distinct even if a particular interpretation could
 	# give them equal extents; conflicting inputs do not silently pick one.
-	conflict = match TimedSchedule.Endings.normalize([{ source, ending: AtBoundary(boundary) }, { source, ending: After(Coordinate(PosixDelta.from_microseconds(86400000000))) }]) {
+	conflict = match TimedScheduleEndings.normalize([{ source, ending: AtBoundary(boundary) }, { source, ending: After(Coordinate(PosixDelta.from_microseconds(86400000000))) }]) {
 		Err(ConflictingEnding(position)) => position == source
 		_ => Bool.False
 	}
-	invalid = match TimedSchedule.Endings.normalize([{ source, ending: After(Coordinate(PosixDelta.from_microseconds(0))) }]) {
+	invalid = match TimedScheduleEndings.normalize([{ source, ending: After(Coordinate(PosixDelta.from_microseconds(0))) }]) {
 		Err(InvalidDuration) => Bool.True
 		_ => Bool.False
 	}
 	entry = { source, ending: AtBoundary(boundary) }
-	too_many = match TimedSchedule.Endings.normalize(List.repeat(entry, 4097)) {
+	too_many = match TimedScheduleEndings.normalize(List.repeat(entry, 4097)) {
 		Err(TooManyOverrides) => Bool.True
 		_ => Bool.False
 	}
-	conflict and invalid and too_many and TimedSchedule.Endings.normalize([entry, entry])?.len() == 1
+	conflict and invalid and too_many and TimedScheduleEndings.normalize([entry, entry])?.len() == 1
 }
 
-schedule_endings_normalize_endings : List(TimedSchedule.Endings.Entry) -> Try(List(TimedSchedule.Endings.Entry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
+schedule_endings_normalize_endings : List(TimedSchedule.EndingEntry) -> Try(List(TimedSchedule.EndingEntry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
 schedule_endings_normalize_endings = |inputs| {
 	if inputs.len() > 4096 {
 		return Err(TooManyOverrides)
@@ -741,4 +695,61 @@ schedule_endings_hash_gap : [RejectGap, UseOffsetBeforeGap], Hasher -> Hasher
 schedule_endings_hash_gap = |policy, hasher| match policy {
 	RejectGap => (0.U8).to_hash(hasher)
 	UseOffsetBeforeGap => (1.U8).to_hash(hasher)
+}
+
+TimedScheduleEndings :: { duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndingEntry) }.{
+
+	## One source-label-specific ending. The original source identifies the override,
+	## even when another source resolves to the same boundary.
+
+	## Rejected default duration, excessive entries or conflicting endings for a source.
+
+	## Check and normalize up to 4096 source-specific ending overrides. Duplicate equal endings
+	## collapse; conflicting endings for one source return ConflictingEnding.
+	normalize : List(TimedSchedule.EndingEntry) -> Try(List(TimedSchedule.EndingEntry), [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
+	normalize = schedule_endings_normalize_endings
+
+	## Validate the positive default duration and normalize ending overrides once for reuse
+	## across queries. Does not resolve zones or enumerate starts.
+	new : TimedOccurrence.Duration, List(TimedSchedule.EndingEntry) -> Try(TimedScheduleEndings, [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)])
+	new = |duration, inputs| {
+		overrides = schedule_endings_normalize_endings(inputs)?
+		TimedOccurrence.validate_duration(duration)?
+		Ok({ duration, overrides })
+	}
+
+	## Compare retained duration and normalized source-ending intent. This is declaration
+	## equality, not equivalence of resulting appointment spans.
+	is_eq : TimedScheduleEndings, TimedScheduleEndings -> Bool
+	is_eq = |a, b| {
+		if !schedule_endings_same_duration_definition(a.duration, b.duration) or a.overrides.len() != b.overrides.len() {
+			return Bool.False
+		}
+		var $index = 0.U64
+		while $index < a.overrides.len() {
+			left = a.overrides.get($index) ?? crash "validated equal list lengths"
+			right = b.overrides.get($index) ?? crash "validated equal list lengths"
+			if left.source != right.source or !schedule_endings_same_ending_definition(left.ending, right.ending) {
+				return Bool.False
+			}
+			$index = $index + 1
+		}
+		Bool.True
+	}
+
+	## Hash the same declaration fields used by equality, including policies and original
+	## override sources, for dictionary keys.
+	to_hash : TimedScheduleEndings, Hasher -> Hasher
+	to_hash = |value, hasher| {
+		var $hash = value.overrides.len().to_hash(schedule_endings_hash_duration(value.duration, hasher))
+		for entry in value.overrides {
+			$hash = schedule_endings_hash_ending(entry.ending, entry.source.to_hash($hash))
+		}
+		$hash
+	}
+
+	## Read the checked default duration and normalized overrides for editing or inspection. The
+	## returned fields are not a persistence format.
+	definition : TimedScheduleEndings -> { duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndingEntry) }
+	definition = |value| { duration: value.duration, overrides: value.overrides }
 }

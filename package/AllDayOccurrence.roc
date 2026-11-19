@@ -13,64 +13,49 @@ import ZoneRules
 ## An identified civil-day selection, including occurrences with empty coverage.
 ## Pair an application series ID with the original date for recurrence identity.
 ## Duration counts civil days, never fixed 24-hour elapsed quantities.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection : ResolvedSelection }.{
 
 	## Constant calendar work; zone interpretation is deferred to the cursor.
 	## Both the source and exclusive end must fit the source calendar and rules.
-	cursor : id, Calendar.Date, U64, ZoneRules -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity])
-	cursor = |id, date, days, rules| {
-		if days == 0 {
+	cursor : id, Calendar.Date, U64, ZoneRules -> Try(AllDayOccurrenceCursor(id), [InvalidDuration, OutOfRange, OutsideValidity])
+	cursor = |id_value, date_value, days_value, rules| {
+		if days_value == 0 {
 			return Err(InvalidDuration)
 		}
-		start_number = CivilDay.to_day_number(Calendar.Date.to_civil_day(date))
-		end_number = match I128.to_i64_try(start_number.to_i128() + days.to_i128()) {
+		start_number = CivilDay.to_day_number(Calendar.Date.to_civil_day(date_value))
+		end_number = match I128.to_i64_try(start_number.to_i128() + days_value.to_i128()) {
 			Ok(value) => value
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
-		end = match Calendar.Date.from_civil_day(Calendar.Date.calendar(date), CivilDay.from_day_number(end_number)) {
+		end = match Calendar.Date.from_civil_day(Calendar.Date.calendar(date_value), CivilDay.from_day_number(end_number)) {
 			Ok(value) => value
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
 		midnight = midnight_clock(0)
-		pending = match ZoneRules.selection_cursor(rules, LocalDateTime.new(date, midnight), LocalDateTime.new(end, midnight)) {
+		pending = match ZoneRules.selection_cursor(rules, LocalDateTime.new(date_value, midnight), LocalDateTime.new(end, midnight)) {
 			Ok(value) => value
 			Err(EmptySelection) => crash "positive civil duration is nonempty"
 			Err(ReversedSelection) => crash "positive civil duration is ordered"
 			Err(OutsideValidity) => return Err(OutsideValidity)
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
-		Ok({ id, date, days, pending })
+		Ok({ id: id_value, date: date_value, days: days_value, pending })
 	}
 
 	## Outcome of interpreting one all-day occurrence. Limited retains a cursor; Complete
 	## supplies the occurrence even when its coverage is empty.
-	Batch(id) : {
+	Batch(id_value) : {
 		segments : U64,
 		buffered : U64,
-		status : [Complete(AllDayOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })],
+		status : [Complete(AllDayOccurrence(id_value)), Limited({ cursor : AllDayOccurrenceCursor(id_value), reason : [WorkLimit, BufferLimit] })],
 	}
 
 	## Pending interpretation of an all-day declaration. Retain this value when a zone work or
 	## buffer limit stops collection.
-	Cursor(id) :: { id : id, date : Calendar.Date, days : U64, pending : ZoneRules.SelectionCursor }.{
-
-		## Advance interpretation within the supplied zone segment/member limits. Resume Limited with
-		## its returned cursor; only Complete supplies a fully interpreted occurrence.
-		collect : Cursor(id), ZoneRules.SelectionLimits -> Try(Batch(id), [OutOfRange])
-		collect = |state, limits| {
-			batch = ResolvedSelection.collect(state.pending, limits)?
-			status = match batch.status {
-				Complete(selection) => Complete({ id: state.id, date: state.date, days: state.days, selection })
-				Limited(progress) => Limited({ cursor: { ..state, pending: progress.cursor }, reason: progress.reason })
-			}
-			Ok({ segments: batch.segments, buffered: batch.buffered, status })
-		}
-
-		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
-		## Use typed accessors for application logic; this text is not a storage format.
-		to_inspect : Cursor(id) -> Str
-		to_inspect = |state| "AllDayOccurrence.Cursor(${Str.inspect(state.date)}, days=${state.days.to_str()})"
-	}
+	Cursor(id_value) : AllDayOccurrenceCursor(id_value)
 
 	## Return the application identifier; equal coverage does not make two events identical.
 	id : AllDayOccurrence(id) -> id
@@ -119,13 +104,13 @@ expect {
 		rules = ZoneRules.new_bounded("Synthetic/Day", "v1", validity, FixedOffset.from_seconds(0), [{ at: test_alldayoccurrence_point(at), offset: FixedOffset.from_seconds(offset) }], { minimum: I32.min(0, offset), maximum: I32.max(0, offset) })?
 		date = test_alldayoccurrence_day(1)?
 		initial = AllDayOccurrence.cursor({ series: "visits", date }, date, 1, rules)?
-		first = AllDayOccurrence.Cursor.collect(initial, { max_segments: 1, max_members: 1 })?
+		first = AllDayOccurrenceCursor.collect(initial, { max_segments: 1, max_members: 1 })?
 		match first.status {
 			Complete(_) => {
 				$valid = Bool.False
 			}
 			Limited(progress) => {
-				last = AllDayOccurrence.Cursor.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
+				last = AllDayOccurrenceCursor.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
 				match last.status {
 					Limited(_) => {
 						$valid = Bool.False
@@ -161,11 +146,11 @@ expect {
 	}
 	julian = Calendar.Date.in_calendar(date, Julian)?
 	initial = AllDayOccurrence.cursor("two-test_alldayoccurrence_day-visit", julian, 2, rules)?
-	limited = AllDayOccurrence.Cursor.collect(initial, { max_segments: 0, max_members: 1 })?
+	limited = AllDayOccurrenceCursor.collect(initial, { max_segments: 0, max_members: 1 })?
 	resumed = match limited.status {
 		Complete(_) => False
 		Limited(progress) => {
-			batch = AllDayOccurrence.Cursor.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
+			batch = AllDayOccurrenceCursor.collect(progress.cursor, { max_segments: 1, max_members: 1 })?
 			match batch.status {
 				Limited(_) => False
 				Complete(value) => AllDayOccurrence.date(value) == julian and
@@ -175,4 +160,24 @@ expect {
 		}
 	}
 	zero and huge and missing and resumed
+}
+
+AllDayOccurrenceCursor(id) :: { id : id, date : Calendar.Date, days : U64, pending : ZoneRules.SelectionCursor }.{
+
+	## Advance interpretation within the supplied zone segment/member limits. Resume Limited with
+	## its returned cursor; only Complete supplies a fully interpreted occurrence.
+	collect : AllDayOccurrenceCursor(id), ZoneRules.SelectionLimits -> Try(AllDayOccurrence.Batch(id), [OutOfRange])
+	collect = |state, limits| {
+		batch = ResolvedSelection.collect(state.pending, limits)?
+		status = match batch.status {
+			Complete(selection) => Complete({ id: state.id, date: state.date, days: state.days, selection })
+			Limited(progress) => Limited({ cursor: { ..state, pending: progress.cursor }, reason: progress.reason })
+		}
+		Ok({ segments: batch.segments, buffered: batch.buffered, status })
+	}
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
+	to_inspect : AllDayOccurrenceCursor(id) -> Str
+	to_inspect = |state| "AllDayOccurrence.Cursor(${Str.inspect(state.date)}, days=${state.days.to_str()})"
 }

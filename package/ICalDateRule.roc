@@ -47,11 +47,14 @@ import ICalRuleText
 ##
 ## Examples assume a package dependency named `time`.
 ICalDateRule :: [].{
+
 	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc5545-date-values-v1"
+
 	## Extracted DTSTART, RRULE, RDATE and EXDATE values. Entries are strings, not property lines; inclusion/exclusion strings may contain comma lists.
 	Parts : { start : Str, rule : Str, inclusions : List(Str), exclusions : List(Str) }
+
 	## Identifies the offending property or rule component, unsupported combinations and limits; InvalidRule retains native recurrence validation failures.
 	Error : [Malformed(Str), Duplicate(Str), Missing(Str), Unsupported(Str), OutOfRange(Str), Incompatible(Str), InvalidDate(Str), TooLarge, InvalidRule([InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])]
 
@@ -272,10 +275,12 @@ expect {
 	anchor = test_rfcdaterule_date(2025, 1, 1)
 	ICalDateRule.to_parts(DateRecurrence.new(test_rfcdaterule_date(0, 1, 1), base)?) == Err(OutOfRange("DTSTART")) and
 		ICalDateRule.to_parts(DateRecurrence.new(anchor, { ..base, termination: Count(2147483648) })?) == Err(OutOfRange("COUNT")) and
-			(match DateRecurrence.new(anchor, { ..base, pattern: { ..base.pattern, interval: 2147483648 } }) {
-				Err(InvalidInterval) => True
-				_ => False
-			}) and
+			(
+				match DateRecurrence.new(anchor, { ..base, pattern: { ..base.pattern, interval: 2147483648 } }) {
+					Err(InvalidInterval) => True
+					_ => False
+				}
+			) and
 				ICalDateRule.to_parts(DateRecurrence.new(anchor, { ..base, by_set_pos: [1] })?) == Err(Incompatible("BYSETPOS requires another BY selector"))
 }
 

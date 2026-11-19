@@ -32,7 +32,11 @@ import PosixSpan
 ## ```
 ##
 ## Examples assume a package dependency named `time`.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 Coverage :: [Spans(List(PosixSpan))].{
+
 	## Coverage containing no occupied spans. Empty coverage is a complete value,
 	## not a signal that interpretation failed.
 	empty : Coverage
@@ -63,81 +67,18 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Validate start ordering in O(n); merge overlap and touch.
 	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput])
 	from_sorted_spans = |input| {
-		var $builder = SortedBuilder.empty
+		var $builder = CoverageSortedBuilder.empty
 		for span in input {
-			$builder = SortedBuilder.append($builder, span)?
+			$builder = CoverageSortedBuilder.append($builder, span)?
 		}
-		Ok(SortedBuilder.to_coverage($builder))
+		Ok(CoverageSortedBuilder.to_coverage($builder))
 	}
 
 	## Incremental construction from start-ordered spans, including across input
 	## chunks. Retains canonical output plus one pending span, not all raw input.
 	## This materializes coverage; it is not a lazy output iterator. Retaining a
 	## builder/snapshot can cause subsequent List appends to copy shared storage.
-	SortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary)] }.{
-		## Start an empty builder for spans supplied in nondecreasing start order.
-		empty : SortedBuilder
-		empty = { state: { done: [], pending: None }, previous: None }
-		## Count canonical members accumulated so far, including the current last span.
-		## Touching or overlapping additions can leave this count unchanged.
-		member_count : SortedBuilder -> U64
-		member_count = |builder| builder.state.done.len() + match builder.state.pending {
-			None => 0
-			Some(_) => 1
-		}
-
-		## Constant comparison work; owned append is amortized, shared append may
-		## copy retained output. Equal starts are valid; decreasing starts fail.
-		append : SortedBuilder, PosixSpan -> Try(SortedBuilder, [UnsortedInput])
-		append = |builder, span| match append_bounded(builder, span, U64.highest)? {
-			Added(updated) => Ok(updated)
-			Full => crash "Allocated span list cannot exhaust U64 member count"
-		}
-
-		## Full leaves the input builder unchanged and performs no output append.
-		## The limit counts canonical members, so touching/overlapping input can
-		## still merge at capacity. An already larger builder also returns Full.
-		append_bounded : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full], [UnsortedInput])
-		append_bounded = |builder, span, limit| match append_retaining(builder, span, limit)? {
-			Added(updated) => Ok(Added(updated))
-			Full(_) => Ok(Full)
-		}
-
-		## Bounded append that returns the unchanged builder on Full. Use this
-		## when resuming construction without retaining an alias across a successful
-		## append. The limit counts canonical members; overlap and touch can merge
-		## at capacity. Decreasing starts fail with UnsortedInput.
-		## append_bounded uses the same validation and merge, but discards the
-		## returned builder on Full. Retained snapshots may make later appends copy.
-		append_retaining : SortedBuilder, PosixSpan, U64 -> Try([Added(SortedBuilder), Full(SortedBuilder)], [UnsortedInput])
-		append_retaining = |builder, span, limit| {
-			match builder.previous {
-				Some(previous) => if previous > PosixSpan.start(span) {
-					return Err(UnsortedInput)
-				}
-				None => {}
-			}
-			adds_member = match builder.state.pending {
-				None => Bool.True
-				Some(previous) => PosixSpan.start(span) > PosixSpan.end(previous)
-			}
-			count = member_count(builder)
-			if count > limit or (adds_member and count == limit) {
-				return Ok(Full(builder))
-			}
-			Ok(Added({ state: push(builder.state, span), previous: Some(PosixSpan.start(span)) }))
-		}
-
-		## Finish the accumulated canonical coverage without sorting it again.
-		## The result may share storage with earlier snapshots; retaining a snapshot
-		## can cause finishing or subsequent construction to copy shared output.
-		to_coverage : SortedBuilder -> Coverage
-		to_coverage = |builder| Spans(finish(builder.state))
-		## Return a bounded diagnostic description of the accumulated coverage.
-		## It does not visit every position or consume the builder.
-		to_inspect : SortedBuilder -> Str
-		to_inspect = |builder| "Coverage.SortedBuilder(members=${member_count(builder).to_str()})"
-	}
+	SortedBuilder : CoverageSortedBuilder
 
 	## Returns the canonical spans. Roc may share their backing storage.
 	to_spans : Coverage -> List(PosixSpan)
@@ -163,6 +104,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Use fact_at to request individual facts without enumerating positions.
 	fact_count : Coverage -> U64
 	fact_count = |coverage| member_count(coverage) + 1
+
 	## Read one semantic fact by zero-based index: the summary is at zero, then
 	## canonical span facts follow in order. Return End beyond the final fact.
 	fact_at : Coverage, U64 -> [End, Item(SemanticFact)]
@@ -243,9 +185,9 @@ Coverage :: [Spans(List(PosixSpan))].{
 		if index == List.len(items) {
 			Bool.False
 		}
-			else {
-				PosixSpan.contains(at(items, index), point)
-			}
+		else {
+			PosixSpan.contains(at(items, index), point)
+		}
 	}
 
 	## Fold whole overlapping members, not clipped intersections. O(log n + k).
@@ -387,12 +329,12 @@ union_nonempty = |a, b| {
 		take_a = if $i == List.len(a) {
 			Bool.False
 		}
-			else if $j == List.len(b) {
-				Bool.True
-			}
-				else {
-					PosixBoundary.compare(PosixSpan.start(at(a, $i)), PosixSpan.start(at(b, $j))) != GT
-				}
+		else if $j == List.len(b) {
+			Bool.True
+		}
+		else {
+			PosixBoundary.compare(PosixSpan.start(at(a, $i)), PosixSpan.start(at(b, $j))) != GT
+		}
 		if take_a {
 			$builder = push($builder, at(a, $i))
 			$i = $i + 1
@@ -467,23 +409,23 @@ expect {
 	a = PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(10))?
 	b = PosixSpan.new(PosixBoundary.from_microseconds(10), PosixBoundary.from_microseconds(12))?
 	c = PosixSpan.new(PosixBoundary.from_microseconds(14), PosixBoundary.from_microseconds(15))?
-	first = Coverage.SortedBuilder.append(Coverage.SortedBuilder.empty, a)?
-	snapshot = Coverage.SortedBuilder.to_coverage(first)
-	match Coverage.SortedBuilder.append_bounded(first, b, 1)? {
+	first = CoverageSortedBuilder.append(CoverageSortedBuilder.empty, a)?
+	snapshot = CoverageSortedBuilder.to_coverage(first)
+	match CoverageSortedBuilder.append_bounded(first, b, 1)? {
 		Full => False
 		Added(second) => {
-			blocked = match Coverage.SortedBuilder.append_bounded(second, c, 1)? {
+			blocked = match CoverageSortedBuilder.append_bounded(second, c, 1)? {
 				Full => True
 				_ => False
 			}
 			# A merged hull must not hide decreasing original input starts.
-			unsorted = match Coverage.SortedBuilder.append(second, a) {
+			unsorted = match CoverageSortedBuilder.append(second, a) {
 				Err(UnsortedInput) => True
 				_ => False
 			}
-			third = Coverage.SortedBuilder.append(second, c)?
+			third = CoverageSortedBuilder.append(second, c)?
 			blocked and unsorted and snapshot == Coverage.from_spans([a]) and
-				Coverage.SortedBuilder.to_coverage(third) == Coverage.from_spans([a, b, c])
+				CoverageSortedBuilder.to_coverage(third) == Coverage.from_spans([a, b, c])
 		}
 	}
 }
@@ -493,14 +435,14 @@ expect {
 expect {
 	a = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(-1))?
 	b = PosixSpan.new(PosixBoundary.from_microseconds(1), PosixBoundary.from_microseconds(2))?
-	first = Coverage.SortedBuilder.append(Coverage.SortedBuilder.empty, a)?
-	snapshot = Coverage.SortedBuilder.to_coverage(first)
-	match Coverage.SortedBuilder.append_retaining(first, b, 1)? {
+	first = CoverageSortedBuilder.append(CoverageSortedBuilder.empty, a)?
+	snapshot = CoverageSortedBuilder.to_coverage(first)
+	match CoverageSortedBuilder.append_retaining(first, b, 1)? {
 		Added(_) => False
-		Full(resume) => match Coverage.SortedBuilder.append_retaining(resume, b, 2)? {
+		Full(resume) => match CoverageSortedBuilder.append_retaining(resume, b, 2)? {
 			Full(_) => False
 			Added(done) => {
-				result = Coverage.SortedBuilder.to_coverage(done)
+				result = CoverageSortedBuilder.to_coverage(done)
 				snapshot == Coverage.from_spans([a]) and
 					Coverage.member_count(result) == 2 and
 						result == Coverage.from_spans([a, b])
@@ -658,4 +600,72 @@ expect {
 	span = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
 	coverage = Coverage.from_spans([span])
 	Coverage.fact_count(Coverage.empty) == 1 and Coverage.fact_at(Coverage.empty, 0) == Item(SemanticFact.new(CoverageDescription({ member_count: 0 }))) and Coverage.fact_at(Coverage.empty, 1) == End and Coverage.fact_count(coverage) == 2 and Coverage.fact_at(coverage, 1) == Item(SemanticFact.new(CoverageMember({ index: 0, span }))) and Coverage.fact_at(coverage, 2) == End and Coverage.fact_at(coverage, U64.highest) == End
+}
+
+CoverageSortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary)] }.{
+
+	## Start an empty builder for spans supplied in nondecreasing start order.
+	empty : CoverageSortedBuilder
+	empty = { state: { done: [], pending: None }, previous: None }
+
+	## Count canonical members accumulated so far, including the current last span.
+	## Touching or overlapping additions can leave this count unchanged.
+	member_count : CoverageSortedBuilder -> U64
+	member_count = |builder| builder.state.done.len() + match builder.state.pending {
+		None => 0
+		Some(_) => 1
+	}
+
+	## Constant comparison work; owned append is amortized, shared append may
+	## copy retained output. Equal starts are valid; decreasing starts fail.
+	append : CoverageSortedBuilder, PosixSpan -> Try(CoverageSortedBuilder, [UnsortedInput])
+	append = |builder, span| match append_bounded(builder, span, U64.highest)? {
+		Added(updated) => Ok(updated)
+		Full => crash "Allocated span list cannot exhaust U64 member count"
+	}
+
+	## Full leaves the input builder unchanged and performs no output append.
+	## The limit counts canonical members, so touching/overlapping input can
+	## still merge at capacity. An already larger builder also returns Full.
+	append_bounded : CoverageSortedBuilder, PosixSpan, U64 -> Try([Added(CoverageSortedBuilder), Full], [UnsortedInput])
+	append_bounded = |builder, span, limit| match append_retaining(builder, span, limit)? {
+		Added(updated) => Ok(Added(updated))
+		Full(_) => Ok(Full)
+	}
+
+	## Bounded append that returns the unchanged builder on Full. Use this
+	## when resuming construction without retaining an alias across a successful
+	## append. The limit counts canonical members; overlap and touch can merge
+	## at capacity. Decreasing starts fail with UnsortedInput.
+	## append_bounded uses the same validation and merge, but discards the
+	## returned builder on Full. Retained snapshots may make later appends copy.
+	append_retaining : CoverageSortedBuilder, PosixSpan, U64 -> Try([Added(CoverageSortedBuilder), Full(CoverageSortedBuilder)], [UnsortedInput])
+	append_retaining = |builder, span, limit| {
+		match builder.previous {
+			Some(previous) => if previous > PosixSpan.start(span) {
+				return Err(UnsortedInput)
+			}
+			None => {}
+		}
+		adds_member = match builder.state.pending {
+			None => Bool.True
+			Some(previous) => PosixSpan.start(span) > PosixSpan.end(previous)
+		}
+		count = member_count(builder)
+		if count > limit or (adds_member and count == limit) {
+			return Ok(Full(builder))
+		}
+		Ok(Added({ state: push(builder.state, span), previous: Some(PosixSpan.start(span)) }))
+	}
+
+	## Finish the accumulated canonical coverage without sorting it again.
+	## The result may share storage with earlier snapshots; retaining a snapshot
+	## can cause finishing or subsequent construction to copy shared output.
+	to_coverage : CoverageSortedBuilder -> Coverage
+	to_coverage = |builder| Spans(finish(builder.state))
+
+	## Return a bounded diagnostic description of the accumulated coverage.
+	## It does not visit every position or consume the builder.
+	to_inspect : CoverageSortedBuilder -> Str
+	to_inspect = |builder| "Coverage.SortedBuilder(members=${member_count(builder).to_str()})"
 }

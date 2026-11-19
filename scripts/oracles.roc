@@ -1,5 +1,5 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Env
 import cli.Monotonic
@@ -106,7 +106,7 @@ main! = |args| {
 			label: "comparator-tests",
 		})?
 		interpreted = OracleStages.run!({
-			command: [program, "main.roc"],
+			command: [program, "--opt=interpreter", "main.roc"],
 			cwd: session,
 			logs: session,
 			label: "interpret",
@@ -174,7 +174,7 @@ main! = |args| {
 			session,
 			workers: options.workers,
 		})?
-		elapsed = (Monotonic.now!() - started).to_f64() / 1000000000
+		elapsed = started.elapsed!().to_nanos().to_f64() / 1000000000
 		counts = results.map(|result| result.allocations)
 		var $package_hashes = []
 		for file in Files.sort_paths(Files.direct_roc_files!("package")?) {

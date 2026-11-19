@@ -84,10 +84,12 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 			(ICal(left), ICal(right)) => {
 				x = ICalTimedRule.definition(left.rule)
 				y = ICalTimedRule.definition(right.rule)
-				x.mode == y.mode and x.duration == y.duration and x.periods == y.periods and TimedRecurrence.definition(x.rule) == TimedRecurrence.definition(y.rule) and (match (left.context, right.context) {
-					(Utc, Utc) | (Local(_), Local(_)) => Bool.True
-					_ => Bool.False
-				})
+				x.mode == y.mode and x.duration == y.duration and x.periods == y.periods and TimedRecurrence.definition(x.rule) == TimedRecurrence.definition(y.rule) and (
+					match (left.context, right.context) {
+						(Utc, Utc) | (Local(_), Local(_)) => Bool.True
+						_ => Bool.False
+					}
+				)
 			}
 			_ => Bool.False
 		}

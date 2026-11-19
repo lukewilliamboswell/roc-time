@@ -46,7 +46,7 @@ IntegrationCases := [].{
 				{
 					name: "fuzz replay and bounded search",
 					program: "scripts/fuzz.roc",
-					args: ["--", "--operation", "all", "--runs", "100", "--seconds", "1", "--seed", "1"],
+					args: ["--operation", "all", "--runs", "100", "--seconds", "1", "--seed", "1"],
 				},
 				{ name: "instrumented fixture controls", program: "scripts/check_fixture_platform.roc", args: [] },
 				{ name: "optional zone database", program: "scripts/check_zone_database.roc", args: [] },
@@ -55,10 +55,10 @@ IntegrationCases := [].{
 				{
 					name: "immutable API archive controls",
 					program: "scripts/restore_api_docs.roc",
-					args: ["--", "--self-test"],
+					args: ["--self-test"],
 				},
 				{ name: "native manual acceptance", program: "scripts/build_docs.roc", args: [] },
-				{ name: "local recurrence resource budgets", program: "scripts/test_local_recurrence.roc", args: ["--", "--resources-only"] },
+				{ name: "local recurrence resource budgets", program: "scripts/test_local_recurrence.roc", args: ["--resources-only"] },
 			])
 	}
 }
@@ -68,7 +68,7 @@ application = |{ roc, work, name, modes }| {
 	source = "tests/${name}/main.roc"
 	[
 		{ name: "${name} check", program: roc, args: ["check", source] },
-		{ name: "${name} interpreter", program: roc, args: [source] },
+		{ name: "${name} interpreter", program: roc, args: ["--opt=interpreter", source] },
 	].concat(
 		modes.map(
 			|mode| {

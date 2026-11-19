@@ -1,10 +1,12 @@
 import cli.Cmd
+import cli.OsStr
+import cli.Duration
 import cli.Monotonic
 import cli.Path
 import NativeMetrics
 import OracleCases
 
-Pending : { child : Cmd.Child, case : OracleCases.Case, command : List(Str), start : U64 }
+Pending : { child : Cmd.Child, case : OracleCases.Case, command : List(Str), start : Monotonic }
 
 ## Bounded FIFO supervision: at most `workers` live child handles, exact
 ## comparison in corpus order, and preserved bounded artifacts on failure.
@@ -100,13 +102,13 @@ start! = |{ binary, case, session, timeout }| {
 	}
 	command = [Path.display(binary), case.id, case.operation].concat(case.input)
 	start = Monotonic.now!()
-	child = Cmd.new(Path.to_os_str(binary)).args_str(command.drop_first(1)).cwd(session).timeout_ms(timeout).manage_tree(Bool.True).output_limit(16384).stdout(Capture).stderr(Capture).spawn!().map_err(|error| OracleSpawn(error))?
+	child = Cmd.new(Path.to_os_str(binary)).args((command.drop_first(1)).map(OsStr.from_str)).cwd(session).timeout(Duration.millis(timeout)).manage_tree(Bool.True).output_limit(MaxBytes(16384)).stdout(Capture).stderr(Capture).spawn!().map_err(|error| OracleSpawn(error))?
 	Ok({ child, case, command, start })
 }
 
-finish! : Pending, Try(Cmd.RunOutput, Cmd.RunErr), Path => Try(OracleReplay.Result, _)
+finish! : Pending, Try(Cmd.Output, [CmdErr(Cmd.Err), Interrupted, Closed]), Path => Try(OracleReplay.Result, _)
 finish! = |pending, outcome, session| {
-	seconds = (Monotonic.now!() - pending.start).to_f64() / 1000000000
+	seconds = pending.start.elapsed!().to_nanos().to_f64() / 1000000000
 	(result, stdout_bytes, stderr_bytes) = match outcome {
 		Ok(output) => (
 			validate({
@@ -117,8 +119,8 @@ finish! = |pending, outcome, session| {
 			output.stdout_bytes,
 			output.stderr_bytes,
 		)
-		Err(Timeout(partial)) => (Err(Timeout), partial.stdout_bytes, partial.stderr_bytes)
-		Err(OutputLimit(partial)) => (Err(OutputLimit), partial.stdout_bytes, partial.stderr_bytes)
+		Err(CmdErr(TimedOut(partial))) => (Err(Timeout), partial.stdout_bytes, partial.stderr_bytes)
+		Err(CmdErr(OutputLimitExceeded(partial))) => (Err(OutputLimit), partial.stdout_bytes, partial.stderr_bytes)
 		Err(_) => (Err(Supervision), [], [])
 	}
 	match result {
@@ -137,7 +139,7 @@ finish! = |pending, outcome, session| {
 	}
 }
 
-validate : { case : OracleCases.Case, output : Cmd.RunOutput, seconds : F64 } -> Try(OracleReplay.Result, OracleReplay.FailureKind)
+validate : { case : OracleCases.Case, output : Cmd.Output, seconds : F64 } -> Try(OracleReplay.Result, OracleReplay.FailureKind)
 validate = |{ case, output, seconds }| {
 	if output.status != Exited(0) {
 		return Err(Status)

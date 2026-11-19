@@ -5,7 +5,12 @@
 //!
 //! Hosted argument ownership:
 //! - Roc transfers ownership of refcounted arguments to the hosted function.
-//! - The hosted function must decref owned refcounted arguments when done.
+//! - The hosted function must release owned refcounted arguments when done, using
+//!   the release call named in each hosted symbol's doc comment below.
+//! - Releasing a container releases its elements only when the container's own
+//!   count reaches zero, which is what compiled Roc code does when it drops one
+//!   it owns. Releasing the elements unconditionally double-frees them whenever
+//!   the Roc caller still holds the container.
 //! - If the host stores or returns an argument, it must retain or transfer ownership explicitly.
 //!
 //! Import this file from the platform host and implement the listed hosted symbols
@@ -13,6 +18,33 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
+
+/// Runtime representation of Roc's fixed-point `Dec` value.
+///
+/// `num` stores the decimal value scaled by 10^18.
+pub const RocDec = extern struct {
+    num: i128,
+};
+
+comptime {
+    if (@sizeOf(RocDec) != 16) @compileError("RocDec size mismatch");
+    if (@alignOf(RocDec) != 16) @compileError("RocDec alignment mismatch");
+}
+
+pub const RocU8x16 = @Vector(16, u8);
+pub const RocI8x16 = @Vector(16, i8);
+pub const RocU16x8 = @Vector(8, u16);
+pub const RocI16x8 = @Vector(8, i16);
+pub const RocU32x4 = @Vector(4, u32);
+pub const RocI32x4 = @Vector(4, i32);
+pub const RocU64x2 = @Vector(2, u64);
+pub const RocI64x2 = @Vector(2, i64);
+comptime {
+    for (.{ RocU8x16, RocI8x16, RocU16x8, RocI16x8, RocU32x4, RocI32x4, RocU64x2, RocI64x2 }) |T| {
+        if (@sizeOf(T) != 16) @compileError("Roc SIMD size mismatch");
+        if (@alignOf(T) != 16) @compileError("Roc SIMD alignment mismatch");
+    }
+}
 
 /// Runtime representation of an opaque `Box(T)` value.
 pub const RocBox = ?*anyopaque;
@@ -23,16 +55,24 @@ pub const RocBox = ?*anyopaque;
 /// linker symbols declared below (`roc_alloc`, hosted symbols, and provided entrypoints).
 pub const RocHost = extern struct {
     env: *anyopaque,
-    roc_alloc: *const fn (*RocHost, usize, usize) callconv(.c) ?*anyopaque,
+    /// Never returns null; see `roc_alloc` below.
+    roc_alloc: *const fn (*RocHost, usize, usize) callconv(.c) *anyopaque,
     roc_dealloc: *const fn (*RocHost, *anyopaque, usize) callconv(.c) void,
-    roc_realloc: *const fn (*RocHost, *anyopaque, usize, usize) callconv(.c) ?*anyopaque,
+    /// Never returns null; see `roc_realloc` below.
+    roc_realloc: *const fn (*RocHost, *anyopaque, usize, usize) callconv(.c) *anyopaque,
     roc_dbg: *const fn (*RocHost, [*]const u8, usize) callconv(.c) void,
     roc_expect_failed: *const fn (*RocHost, [*]const u8, usize) callconv(.c) void,
     roc_crashed: *const fn (*RocHost, [*]const u8, usize) callconv(.c) void,
 };
 
 /// Private erased-callable function pointer stored in `RocErasedCallablePayload`.
-pub const RocErasedCallableFn = *const fn (*RocHost, ?[*]u8, ?[*]const u8, ?[*]u8) callconv(.c) void;
+///
+/// The final `reuse` pointer is nullable. Non-null must be the callable data
+/// pointer whose inline capture begins at `capture`; it transfers one owned
+/// reference to the callee. The caller must not use or decref that ownership
+/// unit after the call. The callee consumes it exactly once, whether or not the
+/// result can reuse the allocation.
+pub const RocErasedCallableFn = *const fn (*RocHost, ?[*]u8, ?[*]const u8, ?[*]u8, ?[*]u8, *?*const anyopaque) callconv(.c) void;
 
 /// Final-drop callback for inline erased-callable captures.
 pub const RocErasedCallableOnDrop = *const fn (?[*]u8, *RocHost) callconv(.c) void;
@@ -41,6 +81,8 @@ pub const RocErasedCallableOnDrop = *const fn (?[*]u8, *RocHost) callconv(.c) vo
 pub const RocErasedCallablePayload = extern struct {
     callable_fn_ptr: RocErasedCallableFn,
     on_drop: ?RocErasedCallableOnDrop,
+    on_copy: ?*const fn (?[*]u8, isize) callconv(.c) void = null,
+    capture_size: usize = 0,
 };
 
 /// Runtime representation of `Box(function)`.
@@ -78,7 +120,7 @@ pub fn rocErasedCallableAllocate(
     const rc: *isize = @ptrFromInt(@intFromPtr(data) - @sizeOf(isize));
     rc.* = 1;
     const payload: *RocErasedCallablePayload = @ptrCast(@alignCast(data));
-    payload.* = .{ .callable_fn_ptr = callable_fn_ptr, .on_drop = on_drop };
+    payload.* = .{ .callable_fn_ptr = callable_fn_ptr, .on_drop = on_drop, .capture_size = capture_size };
     return data;
 }
 
@@ -117,7 +159,7 @@ pub fn allocateBox(
 
 /// Decrement a pointer-aligned boxed payload with no Roc refcounted values.
 pub fn decrefBox(data_ptr: ?*anyopaque, roc_host: *RocHost) void {
-    decrefBoxWith(data_ptr, @alignOf(usize), null, roc_host);
+    decrefBoxWith(data_ptr, @alignOf(usize), false, null, roc_host);
 }
 
 /// Increment a boxed function closure.
@@ -129,7 +171,7 @@ pub fn increfErasedCallable(callable: RocErasedCallable, amount: isize) void {
 /// Decrement a boxed function closure and run its capture drop callback on final release.
 pub fn decrefErasedCallable(callable: RocErasedCallable, roc_host: *RocHost) void {
     const data = callable orelse return;
-    decrefBoxWith(@ptrCast(data), roc_erased_callable_payload_alignment, &dropErasedCallablePayload, roc_host);
+    decrefBoxWith(@ptrCast(data), roc_erased_callable_payload_alignment, false, &dropErasedCallablePayload, roc_host);
 }
 
 fn dropErasedCallablePayload(data_ptr: ?*anyopaque, roc_host: *RocHost) callconv(.c) void {
@@ -142,9 +184,16 @@ fn dropErasedCallablePayload(data_ptr: ?*anyopaque, roc_host: *RocHost) callconv
 }
 
 /// Decrement a boxed payload and run payload teardown when this is the final ref.
+///
+/// `payload_contains_refcounted` must match the value passed to `allocateBox`:
+/// it determines the box header size, and is independent of whether a
+/// `payload_decref` teardown callback is supplied. A host resource handle such
+/// as `Box(U64)` holding a raw pointer has `payload_contains_refcounted = false`
+/// even when it provides a teardown callback to free the underlying resource.
 pub fn decrefBoxWith(
     data_ptr: ?*anyopaque,
     payload_alignment: usize,
+    payload_contains_refcounted: bool,
     payload_decref: ?RocBoxPayloadDecref,
     roc_host: *RocHost,
 ) void {
@@ -155,20 +204,23 @@ pub fn decrefBoxWith(
     const prev = @atomicRmw(isize, rc, .Sub, 1, .monotonic);
     if (prev == 1) {
         if (payload_decref) |callback| callback(data_ptr, roc_host);
-        freeBoxAllocation(data, payload_alignment, payload_decref != null, roc_host);
+        freeBoxAllocation(data, payload_alignment, payload_contains_refcounted, roc_host);
     }
 }
 
 /// Free a boxed payload allocation immediately after running payload teardown.
+///
+/// See `decrefBoxWith` for the meaning of `payload_contains_refcounted`.
 pub fn freeBoxWith(
     data_ptr: ?*anyopaque,
     payload_alignment: usize,
+    payload_contains_refcounted: bool,
     payload_decref: ?RocBoxPayloadDecref,
     roc_host: *RocHost,
 ) void {
     const data = boxDataPtr(data_ptr) orelse return;
     if (payload_decref) |callback| callback(data_ptr, roc_host);
-    freeBoxAllocation(data, payload_alignment, payload_decref != null, roc_host);
+    freeBoxAllocation(data, payload_alignment, payload_contains_refcounted, roc_host);
 }
 
 /// Return true when a boxed payload data pointer has exactly one live ref.
@@ -295,7 +347,7 @@ pub const RocStr = extern struct {
         const alloc_ptr = self.getAllocationPtr() orelse return;
         const data_addr = @intFromPtr(alloc_ptr);
         const rc: *isize = @ptrFromInt(data_addr - @sizeOf(isize));
-        if (rc.* == 0) return; // REFCOUNT_STATIC_DATA — bytes are in read-only memory
+        if (rc.* == 0) return; // REFCOUNT_STATIC_DATA—bytes are in read-only memory
         const prev = @atomicRmw(isize, rc, .Sub, 1, .monotonic);
         if (prev == 1) {
             const ptr_width = @sizeOf(usize);
@@ -318,7 +370,7 @@ pub const RocStr = extern struct {
         if (self.isSmallStr()) return true;
         const alloc_ptr = self.getAllocationPtr() orelse return true;
         const rc: *const isize = @ptrFromInt(@intFromPtr(alloc_ptr) - @sizeOf(isize));
-        if (rc.* == 0) return true; // REFCOUNT_STATIC_DATA — treated as unique
+        if (rc.* == 0) return true; // REFCOUNT_STATIC_DATA—treated as unique
         return rc.* == 1;
     }
 
@@ -419,6 +471,10 @@ pub fn RocListWith(comptime T: type, comptime elements_refcounted: bool) type {
             const data_ptr = base + header_bytes;
             const rc: *isize = @ptrFromInt(@intFromPtr(data_ptr) - @sizeOf(isize));
             rc.* = 1;
+            if (elements_refcounted) {
+                const count: *usize = @ptrFromInt(@intFromPtr(data_ptr) - (2 * @sizeOf(usize)));
+                count.* = length;
+            }
             return .{
                 .elements_ptr = @ptrCast(@alignCast(data_ptr)),
                 .length = length,
@@ -436,14 +492,48 @@ pub fn RocListWith(comptime T: type, comptime elements_refcounted: bool) type {
             return list;
         }
 
-        /// Decrement the reference count; frees the allocation when it reaches zero.
+        /// Drop this reference to the list allocation, freeing it when this was
+        /// the last one.
+        ///
+        /// Shallow: it never touches the elements. To release an owned list whose
+        /// elements are refcounted, call that list's generated `decrefListOf...`
+        /// helper instead, which drops the elements when this reference is the
+        /// last one and then calls this.
         pub fn decref(self: Self, roc_host: *RocHost) void {
             const alloc_ptr = self.getAllocationPtr() orelse return;
             const data_addr = @intFromPtr(alloc_ptr);
             const rc: *isize = @ptrFromInt(data_addr - @sizeOf(isize));
-            if (rc.* == 0) return; // REFCOUNT_STATIC_DATA — bytes are in read-only memory
+            if (rc.* == 0) return; // REFCOUNT_STATIC_DATA—bytes are in read-only memory
             const prev = @atomicRmw(isize, rc, .Sub, 1, .monotonic);
             if (prev == 1) {
+                const base: *anyopaque = @ptrFromInt(data_addr - header_bytes);
+                roc_host.roc_dealloc(roc_host, base, alloc_align);
+            }
+        }
+
+        /// Recursively release this list and its elements.
+        ///
+        /// The reference-count decrement claims the final reference atomically
+        /// before reading any elements, so concurrent releases cannot skip or
+        /// duplicate element teardown.
+        pub fn deinit(self: Self, roc_host: *RocHost) void {
+            const ItemRelease = if (elements_refcounted) rocReleasePolicy(T) else RocNoopRelease(T);
+            self.deinitWith(ItemRelease, roc_host);
+        }
+
+        /// Recursively release with an explicit compiler-generated item policy.
+        pub fn deinitWith(self: Self, comptime ItemRelease: type, roc_host: *RocHost) void {
+            const alloc_ptr = self.getAllocationPtr() orelse return;
+            const data_addr = @intFromPtr(alloc_ptr);
+            const rc: *isize = @ptrFromInt(data_addr - @sizeOf(isize));
+            if (rc.* == 0) return; // REFCOUNT_STATIC_DATA—elements are in read-only memory
+            const prev = @atomicRmw(isize, rc, .Sub, 1, .acq_rel);
+            if (prev == 1) {
+                if (elements_refcounted) {
+                    for (self.allocationItems()) |item| {
+                        ItemRelease.release(item, roc_host);
+                    }
+                }
                 const base: *anyopaque = @ptrFromInt(data_addr - header_bytes);
                 roc_host.roc_dealloc(roc_host, base, alloc_align);
             }
@@ -461,7 +551,7 @@ pub fn RocListWith(comptime T: type, comptime elements_refcounted: bool) type {
         pub fn isUnique(self: Self) bool {
             const alloc_ptr = self.getAllocationPtr() orelse return true;
             const rc: *const isize = @ptrFromInt(@intFromPtr(alloc_ptr) - @sizeOf(isize));
-            if (rc.* == 0) return true; // REFCOUNT_STATIC_DATA — treated as unique
+            if (rc.* == 0) return true; // REFCOUNT_STATIC_DATA—treated as unique
             return rc.* == 1;
         }
 
@@ -470,6 +560,147 @@ pub fn RocListWith(comptime T: type, comptime elements_refcounted: bool) type {
             const alloc_ptr = self.getAllocationPtr() orelse return false;
             const rc: *const isize = @ptrFromInt(@intFromPtr(alloc_ptr) - @sizeOf(isize));
             return rc.* == 1;
+        }
+    };
+}
+
+/// A Roc list whose items have a type only the application knows.
+///
+/// This host knows neither the size of an item nor whether items are
+/// refcounted, so it cannot read an item, allocate such a list, or release
+/// one. It can move the list, retain it, and pass it back to Roc. To release
+/// it, pass it to a Roc function that takes ownership of it.
+pub const RocOpaqueList = extern struct {
+    elements_ptr: ?*anyopaque,
+    length: usize,
+    capacity_or_alloc_ptr: usize,
+
+    /// Return the number of items in the list.
+    pub fn len(self: RocOpaqueList) usize {
+        return self.length;
+    }
+
+    /// Return true if the list has zero items.
+    pub fn isEmpty(self: RocOpaqueList) bool {
+        return self.length == 0;
+    }
+
+    /// Increment the reference count by `amount`.
+    pub fn incref(self: RocOpaqueList, amount: isize) void {
+        retainListAllocation(self.elements_ptr, self.capacity_or_alloc_ptr, amount);
+    }
+};
+
+/// A Roc list whose items hold opaque Roc values.
+///
+/// The items have a known layout, so the host can read them. Whether the
+/// opaque values inside them are refcounted is known only to Roc, and the
+/// list's allocation header depends on it, so the host cannot allocate such
+/// a list or release one. It can move the list, retain it, and pass it back
+/// to Roc. To release it, pass it to a Roc function that takes ownership of
+/// it.
+pub fn RocHeldList(comptime T: type) type {
+    return extern struct {
+        elements_ptr: ?[*]T,
+        length: usize,
+        capacity_or_alloc_ptr: usize,
+
+        const Self = @This();
+
+        /// Return the list items as a `[]const T` slice.
+        pub fn items(self: Self) []const T {
+            if (self.elements_ptr) |ptr| return ptr[0..self.length];
+            return &[_]T{};
+        }
+
+        /// Return the number of items in the list.
+        pub fn len(self: Self) usize {
+            return self.length;
+        }
+
+        /// Return true if the list has zero items.
+        pub fn isEmpty(self: Self) bool {
+            return self.length == 0;
+        }
+
+        /// Increment the reference count by `amount`.
+        pub fn incref(self: Self, amount: isize) void {
+            retainListAllocation(@ptrCast(self.elements_ptr), self.capacity_or_alloc_ptr, amount);
+        }
+    };
+}
+
+/// Add `amount` references to a list's allocation. The refcount slot sits
+/// directly before the allocation's first item whatever the item type is,
+/// and a seamless slice names its allocation in `capacity_or_alloc_ptr`.
+fn retainListAllocation(elements_ptr: ?*anyopaque, capacity_or_alloc_ptr: usize, amount: isize) void {
+    const alloc_addr = if ((capacity_or_alloc_ptr & 1) != 0)
+        capacity_or_alloc_ptr & ~@as(usize, 1)
+    else
+        @intFromPtr(elements_ptr);
+    if (alloc_addr == 0) return;
+    const rc: *isize = @ptrFromInt(alloc_addr - @sizeOf(isize));
+    if (rc.* == 0) return; // REFCOUNT_STATIC_DATA
+    _ = @atomicRmw(isize, rc, .Add, amount, .monotonic);
+}
+
+pub fn RocNoopRelease(comptime T: type) type {
+    return struct {
+        pub fn release(value: T, roc_host: *RocHost) void {
+            _ = value;
+            _ = roc_host;
+        }
+    };
+}
+
+/// A zero-runtime-storage release policy for one Roc string.
+pub const RocStrRelease = struct {
+    pub fn release(value: RocStr, roc_host: *RocHost) void {
+        value.decref(roc_host);
+    }
+};
+
+/// Compose a list release policy from its item release policy.
+pub fn RocListRelease(comptime ListType: type, comptime ItemRelease: type) type {
+    return struct {
+        pub fn release(value: ListType, roc_host: *RocHost) void {
+            value.deinitWith(ItemRelease, roc_host);
+        }
+    };
+}
+
+/// Release only a list spine whose elements contain no Roc references.
+pub fn RocListSpineRelease(comptime ListType: type) type {
+    return struct {
+        pub fn release(value: ListType, roc_host: *RocHost) void {
+            value.decref(roc_host);
+        }
+    };
+}
+
+pub const RocErasedCallableRelease = struct {
+    pub fn release(value: RocErasedCallable, roc_host: *RocHost) void {
+        decrefErasedCallable(value, roc_host);
+    }
+};
+
+pub fn RocBoxRelease(comptime ValueType: type, comptime PayloadType: type, comptime PayloadRelease: type) type {
+    return struct {
+        fn releasePayload(data_ptr: ?*anyopaque, roc_host: *RocHost) callconv(.c) void {
+            const payload: *PayloadType = @ptrCast(@alignCast(data_ptr orelse return));
+            PayloadRelease.release(payload.*, roc_host);
+        }
+
+        pub fn release(value: ValueType, roc_host: *RocHost) void {
+            decrefBoxWith(@ptrCast(value), @alignOf(PayloadType), true, &releasePayload, roc_host);
+        }
+    };
+}
+
+pub fn RocBoxSpineRelease(comptime ValueType: type, comptime PayloadType: type) type {
+    return struct {
+        pub fn release(value: ValueType, roc_host: *RocHost) void {
+            decrefBoxWith(@ptrCast(value), @alignOf(PayloadType), false, null, roc_host);
         }
     };
 }
@@ -554,95 +785,154 @@ pub const RocEnv = struct {
     roc_io: RocIo,
 };
 
-/// Tag discriminant for Try.
-pub const TryTag = enum(u8) {
-    Err = 0,
-    Ok = 1,
-};
+/// Element type for __AnonStruct_5c5d685c3868c5f8
+pub const __AnonStruct_5c5d685c3868c5f8 = if (@sizeOf(usize) == 4) extern struct {
+    @"bytes": RocListWith(u8, false),
+    @"work": RocListWith(u64, false),
+    /// Recursively decrement Roc-owned fields.
+    pub fn decref(self: @This(), roc_host: *RocHost) void {
+        const value = self;
+        value.@"bytes".decref(roc_host);
+        value.@"work".decref(roc_host);
+    }
 
-/// Tag union: Try
-pub const Try = extern struct {
-    payload: extern union {
-        err: i32,
-        ok: void,
-    },
-    tag: TryTag,
+    /// Increment Roc-owned fields.
+    pub fn incref(self: @This(), amount: isize) void {
+        const value = self;
+        value.@"bytes".incref(amount);
+        value.@"work".incref(amount);
+    }
+} else extern struct {
+    @"bytes": RocListWith(u8, false),
+    @"work": RocListWith(u64, false),
+    /// Recursively decrement Roc-owned fields.
+    pub fn decref(self: @This(), roc_host: *RocHost) void {
+        const value = self;
+        value.@"bytes".decref(roc_host);
+        value.@"work".decref(roc_host);
+    }
+
+    /// Increment Roc-owned fields.
+    pub fn incref(self: @This(), amount: isize) void {
+        const value = self;
+        value.@"bytes".incref(amount);
+        value.@"work".incref(amount);
+    }
 };
 
 comptime {
     if (@sizeOf(usize) == 8) {
-        if (@sizeOf(Try) != 8) @compileError("Try size mismatch");
-        if (@alignOf(Try) != 4) @compileError("Try alignment mismatch");
+        if (@sizeOf(__AnonStruct_5c5d685c3868c5f8) != 48) @compileError("__AnonStruct_5c5d685c3868c5f8 size mismatch");
+        if (@alignOf(__AnonStruct_5c5d685c3868c5f8) != 8) @compileError("__AnonStruct_5c5d685c3868c5f8 alignment mismatch");
+    }
+    if (@sizeOf(usize) == 4) {
+        if (@sizeOf(__AnonStruct_5c5d685c3868c5f8) != 24) @compileError("__AnonStruct_5c5d685c3868c5f8 size mismatch");
+        if (@alignOf(__AnonStruct_5c5d685c3868c5f8) != 4) @compileError("__AnonStruct_5c5d685c3868c5f8 alignment mismatch");
     }
 }
 
-/// Arguments for Stderr.line!
-/// Roc signature: Str => {}
+/// Arguments for Host.opaque_u64!
+/// Roc signature: U64 => U64
 /// Refcounted fields are owned by the hosted function.
-pub const StderrLineArgs = extern struct {
-    arg0: RocStr,
+pub const HostOpaque_u64Args = extern struct {
+    arg0: u64,
 };
 
-/// Arguments for Stdout.line!
-/// Roc signature: Str => {}
+/// Arguments for Host.mark!
+/// Roc signature: U64 => {}
 /// Refcounted fields are owned by the hosted function.
-pub const StdoutLineArgs = extern struct {
-    arg0: RocStr,
+pub const HostMarkArgs = extern struct {
+    arg0: u64,
 };
 
-// =============================================================================
+/// Arguments for Host.assert!
+/// Roc signature: Bool => {}
+/// Refcounted fields are owned by the hosted function.
+pub const HostAssertArgs = extern struct {
+    arg0: bool,
+};
+
+// Platform Type Aliases
+
+pub const Main_for_host = __AnonStruct_5c5d685c3868c5f8;
+
 // Generated Refcount Helpers
-// =============================================================================
 
-/// Recursively decrement Roc-owned payloads in Try.
-pub fn decrefTry(value: Try, roc_host: *RocHost) void {
-    _ = roc_host;
-    switch (value.tag) {
-        .Err => {},
-        .Ok => {},
+pub const __AnonStruct_5c5d685c3868c5f8Release = struct {
+    pub fn release(value: __AnonStruct_5c5d685c3868c5f8, roc_host: *RocHost) void {
+        value.decref(roc_host);
     }
+};
+
+/// Release one owned reference to a `RocList(RocStr)`.
+///
+/// The allocation's final reference is claimed atomically before any element
+/// is read, so concurrent owners cannot skip or duplicate element teardown.
+pub fn decrefListOfStr(value: RocList(RocStr), roc_host: *RocHost) void {
+    value.deinitWith(RocStrRelease, roc_host);
 }
 
-/// Increment Roc-owned payloads in Try.
-pub fn increfTry(value: Try, amount: isize) void {
-    _ = amount;
-    switch (value.tag) {
-        .Err => {},
-        .Ok => {},
-    }
+
+fn rocReleasePolicy(comptime T: type) type {
+    if (T == RocStr) return RocStrRelease;
+    if (T == __AnonStruct_5c5d685c3868c5f8) return __AnonStruct_5c5d685c3868c5f8Release;
+    if (T == RocListWith(u8, false)) return RocListSpineRelease(RocListWith(u8, false));
+    if (T == RocListWith(u64, false)) return RocListSpineRelease(RocListWith(u64, false));
+    if (T == RocList(RocStr)) return RocListRelease(RocList(RocStr), RocStrRelease);
+    @compileError("generated glue has no recursive release policy for " ++ @typeName(T));
 }
 
-// =============================================================================
+
 // Runtime Symbols
 //
 // The host defines these linker symbols. Compiled Roc code calls them directly.
-// =============================================================================
 
-pub extern fn roc_alloc(length: usize, alignment: usize) callconv(.c) ?*anyopaque;
+/// Returns `length` bytes aligned to `alignment`. Never returns null: Roc writes through
+/// the result without checking it, so a host that cannot allocate must stop the Roc
+/// program and not return, exactly as `roc_crashed` does.
+pub extern fn roc_alloc(length: usize, alignment: usize) callconv(.c) *anyopaque;
 pub extern fn roc_dealloc(ptr: *anyopaque, alignment: usize) callconv(.c) void;
-pub extern fn roc_realloc(ptr: *anyopaque, new_length: usize, alignment: usize) callconv(.c) ?*anyopaque;
+/// Never returns null, under the same rule as `roc_alloc`.
+pub extern fn roc_realloc(ptr: *anyopaque, new_length: usize, alignment: usize) callconv(.c) *anyopaque;
 pub extern fn roc_dbg(bytes: [*]const u8, len: usize) callconv(.c) void;
 pub extern fn roc_expect_failed(bytes: [*]const u8, len: usize) callconv(.c) void;
+/// Must never return: end the process, or longjmp out of the Roc code that called
+/// it. Roc code traps right after this call, so returning terminates the process.
 pub extern fn roc_crashed(bytes: [*]const u8, len: usize) callconv(.c) void;
 
-// =============================================================================
 // Hosted Symbols
 //
 // The platform host must export these symbols with the exact direct C ABI signatures.
 // Refcounted arguments are owned by the hosted function.
-// =============================================================================
 
-/// Hosted symbol for Stderr.line!
-/// Roc signature: Str => {}
-pub extern fn roc_stderr_line(arg0: RocStr) callconv(.c) void;
+/// Hosted symbol for Host.opaque_u64!
+/// Roc signature: U64 => U64
+pub extern fn fixture_opaque_u64(arg0: u64) callconv(.c) u64;
 
-/// Hosted symbol for Stdin.line!
-/// Roc signature: {} => Str
-pub extern fn roc_stdin_line() callconv(.c) RocStr;
+/// Hosted symbol for Host.allocation_count!
+/// Roc signature: {} => U64
+pub extern fn fixture_allocation_count() callconv(.c) u64;
 
-/// Hosted symbol for Stdout.line!
-/// Roc signature: Str => {}
-pub extern fn roc_stdout_line(arg0: RocStr) callconv(.c) void;
+/// Hosted symbol for Host.allocated_bytes!
+/// Roc signature: {} => U64
+pub extern fn fixture_allocated_bytes() callconv(.c) u64;
+
+/// Hosted symbol for Host.deallocation_count!
+/// Roc signature: {} => U64
+pub extern fn fixture_deallocation_count() callconv(.c) u64;
+
+/// Hosted symbol for Host.monotonic_ns!
+/// Roc signature: {} => U64
+pub extern fn fixture_monotonic_ns() callconv(.c) u64;
+
+/// Hosted symbol for Host.mark!
+/// Roc signature: U64 => {}
+pub extern fn fixture_mark(arg0: u64) callconv(.c) void;
+
+/// Hosted symbol for Host.assert!
+/// Roc signature: Bool => {}
+pub extern fn fixture_assert(arg0: bool) callconv(.c) void;
+
 
 /// Default memory management functions for Roc platforms.
 ///
@@ -651,7 +941,7 @@ pub extern fn roc_stdout_line(arg0: RocStr) callconv(.c) void;
 /// allocation size (required because `roc_dealloc` receives no length).
 pub const DefaultAllocators = struct {
     /// Allocate memory for the Roc runtime.
-    pub fn rocAlloc(roc_host: *RocHost, length: usize, alignment: usize) callconv(.c) ?*anyopaque {
+    pub fn rocAlloc(roc_host: *RocHost, length: usize, alignment: usize) callconv(.c) *anyopaque {
         const env: *RocEnv = @ptrCast(@alignCast(roc_host.env));
         const allocator = env.allocator;
 
@@ -690,7 +980,7 @@ pub const DefaultAllocators = struct {
     }
 
     /// Reallocate memory, copying existing data to the new allocation.
-    pub fn rocRealloc(roc_host: *RocHost, ptr: *anyopaque, new_length: usize, alignment: usize) callconv(.c) ?*anyopaque {
+    pub fn rocRealloc(roc_host: *RocHost, ptr: *anyopaque, new_length: usize, alignment: usize) callconv(.c) *anyopaque {
         const env: *RocEnv = @ptrCast(@alignCast(roc_host.env));
         const allocator = env.allocator;
 
@@ -779,11 +1069,9 @@ pub fn makeRocHost(env: *RocEnv) RocHost {
     };
 }
 
-// =============================================================================
 // Provided Symbols
 //
 // Roc exports these symbols from the app with their natural C ABI signatures.
-// =============================================================================
 
 /// Entrypoint: main_for_host!
-pub extern fn roc_main(arg0: RocList(RocStr)) callconv(.c) RocListWith(u8, false);
+pub extern fn roc_main(arg0: RocList(RocStr)) callconv(.c) __AnonStruct_5c5d685c3868c5f8;

@@ -22,12 +22,13 @@ import PosixDelta
 ##
 ## Examples assume a package dependency named `time`.
 PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
+
 	## Construct a nonempty half-open span [start, end). Equal endpoints return
 	## EmptySpan; a start after the end returns ReversedBounds.
 	new : PosixBoundary, PosixBoundary -> Try(PosixSpan, [EmptySpan, ReversedBounds])
-	new = |start, end| {
-		match PosixBoundary.compare(start, end) {
-			LT => Ok({ start, end })
+	new = |start_value, end_value| {
+		match PosixBoundary.compare(start_value, end_value) {
+			LT => Ok({ start: start_value, end: end_value })
 			EQ => Err(EmptySpan)
 			GT => Err(ReversedBounds)
 		}
@@ -44,9 +45,9 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 		if lo > hi {
 			return Err(ReversedBounds)
 		}
-		start = PosixBoundary.from_seconds(lo, policy)?
-		end = PosixBoundary.from_seconds(hi, policy)?
-		new(start, end)
+		start_value = PosixBoundary.from_seconds(lo, policy)?
+		end_value = PosixBoundary.from_seconds(hi, policy)?
+		new(start_value, end_value)
 	}
 
 	## Read the inclusive lower boundary of this span.

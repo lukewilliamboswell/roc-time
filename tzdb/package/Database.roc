@@ -9,12 +9,14 @@ import "names.txt" as name_text : Str
 ## ZoneRules.from_database. Rules have an explicit finite validity interval;
 ## they do not depend on the host's timezone settings or installed database.
 Database :: [].{
+
 	## Zone rules and provenance for the core package's ZoneRules.from_database adapter.
 	## requested_name preserves the lookup name; canonical_name identifies its target.
 	## start_second is inclusive and end_second exclusive, in POSIX seconds since
 	## 1970-01-01. Offsets are whole seconds, local minus POSIX. source_version,
 	## source_digest and profile describe the supplied rule snapshot.
 	Record : { schema : U16, axis : Str, requested_name : Str, canonical_name : Str, source_version : Str, source_digest : Str, profile : Str, future_handling : Str, start_second : I64, end_second : I64, initial_offset : I32, minimum_offset : I32, maximum_offset : I32, transitions : List({ second : I64, offset : I32 }) }
+
 	## Look up an exact, case-sensitive IANA zone name or supported alias, such as
 	## Europe/Paris. UnknownZone retains an unrecognized name; no local zone or
 	## fallback is selected. The returned immutable record may share rule storage.
@@ -41,16 +43,16 @@ metadata = parse_metadata(field(zone_lines, 0))
 zones : List(Zone)
 zones = zone_lines.drop_first(1).map(parse_zone)
 
-names : List({ name : Str, index : U64 })
+names : List({ key : List(U8), index : U64 })
 names = name_text.trim().split_on("\n").map(
 	|line| {
 		fields = line.split_on("\t")
-		{ name: field(fields, 0), index: zone_index(field(fields, 1)) }
+		{ key: field(fields, 0).to_utf8(), index: zone_index(field(fields, 1)) }
 	},
 )
 
 # names.txt is generated in ASCII name order; binary search takes O(log n)
-# bytewise comparisons without hashing or allocating temporary byte lists.
+# bytewise comparisons over static keys without runtime hashing or byte-list allocation.
 find_name = |name| {
 	var $low = 0.U64
 	var $high = names.len()
@@ -60,7 +62,7 @@ find_name = |name| {
 			Ok(value) => value
 			Err(_) => crash "Zone search bounds invariant"
 		}
-		match compare_name(name, entry.name) {
+		match compare_name(name, entry.key) {
 			EQ => return Found(entry.index)
 			LT => {
 				$high = middle
@@ -73,29 +75,57 @@ find_name = |name| {
 	Missing
 }
 
-compare_name = |a, b| {
-	var $right = b.iter_utf8()
-	for left in a.iter_utf8() {
-		match $right.next() {
-			One({ item, rest }) => {
-				if left < item {
-					return LT
-				}
-				if left > item {
-					return GT
-				}
-				$right = rest
-			}
-			Done => return GT
-			# Str.iter_utf8 yields every byte and never emits Skip.
-			Skip(_) => crash "UTF-8 iterator invariant"
+# The generated ASCII keys are decoded to immutable byte lists at compile time.
+# Index them directly while the caller's string uses the compiler's UTF-8 loop;
+# retaining and advancing a generic iterator allocates per byte on this nightly.
+compare_name : Str, List(U8) -> [LT, EQ, GT]
+compare_name = |supplied, key| {
+	var $index = 0.U64
+	for byte in supplied.iter_utf8() {
+		other = match key.get($index) {
+			Ok(value) => value
+			Err(_) => return GT
+		}
+		if byte < other {
+			return LT
+		}
+		if byte > other {
+			return GT
+		}
+		$index = $index + 1
+	}
+	if ($index < key.len()) LT else EQ
+}
+
+# R07/R15: a deliberately different recursive pairwise byte model checks empty
+# keys, proper prefixes, punctuation, non-ASCII input and long shared prefixes.
+# Lookup accepts every Str; unsupported names retain their exact supplied text.
+expect {
+	values = ["", "A", "A/", "AA", "A_", "B", "é", "Aé", "中", "A中", "A".repeat(64), "${"A".repeat(64)}B"]
+	var $valid = True
+	for left in values {
+		for right in values {
+			$valid = $valid and compare_name(left, right.to_utf8()) == test_compare_bytes(left.to_utf8(), right.to_utf8())
 		}
 	}
-	if a.count_utf8_bytes() < b.count_utf8_bytes() {
-		LT
-	} else {
-		EQ
-	}
+	$valid
+}
+
+expect {
+	["", "Australia/Melbourn", "Australia/Melbourne/", "Australia/Melbourneé", "é", "Asia/東京", "/Etc/UTC"].all(
+		|name| match Database.get(name) {
+			Err(UnknownZone(actual)) => actual == name
+			Ok(_) => False
+		},
+	)
+}
+
+test_compare_bytes : List(U8), List(U8) -> [LT, EQ, GT]
+test_compare_bytes = |left, right| match (left, right) {
+	([], []) => EQ
+	([], _) => LT
+	(_, []) => GT
+	([a, .. as tail_a], [b, .. as tail_b]) => if (a < b) LT else if (a > b) GT else test_compare_bytes(tail_a, tail_b)
 }
 
 # Private text-assets-v1 encoding: tab-separated canonical name, source digest,

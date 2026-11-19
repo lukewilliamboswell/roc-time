@@ -22,9 +22,9 @@ ResolvedSelection :: {
 	## labels and incomplete validity or numeric range; scan the finite rules.
 	## For explicit work and storage budgets, use a selection cursor with collect.
 	resolve : ZoneRules, LocalDateTime, LocalDateTime -> Try(ResolvedSelection, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
-	resolve = |rules, start, end| {
-		coverage = ZoneRules.select(rules, start, end)?
-		Ok({ start, end, rules, coverage })
+	resolve = |rules_value, start_value, end_value| {
+		coverage_value = ZoneRules.select(rules_value, start_value, end_value)?
+		Ok({ start: start_value, end: end_value, rules: rules_value, coverage: coverage_value })
 	}
 
 	## Per-call segment work, retained member count, and either a complete snapshot
@@ -43,9 +43,9 @@ ResolvedSelection :: {
 		batch = ZoneRules.SelectionCursor.collect(cursor, limits)?
 		status = match batch.status {
 			Limited(progress) => Limited(progress)
-			Complete(coverage) => {
+			Complete(coverage_value) => {
 				context = ZoneRules.SelectionCursor.context(cursor)
-				Complete({ start: context.start, end: context.end, rules: context.rules, coverage })
+				Complete({ start: context.start, end: context.end, rules: context.rules, coverage: coverage_value })
 			}
 		}
 		Ok({ segments: batch.segments, buffered: batch.buffered, status })

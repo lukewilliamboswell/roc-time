@@ -20,26 +20,28 @@ import PosixBoundary
 ## retains it. Uncertain endpoints and original source spelling are not retained.
 ## Use canonical text for interchange. See OffsetTimestamp for endpoint limits.
 ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : PosixSpan }.{
+
 	## Separates endpoint timestamp errors from malformed interval syntax and empty or reversed resolved bounds.
 	Error : [Malformed, Incomplete, TooLarge, Start(OffsetTimestamp.Error), End(OffsetTimestamp.Error), EmptySpan, ReversedBounds]
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ExactInterval, rest : state }, [InvalidExactInterval(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : ExactInterval, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidExactInterval(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -65,6 +67,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "exact-offset-interval-v1"
+
 	## Constructs a nonempty half-open interval from two timestamp declarations. Rejects equal/reversed resolved boundaries and endpoint range failures.
 	new : OffsetTimestamp, OffsetTimestamp -> Try(ExactInterval, Error)
 	new = |start, end| {
@@ -83,6 +86,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 		}
 		Ok({ start, end, extent })
 	}
+
 	## Parses two complete offset timestamps separated by one slash. Endpoint errors identify Start or End; this is not a general ISO interval parser.
 	parse : Str -> Try(ExactInterval, Error)
 	parse = |text| {
@@ -108,12 +112,15 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 		}
 		new(start, end)
 	}
+
 	## Returns the retained start/end declarations, including their fractional widths and offset assertions.
 	endpoints : ExactInterval -> { start : OffsetTimestamp, end : OffsetTimestamp }
 	endpoints = |value| { start: value.start, end: value.end }
+
 	## Returns the resolved half-open POSIX extent. This projection discards endpoint presentation and offset-assertion distinctions.
 	span : ExactInterval -> PosixSpan
 	span = |value| value.extent
+
 	## Serializes both retained endpoint declarations, separated by a slash; preserves fractional width and offset intent.
 	to_text : ExactInterval -> Str
 	to_text = |value| "${OffsetTimestamp.to_text(value.start)}/${OffsetTimestamp.to_text(value.end)}"
@@ -132,9 +139,11 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 		}
 		new(start, end)
 	}
+
 	## Compares endpoint declarations as well as their extent. Compare spans when only occupied time matters.
 	is_eq : ExactInterval, ExactInterval -> Bool
 	is_eq = |a, b| a.start == b.start and a.end == b.end
+
 	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : ExactInterval, Hasher -> Hasher
 	to_hash = |value, hasher| value.end.to_hash(value.start.to_hash(hasher))
@@ -142,6 +151,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 	## Stored extent plus original endpoint declarations, without re-resolution.
 	fact_count : ExactInterval -> U64
 	fact_count = |_| 3
+
 	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ExactInterval, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| {
@@ -172,6 +182,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 			),
 		)
 	}
+
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ExactInterval -> Str
 	to_inspect = |value| match fact_at(value, 0) {

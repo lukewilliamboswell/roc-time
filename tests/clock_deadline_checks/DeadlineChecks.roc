@@ -60,7 +60,7 @@ DeadlineChecks :: [].{
 		if Deadline.evaluate(PosixBoundary.from_microseconds(0), "not-a-timestamp${suffix}") != Err(Expiry(Malformed)) {
 			crash "malformed expiry error hidden"
 		}
-		if Deadline.decode("{\"checked_at\":\"not-a-timestamp${suffix}\",\"expired\":true,\"expires_at\":\"1970-01-01T00:00:00Z\"}") != Err(InvalidOffsetTimestamp(Malformed)) {
+		if Deadline.decode("{\"checked_at\":\"not-a-timestamp${suffix}\",\"expired\":true,\"expires_at\":\"1970-01-01T00:00:00Z\"}") != Err(InvalidJson("Invalid JSON")) {
 			crash "malformed record timestamp error hidden"
 		}
 		match Deadline.decode("{${suffix}") {

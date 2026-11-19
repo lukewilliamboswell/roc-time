@@ -16,7 +16,6 @@ CalendarDescriptionText := [].{
 			Fraction(digits) => "T${clock_text(data.clock, digits)}"
 		}
 		"${name}(calendar=${data.calendar}, value=${date}${time}, resolution=${Str.inspect(data.resolution)}, qualifications=${data.qualification_count.to_str()})"
-
 	}
 }
 

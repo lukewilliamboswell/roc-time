@@ -77,7 +77,7 @@ ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64,
 	}
 }
 
-model : Fields, I64, I64, I64, Calendar.Arithmetic.Policy -> Try(Fields, [OutOfRange, InvalidDestination(Fields)])
+model : Fields, I64, I64, I64, Calendar.ArithmeticPolicy -> Try(Fields, [OutOfRange, InvalidDestination(Fields)])
 model = |fields, years, months, days, policy| {
 	after_years = repair({ year: fields.year + years, month: fields.month, day: fields.day }, policy)?
 	var $next = after_years
@@ -103,7 +103,7 @@ model = |fields, years, months, days, policy| {
 	walk(repair($next, policy)?, days)
 }
 
-repair : Fields, Calendar.Arithmetic.Policy -> Try(Fields, [OutOfRange, InvalidDestination(Fields)])
+repair : Fields, Calendar.ArithmeticPolicy -> Try(Fields, [OutOfRange, InvalidDestination(Fields)])
 repair = |fields, policy| {
 	if fields.year < -2147483648 or fields.year > 2147483647 {
 		return Err(OutOfRange)

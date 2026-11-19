@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.OsStr
 import cli.Path
 import cli.Stdout
@@ -35,7 +36,7 @@ main! = |args| {
 					OsStr.from_str(ZoneArchive.url),
 					"--output",
 					Path.to_os_str(file),
-				]).timeout_ms(40000).exec_cmd!()?
+				]).timeout(Duration.millis(40000)).call!()?
 			}
 			file
 		}
@@ -57,7 +58,7 @@ main! = |args| {
 	var $compressed = 0.U64
 	var $count = 0.U64
 	for entry in entries {
-		result = Cmd.new("unzip").args(["-p", Path.to_os_str(wheel), OsStr.from_str(entry.name)]).timeout_ms(5000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+		result = Cmd.new("unzip").args(["-p", Path.to_os_str(wheel), OsStr.from_str(entry.name)]).timeout(Duration.millis(5000)).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
 		if result.status != Exited(0) or result.stdout_bytes.len() != entry.expanded {
 			return Err(PayloadRead)
 		}

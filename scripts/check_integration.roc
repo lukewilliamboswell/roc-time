@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.Monotonic
 import cli.OsStr
@@ -30,12 +31,12 @@ main! = |_args| {
 			message: case.name,
 		})?
 		before = Monotonic.now!()
-		result = Cmd.new_str(case.program).args_str(case.args)
+		result = Cmd.new(OsStr.from_str(case.program)).args((case.args).map(OsStr.from_str))
 			.env("ROC_NIGHTLY", nightly.program())
 			.env("ROC_TIME_TMPDIR", temporary)
-			.env_str("DOCS_OUTPUT", "${Path.display(work)}/manual")
-			.timeout_ms(900000).stdout(Inherit).stderr(Inherit).run!()
-		elapsed = (Monotonic.now!() - before) // 1000000
+			.env(OsStr.from_str("DOCS_OUTPUT"), OsStr.from_str("${Path.display(work)}/manual"))
+			.timeout(Duration.millis(900000)).stdout(Inherit).stderr(Inherit).run!()
+		elapsed = before.elapsed!().to_nanos() // 1000000
 		$timings = $timings.append((elapsed, case.name))
 		match result {
 			Ok(output) if output.status == Exited(0) => Script.info!({
@@ -51,7 +52,7 @@ main! = |_args| {
 			}
 		}
 	}
-	total = (Monotonic.now!() - start) // 1000000
+	total = start.elapsed!().to_nanos() // 1000000
 	Script.info!({
 		label: "SUMMARY",
 		message: "${(cases.len() - $failed.len()).to_str()} passed, ${$failed.len().to_str()} failed, 0 skipped in ${total.to_str()}ms",

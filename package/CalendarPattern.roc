@@ -6,7 +6,12 @@ import GregorianDate
 ## UNTIL, BYSETPOS, clock selectors, exclusions or zone interpretation.
 ## Week ordinals use the date's week-numbering year, which can differ from its
 ## civil year. Negative positions count back from that numbering year's end.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
+	# TODO: Restore Filter.Spec after nested alias lookup is supported by the
+	# compiler we use: https://github.com/roc-lang/roc/issues/11464
 
 	## Calendar periods used to generate candidates. Monthly and yearly expansion skip invalid
 	## dates rather than repeatedly clamping an earlier result.
@@ -113,33 +118,10 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 
 	## Date restrictions without a frequency's expansion defaults. Subdaily
 	## periods use these same selector predicates after choosing their date.
-	Filter :: { spec : CalendarPattern.Spec }.{
-		## Calendar predicates for filtering existing dates without recurrence expansion defaults.
-		Spec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
+	FilterSpec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
 
-		## Validate and normalize calendar predicates for filtering existing dates. This does not
-		## create a recurrence period or inherit missing selectors from an anchor.
-		new : Spec -> Try(Filter, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str)])
-		new = |filters| {
-			if filters.by_month.len() > 4096 or filters.by_month_day.len() > 4096 or filters.by_year_day.len() > 4096 or filters.by_day.len() > 4096 {
-				return Err(TooManySelectors)
-			}
-			spec = { ..CalendarPattern.defaults(Yearly), by_month: filters.by_month, by_month_day: filters.by_month_day, by_year_day: filters.by_year_day, by_day: filters.by_day.map(|weekday| { ordinal: 0.I8, weekday }) }
-			validate(spec)?
-			Ok({ spec: spec })
-		}
-
-		## Read the checked by_month, by_month_day, by_year_day and by_day predicates.
-		## The returned frequency, interval and week_start fields do not describe
-		## this independent date filter; they must not be used to expand it.
-		definition : Filter -> CalendarPattern.Spec
-		definition = |filter| filter.spec
-
-		## Test a Gregorian date against the checked predicates. Provider-range failures remain
-		## errors rather than being treated as a non-match.
-		matches : Filter, GregorianDate -> Try(Bool, [OutOfRange])
-		matches = |filter, date| matches_filters(filter.spec, date)
-	}
+	## Checked date restrictions without recurrence expansion defaults.
+	Filter : CalendarPatternFilter
 
 	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
 	## Use typed accessors for application logic; this text is not a storage format.
@@ -469,8 +451,36 @@ year_length = |year| match GregorianDate.days_in_month(year, 2) {
 }
 
 expect {
-	filter = CalendarPattern.Filter.new({ by_month: [], by_month_day: [], by_year_day: [-1], by_day: [] })?
+	filter = CalendarPatternFilter.new({ by_month: [], by_month_day: [], by_year_day: [-1], by_day: [] })?
 	last = GregorianDate.from_fields({ year: 2147483647, month: 12, day: 31 })?
 	first = GregorianDate.from_fields({ year: 2147483647, month: 1, day: 1 })?
-	CalendarPattern.Filter.matches(filter, last)? and !CalendarPattern.Filter.matches(filter, first)?
+	CalendarPatternFilter.matches(filter, last)? and !CalendarPatternFilter.matches(filter, first)?
+}
+
+CalendarPatternFilter :: { spec : CalendarPattern.Spec }.{
+
+	## Calendar predicates for filtering existing dates without recurrence expansion defaults.
+
+	## Validate and normalize calendar predicates for filtering existing dates. This does not
+	## create a recurrence period or inherit missing selectors from an anchor.
+	new : CalendarPattern.FilterSpec -> Try(CalendarPatternFilter, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str)])
+	new = |filters| {
+		if filters.by_month.len() > 4096 or filters.by_month_day.len() > 4096 or filters.by_year_day.len() > 4096 or filters.by_day.len() > 4096 {
+			return Err(TooManySelectors)
+		}
+		spec = { ..CalendarPattern.defaults(Yearly), by_month: filters.by_month, by_month_day: filters.by_month_day, by_year_day: filters.by_year_day, by_day: filters.by_day.map(|weekday| { ordinal: 0.I8, weekday }) }
+		validate(spec)?
+		Ok({ spec: spec })
+	}
+
+	## Read the checked by_month, by_month_day, by_year_day and by_day predicates.
+	## The returned frequency, interval and week_start fields do not describe
+	## this independent date filter; they must not be used to expand it.
+	definition : CalendarPatternFilter -> CalendarPattern.Spec
+	definition = |filter| filter.spec
+
+	## Test a Gregorian date against the checked predicates. Provider-range failures remain
+	## errors rather than being treated as a non-match.
+	matches : CalendarPatternFilter, GregorianDate -> Try(Bool, [OutOfRange])
+	matches = |filter, date| matches_filters(filter.spec, date)
 }

@@ -14,7 +14,7 @@ import time.Calendar
 # state handling. The second encoding below proves the hooks are format-generic.
 # Strings are canonical standards declarations, never opaque native records.
 CodecChecks := [].{
-	Errors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfDate(EdtfDate.Error), InvalidOffsetTimestamp(OffsetTimestamp.Error), InvalidExactInterval(ExactInterval.Error), InvalidIxdtf(Ixdtf.Error), InvalidICalDateTime(ICalDateTime.Error), InvalidICalDuration(ICalDuration.Error), InvalidICalPeriod(ICalPeriod.Error)]
+	Errors : [InvalidJson(Str), MissingRequiredField(Str)]
 	Document : { date : EdtfDate, dates : List(EdtfDate), exact : ExactInterval, ixdtf : Ixdtf, rfc_date : ICalDateTime, rfc_duration : ICalDuration, rfc_period : ICalPeriod, stamp : OffsetTimestamp, tail : Str }
 	run = |input| {
 		check_interval_codecs(input.interval_invalid)
@@ -62,62 +62,73 @@ CodecChecks := [].{
 		}
 		invalid_date : Try(EdtfDate, Errors)
 		invalid_date = Json.parse(input.invalid_date)
-		if invalid_date != Err(InvalidEdtfDate(Malformed)) {
-			crash "Lost EDTF semantic error"
+		if invalid_date != Err(InvalidJson("Invalid JSON")) {
+			crash "EDTF JSON validation failure was not reported"
 		}
 		invalid_stamp : Try(OffsetTimestamp, Errors)
 		invalid_stamp = Json.parse(input.invalid_stamp)
-		if invalid_stamp != Err(InvalidOffsetTimestamp(InvalidDate)) {
-			crash "Lost timestamp semantic error"
+		if invalid_stamp != Err(InvalidJson("Invalid JSON")) {
+			crash "Timestamp JSON validation failure was not reported"
 		}
 		invalid_exact : Try(ExactInterval, Errors)
 		invalid_exact = Json.parse(input.invalid_exact)
-		if invalid_exact != Err(InvalidExactInterval(EmptySpan)) {
-			crash "Lost exact interval semantic error"
+		if invalid_exact != Err(InvalidJson("Invalid JSON")) {
+			crash "Exact interval JSON validation failure was not reported"
 		}
 		invalid_ixdtf : Try(Ixdtf, Errors)
 		invalid_ixdtf = Json.parse(input.invalid_ixdtf)
-		if invalid_ixdtf != Err(InvalidIxdtf(UnknownCritical)) {
-			crash "Lost IXDTF semantic error"
+		if invalid_ixdtf != Err(InvalidJson("Invalid JSON")) {
+			crash "IXDTF JSON validation failure was not reported"
 		}
 		invalid_rfc_date : Try(ICalDateTime, Errors)
 		invalid_rfc_date = Json.parse(input.invalid_rfc_date)
-		if invalid_rfc_date != Err(InvalidICalDateTime(InvalidDate)) {
-			crash "Lost RFC datetime semantic error"
+		if invalid_rfc_date != Err(InvalidJson("Invalid JSON")) {
+			crash "RFC datetime JSON validation failure was not reported"
 		}
 		invalid_duration : Try(ICalDuration, Errors)
 		invalid_duration = Json.parse(input.invalid_duration)
-		if invalid_duration != Err(InvalidICalDuration(NonPositive)) {
-			crash "Lost RFC duration semantic error"
+		if invalid_duration != Err(InvalidJson("Invalid JSON")) {
+			crash "RFC duration JSON validation failure was not reported"
 		}
 		invalid_period : Try(ICalPeriod, Errors)
 		invalid_period = Json.parse(input.invalid_period)
-		if invalid_period != Err(InvalidICalPeriod(InvalidPeriod)) {
-			crash "Lost RFC period semantic error"
+		if invalid_period != Err(InvalidJson("Invalid JSON")) {
+			crash "RFC period JSON validation failure was not reported"
 		}
 		syntax : Try(Document, Errors)
 		syntax = Json.parse(input.syntax)
 		match syntax {
-			Err(InvalidJson(_)) => {}
+			Err(InvalidJson("Invalid JSON")) => {}
 			_ => crash "Malformed JSON did not retain format error"
 		}
 		backing : Try(EdtfDate, Errors)
 		backing = Json.parse(input.backing)
 		match backing {
-			Err(Encoding(InvalidJson(_))) => {}
+			Err(InvalidJson(_)) => {}
 			_ => crash "Opaque backing record accepted instead of semantic string"
 		}
 		nested_bad : Try({ dates : List(EdtfDate), tail : Str }, Errors)
 		nested_bad = Json.parse(input.nested_bad)
 		match nested_bad {
-			Err(InvalidEdtfDate(Malformed)) => {}
-			_ => crash "Nested list lost semantic validation error"
+			Err(InvalidJson("Invalid JSON")) => {}
+			_ => crash "Nested list did not report validation failure"
+		}
+		invalid_stamp_text : Str
+		invalid_stamp_text = Json.parse(input.invalid_stamp) ?? crash "Invalid timestamp fixture is not a JSON string"
+		invalid_clock_text : Str
+		invalid_clock_text = Json.parse(input.civil_invalid_clock) ?? crash "Invalid clock fixture is not a JSON string"
+		invalid_duration_text : Str
+		invalid_duration_text = Json.parse(input.invalid_duration) ?? crash "Invalid duration fixture is not a JSON string"
+		if OffsetTimestamp.parse(invalid_stamp_text) != Err(InvalidDate) or
+			ClockTime.parse(invalid_clock_text) != Err(UnsupportedLeapSecond) or
+				ICalDuration.parse(invalid_duration_text) != Err(NonPositive) {
+			crash "Direct temporal parsers lost detailed validation errors"
 		}
 		check_tokens(input.tokens, date)
 	}
 }
 
-CivilErrors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidGregorianDate(GregorianDate.Error), InvalidClockTime(ClockTime.Error)]
+CivilErrors : [InvalidJson(Str), MissingRequiredField(Str)]
 
 CivilDocument : { date : GregorianDate, clock : ClockTime, tail : Str }
 
@@ -145,13 +156,16 @@ check_civil = |source, invalid_date, invalid_clock| {
 	bad_date = Json.parse(invalid_date)
 	bad_clock : Try(ClockTime, CivilErrors)
 	bad_clock = Json.parse(invalid_clock)
-	if bad_date != Err(InvalidGregorianDate(InvalidDay)) or bad_clock != Err(InvalidClockTime(UnsupportedLeapSecond)) {
-		crash "Civil JSON codecs lost native validation errors"
+	if bad_date != Err(InvalidJson("Invalid JSON")) or bad_clock != Err(InvalidJson("Invalid JSON")) {
+		crash "Civil JSON codecs did not report validation failures"
 	}
 }
 
 TokenEncoding := [Default].{
-	parse_str : TokenEncoding, List(Str) -> Try({ value : Str, rest : List(Str) }, [NoToken])
+	invalid_value : TokenEncoding, List(Str) -> [NoToken, InvalidToken]
+	invalid_value = |_, _| InvalidToken
+
+	parse_str : TokenEncoding, List(Str) -> Try({ value : Str, rest : List(Str) }, [NoToken, InvalidToken])
 	parse_str = |_, state| match state.first() {
 		Ok(value) => Ok({ value, rest: state.drop_first(1) })
 		Err(_) => Err(NoToken)
@@ -180,11 +194,11 @@ check_civil_tokens = |tokens| {
 		crash "Civil parser changed semantic values or unconsumed state"
 	}
 	match parse_date([]) {
-		Err(Encoding(NoToken)) => {}
+		Err(NoToken) => {}
 		_ => crash "Civil date parser lost encoding failure"
 	}
 	match parse_clock([]) {
-		Err(Encoding(NoToken)) => {}
+		Err(NoToken) => {}
 		_ => crash "Civil clock parser lost encoding failure"
 	}
 	encode_date = GregorianDate.encoder_for(TokenEncoding.Default)
@@ -210,8 +224,11 @@ check_tokens = |tokens, expected| {
 	if first.value != expected or EdtfDate.to_text(second.value) != "2020-02-29" or second.rest != ["tail"] {
 		crash "Generic parser changed unconsumed encoding state"
 	}
+	if parse(["not-a-date"]) != Err(InvalidToken) {
+		crash "Generic codec did not use the format-owned validation error"
+	}
 	match parse([]) {
-		Err(Encoding(NoToken)) => {}
+		Err(NoToken) => {}
 		_ => crash "Generic encoding error was not preserved"
 	}
 	encode = EdtfDate.encoder_for(TokenEncoding.Default)
@@ -221,7 +238,7 @@ check_tokens = |tokens, expected| {
 	}
 }
 
-IntervalErrors : [InvalidJson(Str), MissingRequiredField(Str), Encoding([InvalidJson(Str)]), InvalidEdtfInterval(EdtfInterval.Error)]
+IntervalErrors : [InvalidJson(Str), MissingRequiredField(Str)]
 
 check_interval_codecs = |invalid| {
 	value : EdtfInterval
@@ -239,8 +256,8 @@ check_interval_codecs = |invalid| {
 	}
 	bad : Try(EdtfInterval, IntervalErrors)
 	bad = Json.parse(invalid)
-	if bad != Err(InvalidEdtfInterval(ReversedBounds)) {
-		crash "Interval semantic error was hidden"
+	if bad != Err(InvalidJson("Invalid JSON")) {
+		crash "Interval JSON validation failure was not reported"
 	}
 	parse = EdtfInterval.parser_for(TokenEncoding.Default)
 	first = parse(["1985/", "tail"]) ?? crash "Generic interval codec rejected date interval"

@@ -84,12 +84,12 @@ ZoneDistribution := [].{
 	validate_source : Str, Str -> Try({}, [SourceVersion])
 	validate_source = |zi, module_text| if (zi.starts_with("# version ${version}\n") and module_text.contains("IANA_VERSION = \"${version}\"")) Ok({}) else Err(SourceVersion)
 	validate_metadata : Manifest -> Try({}, [DistributionMetadata])
-	validate_metadata = |manifest| {
-		if manifest.source_version != version or manifest.source_revision != revision or manifest.profile != profile or manifest.encoding != "text-assets-v1" or manifest.wheel_url != wheel_url or manifest.wheel_sha256 != wheel_sha256 or manifest.start_second != -5364662400 or manifest.end_second != 7258118400 or manifest.zone_names != manifest.names.len() or manifest.canonical_zones != manifest.transition_expectations.len() or manifest.zone_names == 0 or manifest.zone_names > 1000 or manifest.canonical_zones == 0 or manifest.canonical_zones > manifest.zone_names or manifest.files.contains("main.roc") {
+	validate_metadata = |metadata| {
+		if metadata.source_version != version or metadata.source_revision != revision or metadata.profile != profile or metadata.encoding != "text-assets-v1" or metadata.wheel_url != wheel_url or metadata.wheel_sha256 != wheel_sha256 or metadata.start_second != -5364662400 or metadata.end_second != 7258118400 or metadata.zone_names != metadata.names.len() or metadata.canonical_zones != metadata.transition_expectations.len() or metadata.zone_names == 0 or metadata.zone_names > 1000 or metadata.canonical_zones == 0 or metadata.canonical_zones > metadata.zone_names or metadata.files.contains("main.roc") {
 			return Err(DistributionMetadata)
 		}
-		for (name, canonical) in manifest.names.to_list() {
-			if !is_safe_column(name) or !is_safe_column(canonical) or !manifest.transition_expectations.contains(canonical) {
+		for (name, canonical) in metadata.names.to_list() {
+			if !is_safe_column(name) or !is_safe_column(canonical) or !metadata.transition_expectations.contains(canonical) {
 				return Err(DistributionMetadata)
 			}
 		}

@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.Monotonic
 import cli.OsStr
@@ -38,7 +39,7 @@ main! = |args| {
 			OsStr.from_str(ZoneArchive.url),
 			"--output",
 			Path.to_os_str(wheel),
-		]).timeout_ms(40000).exec_cmd!()?
+		]).timeout(Duration.millis(40000)).call!()?
 	}
 	if size!(wheel)? > 1048576 or hash!(wheel)? != ZoneArchive.sha256 {
 		return Err(WheelIntegrity)
@@ -50,7 +51,7 @@ main! = |args| {
 	python = Script.env_str!("PYTHON") ?? "python3"
 	# This retained reference only decodes CPython's TZif columns. It does not
 	# build Roc code, bless expectations from roc-time, or supervise processes.
-	reference = Cmd.new_str(python).args_str(["scripts/reference_zone_payloads.py", Path.display(wheel), if (options.smoke) "smoke" else "full"]).timeout_ms(60000).output_limit(8388608).stdout(Capture).stderr(Capture).run!()?
+	reference = Cmd.new(OsStr.from_str(python)).args((["scripts/reference_zone_payloads.py", Path.display(wheel), if (options.smoke) "smoke" else "full"]).map(OsStr.from_str)).timeout(Duration.millis(60000)).output_limit(MaxBytes(8388608)).stdout(Capture).stderr(Capture).run!()?
 	Path.write_bytes!(Path.join(work, "reference.json"), reference.stdout_bytes)?
 	Path.write_bytes!(Path.join(work, "reference.stderr"), reference.stderr_bytes)?
 	if reference.status != Exited(0) {
@@ -192,8 +193,8 @@ main! = |args| {
 execute! : { command : List(Str), cwd : Path, logs : Path, label : Str } => Try({ stdout : Str, stderr : Str, seconds : F64 }, _)
 execute! = |{ command, cwd, logs, label }| {
 	before = Monotonic.now!()
-	result = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(cwd).timeout_ms(180000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
-	seconds = (Monotonic.now!() - before).to_f64() / 1000000000
+	result = Cmd.new(OsStr.from_str(command.first()?)).args((command.drop_first(1)).map(OsStr.from_str)).cwd(cwd).timeout(Duration.millis(180000)).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
+	seconds = before.elapsed!().to_nanos().to_f64() / 1000000000
 	Path.write_bytes!(Path.join(logs, "${label}.stdout"), result.stdout_bytes)?
 	Path.write_bytes!(Path.join(logs, "${label}.stderr"), result.stderr_bytes)?
 	stdout = Str.from_utf8(result.stdout_bytes)?

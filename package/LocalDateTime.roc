@@ -111,11 +111,12 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	## Combine a validated calendar date and clock label without choosing an offset
 	## or timezone. Resolve the result explicitly before timeline computation.
 	new : Calendar.Date, ClockTime -> LocalDateTime
-	new = |date, clock| { date, clock }
+	new = |date_value, clock_value| { date: date_value, clock: clock_value }
 
 	## Read the calendar date as described, retaining its calendar identity.
 	date : LocalDateTime -> Calendar.Date
 	date = |value| value.date
+
 	## Read the local clock label without resolving it to a timeline.
 	clock : LocalDateTime -> ClockTime
 	clock = |value| value.clock
@@ -152,10 +153,12 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	## Description equality preserves the calendar as well as the clock label.
 	is_eq : LocalDateTime, LocalDateTime -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock
+
 	## Hash description identity, including the calendar and clock, consistently
 	## with is_eq. Use explicit conversion when keys should ignore calendar identity.
 	to_hash : LocalDateTime, Hasher -> Hasher
 	to_hash = |value, hasher| value.clock.to_hash(value.date.to_hash(hasher))
+
 	## Describe the calendar date and local clock for diagnostics, without choosing
 	## a zone or resolving an occurrence.
 	to_inspect : LocalDateTime -> Str

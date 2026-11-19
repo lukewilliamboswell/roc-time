@@ -5,9 +5,15 @@ starts, non-hour shifts, source and UTC exclusions, inclusions and PERIOD ending
 Its independent model, deterministic corpus, seed provenance and resource scopes
 are described in [the local recurrence evidence](../local_recurrence/README.md).
 
-The test roots `tests/precision/main.roc`, `tests/spans/main.roc`, `tests/coverage/main.roc`, `tests/gregorian/main.roc`, `tests/arithmetic/main.roc`, `tests/calendars/main.roc`, `tests/clock/main.roc`, `tests/offsets/main.roc`, `tests/zones/main.roc`, `tests/events/main.roc`, `tests/patterns/main.roc`, and `tests/recurrence/main.roc`
-import the real public package and the content-addressed
-[roc-fuzz 0.5.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.5.0).
+The test roots `tests/core_suite/main.roc`, `tests/civil_suite/main.roc` and
+`tests/interpretation_suite/main.roc` combine fourteen properties using
+[roc-fuzz 0.7.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
+Core groups precision, spans, coverage and events; civil groups Gregorian,
+arithmetic, calendars, clock and offsets; interpretation groups zones, patterns,
+recurrence, descriptions and interchange. The runner builds each selected suite
+once and uses `--target=NAME` for each member's examples, replay and search.
+Property packages keep their pure generators and checks beside reusable
+`*Target.roc` modules, with no duplicated examples.
 `dependency.json` records the release commit and independently verified SHA-256.
 The runner verifies the archive digest; targets keep the release URL directly.
 No local checkout or platform rebuild is required.
@@ -25,7 +31,7 @@ exclude persistent compiler-cache artifacts from the allocation profile.
 The runner rejects zero accepted inputs, missing baselines and incomplete
 evidence. See [baseline scope and reproduction](baselines/README.md).
 
-Each root wires the platform to a separate pure type module (`PrecisionCase`,
+Each property package wires the platform to a separate pure type module (`PrecisionCase`,
 `SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, or `CalendarCase`). Generators and semantic checks live in those
 modules; the runner records their source hashes along with the root and public
 package modules. Moving code into type modules does not change the saved-input

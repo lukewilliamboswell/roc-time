@@ -8,23 +8,23 @@ import cli.Stdout
 Script := [].{
 
 	## A command-line program that repository scripts run by name.
-	Command := { base : Cmd, program : OsStr }.{
+	Command := { base : Cmd.Command, program : OsStr }.{
 
 		## Print the command line, then run it with inherited output. A nonzero
 		## exit is an error.
 		run! : Command, List(OsStr) => Try({}, _)
 		run! = |self, args| {
 			Stdout.line!("+ ${Str.join_with([self.program].concat(args).map(OsStr.display), " ")}")?
-			self.base.args(args).exec_cmd!()
+			self.base.args(args).call!()
 		}
 
 		## Run the command and return its standard output without the trailing
 		## newline. A nonzero exit is an error.
 		output! : Command, List(OsStr) => Try(Str, _)
-		output! = |self, args| Ok(Str.trim_end(self.base.args(args).exec_output!()?.stdout_utf8))
+		output! = |self, args| Ok(Str.trim_end(self.base.args(args).capture!()?))
 
 		## Build the underlying basic-cli command with the supplied arguments.
-		cmd : Command, List(OsStr) -> Cmd
+		cmd : Command, List(OsStr) -> Cmd.Command
 		cmd = |self, args| self.base.args(args)
 
 		## The program name or path this command runs.
