@@ -70,7 +70,7 @@ expect FuzzOptions.selection("lifecycle") == []
 expect {
 	FuzzOptions.build_args({
 		target: "x64musl",
-		source: "tests/recurrence/main.roc",
+		source: "tests/interpretation_suite/main.roc",
 		output: "/tmp/time profiles/recurrence",
 	}) == [
 		"build",
@@ -78,11 +78,11 @@ expect {
 		"--opt=speed",
 		"--no-cache",
 		"--target=x64musl",
-		"tests/recurrence/main.roc",
+		"tests/interpretation_suite/main.roc",
 		"--output=/tmp/time profiles/recurrence",
 	] and FuzzOptions.build_args({
 		target: "arm64mac",
-		source: "tests/clock/main.roc",
+		source: "tests/civil_suite/main.roc",
 		output: "/tmp/clock",
 	}).contains("--target=arm64mac")
 }

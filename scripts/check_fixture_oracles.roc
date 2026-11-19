@@ -71,7 +71,7 @@ main! = |args| {
 		timeout_ms: 180000,
 	})?
 	smoke = OracleStages.run!({
-		command: [program, Path.display(source)].concat(first.input),
+		command: [program, "--opt=interpreter", Path.display(source)].concat(first.input),
 		cwd,
 		logs: work,
 		label: "interpret",

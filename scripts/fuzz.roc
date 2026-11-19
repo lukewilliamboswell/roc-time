@@ -27,6 +27,7 @@ main! = |args| {
 	options = FuzzOptions.parse(args.map(OsStr.display))?
 	context = prepare!()?
 	check_input_admission!(context.work)?
+	var $failed = []
 	if options.operation != Lifecycle {
 		build_names = if (options.operation == All) options.names.concat(["clock"]) else options.names
 		for suite in FuzzOptions.builds(build_names) {
@@ -34,42 +35,12 @@ main! = |args| {
 		}
 		for name in options.names {
 			binary = Path.join(context.work, FuzzOptions.suite(name))
-			if options.operation == Accept {
-				_ = run_examples!(
-					context,
-					{
-						name,
-						binary,
-						action: AcceptBaseline,
-					},
-				)?
-			}
-			if [Replay, All].contains(options.operation) {
-				_ = run_examples!(
-					context,
-					{
-						name,
-						binary,
-						action: CheckBaseline,
-					},
-				)?
-				replay!(
-					context,
-					{
-						name,
-						binary,
-					},
-				)?
-			}
-			if [Run, All].contains(options.operation) {
-				campaign!(
-					context,
-					{
-						name,
-						binary,
-						options,
-					},
-				)?
+			match check_target!(context, { name, binary, options }) {
+				Ok({}) => {}
+				Err(error) => {
+					Script.info!({ label: "FAIL", message: "${name}: ${Str.inspect(error)}" })?
+					$failed = $failed.append(name)
+				}
 			}
 		}
 	}
@@ -79,6 +50,51 @@ main! = |args| {
 			_ = build!(context, "civil_suite")?
 		}
 		check_baseline_controls!(context)?
+	}
+	if !$failed.is_empty() {
+		return Script.fail!("fuzz members failed: ${Str.join_with($failed, ", ")}")
+	}
+	Ok({})
+}
+
+check_target! : Context, { name : Str, binary : Path, options : FuzzOptions.Options } => Try({}, _)
+check_target! = |context, { name, binary, options }| {
+	if options.operation == Accept {
+		_ = run_examples!(
+			context,
+			{
+				name,
+				binary,
+				action: AcceptBaseline,
+			},
+		)?
+	}
+	if [Replay, All].contains(options.operation) {
+		_ = run_examples!(
+			context,
+			{
+				name,
+				binary,
+				action: CheckBaseline,
+			},
+		)?
+		replay!(
+			context,
+			{
+				name,
+				binary,
+			},
+		)?
+	}
+	if [Run, All].contains(options.operation) {
+		campaign!(
+			context,
+			{
+				name,
+				binary,
+				options,
+			},
+		)?
 	}
 	Ok({})
 }

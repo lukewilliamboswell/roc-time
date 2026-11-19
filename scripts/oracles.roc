@@ -106,7 +106,7 @@ main! = |args| {
 			label: "comparator-tests",
 		})?
 		interpreted = OracleStages.run!({
-			command: [program, "main.roc"],
+			command: [program, "--opt=interpreter", "main.roc"],
 			cwd: session,
 			logs: session,
 			label: "interpret",

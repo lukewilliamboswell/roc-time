@@ -390,9 +390,9 @@ baselines, and the deliberately failing harness lifecycle. Searches
 also bound raw inputs to 256 bytes, RSS to 256 MB, and each target call to two
 seconds. Builds, corpora, failure artifacts, and logs stay under `.roc-time-tmp/`
 by default; `ROC_TIME_TMPDIR` selects a different disposable working directory.
-The current allocation baselines cover Linux x86-64/musl, LLVM speed with
-`--fuzz`. Apple Silicon needs a reviewed host-specific baseline before this
-gate can pass there. Other hosts explicitly report fuzzing as unverified.
+Allocation baselines cover Linux x86-64/musl and Apple Silicon macOS, LLVM
+speed with `--fuzz`; the [baseline scope](tests/fuzz/baselines/README.md) records
+the compiler/platform for each host. Other hosts explicitly report fuzzing as unverified.
 See [target domains and corpus provenance](tests/fuzz/README.md).
 
 Targets declare readable boundary examples in source and retain discovered

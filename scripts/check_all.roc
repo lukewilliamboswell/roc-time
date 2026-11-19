@@ -177,7 +177,7 @@ check_applications! = |roc_nightly, temporary| {
 		verify!({
 			name: check.name,
 			mode: "interpreted",
-			actual: roc(["main.roc", "--no-cache"]).capture!()?,
+			actual: roc(["--opt=interpreter", "--no-cache", "main.roc"]).capture!()?,
 			expected,
 		})?
 		binary = Path.join(build, check.name)

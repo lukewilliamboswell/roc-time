@@ -68,7 +68,7 @@ application = |{ roc, work, name, modes }| {
 	source = "tests/${name}/main.roc"
 	[
 		{ name: "${name} check", program: roc, args: ["check", source] },
-		{ name: "${name} interpreter", program: roc, args: [source] },
+		{ name: "${name} interpreter", program: roc, args: ["--opt=interpreter", source] },
 	].concat(
 		modes.map(
 			|mode| {
