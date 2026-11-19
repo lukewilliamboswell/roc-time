@@ -118,30 +118,30 @@ ZoneRules :: {
 	## Prefer new_bounded when the provider supplies tighter authoritative bounds:
 	## full-range bounds require wider validity for complete inverse queries.
 	new : Str, Str, PosixSpan, FixedOffset, List(Transition) -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
-	new = |name, version, validity, initial, transitions| new_bounded(name, version, validity, initial, transitions, { minimum: I32.lowest, maximum: I32.highest })
+	new = |name_value, version_value, validity_value, initial, transitions| new_bounded(name_value, version_value, validity_value, initial, transitions, { minimum: I32.lowest, maximum: I32.highest })
 
 	## Bounds are a provider guarantee, including outside this finite table.
 	## Never infer global bounds merely from the offsets observed in the table.
 	new_bounded : Str, Str, PosixSpan, FixedOffset, List(Transition), OffsetBounds -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
-	new_bounded = |name, version, validity, initial, transitions, bounds| {
+	new_bounded = |name_value, version_value, validity_value, initial, transitions, bounds| {
 		if bounds.minimum > bounds.maximum {
 			return Err(InvalidOffsetBounds)
 		}
 		if FixedOffset.to_seconds(initial) < bounds.minimum or FixedOffset.to_seconds(initial) > bounds.maximum {
 			return Err(OffsetOutsideBounds)
 		}
-		if name.is_empty() {
+		if name_value.is_empty() {
 			return Err(EmptyName)
 		}
-		if version.is_empty() {
+		if version_value.is_empty() {
 			return Err(EmptyVersion)
 		}
-		var $previous = PosixSpan.start(validity)
+		var $previous = PosixSpan.start(validity_value)
 		for transition in transitions {
 			if FixedOffset.to_seconds(transition.offset) < bounds.minimum or FixedOffset.to_seconds(transition.offset) > bounds.maximum {
 				return Err(OffsetOutsideBounds)
 			}
-			if transition.at <= PosixSpan.start(validity) or transition.at >= PosixSpan.end(validity) {
+			if transition.at <= PosixSpan.start(validity_value) or transition.at >= PosixSpan.end(validity_value) {
 				return Err(TransitionOutsideValidity)
 			}
 			if transition.at <= $previous {
@@ -149,7 +149,7 @@ ZoneRules :: {
 			}
 			$previous = transition.at
 		}
-		Ok({ name, version, validity, initial, transitions, bounds, provenance: Supplied })
+		Ok({ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds, provenance: Supplied })
 	}
 
 	## Constant-time projection. Transition/string storage may remain shared;
@@ -215,13 +215,13 @@ ZoneRules :: {
 		}
 		lower = database_boundary(data.start_second)?
 		upper = database_boundary(data.end_second)?
-		validity = PosixSpan.new(lower, upper)?
+		validity_value = PosixSpan.new(lower, upper)?
 		var $transitions = []
 		for entry in data.transitions {
 			at = database_boundary(entry.second)?
 			$transitions = $transitions.append({ at, offset: FixedOffset.from_seconds(entry.offset) })
 		}
-		rules = new_bounded(data.canonical_name, data.source_version, validity, FixedOffset.from_seconds(data.initial_offset), $transitions, { minimum: data.minimum_offset, maximum: data.maximum_offset })?
+		rules = new_bounded(data.canonical_name, data.source_version, validity_value, FixedOffset.from_seconds(data.initial_offset), $transitions, { minimum: data.minimum_offset, maximum: data.maximum_offset })?
 		Ok({ ..rules, provenance: DatabaseSource({ requested_name: data.requested_name, canonical_name: data.canonical_name, source_digest: data.source_digest, profile: data.profile }) })
 	}
 

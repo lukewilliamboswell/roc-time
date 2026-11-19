@@ -6,7 +6,7 @@ import time.ZoneRules
 
 ZoneOracle :: [].{
 	Fixture : { name : Str, source_digest : Str, lower : I64, upper : I64, initial : I32, minimum : I32, maximum : I32, transitions : List({ at : I64, offset : I32 }) }
-	Case : { id : U64, zone : U64, date : Calendar.Date.Fields, clock : ClockTime.Fields, expected : List(I64) }
+	Case : { id : U64, zone : U64, date : Calendar.DateFields, clock : ClockTime.Fields, expected : List(I64) }
 
 	rules_for = |fixture| {
 		if I64.rem_by(fixture.lower, 1000000) != 0 or I64.rem_by(fixture.upper, 1000000) != 0 {

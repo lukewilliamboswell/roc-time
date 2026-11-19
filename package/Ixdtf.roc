@@ -34,37 +34,47 @@ import ClockTime
 ## Numeric zone -00:00 denotes a fixed zero offset, serialized as +00:00.
 ## Canonical IXDTF text preserves the declaration; snapshots remain in-memory
 ## results with explicit context. No complete ISO or broader-calendar claim.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }.{
+
 	## A named zone requiring matching rules at resolution, or a fixed numeric zone offset.
 	ZoneId : [Named(Str), Numeric(FixedOffset)]
+
 	## Zone annotation and its critical flag; a named identifier is not automatically downloaded or resolved.
 	Zone : { critical : Bool, identifier : ZoneId }
+
 	## An ordered key/value annotation and critical flag. Elective unknown values may be retained; unsupported critical processing fails.
 	Tag : { critical : Bool, key : Str, value : Str }
+
 	## The base timestamp, optional zone annotation and ordered tags. Construction validates profile limits and critical-tag compatibility.
 	Parts : { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }
+
 	## Reports base timestamp failures, annotation syntax/limits, invalid identifiers and unsupported or conflicting critical processing.
 	Error : [Base(OffsetTimestamp.Error), Malformed, Incomplete, TooLarge, TooManyAnnotations, InvalidZone, InvalidTag, ExperimentalKey, UnknownCritical, ConflictingCritical, UnsupportedCriticalCalendar]
+
 	## Reports missing/unexpected context, zone-name or numeric-offset conflicts, provider validity limits and coordinate overflow.
 	ResolveError : [NeedsContext, UnexpectedContext, ZoneMismatch, OffsetConflict, OutsideValidity, OutOfRange]
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : Ixdtf, rest : state }, [InvalidIxdtf(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : Ixdtf, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidIxdtf(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -93,12 +103,12 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 
 	## Validates annotations and profile limits around an already validated base timestamp. Preserves tag order and criticality without consulting zone data.
 	new : Parts -> Try(Ixdtf, Error)
-	new = |parts| {
-		if parts.tags.len() > 32 {
+	new = |parts_value| {
+		if parts_value.tags.len() > 32 {
 			return Err(TooManyAnnotations)
 		}
-		var $total = OffsetTimestamp.to_text(parts.timestamp).count_utf8_bytes()
-		match parts.zone {
+		var $total = OffsetTimestamp.to_text(parts_value.timestamp).count_utf8_bytes()
+		match parts_value.zone {
 			None => {}
 			Some(zone) => {
 				length = match zone.identifier {
@@ -126,7 +136,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 			}
 		}
 		var $seen = []
-		for tag in parts.tags {
+		for tag in parts_value.tags {
 			if tag.key.count_utf8_bytes() > 64 or tag.value.count_utf8_bytes() > 256 {
 				return Err(TooLarge)
 			}
@@ -153,7 +163,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 		# Validate conflicts first so critical calendar duplicates are never lost
 		# behind first-value processing or unsupported-value processing.
-		for tag in parts.tags {
+		for tag in parts_value.tags {
 			if tag.critical {
 				if tag.key != "u-ca" {
 					return Err(UnknownCritical)
@@ -163,8 +173,9 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 				}
 			}
 		}
-		Ok({ timestamp: parts.timestamp, zone: parts.zone, tags: parts.tags })
+		Ok({ timestamp: parts_value.timestamp, zone: parts_value.zone, tags: parts_value.tags })
 	}
+
 	## Returns the retained base timestamp, optional zone and ordered annotations for inspection or checked editing.
 	parts : Ixdtf -> Parts
 	parts = |value| { timestamp: value.timestamp, zone: value.zone, tags: value.tags }
@@ -263,9 +274,11 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 		$output
 	}
+
 	## Compares the entire declaration, including base precision/offset intent, optional zone and ordered tags.
 	is_eq : Ixdtf, Ixdtf -> Bool
 	is_eq = |a, b| a.timestamp == b.timestamp and a.zone == b.zone and a.tags == b.tags
+
 	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : Ixdtf, Hasher -> Hasher
 	to_hash = |value, hasher| {
@@ -292,9 +305,11 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 	## A named zone records its context requirement without looking up rules.
 	fact_count : Ixdtf -> U64
 	fact_count = |value| source_fact_count(value, Bool.True)
+
 	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : Ixdtf, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| source_fact_at(value, index, Bool.True)
+
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : Ixdtf -> Str
 	to_inspect = |value| match fact_at(value, 0) {
@@ -305,166 +320,11 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 	## Strict interpretation: supplied context is required exactly for Named.
 	## Elective unknown tags are retained without acting on them. Unsupported
 	## elective calendars affect presentation, not the already supplied instant.
-	resolve : Ixdtf, [None, Some(ZoneRules)] -> Try(Snapshot, ResolveError)
-	resolve = |source, context| Snapshot.resolve(source, context)
+	resolve : Ixdtf, [None, Some(ZoneRules)] -> Try(IxdtfSnapshot, ResolveError)
+	resolve = |source, context| IxdtfSnapshot.resolve(source, context)
 
 	## An immutable interpretation result retaining its source, actual rules and selected POSIX boundary. Accessors do not re-resolve the timestamp.
-	Snapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary : PosixBoundary, offset : FixedOffset, local : LocalDateTime }.{
-		## Resolves under the supplied matching rules for a named zone. Fixed/no-zone declarations reject unexpected context; numeric offset conflicts are errors.
-		resolve : Ixdtf, [None, Some(ZoneRules)] -> Try(Snapshot, ResolveError)
-		resolve = |source, context| {
-			boundary = match OffsetTimestamp.boundary(source.timestamp) {
-				Ok(value) => value
-				Err(_) => return Err(OutOfRange)
-			}
-			offset = match source.zone {
-				None => {
-					match context {
-						Some(_) => return Err(UnexpectedContext)
-						None => {}
-					}
-					base_offset(source.timestamp)
-				}
-				Some(zone) => match zone.identifier {
-					Numeric(fixed) => {
-						match context {
-							Some(_) => return Err(UnexpectedContext)
-							None => {}
-						}
-						fixed
-					}
-					Named(name) => {
-						rules = match context {
-							None => return Err(NeedsContext)
-							Some(value) => value
-						}
-						matches = name == ZoneRules.name(rules) or match ZoneRules.provenance(rules) {
-							Supplied => False
-							DatabaseSource(data) => name == data.requested_name
-						}
-						if !matches {
-							return Err(ZoneMismatch)
-						}
-						match ZoneRules.offset_at(rules, boundary) {
-							Ok(value) => value
-							Err(_) => return Err(OutsideValidity)
-						}
-					}
-				}
-			}
-			match OffsetTimestamp.parts(source.timestamp).offset {
-				UnassertedUtc => {}
-				Asserted(assertion) => if assertion != offset {
-					return Err(OffsetConflict)
-				}
-			}
-			local = match FixedOffset.project(offset, boundary, Gregorian) {
-				Ok(value) => value
-				Err(_) => return Err(OutOfRange)
-			}
-			Ok({ source, context, boundary, offset, local })
-		}
-		## Returns the original validated IXDTF declaration retained by this interpretation.
-		source : Snapshot -> Ixdtf
-		source = |snapshot| snapshot.source
-		## Returns the immutable zone rules retained for named-zone interpretation, or None when no rules were needed.
-		context : Snapshot -> [None, Some(ZoneRules)]
-		context = |snapshot| snapshot.context
-		## Returns the stored POSIX boundary without performing another offset lookup.
-		boundary : Snapshot -> PosixBoundary
-		boundary = |snapshot| snapshot.boundary
-		## Returns the offset selected during interpretation, which may differ from an unasserted base timestamp’s displayed UTC label.
-		offset : Snapshot -> FixedOffset
-		offset = |snapshot| snapshot.offset
-
-		## Read the stored Gregorian projection only when the requested preferred
-		## calendar is supported. An absent preference adds no calendar assertion.
-		presentation : Snapshot -> Try(LocalDateTime, [UnsupportedCalendar(Str)])
-		presentation = |snapshot| {
-			match preferred_calendar(snapshot.source) {
-				None => {}
-				Some(name) => if name != "gregory" {
-					return Err(UnsupportedCalendar(name))
-				}
-			}
-			Ok(snapshot.local)
-		}
-		## Explicitly interprets the retained source again under new context; returns a new snapshot or the same structured interpretation failures as resolve.
-		reresolve : Snapshot, [None, Some(ZoneRules)] -> Try(Snapshot, ResolveError)
-		reresolve = |snapshot, new_context| resolve(snapshot.source, new_context)
-		## Compares only resolved POSIX boundaries, ignoring differences in source declarations or interpretation context.
-		same_position : Snapshot, Snapshot -> Bool
-		same_position = |a, b| a.boundary == b.boundary
-
-		## Snapshot equality includes the source and complete immutable context,
-		## even when provider labels are reused. Use same_position for axis equality.
-		## Equality/hashing visit the retained definition; getters do not.
-		is_eq : Snapshot, Snapshot -> Bool
-		is_eq = |a, b| a.source == b.source and a.boundary == b.boundary and a.offset == b.offset and a.local == b.local and match (a.context, b.context) {
-			(None, None) => True
-			(Some(left), Some(right)) => ZoneRules.definition(left) == ZoneRules.definition(right)
-			_ => False
-		}
-		## Hashes the complete stored declaration and interpretation context, consistently with Snapshot.is_eq; use the boundary as a key for position-only identity.
-		to_hash : Snapshot, Hasher -> Hasher
-		to_hash = |value, hasher| {
-			base = value.local.to_hash(value.offset.to_hash(value.boundary.to_hash(value.source.to_hash(hasher))))
-			match value.context {
-				None => (0.U8).to_hash(base)
-				Some(rules) => ZoneRules.definition(rules).to_hash((1.U8).to_hash(base))
-			}
-		}
-
-		## Stored interpretation evidence only: no offset lookup, resolution or
-		## presentation conversion happens while reading these facts. The local
-		## position is the stored Gregorian projection even if a different
-		## requested presentation calendar is unsupported.
-		fact_count : Snapshot -> U64
-		fact_count = |snapshot| 2 + (
-			match snapshot.context {
-				None => 0
-				Some(_) => 1
-			}
-		) + source_fact_count(snapshot.source, Bool.False)
-		## Returns a zero-based stored interpretation fact or End beyond fact_count. Reading evidence performs no new zone lookup.
-		fact_at : Snapshot, U64 -> [End, Item(SemanticFact)]
-		fact_at = |snapshot, index| {
-			if index >= fact_count(snapshot) {
-				return End
-			}
-			if index == 0 {
-				return Item(SemanticFact.new(ResolvedPosition({ boundary: snapshot.boundary, offset: snapshot.offset, local: snapshot.local })))
-			}
-			if index == 1 {
-				preference = match preferred_calendar(snapshot.source) {
-					None => Gregorian
-					Some(name) => if name == "gregory" {
-						Gregorian
-					} else {
-						UnsupportedCalendar(name)
-					}
-				}
-				return Item(SemanticFact.new(Presentation(preference)))
-			}
-			var $next = index - 2
-			match snapshot.context {
-				None => {}
-				Some(rules) => {
-					if $next == 0 {
-						return Item(SemanticFact.new(Context({ name: ZoneRules.name(rules), version: ZoneRules.version(rules), validity: ZoneRules.validity(rules), provenance: ZoneRules.provenance(rules) })))
-					}
-					$next = $next - 1
-				}
-			}
-			source_fact_at(snapshot.source, $next, Bool.False)
-		}
-		## A concise summary of stored interpretation evidence; does not re-resolve or provide a persistence representation.
-		to_inspect : Snapshot -> Str
-		to_inspect = |snapshot| match fact_at(snapshot, 0) {
-			Item(fact) => SemanticFact.summary(fact)
-			End => crash "IXDTF snapshot has a first semantic fact"
-		}
-	}
+	Snapshot : IxdtfSnapshot
 }
 
 base_offset = |timestamp| match OffsetTimestamp.parts(timestamp).offset {
@@ -573,10 +433,10 @@ expect {
 	point = OffsetTimestamp.boundary(Ixdtf.parts(source).timestamp)?
 	rules = test_rules("Europe/Paris", point, 7200)?
 	snapshot = Ixdtf.resolve(source, Some(rules))?
-	local = Ixdtf.Snapshot.presentation(snapshot)?
+	local = IxdtfSnapshot.presentation(snapshot)?
 	clock = ClockTime.to_fields(LocalDateTime.clock(local))
 	asserted = Ixdtf.parse("2022-07-08T00:14:07+00:00[Europe/Paris]")?
-	Ixdtf.Snapshot.boundary(snapshot) == point and clock.hour == 2 and clock.minute == 14 and clock.second == 7 and
+	IxdtfSnapshot.boundary(snapshot) == point and clock.hour == 2 and clock.minute == 14 and clock.second == 7 and
 		resolve_error(Ixdtf.resolve(asserted, Some(rules))) == Some(OffsetConflict) and
 			resolve_error(Ixdtf.resolve(source, None)) == Some(NeedsContext) and
 				resolve_error(Ixdtf.resolve(source, Some(test_rules("Europe/London", point, 7200)?))) == Some(ZoneMismatch)
@@ -594,8 +454,8 @@ expect {
 expect {
 	value = Ixdtf.parse("1996-12-19T16:39:57-08:00[u-ca=hebrew][knort=blargel]")?
 	snapshot = Ixdtf.resolve(value, None)?
-	Ixdtf.Snapshot.presentation(snapshot) == Err(UnsupportedCalendar("hebrew")) and
-		Ixdtf.Snapshot.boundary(snapshot) == OffsetTimestamp.boundary(Ixdtf.parts(value).timestamp)? and
+	IxdtfSnapshot.presentation(snapshot) == Err(UnsupportedCalendar("hebrew")) and
+		IxdtfSnapshot.boundary(snapshot) == OffsetTimestamp.boundary(Ixdtf.parts(value).timestamp)? and
 			Ixdtf.parse(Ixdtf.to_text(value)) == Ok(value) and
 				Ixdtf.parse("1996-12-19T16:39:57-08:00[!u-ca=hebrew]") == Err(UnsupportedCriticalCalendar)
 }
@@ -603,7 +463,7 @@ expect {
 	value = Ixdtf.parse("1970-01-01t00:00:00z[!-00:00][!u-ca=gregory][u-ca=gregory]")?
 	snapshot = Ixdtf.resolve(value, None)?
 	Ixdtf.to_text(value) == "1970-01-01T00:00:00Z[!+00:00][!u-ca=gregory][u-ca=gregory]" and
-		Ixdtf.Snapshot.boundary(snapshot) == PosixBoundary.from_microseconds(0) and
+		IxdtfSnapshot.boundary(snapshot) == PosixBoundary.from_microseconds(0) and
 			Ixdtf.parse(Ixdtf.to_text(value)) == Ok(value) and
 				resolve_error(Ixdtf.resolve(value, Some(test_rules("UTC", PosixBoundary.from_microseconds(0), 0)?))) == Some(UnexpectedContext) and
 					resolve_error(Ixdtf.resolve(Ixdtf.parse("1970-01-01T00:00:00+01:00[+00:00]")?, None)) == Some(OffsetConflict)
@@ -643,11 +503,11 @@ expect {
 	first_rules = test_rules("Synthetic/Rule", point, 0)?
 	second_rules = test_rules("Synthetic/Rule", point, 3600)?
 	first = Ixdtf.resolve(source, Some(first_rules))?
-	second = Ixdtf.Snapshot.reresolve(first, Some(second_rules))?
-	Ixdtf.Snapshot.same_position(first, second) and first != second and first == Ixdtf.resolve(source, Some(first_rules))? and
-		Ixdtf.Snapshot.offset(first) == FixedOffset.from_seconds(0) and
-			Ixdtf.Snapshot.offset(second) == FixedOffset.from_seconds(3600) and
-				Ixdtf.Snapshot.source(first) == source and Ixdtf.Snapshot.source(second) == source
+	second = IxdtfSnapshot.reresolve(first, Some(second_rules))?
+	IxdtfSnapshot.same_position(first, second) and first != second and first == Ixdtf.resolve(source, Some(first_rules))? and
+		IxdtfSnapshot.offset(first) == FixedOffset.from_seconds(0) and
+			IxdtfSnapshot.offset(second) == FixedOffset.from_seconds(3600) and
+				IxdtfSnapshot.source(first) == source and IxdtfSnapshot.source(second) == source
 }
 
 test_rules = |name, point, offset| {
@@ -684,7 +544,7 @@ expect {
 	canonical = Ixdtf.parse("1970-01-01T00:00:00Z[Synthetic/Canonical]")?
 	left = Ixdtf.resolve(alias, Some(rules))?
 	right = Ixdtf.resolve(canonical, Some(rules))?
-	Ixdtf.Snapshot.same_position(left, right) and Ixdtf.Snapshot.source(left) != Ixdtf.Snapshot.source(right) and
+	IxdtfSnapshot.same_position(left, right) and IxdtfSnapshot.source(left) != IxdtfSnapshot.source(right) and
 		resolve_error(Ixdtf.resolve(Ixdtf.parse("1970-01-01T00:00:00Z[synthetic/Alias]")?, Some(rules))) == Some(ZoneMismatch) and
 			resolve_error(Ixdtf.resolve(Ixdtf.parse("1970-01-01T00:00:00Z[Synthetic/Other]")?, Some(rules))) == Some(ZoneMismatch)
 }
@@ -695,10 +555,12 @@ source_fact_count : Ixdtf, Bool -> U64
 source_fact_count = |value, include_requirement| {
 	extra = match value.zone {
 		None => 0.U64
-		Some(zone) => if include_requirement and (match zone.identifier {
-			Named(_) => Bool.True
-			Numeric(_) => Bool.False
-		}) {
+		Some(zone) => if include_requirement and (
+			match zone.identifier {
+				Named(_) => Bool.True
+				Numeric(_) => Bool.False
+			}
+		) {
 			2
 		} else {
 			1
@@ -724,10 +586,12 @@ source_fact_at = |value, index, include_requirement| {
 				return Item(SemanticFact.new(ZoneAnnotation(zone)))
 			}
 			$next = $next - 1
-			needs_context = include_requirement and (match zone.identifier {
-				Named(_) => Bool.True
-				Numeric(_) => Bool.False
-			})
+			needs_context = include_requirement and (
+				match zone.identifier {
+					Named(_) => Bool.True
+					Numeric(_) => Bool.False
+				}
+			)
 			if needs_context {
 				if $next == 0 {
 					return Item(SemanticFact.new(Requirement(ZoneContext)))
@@ -768,7 +632,7 @@ expect {
 		$correct = $correct and Ixdtf.fact_at(source, $index) == Item(SemanticFact.new(kind))
 		$index = $index + 1
 	}
-	first = match Ixdtf.Snapshot.fact_at(snapshot, 0) {
+	first = match IxdtfSnapshot.fact_at(snapshot, 0) {
 		Item(fact) => Ok(SemanticFact.kind(fact))
 		End => Err(MissingFact)
 	}?
@@ -778,8 +642,8 @@ expect {
 		_ => Bool.False
 	}
 	$index = 0
-	while $index < Ixdtf.Snapshot.fact_count(snapshot) {
-		match Ixdtf.Snapshot.fact_at(snapshot, $index) {
+	while $index < IxdtfSnapshot.fact_count(snapshot) {
+		match IxdtfSnapshot.fact_at(snapshot, $index) {
 			Item(fact) => if SemanticFact.kind(fact) == Requirement(ZoneContext) {
 				$correct = Bool.False
 			}
@@ -789,11 +653,178 @@ expect {
 		}
 		$index = $index + 1
 	}
-	$correct and position_valid and Ixdtf.fact_count(source) == 5 and Ixdtf.Snapshot.fact_count(snapshot) == 7 and
-		Ixdtf.Snapshot.fact_at(snapshot, 1) == Item(SemanticFact.new(Presentation(UnsupportedCalendar("hebrew")))) and
-			Ixdtf.Snapshot.fact_at(snapshot, 2) == Item(SemanticFact.new(Context({ name: "Synthetic/Facts", version: "rfc9557-fixture-v1", validity: ZoneRules.validity(rules), provenance: Supplied }))) and
-				Ixdtf.Snapshot.presentation(snapshot) == Err(UnsupportedCalendar("hebrew")) and
+	$correct and position_valid and Ixdtf.fact_count(source) == 5 and IxdtfSnapshot.fact_count(snapshot) == 7 and
+		IxdtfSnapshot.fact_at(snapshot, 1) == Item(SemanticFact.new(Presentation(UnsupportedCalendar("hebrew")))) and
+			IxdtfSnapshot.fact_at(snapshot, 2) == Item(SemanticFact.new(Context({ name: "Synthetic/Facts", version: "rfc9557-fixture-v1", validity: ZoneRules.validity(rules), provenance: Supplied }))) and
+				IxdtfSnapshot.presentation(snapshot) == Err(UnsupportedCalendar("hebrew")) and
 					Ixdtf.fact_at(source, 5) == End and Ixdtf.fact_at(source, U64.highest) == End and
-						Ixdtf.Snapshot.fact_at(snapshot, 7) == End and Ixdtf.Snapshot.fact_at(snapshot, U64.highest) == End and
-							Ixdtf.to_inspect(source).count_utf8_bytes() <= 256 and Ixdtf.Snapshot.to_inspect(snapshot).count_utf8_bytes() <= 160
+						IxdtfSnapshot.fact_at(snapshot, 7) == End and IxdtfSnapshot.fact_at(snapshot, U64.highest) == End and
+							Ixdtf.to_inspect(source).count_utf8_bytes() <= 256 and IxdtfSnapshot.to_inspect(snapshot).count_utf8_bytes() <= 160
+}
+
+IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary : PosixBoundary, offset : FixedOffset, local : LocalDateTime }.{
+
+	## Resolves under the supplied matching rules for a named zone. Fixed/no-zone declarations reject unexpected context; numeric offset conflicts are errors.
+	resolve : Ixdtf, [None, Some(ZoneRules)] -> Try(IxdtfSnapshot, Ixdtf.ResolveError)
+	resolve = |source_value, context_value| {
+		boundary_value = match OffsetTimestamp.boundary(source_value.timestamp) {
+			Ok(value) => value
+			Err(_) => return Err(OutOfRange)
+		}
+		offset_value = match source_value.zone {
+			None => {
+				match context_value {
+					Some(_) => return Err(UnexpectedContext)
+					None => {}
+				}
+				base_offset(source_value.timestamp)
+			}
+			Some(zone) => match zone.identifier {
+				Numeric(fixed) => {
+					match context_value {
+						Some(_) => return Err(UnexpectedContext)
+						None => {}
+					}
+					fixed
+				}
+				Named(name) => {
+					rules = match context_value {
+						None => return Err(NeedsContext)
+						Some(value) => value
+					}
+					matches = name == ZoneRules.name(rules) or match ZoneRules.provenance(rules) {
+						Supplied => False
+						DatabaseSource(data) => name == data.requested_name
+					}
+					if !matches {
+						return Err(ZoneMismatch)
+					}
+					match ZoneRules.offset_at(rules, boundary_value) {
+						Ok(value) => value
+						Err(_) => return Err(OutsideValidity)
+					}
+				}
+			}
+		}
+		match OffsetTimestamp.parts(source_value.timestamp).offset {
+			UnassertedUtc => {}
+			Asserted(assertion) => if assertion != offset_value {
+				return Err(OffsetConflict)
+			}
+		}
+		local = match FixedOffset.project(offset_value, boundary_value, Gregorian) {
+			Ok(value) => value
+			Err(_) => return Err(OutOfRange)
+		}
+		Ok({ source: source_value, context: context_value, boundary: boundary_value, offset: offset_value, local })
+	}
+
+	## Returns the original validated IXDTF declaration retained by this interpretation.
+	source : IxdtfSnapshot -> Ixdtf
+	source = |snapshot| snapshot.source
+
+	## Returns the immutable zone rules retained for named-zone interpretation, or None when no rules were needed.
+	context : IxdtfSnapshot -> [None, Some(ZoneRules)]
+	context = |snapshot| snapshot.context
+
+	## Returns the stored POSIX boundary without performing another offset lookup.
+	boundary : IxdtfSnapshot -> PosixBoundary
+	boundary = |snapshot| snapshot.boundary
+
+	## Returns the offset selected during interpretation, which may differ from an unasserted base timestamp’s displayed UTC label.
+	offset : IxdtfSnapshot -> FixedOffset
+	offset = |snapshot| snapshot.offset
+
+	## Read the stored Gregorian projection only when the requested preferred
+	## calendar is supported. An absent preference adds no calendar assertion.
+	presentation : IxdtfSnapshot -> Try(LocalDateTime, [UnsupportedCalendar(Str)])
+	presentation = |snapshot| {
+		match Ixdtf.preferred_calendar(snapshot.source) {
+			None => {}
+			Some(name) => if name != "gregory" {
+				return Err(UnsupportedCalendar(name))
+			}
+		}
+		Ok(snapshot.local)
+	}
+
+	## Explicitly interprets the retained source again under new context; returns a new snapshot or the same structured interpretation failures as resolve.
+	reresolve : IxdtfSnapshot, [None, Some(ZoneRules)] -> Try(IxdtfSnapshot, Ixdtf.ResolveError)
+	reresolve = |snapshot, new_context| resolve(snapshot.source, new_context)
+
+	## Compares only resolved POSIX boundaries, ignoring differences in source declarations or interpretation context.
+	same_position : IxdtfSnapshot, IxdtfSnapshot -> Bool
+	same_position = |a, b| a.boundary == b.boundary
+
+	## Ixdtf.Snapshot equality includes the source and complete immutable context,
+	## even when provider labels are reused. Use same_position for axis equality.
+	## Equality/hashing visit the retained definition; getters do not.
+	is_eq : IxdtfSnapshot, IxdtfSnapshot -> Bool
+	is_eq = |a, b| a.source == b.source and a.boundary == b.boundary and a.offset == b.offset and a.local == b.local and match (a.context, b.context) {
+		(None, None) => True
+		(Some(left), Some(right)) => ZoneRules.definition(left) == ZoneRules.definition(right)
+		_ => False
+	}
+
+	## Hashes the complete stored declaration and interpretation context, consistently with Ixdtf.Snapshot.is_eq; use the boundary as a key for position-only identity.
+	to_hash : IxdtfSnapshot, Hasher -> Hasher
+	to_hash = |value, hasher| {
+		base = value.local.to_hash(value.offset.to_hash(value.boundary.to_hash(value.source.to_hash(hasher))))
+		match value.context {
+			None => (0.U8).to_hash(base)
+			Some(rules) => ZoneRules.definition(rules).to_hash((1.U8).to_hash(base))
+		}
+	}
+
+	## Stored interpretation evidence only: no offset lookup, resolution or
+	## presentation conversion happens while reading these facts. The local
+	## position is the stored Gregorian projection even if a different
+	## requested presentation calendar is unsupported.
+	fact_count : IxdtfSnapshot -> U64
+	fact_count = |snapshot| 2 + (
+		match snapshot.context {
+			None => 0
+			Some(_) => 1
+		}
+	) + source_fact_count(snapshot.source, Bool.False)
+
+	## Returns a zero-based stored interpretation fact or End beyond fact_count. Reading evidence performs no new zone lookup.
+	fact_at : IxdtfSnapshot, U64 -> [End, Item(SemanticFact)]
+	fact_at = |snapshot, index| {
+		if index >= fact_count(snapshot) {
+			return End
+		}
+		if index == 0 {
+			return Item(SemanticFact.new(ResolvedPosition({ boundary: snapshot.boundary, offset: snapshot.offset, local: snapshot.local })))
+		}
+		if index == 1 {
+			preference = match Ixdtf.preferred_calendar(snapshot.source) {
+				None => Gregorian
+				Some(name) => if name == "gregory" {
+					Gregorian
+				} else {
+					UnsupportedCalendar(name)
+				}
+			}
+			return Item(SemanticFact.new(Presentation(preference)))
+		}
+		var $next = index - 2
+		match snapshot.context {
+			None => {}
+			Some(rules) => {
+				if $next == 0 {
+					return Item(SemanticFact.new(Context({ name: ZoneRules.name(rules), version: ZoneRules.version(rules), validity: ZoneRules.validity(rules), provenance: ZoneRules.provenance(rules) })))
+				}
+				$next = $next - 1
+			}
+		}
+		source_fact_at(snapshot.source, $next, Bool.False)
+	}
+
+	## A concise summary of stored interpretation evidence; does not re-resolve or provide a persistence representation.
+	to_inspect : IxdtfSnapshot -> Str
+	to_inspect = |snapshot| match fact_at(snapshot, 0) {
+		Item(fact) => SemanticFact.summary(fact)
+		End => crash "IXDTF snapshot has a first semantic fact"
+	}
 }

@@ -28,11 +28,13 @@ import PosixBoundary
 ##
 ## Examples assume a package dependency named `time`.
 FixedOffset :: [Seconds(I32)].{
+
 	## Construct an explicit local-minus-POSIX offset in whole seconds.
 	## Positive offsets place the local label ahead of the POSIX label. All I32
 	## values are accepted; a text format may impose a narrower range.
 	from_seconds : I32 -> FixedOffset
 	from_seconds = |seconds| Seconds(seconds)
+
 	## Read the whole-second local-minus-POSIX offset.
 	to_seconds : FixedOffset -> I32
 	to_seconds = |Seconds(seconds)| seconds
@@ -72,9 +74,11 @@ FixedOffset :: [Seconds(I32)].{
 	## Compare offset seconds. Equal fixed offsets do not imply equal named zones.
 	is_eq : FixedOffset, FixedOffset -> Bool
 	is_eq = |Seconds(a), Seconds(b)| a == b
+
 	## Hash the offset seconds consistently with equality for dictionary/set keys.
 	to_hash : FixedOffset, Hasher -> Hasher
 	to_hash = |Seconds(seconds), hasher| seconds.to_hash(hasher)
+
 	## Describe the offset in seconds with its local-minus-POSIX convention.
 	## This diagnostic string is not an interchange timestamp.
 	to_inspect : FixedOffset -> Str

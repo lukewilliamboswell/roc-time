@@ -37,30 +37,34 @@ import ZoneRules
 ## }
 ## ```
 ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
+
 	## Preserves whether the period ends at an explicit DATE-TIME or after a positive duration; these intents are not interchangeable near zone transitions.
 	Ending : [End(ICalDateTime), Duration(ICalDuration)]
+
 	## Utc interprets Z values without caller-supplied rules. Local supplies the immutable rules for local labels, including floating values interpreted by the caller.
 	Context : [Utc, Local(ZoneRules)]
+
 	## Reports which endpoint or duration failed, mixed UTC/local forms, invalid UTC ordering, syntax or input size.
 	Error : [Malformed, TooLarge, Start(ICalDateTime.Error), End(ICalDateTime.Error), Duration(ICalDuration.Error), MixedForms, InvalidPeriod]
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ICalPeriod, rest : state }, [InvalidICalPeriod(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : ICalPeriod, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidICalPeriod(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -86,6 +90,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc5545-period-values-v1"
+
 	## Parses start/end or start/duration. UTC ordering is checked now; local ending order is checked when the period is interpreted.
 	parse : Str -> Try(ICalPeriod, Error)
 	parse = |text| {
@@ -96,12 +101,12 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 			[a, b] => (a, b)
 			_ => return Err(Malformed)
 		}
-		start = match ICalDateTime.parse(left) {
+		start_value = match ICalDateTime.parse(left) {
 			Ok(value) => value
 			Err(error) => return Err(Start(error))
 		}
 		first = right.to_utf8().get(0) ?? 0
-		ending = if first == 80 or first == 112 or first == 43 or first == 45 {
+		ending_value = if first == 80 or first == 112 or first == 43 or first == 45 {
 			parsed_duration = match ICalDuration.parse(right) {
 				Ok(value) => value
 				Err(error) => return Err(Duration(error))
@@ -112,22 +117,25 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 				Ok(value) => value
 				Err(error) => return Err(End(error))
 			}
-			if ICalDateTime.form(start) != ICalDateTime.form(end) {
+			if ICalDateTime.form(start_value) != ICalDateTime.form(end) {
 				return Err(MixedForms)
 			}
-			if ICalDateTime.form(start) == Utc and LocalDateTime.compare_position(ICalDateTime.local_label(start), ICalDateTime.local_label(end)) != LT {
+			if ICalDateTime.form(start_value) == Utc and LocalDateTime.compare_position(ICalDateTime.local_label(start_value), ICalDateTime.local_label(end)) != LT {
 				return Err(InvalidPeriod)
 			}
 			End(end)
 		}
-		Ok({ start, ending })
+		Ok({ start: start_value, ending: ending_value })
 	}
+
 	## The retained starting DATE-TIME declaration; no zone interpretation is performed.
 	start : ICalPeriod -> ICalDateTime
 	start = |value| value.start
+
 	## The retained explicit endpoint or duration, preserving the original ending intent.
 	ending : ICalPeriod -> Ending
 	ending = |value| value.ending
+
 	## Canonical start/end or start/duration value. Duration units may normalize, but explicit-end versus duration intent remains distinct.
 	to_text : ICalPeriod -> Str
 	to_text = |value| {
@@ -137,9 +145,11 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 		}
 		"${ICalDateTime.to_text(value.start)}/${end_text}"
 	}
+
 	## Compares the start and ending declarations, including UTC/local form and duration-versus-endpoint intent.
 	is_eq : ICalPeriod, ICalPeriod -> Bool
 	is_eq = |a, b| a.start == b.start and a.ending == b.ending
+
 	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : ICalPeriod, Hasher -> Hasher
 	to_hash = |value, hasher| {
@@ -158,6 +168,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	} else {
 		3
 	}
+
 	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ICalPeriod, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| {
@@ -184,6 +195,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 			_ => Item(SemanticFact.new(Requirement(ZoneContext)))
 		}
 	}
+
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ICalPeriod -> Str
 	to_inspect = |value| match fact_at(value, 0) {

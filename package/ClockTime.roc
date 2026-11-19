@@ -16,9 +16,11 @@
 ##
 ## Examples assume a package dependency named `time`.
 ClockTime :: [Micros(I64)].{
+
 	## Clock fields: hour 0..23, minute and second 0..59, microsecond 0..999999.
 	## Pass the complete record to from_fields for validation.
 	Fields : { hour : U8, minute : U8, second : U8, microsecond : U32 }
+
 	## Clock parsing failures distinguish incomplete or malformed text, profile
 	## limits, invalid fields and unsupported leap seconds or fractional precision.
 	Error : [Malformed, Incomplete, TooLarge, UnsupportedPrecision, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond]
@@ -110,19 +112,20 @@ ClockTime :: [Micros(I64)].{
 	}
 
 	## Build a decoder for one encoded clock-label string. Return the clock and
-	## unconsumed state; distinguish InvalidClockTime from outer Encoding errors.
-	parser_for : encoding -> (state -> Try({ value : ClockTime, rest : state }, [InvalidClockTime(Error), Encoding(err)]))
-		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
+	## unconsumed state. Validation failures use the format-owned invalid_value error;
+	## parse retains detailed clock errors.
+	parser_for : encoding -> (state -> Try({ value : ClockTime, rest : state }, err))
+		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err), encoding.invalid_value : encoding, state -> err]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidClockTime(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -197,22 +200,28 @@ ClockTime :: [Micros(I64)].{
 	## Equality of clock labels within the same nominal day; values of other temporal domains must be converted explicitly.
 	is_eq : ClockTime, ClockTime -> Bool
 	is_eq = |Micros(a), Micros(b)| a == b
+
 	## Whether the first of two clock labels within the same nominal day precedes the second in their numeric order.
 	is_lt : ClockTime, ClockTime -> Bool
 	is_lt = |Micros(a), Micros(b)| a < b
+
 	## Whether the first of two clock labels within the same nominal day precedes or equals the second.
 	is_lte : ClockTime, ClockTime -> Bool
 	is_lte = |Micros(a), Micros(b)| a <= b
+
 	## Whether the first of two clock labels within the same nominal day follows the second in their numeric order.
 	is_gt : ClockTime, ClockTime -> Bool
 	is_gt = |Micros(a), Micros(b)| a > b
+
 	## Whether the first of two clock labels within the same nominal day follows or equals the second.
 	is_gte : ClockTime, ClockTime -> Bool
 	is_gte = |Micros(a), Micros(b)| a >= b
+
 	## Hash clock labels within the same nominal day consistently with equality for dictionary and set keys.
 	## Hash values are not a stable serialization format.
 	to_hash : ClockTime, Hasher -> Hasher
 	to_hash = |Micros(number), hasher| number.to_hash(hasher)
+
 	## Return a concise diagnostic description of these clock labels within the same nominal day.
 	## Use explicit conversions or text serialization when storing or exchanging data.
 	to_inspect : ClockTime -> Str

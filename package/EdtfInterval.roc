@@ -23,23 +23,24 @@ EdtfInterval :: { raw : CalendarInterval }.{
 	## existing date-profile validation failure.
 	Error : [Malformed, Incomplete, TooLarge, ReversedBounds, Start(EdtfDate.Error), End(EdtfDate.Error)]
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : EdtfInterval, rest : state }, [InvalidEdtfInterval(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : EdtfInterval, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidEdtfInterval(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}

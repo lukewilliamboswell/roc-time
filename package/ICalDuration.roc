@@ -33,23 +33,24 @@ import TimedOccurrence
 ## ```
 ICalDuration :: { days : I64, seconds : I64 }.{
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ICalDuration, rest : state }, [InvalidICalDuration(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : ICalDuration, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidICalDuration(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -75,6 +76,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	## Identifier of the supported text profile described above; it does not imply support for the entire standard.
 	profile : Str
 	profile = "rfc5545-positive-duration-v1"
+
 	## Reports malformed grammar, nonpositive duration, numerical range overflow or the input byte limit.
 	Error : [Malformed, NonPositive, OutOfRange, TooLarge]
 
@@ -189,6 +191,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	## Equality compares nominal days and coordinate seconds, without an anchor.
 	is_eq : ICalDuration, ICalDuration -> Bool
 	is_eq = |a, b| a.days == b.days and a.seconds == b.seconds
+
 	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : ICalDuration, Hasher -> Hasher
 	to_hash = |value, hasher| value.seconds.to_hash(value.days.to_hash(hasher))
@@ -231,6 +234,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	## an invented anchor or conversion of calendar days to elapsed seconds.
 	fact_count : ICalDuration -> U64
 	fact_count = |_| 1
+
 	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ICalDuration, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| if index == 0 {
@@ -238,6 +242,7 @@ ICalDuration :: { days : I64, seconds : I64 }.{
 	} else {
 		End
 	}
+
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ICalDuration -> Str
 	to_inspect = |value| match fact_at(value, 0) {

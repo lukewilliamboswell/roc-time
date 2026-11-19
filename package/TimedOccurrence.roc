@@ -22,6 +22,9 @@ import ZoneRules
 ## appointments and None for explicit ends. InvalidDuration also identifies an
 ## explicit end that resolves at or before the start.
 ## It does not construct the preimage of every civil label between endpoints.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : Ending, span : PosixSpan, calendar_anchor : [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] }.{
 
 	## Endpoint intent is distinct from an elapsed or calendar quantity.
@@ -38,15 +41,15 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## Nonnegative year/month/day components, invalid-date policy and coordinate tail, plus end
 	## fold/gap policies. At least one component or tail must be positive; the tail is applied
 	## after the calendar end is resolved.
-	CalendarDuration : { delta : Calendar.Delta, invalid_date : Calendar.Arithmetic.Policy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
+	CalendarDuration : { delta : Calendar.Delta, invalid_date : Calendar.ArithmeticPolicy, tail : PosixDelta, occurrence : ZoneRules.OccurrencePolicy, gap : [RejectGap, UseOffsetBeforeGap] }
 
 	## Result of interpreting one appointment ending. Complete supplies the event; Limited
 	## preserves pending interpretation and its reason.
-	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : Cursor(id), reason : [WorkLimit, BufferLimit] })] }
+	Batch(id) : { segments : U64, buffered : U64, status : [Complete(TimedOccurrence(id)), Limited({ cursor : TimedOccurrenceCursor(id), reason : [WorkLimit, BufferLimit] })] }
 
 	## Validate the duration's component domain without interpreting an anchor.
 	validate_duration : Duration -> Try({}, [InvalidDuration])
-	validate_duration = |duration| match duration {
+	validate_duration = |duration_value| match duration_value {
 		Coordinate(delta) => if PosixDelta.to_microseconds(delta) > 0 {
 			Ok({})
 		} else {
@@ -66,46 +69,46 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## Components must be nonnegative and at least one must be positive.
 	## Calendar work is bounded; zone interpretation resumes through collect.
 	## Existing start interpretation and its immutable rules are preserved.
-	cursor : id, TimedRecurrence.Occurrence, Duration -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields)])
-	cursor = |id, start, duration| match duration {
+	cursor : id, TimedRecurrence.Occurrence, Duration -> Try(TimedOccurrenceCursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields)])
+	cursor = |id_value, start_value, duration_value| match duration_value {
 		Coordinate(delta) => {
-			validate_duration(duration)?
-			end = match PosixBoundary.shift(TimedRecurrence.Occurrence.boundary(start), delta) {
+			validate_duration(duration_value)?
+			end = match PosixBoundary.shift(TimedRecurrence.Occurrence.boundary(start_value), delta) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
 			}
-			value = finish(id, start, duration, end, None)?
+			value = finish(id_value, start_value, duration_value, end, None)?
 			Ok(Ready(value))
 		}
 		Calendar(spec) => {
 			parts = Calendar.Delta.to_components(spec.delta)
-			validate_duration(duration)?
-			source = TimedRecurrence.Occurrence.source(start)
+			validate_duration(duration_value)?
+			source_value = TimedRecurrence.Occurrence.source(start_value)
 			if parts.years == 0 and parts.months == 0 and parts.days == 0 {
 				# Zero calendar movement is identity on the already selected
 				# start, including a fold occurrence or before-gap adjustment.
-				choice = { boundary: TimedRecurrence.Occurrence.boundary(start), adjustment: TimedRecurrence.Occurrence.adjustment(start) }
+				choice = { boundary: TimedRecurrence.Occurrence.boundary(start_value), adjustment: TimedRecurrence.Occurrence.adjustment(start_value) }
 				end = match PosixBoundary.shift(choice.boundary, spec.tail) {
 					Ok(value) => value
 					Err(OutOfRange) => return Err(OutOfRange)
 				}
-				value = finish(id, start, duration, end, Some({ source, choice }))?
+				value = finish(id_value, start_value, duration_value, end, Some({ source: source_value, choice }))?
 				return Ok(Ready(value))
 			}
 			# TimedRecurrence constructs Gregorian sources. Conversion through
 			# the common day coordinate preserves that established invariant.
-			date = match GregorianDate.from_civil_day(Calendar.Date.to_civil_day(LocalDateTime.date(source))) {
+			date = match GregorianDate.from_civil_day(Calendar.Date.to_civil_day(LocalDateTime.date(source_value))) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
 			}
 			shifted = Calendar.Arithmetic.shift_day(date, spec.delta, spec.invalid_date)?
-			end_source = LocalDateTime.new(Calendar.Date.from_gregorian(shifted), LocalDateTime.clock(source))
-			pending = match ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start), end_source) {
+			end_source = LocalDateTime.new(Calendar.Date.from_gregorian(shifted), LocalDateTime.clock(source_value))
+			pending = match ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start_value), end_source) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
 				Err(OutsideValidity) => return Err(OutsideValidity)
 			}
-			Ok(Pending({ id, start, spec, end_source, pending }))
+			Ok(Pending({ id: id_value, start: start_value, spec, end_source, pending }))
 		}
 	}
 
@@ -114,65 +117,22 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## order does not establish timeline order across a fold/gap. Both explicit
 	## end forms validate the resolved span, returning InvalidDuration when its
 	## end is equal to or before the selected start. AtBoundary needs no rules.
-	cursor_with_ending : id, TimedRecurrence.Occurrence, Ending -> Try(Cursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields)])
-	cursor_with_ending = |id, start, ending| match ending {
-		After(duration) => cursor(id, start, duration)
+	cursor_with_ending : id, TimedRecurrence.Occurrence, Ending -> Try(TimedOccurrenceCursor(id), [InvalidDuration, OutOfRange, OutsideValidity, InvalidDestination(GregorianDate.Fields)])
+	cursor_with_ending = |id_value, start_value, ending_value| match ending_value {
+		After(duration_value) => cursor(id_value, start_value, duration_value)
 		AtBoundary(end) => {
-			value = finish_ending(id, start, ending, end, None)?
+			value = finish_ending(id_value, start_value, ending_value, end, None)?
 			Ok(Ready(value))
 		}
 		AtLocal(spec) => {
-			pending = ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start), spec.source)?
-			Ok(Explicit({ id, start, spec, pending }))
+			pending = ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start_value), spec.source)?
+			Ok(Explicit({ id: id_value, start: start_value, spec, pending }))
 		}
 	}
 
 	## Pending appointment-end interpretation retaining the already resolved start. Resume this
 	## cursor instead of selecting the start again.
-	Cursor(id) :: [Ready(TimedOccurrence(id)), Explicit({ id : id, start : TimedRecurrence.Occurrence, spec : LocalEnd, pending : ZoneRules.ClassificationCursor }), Pending({ id : id, start : TimedRecurrence.Occurrence, spec : CalendarDuration, end_source : LocalDateTime, pending : ZoneRules.ClassificationCursor })].{
-
-		## Resolve the pending ending within zone work/storage limits. Complete returns the nonempty
-		## span; Limited retains progress. Invalid endpoints or unsupported interpretation remain
-		## structured errors.
-		collect : Cursor(id), ZoneRules.ClassificationLimits -> Try(Batch(id), [InvalidDuration, OutOfRange, Gap, Ambiguous, AmbiguousGap, OffsetConflict])
-		collect = |state, limits| match state {
-			Ready(value) => Ok({ segments: 0, buffered: 0, status: Complete(value) })
-			Explicit(value) => {
-				batch = ZoneRules.ClassificationCursor.collect(value.pending, limits)?
-				status = match batch.status {
-					Limited(progress) => Limited({ cursor: Explicit({ ..value, pending: progress.cursor }), reason: progress.reason })
-					Complete(classification) => {
-						choice = ZoneRules.Classification.choose(classification, { occurrence: value.spec.occurrence, gap: value.spec.gap })?
-						occurrence = finish_ending(value.id, value.start, AtLocal(value.spec), choice.boundary, Some({ source: value.spec.source, choice }))?
-						Complete(occurrence)
-					}
-				}
-				Ok({ segments: batch.segments, buffered: batch.buffered, status })
-			}
-			Pending(value) => {
-				batch = ZoneRules.ClassificationCursor.collect(value.pending, limits)?
-				status = match batch.status {
-					Limited(progress) => Limited({ cursor: Pending({ ..value, pending: progress.cursor }), reason: progress.reason })
-					Complete(classification) => {
-						choice = ZoneRules.Classification.choose(classification, { occurrence: value.spec.occurrence, gap: value.spec.gap })?
-						end = PosixBoundary.shift(choice.boundary, value.spec.tail)?
-						occurrence = finish(value.id, value.start, Calendar(value.spec), end, Some({ source: value.end_source, choice }))?
-						Complete(occurrence)
-					}
-				}
-				Ok({ segments: batch.segments, buffered: batch.buffered, status })
-			}
-		}
-
-		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
-		## Use typed accessors for application logic; this text is not a storage format.
-		to_inspect : Cursor(id) -> Str
-		to_inspect = |state| match state {
-			Ready(_) => "TimedOccurrence.Cursor(ready)"
-			Pending(_) => "TimedOccurrence.Cursor(calendar end pending)"
-			Explicit(_) => "TimedOccurrence.Cursor(explicit local end pending)"
-		}
-	}
+	Cursor(id_value) : TimedOccurrenceCursor(id_value)
 
 	## Return the application identity carried by this appointment. Distinct source occurrences
 	## can occupy the same span.
@@ -199,7 +159,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 	## the resolved span when a checked numerical width is desired.
 	duration : TimedOccurrence(id) -> [None, Some(Duration)]
 	duration = |value| match value.ending {
-		After(duration) => Some(duration)
+		After(duration_value) => Some(duration_value)
 		_ => None
 	}
 
@@ -274,18 +234,18 @@ test_rules = |offset, at| {
 expect {
 	start = test_start(test_rules(3600, 43200000000)?, RequireUnique)?
 	fixed = TimedOccurrence.cursor("fixed", start, Coordinate(PosixDelta.from_microseconds(86400000000)))?
-	fixed_batch = TimedOccurrence.Cursor.collect(fixed, { max_segments: 0, max_candidates: 0 })?
+	fixed_batch = TimedOccurrenceCursor.collect(fixed, { max_segments: 0, max_candidates: 0 })?
 	fixed_value = match fixed_batch.status {
 		Complete(value) => value
 		Limited(_) => crash "coordinate duration needs no zone work"
 	}
 	calendar = TimedOccurrence.cursor("calendar", start, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }))?
-	paused = TimedOccurrence.Cursor.collect(calendar, { max_segments: 1, max_candidates: 1 })?
+	paused = TimedOccurrenceCursor.collect(calendar, { max_segments: 1, max_candidates: 1 })?
 	pending = match paused.status {
 		Limited(progress) => progress.cursor
 		Complete(_) => crash "calendar end needs both segments"
 	}
-	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 1 })?
+	resumed = TimedOccurrenceCursor.collect(pending, { max_segments: 1, max_candidates: 1 })?
 	calendar_value = match resumed.status {
 		Complete(value) => value
 		Limited(_) => crash "calendar end did not resume"
@@ -299,7 +259,7 @@ expect {
 	# in the unused end policy, and performs no classification.
 	start = test_start(test_rules(-3600, 3600000000)?, Last)?
 	cursor = TimedOccurrence.cursor(7.U64, start, Calendar({ delta: Calendar.Delta.days(0), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap }))?
-	result = TimedOccurrence.Cursor.collect(cursor, { max_segments: 0, max_candidates: 0 })?
+	result = TimedOccurrenceCursor.collect(cursor, { max_segments: 0, max_candidates: 0 })?
 	match result.status {
 		Complete(value) => result.segments == 0 and PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(3600000000))
 		Limited(_) => Bool.False
@@ -316,7 +276,7 @@ expect {
 		_ => Bool.False
 	}
 	clamped = TimedOccurrence.cursor("loan", start, Calendar({ ..spec, invalid_date: Clamp }))?
-	result = TimedOccurrence.Cursor.collect(clamped, { max_segments: 1, max_candidates: 1 })?
+	result = TimedOccurrenceCursor.collect(clamped, { max_segments: 1, max_candidates: 1 })?
 	rejected and match result.status {
 		Complete(value) => PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(2419200000000))
 		Limited(_) => Bool.False
@@ -357,7 +317,7 @@ expect {
 	}
 	# A coordinate duration needs rules only for the already resolved start.
 	fixed = TimedOccurrence.cursor(1.U64, start, Coordinate(PosixDelta.from_microseconds(259200000000)))?
-	result = TimedOccurrence.Cursor.collect(fixed, { max_segments: 0, max_candidates: 0 })?
+	result = TimedOccurrenceCursor.collect(fixed, { max_segments: 0, max_candidates: 0 })?
 	missing_end and match result.status {
 		Complete(_) => result.segments == 0
 		Limited(_) => Bool.False
@@ -368,12 +328,12 @@ expect {
 	start = test_start(test_rules(-3600, 90000000000)?, RequireUnique)?
 	spec = { delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
 	strict = TimedOccurrence.cursor("fold", start, Calendar(spec))?
-	ambiguous = match TimedOccurrence.Cursor.collect(strict, { max_segments: 2, max_candidates: 2 }) {
+	ambiguous = match TimedOccurrenceCursor.collect(strict, { max_segments: 2, max_candidates: 2 }) {
 		Err(Ambiguous) => Bool.True
 		_ => Bool.False
 	}
 	last = TimedOccurrence.cursor("fold", start, Calendar({ ..spec, occurrence: Last }))?
-	paused = TimedOccurrence.Cursor.collect(last, { max_segments: 2, max_candidates: 1 })?
+	paused = TimedOccurrenceCursor.collect(last, { max_segments: 2, max_candidates: 1 })?
 	var $valid = ambiguous
 	pending = match paused.status {
 		Limited(progress) => {
@@ -382,7 +342,7 @@ expect {
 		}
 		Complete(_) => crash "fold candidates must obey capacity"
 	}
-	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
+	resumed = TimedOccurrenceCursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
 	$valid and resumed.segments == 1 and match resumed.status {
 		Complete(value) => TimedOccurrence.id(value) == "fold" and PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(90000000000))
 		Limited(_) => Bool.False
@@ -393,12 +353,12 @@ expect {
 	start = test_start(test_rules(3600, 86400000000)?, RequireUnique)?
 	spec = { delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
 	strict = TimedOccurrence.cursor("gap", start, Calendar(spec))?
-	rejected = match TimedOccurrence.Cursor.collect(strict, { max_segments: 2, max_candidates: 1 }) {
+	rejected = match TimedOccurrenceCursor.collect(strict, { max_segments: 2, max_candidates: 1 }) {
 		Err(Gap) => Bool.True
 		_ => Bool.False
 	}
 	adjusted = TimedOccurrence.cursor("gap", start, Calendar({ ..spec, gap: UseOffsetBeforeGap }))?
-	result = TimedOccurrence.Cursor.collect(adjusted, { max_segments: 2, max_candidates: 1 })?
+	result = TimedOccurrenceCursor.collect(adjusted, { max_segments: 2, max_candidates: 1 })?
 	rejected and match result.status {
 		Complete(value) => {
 			evidence = match TimedOccurrence.calendar_anchor(value) {
@@ -421,12 +381,12 @@ expect {
 	source = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), ClockTime.from_microseconds_since_midnight(0)?)
 	ending = AtLocal({ source, occurrence: RequireUnique, gap: RejectGap })
 	cursor = TimedOccurrence.cursor_with_ending("explicit", start, ending)?
-	paused = TimedOccurrence.Cursor.collect(cursor, { max_segments: 1, max_candidates: 1 })?
+	paused = TimedOccurrenceCursor.collect(cursor, { max_segments: 1, max_candidates: 1 })?
 	pending = match paused.status {
 		Limited(progress) => progress.cursor
 		Complete(_) => crash "explicit end needs both segments"
 	}
-	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 1 })?
+	resumed = TimedOccurrenceCursor.collect(pending, { max_segments: 1, max_candidates: 1 })?
 	match resumed.status {
 		Complete(value) => {
 			anchor = match TimedOccurrence.calendar_anchor(value) {
@@ -451,7 +411,7 @@ expect {
 		_ => Bool.False
 	}
 	cursor = TimedOccurrence.cursor_with_ending({}, start, AtBoundary(PosixBoundary.from_microseconds(I64.highest)))?
-	batch = TimedOccurrence.Cursor.collect(cursor, { max_segments: 0, max_candidates: 0 })?
+	batch = TimedOccurrenceCursor.collect(cursor, { max_segments: 0, max_candidates: 0 })?
 	reversed and empty and batch.segments == 0 and match batch.status {
 		Complete(value) => PosixSpan.end(TimedOccurrence.span(value)) == PosixBoundary.from_microseconds(I64.highest) and TimedOccurrence.duration(value) == None
 		Limited(_) => Bool.False
@@ -464,17 +424,17 @@ expect {
 	start = test_start(test_rules(-3600, 3600000000)?, Last)?
 	source = LocalDateTime.new(LocalDateTime.date(TimedRecurrence.Occurrence.source(start)), ClockTime.from_microseconds_since_midnight(1800000000)?)
 	first = TimedOccurrence.cursor_with_ending({}, start, AtLocal({ source, occurrence: First, gap: RejectGap }))?
-	rejected = match TimedOccurrence.Cursor.collect(first, { max_segments: 2, max_candidates: 2 }) {
+	rejected = match TimedOccurrenceCursor.collect(first, { max_segments: 2, max_candidates: 2 }) {
 		Err(InvalidDuration) => Bool.True
 		_ => Bool.False
 	}
 	last = TimedOccurrence.cursor_with_ending({}, start, AtLocal({ source, occurrence: Last, gap: RejectGap }))?
-	paused = TimedOccurrence.Cursor.collect(last, { max_segments: 2, max_candidates: 1 })?
+	paused = TimedOccurrenceCursor.collect(last, { max_segments: 2, max_candidates: 1 })?
 	pending = match paused.status {
 		Limited(progress) => progress.cursor
 		Complete(_) => crash "two fold candidates need capacity"
 	}
-	resumed = TimedOccurrence.Cursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
+	resumed = TimedOccurrenceCursor.collect(pending, { max_segments: 1, max_candidates: 2 })?
 	rejected and match resumed.status {
 		Complete(value) => PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(1800000000))
 		Limited(_) => Bool.False
@@ -498,7 +458,7 @@ expect {
 		_ => crash "gap fixture occurrence"
 	}
 	appointment = TimedOccurrence.cursor(17.U8, start, Coordinate(PosixDelta.from_microseconds(1)))?
-	result = TimedOccurrence.Cursor.collect(appointment, { max_segments: 0, max_candidates: 0 })?
+	result = TimedOccurrenceCursor.collect(appointment, { max_segments: 0, max_candidates: 0 })?
 	match result.status {
 		Complete(value) => {
 			boundary = PosixSpan.start(TimedOccurrence.span(value))
@@ -507,5 +467,50 @@ expect {
 			TimedOccurrence.source(value) == original and projected == expected_projection and projected != TimedOccurrence.source(value) and boundary == PosixBoundary.from_microseconds(1800000123) and TimedOccurrence.id(value) == 17
 		}
 		Limited(_) => Bool.False
+	}
+}
+
+TimedOccurrenceCursor(id) :: [Ready(TimedOccurrence(id)), Explicit({ id : id, start : TimedRecurrence.Occurrence, spec : TimedOccurrence.LocalEnd, pending : ZoneRules.ClassificationCursor }), Pending({ id : id, start : TimedRecurrence.Occurrence, spec : TimedOccurrence.CalendarDuration, end_source : LocalDateTime, pending : ZoneRules.ClassificationCursor })].{
+
+	## Resolve the pending ending within zone work/storage limits. Complete returns the nonempty
+	## span; Limited retains progress. Invalid endpoints or unsupported interpretation remain
+	## structured errors.
+	collect : TimedOccurrenceCursor(id), ZoneRules.ClassificationLimits -> Try(TimedOccurrence.Batch(id), [InvalidDuration, OutOfRange, Gap, Ambiguous, AmbiguousGap, OffsetConflict])
+	collect = |state, limits| match state {
+		Ready(value) => Ok({ segments: 0, buffered: 0, status: Complete(value) })
+		Explicit(value) => {
+			batch = ZoneRules.ClassificationCursor.collect(value.pending, limits)?
+			status = match batch.status {
+				Limited(progress) => Limited({ cursor: Explicit({ ..value, pending: progress.cursor }), reason: progress.reason })
+				Complete(classification) => {
+					choice = ZoneRules.Classification.choose(classification, { occurrence: value.spec.occurrence, gap: value.spec.gap })?
+					occurrence = finish_ending(value.id, value.start, AtLocal(value.spec), choice.boundary, Some({ source: value.spec.source, choice }))?
+					Complete(occurrence)
+				}
+			}
+			Ok({ segments: batch.segments, buffered: batch.buffered, status })
+		}
+		Pending(value) => {
+			batch = ZoneRules.ClassificationCursor.collect(value.pending, limits)?
+			status = match batch.status {
+				Limited(progress) => Limited({ cursor: Pending({ ..value, pending: progress.cursor }), reason: progress.reason })
+				Complete(classification) => {
+					choice = ZoneRules.Classification.choose(classification, { occurrence: value.spec.occurrence, gap: value.spec.gap })?
+					end = PosixBoundary.shift(choice.boundary, value.spec.tail)?
+					occurrence = finish(value.id, value.start, Calendar(value.spec), end, Some({ source: value.end_source, choice }))?
+					Complete(occurrence)
+				}
+			}
+			Ok({ segments: batch.segments, buffered: batch.buffered, status })
+		}
+	}
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
+	to_inspect : TimedOccurrenceCursor(id) -> Str
+	to_inspect = |state| match state {
+		Ready(_) => "TimedOccurrence.Cursor(ready)"
+		Pending(_) => "TimedOccurrence.Cursor(calendar end pending)"
+		Explicit(_) => "TimedOccurrence.Cursor(explicit local end pending)"
 	}
 }

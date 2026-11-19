@@ -26,11 +26,14 @@ import ZoneRules
 ## Clock candidates are ordered by source label. BYSETPOS indexes that full
 ## period after explicit interpretation, without deduplicating equal boundaries.
 ## Construction retains at most 4096 positions and bounded field selectors.
-## Cursor work follows examined days/clocks and separately budgeted zone
+## TimedRecurrence.Cursor work follows examined days/clocks and separately budgeted zone
 ## segments. Position selection scans at most 4096 supplied positions per item.
 ## Without positions, buffering holds one occurrence. With positions it holds
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
+# TODO: Restore the nested nominal definitions after the compiler's nested
+# method shadowing issue is fixed for our supported nightly:
+# https://github.com/roc-lang/roc/issues/13077
 TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary), inclusions : List(LocalDateTime) }.{
 
 	## Until is inclusive in source-label order. UntilBoundary is inclusive
@@ -46,7 +49,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## Window-free native declaration retaining anchor precision, effective selectors and
 	## separate local-source and boundary exclusions. This is an editing interface, not a
 	## standardized storage document.
-	Definition : { anchor : LocalDateTime, pattern : [Calendar(CalendarPattern.Spec), Subdaily({ frequency : SubdailyPattern.Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec })], clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16), inclusions : List(LocalDateTime), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary) }
+	Definition : { anchor : LocalDateTime, pattern : [Calendar(CalendarPattern.Spec), Subdaily({ frequency : SubdailyPattern.Frequency, interval : I64, calendar : CalendarPattern.FilterSpec })], clocks : ClockPattern.Spec, termination : Termination, by_set_pos : List(I16), inclusions : List(LocalDateTime), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary) }
 
 	## Effective field selectors and source labels, without clock products,
 	## occurrence enumeration or interpretation. Immutable lists may be shared.
@@ -255,47 +258,22 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 
 	## A selected recurrence start retaining source identity separately from its resolved
 	## boundary and any gap adjustment.
-	Occurrence :: { source : LocalDateTime, choice : ZoneRules.BoundaryChoice, rules : ZoneRules }.{
-
-		## Return the original local source label. A gap adjustment never replaces this identity with
-		## its projected wall-clock label.
-		source : Occurrence -> LocalDateTime
-		source = |value| value.source
-
-		## Return the selected POSIX boundary. Different source labels can select the same boundary.
-		boundary : Occurrence -> PosixBoundary
-		boundary = |value| value.choice.boundary
-
-		## Report exact resolution or the forward gap whose before-offset policy selected this
-		## boundary.
-		adjustment : Occurrence -> [Exact, BeforeGap(ZoneRules.GapTransition)]
-		adjustment = |value| value.choice.adjustment
-
-		## Return the immutable rules used to resolve this occurrence, suitable for consistent
-		## interpretation of its ending.
-		rules : Occurrence -> ZoneRules
-		rules = |value| value.rules
-
-		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
-		## Use typed accessors for application logic; this text is not a storage format.
-		to_inspect : Occurrence -> Str
-		to_inspect = |value| "TimedRecurrence.Occurrence(${Str.inspect(value.source)}, ${Str.inspect(value.choice.boundary)})"
-	}
+	Occurrence : TimedRecurrenceOccurrence
 
 	## One interpreted source occurrence with continuation, End, or Limited progress. Counters
 	## expose candidate and zone work for the call.
-	Next : { steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [End, Item({ occurrence : Occurrence, cursor : Cursor }), Limited({ cursor : Cursor, reason : Limit })] }
+	Next : { steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [End, Item({ occurrence : TimedRecurrenceOccurrence, cursor : TimedRecurrenceCursor }), Limited({ cursor : TimedRecurrenceCursor, reason : Limit })] }
 
 	## Candidate/zone work limits plus the maximum number of occurrences returned in this batch.
 	CollectLimits : { work : Limits, max_occurrences : U64 }
 
 	## Interpreted starts with resource accounting and completion status. Limited carries the
 	## cursor preserving COUNT, position selection and exceptions.
-	Batch : { occurrences : List(Occurrence), steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [Complete, Limited({ cursor : Cursor, reason : Limit })] }
+	Batch : { occurrences : List(TimedRecurrenceOccurrence), steps : U64, zone_segments : U64, buffered : U64, zone_buffered : U64, status : [Complete, Limited({ cursor : TimedRecurrenceCursor, reason : Limit })] }
 
 	## Start a bounded source-window query using explicit immutable rules and fold/gap policies.
 	## Reject invalid windows; defer interpretation errors to cursor consumption.
-	cursor : TimedRecurrence, Window, Context -> Try(Cursor, [EmptyWindow, ReversedWindow, OutOfRange])
+	cursor : TimedRecurrence, Window, Context -> Try(TimedRecurrenceCursor, [EmptyWindow, ReversedWindow, OutOfRange])
 	cursor = |rule, window, context| {
 		match LocalDateTime.compare_position(window.start, window.end) {
 			EQ => return Err(EmptyWindow)
@@ -320,205 +298,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 
 	## Resumable recurrence execution state for one source window and immutable context. Keep it
 	## intact across limited queries.
-	Cursor :: {
-		rule : TimedRecurrence,
-		boundary_cutoff : [None, Some(PosixBoundary)],
-		window : Window,
-		context : Context,
-		period : U64,
-		day : I64,
-		end_day : I64,
-		day_selected : [Unknown, Yes, No],
-		clock_index : U64,
-		clock_start : U64,
-		clock_end : U64,
-		period_end : LocalDateTime,
-		buffer : List(Occurrence),
-		phase : [Build, Emit({ index : U64, advance : Bool }), Advance],
-		pending : [None, Some({ source : LocalDateTime, cursor : ZoneRules.ClassificationCursor })],
-		anchor_index : [None, Some(U64)],
-		count : U64,
-		zone_buffered : U64,
-		inclusion_index : U64,
-		# Keep optional merge payloads out of every cursor copy. Boxes are
-		# allocated only when inclusions require lookahead or interpretation.
-		held : [None, Some(Box(Occurrence))],
-		rule_ended : Bool,
-		inclusion_pending : [None, Some(Box({ source : LocalDateTime, cursor : ZoneRules.ClassificationCursor }))],
-	}.{
-
-		## Work counts date tests, clock candidates, period boundaries and
-		## emitted/filtered candidates. Zone work has a separate total budget.
-		## BYSETPOS buffers the whole period and validates DTSTART's position
-		## before any first-period output. Without BYSETPOS, only one pending
-		## occurrence is retained. Caller-retained cursors may share buffers.
-		## Merge explicit starts after rule selection/COUNT, retaining at most
-		## one rule lookahead and one pending inclusion classification. Looking
-		## ahead may examine a full BYSETPOS period under the same budgets.
-		next : Cursor, Limits -> Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
-		next = |initial, limits| {
-			if initial.rule.inclusions.is_empty() {
-				return next_rule(initial, limits)
-			}
-			var $state = initial
-			var $steps = 0.U64
-			var $zone_segments = 0.U64
-			while True {
-				if buffered_count($state) > limits.max_buffered {
-					return Ok(limited($state, $steps, $zone_segments, BufferLimit))
-				}
-				match $state.inclusion_pending {
-					Some(boxed) => {
-						pending = Box.unbox(boxed)
-						batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - $zone_segments, max_candidates: limits.max_zone_candidates })?
-						$zone_segments = $zone_segments + batch.segments
-						$state = { ..$state, zone_buffered: batch.buffered }
-						match batch.status {
-							Limited(progress) => return Ok(
-								limited(
-									{ ..$state, inclusion_pending: Some(Box.box({ ..pending, cursor: progress.cursor })) },
-									$steps,
-									$zone_segments,
-									match progress.reason {
-										WorkLimit => ZoneWorkLimit
-										BufferLimit => ZoneBufferLimit
-									},
-								),
-							)
-							Complete(classification) => {
-								choice = ZoneRules.Classification.choose(classification, { occurrence: $state.context.occurrence, gap: $state.context.gap })?
-								occurrence : Occurrence
-								occurrence = { source: pending.source, choice, rules: $state.context.rules }
-								$state = { ..$state, inclusion_pending: None, inclusion_index: $state.inclusion_index + 1, zone_buffered: 0 }
-								if !excluded($state.rule.exclusions, pending.source) and !boundary_excluded($state.rule.boundary_exclusions, choice.boundary) {
-									return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: 0, status: Item({ occurrence, cursor: $state }) })
-								}
-							}
-						}
-					}
-					None => {}
-				}
-				match $state.held {
-					None => if !$state.rule_ended {
-						batch = next_rule($state, { ..limits, max_steps: limits.max_steps - $steps, max_zone_segments: limits.max_zone_segments - $zone_segments })?
-						$steps = $steps + batch.steps
-						$zone_segments = $zone_segments + batch.zone_segments
-						match batch.status {
-							Limited(progress) => return Ok(limited(progress.cursor, $steps, $zone_segments, progress.reason))
-							End => {
-								$state = { ..$state, rule_ended: Bool.True, buffer: [], pending: None, zone_buffered: 0 }
-							}
-							Item(item) => {
-								$state = { ..item.cursor, held: Some(Box.box(item.occurrence)) }
-							}
-						}
-					}
-					Some(_) => {}
-				}
-				explicit = $state.rule.inclusions.get($state.inclusion_index)
-				match ($state.held, explicit) {
-					(None, Err(_)) => return Ok(ended($state, $steps, $zone_segments))
-					(None, Ok(source)) => if !before(source, $state.window.end) {
-						return Ok(ended($state, $steps, $zone_segments))
-					}
-					_ => {}
-				}
-				if $steps == limits.max_steps {
-					return Ok(limited($state, $steps, $zone_segments, WorkLimit))
-				}
-				$steps = $steps + 1
-				match $state.held {
-					Some(boxed) => {
-						occurrence = Box.unbox(boxed)
-						use_rule = match explicit {
-							Err(_) => Bool.True
-							Ok(source) => !before(source, occurrence.source)
-						}
-						if use_rule {
-							index = match explicit {
-								Ok(source) => if LocalDateTime.same_position(source, occurrence.source) {
-									$state.inclusion_index + 1
-								} else {
-									$state.inclusion_index
-								}
-								Err(_) => $state.inclusion_index
-							}
-							$state = { ..$state, held: None, inclusion_index: index }
-							return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
-						}
-					}
-					None => {}
-				}
-				source = match explicit {
-					Ok(value) => value
-					Err(_) => crash "merge has an inclusion"
-				}
-				if before(source, $state.window.start) {
-					$state = { ..$state, inclusion_index: $state.inclusion_index + 1 }
-				} else {
-					if buffered_count($state) == limits.max_buffered {
-						return Ok(limited($state, $steps, $zone_segments, BufferLimit))
-					}
-					pending = ZoneRules.classification_cursor($state.context.rules, source)?
-					$state = { ..$state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
-				}
-			}
-		}
-
-		## Budgets apply to the entire batch, not separately to each output.
-		## Output capacity is a separate bound from pending candidate buffers.
-		## At capacity return Limited(OutputLimit) without looking ahead; even
-		## an exactly full final batch needs resumption to prove completion.
-		collect : Cursor, CollectLimits -> Try(Batch, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
-		collect = |initial, limits| {
-			var $current = initial
-			var $occurrences = []
-			var $steps = 0.U64
-			var $zone_segments = 0.U64
-			while $occurrences.len() < limits.max_occurrences {
-				result = next($current, { ..limits.work, max_steps: limits.work.max_steps - $steps, max_zone_segments: limits.work.max_zone_segments - $zone_segments })?
-				$steps = $steps + result.steps
-				$zone_segments = $zone_segments + result.zone_segments
-				match result.status {
-					End => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Complete })
-					Limited(progress) => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Limited(progress) })
-					Item(item) => {
-						$occurrences = $occurrences.append(item.occurrence)
-						$current = item.cursor
-					}
-				}
-			}
-			Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($current), zone_buffered: $current.zone_buffered, status: Limited({ cursor: $current, reason: OutputLimit }) })
-		}
-
-		## A lazy stream of next outcomes. Budgets apply per advancement.
-		## End, errors and Limited are terminal items. Resume a Limited cursor
-		## explicitly; iterating a zero-work stream cannot retry forever.
-		outcomes : Cursor, Limits -> Iter(Try(Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart]))
-		outcomes = |initial, limits| Iter.custom(
-			Some(initial),
-			Err(Unknown),
-			|state| match state {
-				None => Err(NoMore)
-				Some(current) => {
-					result = next(current, limits)
-					rest = match result {
-						Ok(batch) => match batch.status {
-							Item(item) => Some(item.cursor)
-							_ => None
-						}
-						Err(_) => None
-					}
-					Ok((result, rest))
-				}
-			},
-		)
-
-		## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
-		## Use typed accessors for application logic; this text is not a storage format.
-		to_inspect : Cursor -> Str
-		to_inspect = |state| "TimedRecurrence.Cursor(period=${state.period.to_str()}, count=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
-	}
+	Cursor : TimedRecurrenceCursor
 }
 
 before = |a, b| LocalDateTime.compare_position(a, b) == LT
@@ -629,7 +409,7 @@ test_stopping_boundary = |termination, end_microseconds| {
 	var $valid = Bool.True
 	var $calls = 0.U64
 	while $calls < 40 and !$complete {
-		batch = TimedRecurrence.Cursor.next($cursor, { max_steps: 1, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 })?
+		batch = TimedRecurrenceCursor.next($cursor, { max_steps: 1, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 })?
 		$valid = $valid and batch.steps <= 1 and batch.zone_segments <= 1
 		match batch.status {
 			End => {
@@ -639,7 +419,7 @@ test_stopping_boundary = |termination, end_microseconds| {
 				$cursor = progress.cursor
 			}
 			Item(item) => {
-				$values = $values.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				$values = $values.append(TimedRecurrenceOccurrence.boundary(item.occurrence))
 				$cursor = item.cursor
 			}
 		}
@@ -708,7 +488,7 @@ test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, b
 	var $calls = 0.U64
 	while $calls < 100 and !$complete {
 		effective = List.get(pauses, $calls) ?? budget
-		batch = TimedRecurrence.Cursor.next($cursor, effective)?
+		batch = TimedRecurrenceCursor.next($cursor, effective)?
 		$valid = $valid and batch.steps <= effective.max_steps and batch.zone_segments <= effective.max_zone_segments
 		match batch.status {
 			End => {
@@ -718,10 +498,10 @@ test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, b
 				$cursor = progress.cursor
 			}
 			Item(item) => {
-				$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
-				$sources = $sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
+				$boundaries = $boundaries.append(TimedRecurrenceOccurrence.boundary(item.occurrence))
+				$sources = $sources.append(TimedRecurrenceOccurrence.source(item.occurrence))
 				$adjusted = $adjusted.append(
-					match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
+					match TimedRecurrenceOccurrence.adjustment(item.occurrence) {
 						Exact => Bool.False
 						BeforeGap(_) => Bool.True
 					},
@@ -815,7 +595,7 @@ test_stream_cursor_with_validity = |count, validity_end| {
 expect {
 	initial = test_stream_cursor(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
-	zero = TimedRecurrence.Cursor.collect(initial, { work, max_occurrences: 0 })?
+	zero = TimedRecurrenceCursor.collect(initial, { work, max_occurrences: 0 })?
 	var $valid = zero.steps == 0 and zero.zone_segments == 0 and zero.occurrences.is_empty()
 	resume = match zero.status {
 		Limited(progress) => {
@@ -824,8 +604,8 @@ expect {
 		}
 		Complete => crash "zero-output collection must not infer completion"
 	}
-	full = TimedRecurrence.Cursor.collect(resume, { work, max_occurrences: 2 })?
-	boundaries = full.occurrences.map(TimedRecurrence.Occurrence.boundary)
+	full = TimedRecurrenceCursor.collect(resume, { work, max_occurrences: 2 })?
+	boundaries = full.occurrences.map(TimedRecurrenceOccurrence.boundary)
 	rest = match full.status {
 		Limited(progress) => {
 			$valid = $valid and progress.reason == OutputLimit
@@ -833,7 +613,7 @@ expect {
 		}
 		Complete => crash "exact capacity must not look ahead"
 	}
-	final = TimedRecurrence.Cursor.collect(rest, { work, max_occurrences: 2 })?
+	final = TimedRecurrenceCursor.collect(rest, { work, max_occurrences: 2 })?
 	$valid and boundaries == [PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3600000000)] and final.occurrences.is_empty() and match final.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
@@ -843,8 +623,8 @@ expect {
 expect {
 	initial = test_stream_cursor(2)?
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
-	first = TimedRecurrence.Cursor.collect(initial, { work, max_occurrences: 10 })?
-	var $valid = first.zone_segments == 1 and first.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(0)]
+	first = TimedRecurrenceCursor.collect(initial, { work, max_occurrences: 10 })?
+	var $valid = first.zone_segments == 1 and first.occurrences.map(TimedRecurrenceOccurrence.boundary) == [PosixBoundary.from_microseconds(0)]
 	rest = match first.status {
 		Limited(progress) => {
 			$valid = $valid and progress.reason == ZoneWorkLimit
@@ -852,8 +632,8 @@ expect {
 		}
 		Complete => crash "zone work is shared by the entire batch"
 	}
-	second = TimedRecurrence.Cursor.collect(rest, { work, max_occurrences: 10 })?
-	$valid and second.zone_segments == 1 and second.occurrences.map(TimedRecurrence.Occurrence.boundary) == [PosixBoundary.from_microseconds(3600000000)] and match second.status {
+	second = TimedRecurrenceCursor.collect(rest, { work, max_occurrences: 10 })?
+	$valid and second.zone_segments == 1 and second.occurrences.map(TimedRecurrenceOccurrence.boundary) == [PosixBoundary.from_microseconds(3600000000)] and match second.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
 	}
@@ -864,7 +644,7 @@ expect {
 	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
 	var $zero_count = 0.U64
 	var $valid = Bool.True
-	for result in TimedRecurrence.Cursor.outcomes(initial, { ..work, max_steps: 0 }) {
+	for result in TimedRecurrenceCursor.outcomes(initial, { ..work, max_steps: 0 }) {
 		batch = result?
 		$zero_count = $zero_count + 1
 		$valid = $valid and batch.steps == 0 and match batch.status {
@@ -874,14 +654,14 @@ expect {
 	}
 	var $boundaries = []
 	var $end_count = 0.U64
-	for result in TimedRecurrence.Cursor.outcomes(initial, work) {
+	for result in TimedRecurrenceCursor.outcomes(initial, work) {
 		batch = result?
 		match batch.status {
 			End => {
 				$end_count = $end_count + 1
 			}
 			Item(item) => {
-				$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
+				$boundaries = $boundaries.append(TimedRecurrenceOccurrence.boundary(item.occurrence))
 			}
 			Limited(_) => {
 				$valid = Bool.False
@@ -895,7 +675,7 @@ expect {
 	initial = test_stream_cursor_with_validity(2, 0)?
 	var $errors = 0.U64
 	var $valid = Bool.True
-	for result in TimedRecurrence.Cursor.outcomes(initial, { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	for result in TimedRecurrenceCursor.outcomes(initial, { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		$errors = $errors + 1
 		$valid = $valid and match result {
 			Err(OutsideValidity) => Bool.True
@@ -958,12 +738,12 @@ test_subdaily = |clock_fields, pattern, positions, count| {
 	var $boundaries = []
 	var $calls = 0.U64
 	while $calls < 2000 {
-		batch = TimedRecurrence.Cursor.collect($current, { work: { max_steps: 1, max_buffered: 60, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
+		batch = TimedRecurrenceCursor.collect($current, { work: { max_steps: 1, max_buffered: 60, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
 		if batch.steps > 1 or batch.zone_segments > 1 {
 			crash "subdaily work limit"
 		}
 		for occurrence in batch.occurrences {
-			$boundaries = $boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
+			$boundaries = $boundaries.append(PosixBoundary.to_microseconds(TimedRecurrenceOccurrence.boundary(occurrence)))
 		}
 		match batch.status {
 			Complete => return Ok($boundaries)
@@ -1072,7 +852,7 @@ expect {
 	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(86400000000))?
 	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
 	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
-	result = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
+	result = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
 	result.occurrences.len() == 1 and match result.status {
 		Complete => Bool.True
 		Limited(_) => Bool.False
@@ -1145,9 +925,9 @@ expect {
 	cleared_rule = TimedRecurrence.with_exclusions(excluded_rule, [])?
 	cleared_cursor = TimedRecurrence.cursor(cleared_rule, { start, end }, context)?
 	limits = { work: { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }, max_occurrences: 4.U64 }
-	removed = TimedRecurrence.Cursor.collect(excluded_cursor, limits)?
-	original_result = TimedRecurrence.Cursor.collect(original, limits)?
-	cleared_result = TimedRecurrence.Cursor.collect(cleared_cursor, limits)?
+	removed = TimedRecurrenceCursor.collect(excluded_cursor, limits)?
+	original_result = TimedRecurrenceCursor.collect(original, limits)?
+	cleared_result = TimedRecurrenceCursor.collect(cleared_cursor, limits)?
 	too_many = match TimedRecurrence.with_exclusions(rule, List.repeat(start, 4097)) {
 		Err(TooManySelectors) => Bool.True
 		_ => Bool.False
@@ -1157,7 +937,7 @@ expect {
 			Complete => Bool.True
 			Limited(_) => Bool.False
 		}
-	) and original_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start] and cleared_result.occurrences.map(TimedRecurrence.Occurrence.source) == [start]
+	) and original_result.occurrences.map(TimedRecurrenceOccurrence.source) == [start] and cleared_result.occurrences.map(TimedRecurrenceOccurrence.source) == [start]
 }
 
 expect {
@@ -1171,9 +951,9 @@ expect {
 	}
 }
 
-# Internal rule execution: only Cursor.next performs inclusion merging.
+# Internal rule execution: only TimedRecurrence.Cursor.next performs inclusion merging.
 
-next_rule : TimedRecurrence.Cursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
+next_rule : TimedRecurrenceCursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
 next_rule = |initial, limits| {
 	var $state = initial
 	var $steps = 0.U64
@@ -1203,7 +983,7 @@ next_rule = |initial, limits| {
 					}
 					Complete(classification) => {
 						choice = ZoneRules.Classification.choose(classification, { occurrence: $state.context.occurrence, gap: $state.context.gap })?
-						occurrence : TimedRecurrence.Occurrence
+						occurrence : TimedRecurrenceOccurrence
 						occurrence = { source: pending.source, choice, rules: $state.context.rules }
 						anchor_index = if pending.source == $state.rule.anchor {
 							Some($state.buffer.len())
@@ -1392,7 +1172,7 @@ test_inclusions = |budget| {
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 1000 {
-		batch = TimedRecurrence.Cursor.next($cursor, budget)?
+		batch = TimedRecurrenceCursor.next($cursor, budget)?
 		if batch.steps > budget.max_steps or batch.zone_segments > budget.max_zone_segments {
 			return Ok(Bool.False)
 		}
@@ -1402,7 +1182,7 @@ test_inclusions = |budget| {
 				$cursor = progress.cursor
 			}
 			Item(item) => {
-				$observed = $observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(item.occurrence)))
+				$observed = $observed.append(PosixBoundary.to_microseconds(TimedRecurrenceOccurrence.boundary(item.occurrence)))
 				$cursor = item.cursor
 			}
 		}
@@ -1419,13 +1199,13 @@ expect {
 	full = { max_steps: 100.U64, max_buffered: 2.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }
 	var $valid = Bool.True
 	for work in [{ ..full, max_steps: 0 }, { ..full, max_buffered: 0 }, { ..full, max_buffered: 1 }, { ..full, max_zone_segments: 0 }, { ..full, max_zone_candidates: 0 }] {
-		paused = TimedRecurrence.Cursor.next(initial, work)?
+		paused = TimedRecurrenceCursor.next(initial, work)?
 		rest = match paused.status {
 			Limited(progress) => progress.cursor
 			_ => crash "merge needs more budget"
 		}
-		completed = TimedRecurrence.Cursor.collect(rest, { work: full, max_occurrences: 10 })?
-		observed = completed.occurrences.map(|value| PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
+		completed = TimedRecurrenceCursor.collect(rest, { work: full, max_occurrences: 10 })?
+		observed = completed.occurrences.map(|value| PosixBoundary.to_microseconds(TimedRecurrenceOccurrence.boundary(value)))
 		$valid = $valid and observed == [0.I64, 172800000000, 259200000000] and match completed.status {
 			Complete => Bool.True
 			_ => Bool.False
@@ -1454,10 +1234,10 @@ expect {
 	var $calls = 0.U64
 	var $complete = Bool.False
 	while $calls < 100 and !$complete {
-		batch = TimedRecurrence.Cursor.collect($cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 })?
+		batch = TimedRecurrenceCursor.collect($cursor, { work: { max_steps: 1, max_buffered: 2, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 })?
 		for value in batch.occurrences {
-			$boundaries = $boundaries.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)))
-			$hours = $hours.append(ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour)
+			$boundaries = $boundaries.append(PosixBoundary.to_microseconds(TimedRecurrenceOccurrence.boundary(value)))
+			$hours = $hours.append(ClockTime.to_fields(LocalDateTime.clock(TimedRecurrenceOccurrence.source(value))).hour)
 		}
 		match batch.status {
 			Complete => {
@@ -1484,9 +1264,9 @@ expect {
 	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
 	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
 	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
-	batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 3, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 })?
+	batch = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 3, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 })?
 	match batch.status {
-		Complete => batch.occurrences.len() == 1 and TimedRecurrence.Occurrence.boundary(batch.occurrences.get(0)?) == PosixBoundary.from_microseconds(7200000000)
+		Complete => batch.occurrences.len() == 1 and TimedRecurrenceOccurrence.boundary(batch.occurrences.get(0)?) == PosixBoundary.from_microseconds(7200000000)
 		Limited(_) => Bool.False
 	}
 }
@@ -1508,8 +1288,8 @@ expect {
 	for case in [{ cutoff_hour: 21.I64, expected: [9.U8, 12, 15] }, { cutoff_hour: 17, expected: [9, 12] }, { cutoff_hour: 19, expected: [9, 12, 15] }] {
 		rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern: { frequency: Hourly, interval: 3, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } }, termination: UntilBoundary(PosixBoundary.from_microseconds(base + case.cutoff_hour * 3600000000)), by_set_pos: [] })?
 		cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
-		batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 1 }, max_occurrences: 10 })?
-		$valid = $valid and batch.occurrences.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))).hour) == case.expected and match batch.status {
+		batch = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 1 }, max_occurrences: 10 })?
+		$valid = $valid and batch.occurrences.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrenceOccurrence.source(value))).hour) == case.expected and match batch.status {
 			Complete => Bool.True
 			Limited(_) => Bool.False
 		}
@@ -1632,9 +1412,236 @@ expect {
 # are also filtered by their selected boundaries. No January 5 refills COUNT.
 expect {
 	cursor = test_inclusion_boundary_cursor([PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(172800000000), PosixBoundary.from_microseconds(259200000000)])?
-	batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 100, max_zone_candidates: 1 }, max_occurrences: 10 })?
+	batch = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 100, max_zone_candidates: 1 }, max_occurrences: 10 })?
 	batch.occurrences.is_empty() and match batch.status {
 		Complete => True
 		_ => False
 	}
+}
+
+TimedRecurrenceOccurrence :: { source : LocalDateTime, choice : ZoneRules.BoundaryChoice, rules : ZoneRules }.{
+
+	## Return the original local source label. A gap adjustment never replaces this identity with
+	## its projected wall-clock label.
+	source : TimedRecurrenceOccurrence -> LocalDateTime
+	source = |value| value.source
+
+	## Return the selected POSIX boundary. Different source labels can select the same boundary.
+	boundary : TimedRecurrenceOccurrence -> PosixBoundary
+	boundary = |value| value.choice.boundary
+
+	## Report exact resolution or the forward gap whose before-offset policy selected this
+	## boundary.
+	adjustment : TimedRecurrenceOccurrence -> [Exact, BeforeGap(ZoneRules.GapTransition)]
+	adjustment = |value| value.choice.adjustment
+
+	## Return the immutable rules used to resolve this occurrence, suitable for consistent
+	## interpretation of its ending.
+	rules : TimedRecurrenceOccurrence -> ZoneRules
+	rules = |value| value.rules
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
+	to_inspect : TimedRecurrenceOccurrence -> Str
+	to_inspect = |value| "TimedRecurrence.Occurrence(${Str.inspect(value.source)}, ${Str.inspect(value.choice.boundary)})"
+}
+
+TimedRecurrenceCursor :: {
+	rule : TimedRecurrence,
+	boundary_cutoff : [None, Some(PosixBoundary)],
+	window : TimedRecurrence.Window,
+	context : TimedRecurrence.Context,
+	period : U64,
+	day : I64,
+	end_day : I64,
+	day_selected : [Unknown, Yes, No],
+	clock_index : U64,
+	clock_start : U64,
+	clock_end : U64,
+	period_end : LocalDateTime,
+	buffer : List(TimedRecurrenceOccurrence),
+	phase : [Build, Emit({ index : U64, advance : Bool }), Advance],
+	pending : [None, Some({ source : LocalDateTime, cursor : ZoneRules.ClassificationCursor })],
+	anchor_index : [None, Some(U64)],
+	count : U64,
+	zone_buffered : U64,
+	inclusion_index : U64,
+	# Keep optional merge payloads out of every cursor copy. Boxes are
+	# allocated only when inclusions require lookahead or interpretation.
+	held : [None, Some(Box(TimedRecurrenceOccurrence))],
+	rule_ended : Bool,
+	inclusion_pending : [None, Some(Box({ source : LocalDateTime, cursor : ZoneRules.ClassificationCursor }))],
+}.{
+
+	## Work counts date tests, clock candidates, period boundaries and
+	## emitted/filtered candidates. Zone work has a separate total budget.
+	## BYSETPOS buffers the whole period and validates DTSTART's position
+	## before any first-period output. Without BYSETPOS, only one pending
+	## occurrence is retained. Caller-retained cursors may share buffers.
+	## Merge explicit starts after rule selection/COUNT, retaining at most
+	## one rule lookahead and one pending inclusion classification. Looking
+	## ahead may examine a full BYSETPOS period under the same budgets.
+	next : TimedRecurrenceCursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
+	next = |initial, limits| {
+		if initial.rule.inclusions.is_empty() {
+			return next_rule(initial, limits)
+		}
+		var $state = initial
+		var $steps = 0.U64
+		var $zone_segments = 0.U64
+		while True {
+			if buffered_count($state) > limits.max_buffered {
+				return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+			}
+			match $state.inclusion_pending {
+				Some(boxed) => {
+					pending = Box.unbox(boxed)
+					batch = ZoneRules.ClassificationCursor.collect(pending.cursor, { max_segments: limits.max_zone_segments - $zone_segments, max_candidates: limits.max_zone_candidates })?
+					$zone_segments = $zone_segments + batch.segments
+					$state = { ..$state, zone_buffered: batch.buffered }
+					match batch.status {
+						Limited(progress) => return Ok(
+							limited(
+								{ ..$state, inclusion_pending: Some(Box.box({ ..pending, cursor: progress.cursor })) },
+								$steps,
+								$zone_segments,
+								match progress.reason {
+									WorkLimit => ZoneWorkLimit
+									BufferLimit => ZoneBufferLimit
+								},
+							),
+						)
+						Complete(classification) => {
+							choice = ZoneRules.Classification.choose(classification, { occurrence: $state.context.occurrence, gap: $state.context.gap })?
+							occurrence : TimedRecurrenceOccurrence
+							occurrence = { source: pending.source, choice, rules: $state.context.rules }
+							$state = { ..$state, inclusion_pending: None, inclusion_index: $state.inclusion_index + 1, zone_buffered: 0 }
+							if !excluded($state.rule.exclusions, pending.source) and !boundary_excluded($state.rule.boundary_exclusions, choice.boundary) {
+								return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: 0, status: Item({ occurrence, cursor: $state }) })
+							}
+						}
+					}
+				}
+				None => {}
+			}
+			match $state.held {
+				None => if !$state.rule_ended {
+					batch = next_rule($state, { ..limits, max_steps: limits.max_steps - $steps, max_zone_segments: limits.max_zone_segments - $zone_segments })?
+					$steps = $steps + batch.steps
+					$zone_segments = $zone_segments + batch.zone_segments
+					match batch.status {
+						Limited(progress) => return Ok(limited(progress.cursor, $steps, $zone_segments, progress.reason))
+						End => {
+							$state = { ..$state, rule_ended: Bool.True, buffer: [], pending: None, zone_buffered: 0 }
+						}
+						Item(item) => {
+							$state = { ..item.cursor, held: Some(Box.box(item.occurrence)) }
+						}
+					}
+				}
+				Some(_) => {}
+			}
+			explicit = $state.rule.inclusions.get($state.inclusion_index)
+			match ($state.held, explicit) {
+				(None, Err(_)) => return Ok(ended($state, $steps, $zone_segments))
+				(None, Ok(source)) => if !before(source, $state.window.end) {
+					return Ok(ended($state, $steps, $zone_segments))
+				}
+				_ => {}
+			}
+			if $steps == limits.max_steps {
+				return Ok(limited($state, $steps, $zone_segments, WorkLimit))
+			}
+			$steps = $steps + 1
+			match $state.held {
+				Some(boxed) => {
+					occurrence = Box.unbox(boxed)
+					use_rule = match explicit {
+						Err(_) => Bool.True
+						Ok(source) => !before(source, occurrence.source)
+					}
+					if use_rule {
+						index = match explicit {
+							Ok(source) => if LocalDateTime.same_position(source, occurrence.source) {
+								$state.inclusion_index + 1
+							} else {
+								$state.inclusion_index
+							}
+							Err(_) => $state.inclusion_index
+						}
+						$state = { ..$state, held: None, inclusion_index: index }
+						return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
+					}
+				}
+				None => {}
+			}
+			source = match explicit {
+				Ok(value) => value
+				Err(_) => crash "merge has an inclusion"
+			}
+			if before(source, $state.window.start) {
+				$state = { ..$state, inclusion_index: $state.inclusion_index + 1 }
+			} else {
+				if buffered_count($state) == limits.max_buffered {
+					return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+				}
+				pending = ZoneRules.classification_cursor($state.context.rules, source)?
+				$state = { ..$state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
+			}
+		}
+	}
+
+	## Budgets apply to the entire batch, not separately to each output.
+	## Output capacity is a separate bound from pending candidate buffers.
+	## At capacity return Limited(OutputLimit) without looking ahead; even
+	## an exactly full final batch needs resumption to prove completion.
+	collect : TimedRecurrenceCursor, TimedRecurrence.CollectLimits -> Try(TimedRecurrence.Batch, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
+	collect = |initial, limits| {
+		var $current = initial
+		var $occurrences = []
+		var $steps = 0.U64
+		var $zone_segments = 0.U64
+		while $occurrences.len() < limits.max_occurrences {
+			result = next($current, { ..limits.work, max_steps: limits.work.max_steps - $steps, max_zone_segments: limits.work.max_zone_segments - $zone_segments })?
+			$steps = $steps + result.steps
+			$zone_segments = $zone_segments + result.zone_segments
+			match result.status {
+				End => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Complete })
+				Limited(progress) => return Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: result.buffered, zone_buffered: result.zone_buffered, status: Limited(progress) })
+				Item(item) => {
+					$occurrences = $occurrences.append(item.occurrence)
+					$current = item.cursor
+				}
+			}
+		}
+		Ok({ occurrences: $occurrences, steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($current), zone_buffered: $current.zone_buffered, status: Limited({ cursor: $current, reason: OutputLimit }) })
+	}
+
+	## A lazy stream of next outcomes. Budgets apply per advancement.
+	## End, errors and Limited are terminal items. Resume a Limited cursor
+	## explicitly; iterating a zero-work stream cannot retry forever.
+	outcomes : TimedRecurrenceCursor, TimedRecurrence.Limits -> Iter(Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart]))
+	outcomes = |initial, limits| Iter.custom(
+		Some(initial),
+		Err(Unknown),
+		|state| match state {
+			None => Err(NoMore)
+			Some(current) => {
+				result = next(current, limits)
+				rest = match result {
+					Ok(batch) => match batch.status {
+						Item(item) => Some(item.cursor)
+						_ => None
+					}
+					Err(_) => None
+				}
+				Ok((result, rest))
+			}
+		},
+	)
+
+	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.
+	## Use typed accessors for application logic; this text is not a storage format.
+	to_inspect : TimedRecurrenceCursor -> Str
+	to_inspect = |state| "TimedRecurrence.Cursor(period=${state.period.to_str()}, count=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
 }

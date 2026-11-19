@@ -17,7 +17,7 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 
 	## Subdaily frequency/interval, calendar predicates and clock selectors. Higher omitted clock
 	## fields expand over their full range; lower omitted fields inherit the anchor.
-	Spec : { frequency : Frequency, interval : I64, calendar : CalendarPattern.Filter.Spec, clocks : ClockPattern.Spec }
+	Spec : { frequency : Frequency, interval : I64, calendar : CalendarPattern.FilterSpec, clocks : ClockPattern.Spec }
 
 	## One local period’s date, exclusive end and half-open indices into its effective clock
 	## pattern. An empty index range means no clock candidate in that period.
@@ -54,9 +54,9 @@ SubdailyPattern :: { anchor_second : I128, unit : I128, interval : I128, clocks 
 		} else {
 			spec.clocks.seconds
 		}
-		clocks = ClockPattern.new(start.clock, { hours, minutes, seconds: seconds_list })?
+		clocks_value = ClockPattern.new(start.clock, { hours, minutes, seconds: seconds_list })?
 		dates = CalendarPattern.Filter.new(spec.calendar)?
-		Ok({ anchor_second, unit, interval: spec.interval.to_i128(), clocks, dates })
+		Ok({ anchor_second, unit, interval: spec.interval.to_i128(), clocks: clocks_value, dates })
 	}
 
 	## Read frequency, interval and calendar predicates for this checked pattern.

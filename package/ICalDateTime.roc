@@ -32,28 +32,31 @@ import PosixBoundary
 ## }
 ## ```
 ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
+
 	## Utc requires a trailing Z. Local has no offset; its surrounding property determines floating versus named-zone interpretation.
 	Form : [Local, Utc]
+
 	## Distinguishes incomplete/malformed syntax, invalid Gregorian fields or time, year range, and unsupported leap seconds.
 	Error : [Malformed, Incomplete, OutOfRange, InvalidDate, InvalidTime, UnsupportedLeapSecond]
 
-	## Decode one encoded string using this type's text parser.
-	## Encoding failures remain distinct from this profile's validation errors.
+	## Decode one encoded string using this type's validated text parser.
+	## Failures use the format's error type; parse retains detailed temporal errors.
 	## The encoding owns framing and its work limits; parse bounds the decoded text.
-	parser_for : encoding -> (state -> Try({ value : ICalDateTime, rest : state }, [InvalidICalDateTime(Error), Encoding(err)]))
+	parser_for : encoding -> (state -> Try({ value : ICalDateTime, rest : state }, err))
 		where [
 			encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err),
+			encoding.invalid_value : encoding, state -> err,
 		]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidICalDateTime(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -121,17 +124,18 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			Err(UnsupportedLeapSecond) => return Err(UnsupportedLeapSecond)
 			Err(_) => return Err(InvalidTime)
 		}
-		form = if length == 16 {
+		form_value = if length == 16 {
 			Utc
 		} else {
 			Local
 		}
-		Ok({ date, clock, form })
+		Ok({ date, clock, form: form_value })
 	}
 
 	## Returns whether the declaration carries explicit UTC Z or an unresolved local label.
 	form : ICalDateTime -> Form
 	form = |value| value.form
+
 	## Returns validated Gregorian date and clock fields. Preserve form separately when choosing how to interpret them.
 	source : ICalDateTime -> { date : GregorianDate, clock : ClockTime }
 	source = |value| { date: value.date, clock: value.clock }
@@ -159,9 +163,11 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		}
 		"${pad(date.year.to_str(), 4)}${pad(date.month.to_str(), 2)}${pad(date.day.to_str(), 2)}T${pad(clock.hour.to_str(), 2)}${pad(clock.minute.to_str(), 2)}${pad(clock.second.to_str(), 2)}${suffix}"
 	}
+
 	## Compares date, clock and UTC/local form; identical clock labels in different forms are distinct declarations.
 	is_eq : ICalDateTime, ICalDateTime -> Bool
 	is_eq = |a, b| a.date == b.date and a.clock == b.clock and a.form == b.form
+
 	## Hashes the same declaration fields used by is_eq, so equal values are interchangeable as dictionary keys.
 	to_hash : ICalDateTime, Hasher -> Hasher
 	to_hash = |value, hasher| {
@@ -180,6 +186,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 	} else {
 		1
 	}
+
 	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
 	fact_at : ICalDateTime, U64 -> [End, Item(SemanticFact)]
 	fact_at = |value, index| {
@@ -192,6 +199,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			Item(SemanticFact.new(Requirement(ZoneContext)))
 		}
 	}
+
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ICalDateTime -> Str
 	to_inspect = |value| match fact_at(value, 0) {

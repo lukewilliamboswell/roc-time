@@ -41,15 +41,19 @@ import CivilDay
 ## is Friday, ordinal day 1, in ISO week 53 of 2020. Group by both `week_year`
 ## and `week`; the Gregorian year alone does not identify an ISO week.
 GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
+
 	## Astronomical year and one-based month/day fields for a Gregorian date.
 	## Year zero means 1 BCE; from_fields validates combinations and provider range.
 	Fields : { year : I64, month : U8, day : U8 }
+
 	## Parsing failures distinguish unfinished input, malformed text, invalid calendar
 	## fields, unsupported year range and input longer than the profile limit.
 	Error : [Malformed, Incomplete, OutOfRange, InvalidMonth, InvalidDay, TooLarge]
+
 	## Weekday names in Monday-through-Sunday order. They describe civil dates,
 	## without a timezone or an elapsed-duration interpretation.
 	Weekday : [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+
 	## ISO week-based year, week number (1..53) and weekday.
 	## The week_year may differ from the ordinary calendar year near New Year.
 	IsoWeekDate : { week_year : I64, week : U8, weekday : Weekday }
@@ -65,20 +69,20 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	profile = "native-gregorian-full-date-v1"
 
 	## Build a decoder for one encoded string containing a Gregorian full date.
-	## Return the validated date and unconsumed encoding state; distinguish
-	## InvalidGregorianDate from failures of the outer Encoding.
-	parser_for : encoding -> (state -> Try({ value : GregorianDate, rest : state }, [InvalidGregorianDate(Error), Encoding(err)]))
-		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err)]
+	## Return the validated date and unconsumed encoding state. Validation failures
+	## use the format-owned invalid_value error; parse retains detailed date errors.
+	parser_for : encoding -> (state -> Try({ value : GregorianDate, rest : state }, err))
+		where [encoding.parse_str : encoding, state -> Try({ value : Str, rest : state }, err), encoding.invalid_value : encoding, state -> err]
 	parser_for = |encoding| {
 		Encoding : encoding
 		|state| {
 			parsed = match Encoding.parse_str(encoding, state) {
 				Ok(value) => value
-				Err(error) => return Err(Encoding(error))
+				Err(error) => return Err(error)
 			}
 			match parse(parsed.value) {
 				Ok(value) => Ok({ value, rest: parsed.rest })
-				Err(error) => Err(InvalidGregorianDate(error))
+				Err(_) => Err(Encoding.invalid_value(encoding, state))
 			}
 		}
 	}
@@ -545,6 +549,7 @@ pad_two = |value| if value < 10 {
 # inverse conversion validates against them without recomputing either year.
 first_supported_day : I64
 first_supported_day = year_start(-2147483648)
+
 after_last_supported_day : I64
 after_last_supported_day = year_start(2147483648)
 

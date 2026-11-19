@@ -1,5 +1,6 @@
 ## Signed coordinate displacement on the POSIX axis, not physical SI elapsed time.
 PosixDelta :: [Micros(I64)].{
+
 	## Construct a signed coordinate displacement in whole microseconds.
 	## Every I64 value is accepted; negative values move toward earlier positions.
 	from_microseconds : I64 -> PosixDelta
