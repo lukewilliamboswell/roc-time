@@ -23,6 +23,7 @@ Calendar := [Gregorian, Julian].{
 	## Work is constant, without zone resolution. Provider limits return OutOfRange.
 	ArithmeticPolicy : [Reject, Clamp, Carry]
 
+	## Checked Gregorian calendar arithmetic with an explicit invalid-date policy.
 	Arithmetic : CalendarArithmetic
 
 	## Whether two calendar profiles identify the same calendar. This does not
@@ -59,12 +60,14 @@ Calendar := [Gregorian, Julian].{
 	## A validated day description retaining its calendar. Resolution is one civil day.
 	DateFields : { year : I64, month : U8, day : U8 }
 
+	## A validated Gregorian or Julian date retaining its calendar identity.
 	Date : CalendarDate
 
 	## Ordered calendar components, not an elapsed or POSIX displacement.
 	## Calendar.Arithmetic applies years, then months, then civil days.
 	DeltaComponents : { years : I64, months : I64, days : I64 }
 
+	## Ordered calendar quantities, distinct from elapsed displacement.
 	Delta : CalendarDelta
 
 	## A finite civil selection retaining its calendar and supplied resolution.
@@ -75,8 +78,11 @@ Calendar := [Gregorian, Julian].{
 	## fail only when requested. Use ZoneRules.calendar_selection_cursor for
 	## bounded interpretation, preserving disconnected folds and empty gaps.
 	Resolution : [Year, Month, Day, Hour, Minute, Second, Fraction(U8)]
+
+	## Calendar, date fields, clock fields and supplied resolution without interpretation.
 	Description : { calendar : Calendar, fields : Calendar.DateFields, clock : ClockTime.Fields, resolution : Calendar.Resolution }
 
+	## A validated civil selection retaining its calendar and supplied resolution.
 	Value : CalendarValue
 }
 

@@ -8,9 +8,8 @@ replay reports.
 The platform/dependency revision and archive SHA-256 are in [dependency.json](../dependency.json).
 
 Scope: LLVM `--opt=speed --fuzz --no-cache`, profile `speed`, metric version
-`roc-fuzz-allocations/1`. Linux `x64musl` entries were measured with roc-fuzz 0.5.0
-and compiler `nightly-2026-11-07-ad3a5d2`; Apple Silicon `arm64mac` entries use
-roc-fuzz 0.7.0 suites and `nightly-2026-11-18-a520eed`. Each named
+`roc-fuzz-allocations/1`. Linux `x64musl` and Apple Silicon `arm64mac` entries
+use roc-fuzz 0.7.0 suites and `nightly-2026-11-18-a520eed`. Each named
 property executes once in a fresh process. Counters cover the platform's
 `$property` region, including the property's independent models and assertions;
 they are not isolated production API costs. Requested bytes are cumulative,

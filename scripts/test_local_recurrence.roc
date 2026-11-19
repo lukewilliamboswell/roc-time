@@ -41,7 +41,7 @@ main! = |args| {
 			return Script.fail!("local schedule prefix allocation/work depends on horizon")
 		}
 		for stage in ["construction", "first", "resume"] {
-			match Cmd.new(OsStr.from_str(resource)).args((["200000", "0", stage]).map(OsStr.from_str)).timeout(Duration.millis(5000)).capture!() {
+			match Cmd.new(OsStr.from_str(resource)).args((["200000", "0", stage]).map(OsStr.from_str)).timeout(Duration.millis(5000)).stderr(Capture).capture!() {
 				Err(BadExitStatus(value)) if Str.from_utf8_lossy(value.stderr_bytes).contains("ROC_ASSERT_FAILED") => {}
 				_ => return Script.fail!("local recurrence ${stage} allocation negative control did not fail as intended")
 			}

@@ -14,13 +14,6 @@ const HostEnv = struct {
     roc_env: abi.RocEnv,
 };
 
-const ScenarioResult = extern struct {
-    bytes: abi.RocListWith(u8, false),
-    work: abi.RocListWith(u64, false),
-};
-
-extern fn roc_main(args: abi.RocList(abi.RocStr)) callconv(.c) ScenarioResult;
-
 var roc_host: ?*abi.RocHost = null;
 var allocation_events: u64 = 0;
 var requested_bytes: u64 = 0;
@@ -50,7 +43,7 @@ fn main(argc: c_int, argv: [*][*:0]u8) callconv(.c) c_int {
     return platformMain(@intCast(argc), argv);
 }
 
-fn hostAlloc(length: usize, alignment: usize) callconv(.c) ?*anyopaque {
+fn hostAlloc(length: usize, alignment: usize) callconv(.c) *anyopaque {
     allocation_events += 1;
     requested_bytes += length;
     return abi.DefaultAllocators.rocAlloc(roc_host.?, length, alignment);
@@ -61,7 +54,7 @@ fn hostDealloc(ptr: *anyopaque, alignment: usize) callconv(.c) void {
     abi.DefaultAllocators.rocDealloc(roc_host.?, ptr, alignment);
 }
 
-fn hostRealloc(ptr: *anyopaque, new_length: usize, alignment: usize) callconv(.c) ?*anyopaque {
+fn hostRealloc(ptr: *anyopaque, new_length: usize, alignment: usize) callconv(.c) *anyopaque {
     allocation_events += 1;
     requested_bytes += new_length;
     return abi.DefaultAllocators.rocRealloc(roc_host.?, ptr, new_length, alignment);
@@ -99,7 +92,7 @@ fn platformMain(argc: usize, argv: [*][*:0]u8) c_int {
     requested_bytes = 0;
     deallocation_events = 0;
 
-    var result = roc_main(args);
+    var result = abi.roc_main(args);
     std.Io.File.stdout().writeStreamingAll(io, result.bytes.items()) catch return 1;
     reportMetrics(io, result.work.items()) catch return 1;
     result.bytes.decref(&host);
@@ -139,6 +132,8 @@ fn buildStrArgsList(
 ) abi.RocList(abi.RocStr) {
     if (argc == 0) return abi.RocList(abi.RocStr).empty();
 
+    // The generated allocator initializes the element-count header as well as
+    // the refcount. Roc consumes this list and uses that count to release strings.
     const args = abi.RocList(abi.RocStr).allocate(argc, host);
     const values = args.elements_ptr.?;
     for (0..argc) |index| {

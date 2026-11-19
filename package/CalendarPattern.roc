@@ -120,6 +120,7 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## periods use these same selector predicates after choosing their date.
 	FilterSpec : { by_month : List(U8), by_month_day : List(I8), by_year_day : List(I16), by_day : List(Weekday) }
 
+	## Checked date restrictions without recurrence expansion defaults.
 	Filter : CalendarPatternFilter
 
 	## Return a bounded diagnostic summary without advancing cursors or enumerating occurrences.

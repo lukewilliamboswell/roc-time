@@ -97,8 +97,11 @@ TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrid
 	## Construction validates duration and normalizes at most 4096 overrides once;
 	## no zone resolution or recurrence expansion. This is not a storage format.
 	EndingEntry : { source : LocalDateTime, ending : TimedOccurrence.Ending }
+
+	## Invalid duration, excessive overrides or conflicting endings for one source label.
 	EndingsError : [InvalidDuration, TooManyOverrides, ConflictingEnding(LocalDateTime)]
 
+	## Checked normalized default duration and source-specific ending overrides.
 	Endings : TimedScheduleEndings
 
 	## Replace the ending of one original source label with duration, explicit boundary or
