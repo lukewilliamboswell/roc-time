@@ -5,3 +5,5 @@ The https://github.com/lukewilliamboswell/roc-time/releases[published releases]
 provide exact core and zone-data package URLs, tested compiler versions and
 upgrade instructions. Download the examples and API archive from the same
 release as your package.
+
+include::releases/0.5.0.adoc[leveloffset=+1]

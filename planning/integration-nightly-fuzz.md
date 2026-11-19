@@ -21,6 +21,11 @@ with verified published examples. Preserve design requirements R01–R16.
 - Publish a compatible release after verified integration, rerun the published
   nightly compatibility workflow, and close #55 only with passing release evidence.
 
+The shared release workflow's compiler asset-API transport has returned HTTP 403
+on repeated attempts. The browser route works in contributor CI, but the shared
+release caller cannot select it. Track configuration support in
+[roc-automation #153](https://github.com/lukewilliamboswell/roc-automation/issues/153).
+
 The approved metadata aliases are temporarily promoted one level because this
 compiler cannot resolve nested types beneath aliases. Keep restoration TODOs
 linked to roc-lang/roc#11464 and the nominal-layout TODOs linked to #13077.
