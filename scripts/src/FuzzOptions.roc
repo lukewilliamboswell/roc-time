@@ -11,6 +11,7 @@ FuzzOptions := [].{
 		"arithmetic",
 		"calendars",
 		"clock",
+		"nano_clock",
 		"offsets",
 		"zones",
 		"events",
@@ -24,13 +25,17 @@ FuzzOptions := [].{
 	suite : Str -> Str
 	suite = |name| match name {
 		"precision" | "spans" | "coverage" | "events" => "core_suite"
-		"gregorian" | "arithmetic" | "calendars" | "clock" | "offsets" => "civil_suite"
+		"gregorian" | "arithmetic" | "calendars" | "clock" | "nano_clock" | "offsets" => "civil_suite"
 		"zones" | "patterns" | "recurrence" | "descriptions" | "interchange" => "interpretation_suite"
 		_ => name
 	}
 
 	member : Str -> Str
-	member = |name| if (name == "coverage") "coverage-v2" else "${name}-v1"
+	member = |name| match name {
+		"coverage" => "coverage-v2"
+		"nano_clock" => "nano-clock-v1"
+		_ => "${name}-v1"
+	}
 
 	selection : Str -> List(Str)
 	selection = |name| if (names.contains(name)) ["--target=${member(name)}"] else []
@@ -63,6 +68,7 @@ FuzzOptions := [].{
 ## coverage regression keeps its existing v2 binary encoding/report identity.
 expect FuzzOptions.builds(["coverage", "precision", "clock", "offsets", "recurrence"]) == ["core_suite", "civil_suite", "interpretation_suite"]
 expect FuzzOptions.selection("coverage") == ["--target=coverage-v2"]
+expect FuzzOptions.selection("nano_clock") == ["--target=nano-clock-v1"]
 expect FuzzOptions.selection("lifecycle") == []
 
 ## The executed compiler argv must enforce the reviewed measurement policy.

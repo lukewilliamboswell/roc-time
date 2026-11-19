@@ -28,6 +28,7 @@ package
 		Ixdtf,
 		JulianDate,
 		LocalDateTime,
+		NanoClockTime,
 		OffsetTimestamp,
 		PosixBoundary,
 		PosixDelta,

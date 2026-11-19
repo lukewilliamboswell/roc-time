@@ -1,7 +1,7 @@
 = roc-time 0.5.0
 
 This release supports Roc `nightly-2026-11-18-a520eed`. It updates the examples
-and repository automation to basic-cli 0.28.1 and groups the fourteen temporal
+and repository automation to basic-cli 0.28.1 and groups the fifteen temporal
 fuzz properties into three roc-fuzz 0.7.0 suites. Each property keeps its own
 examples, saved inputs, allocation baseline and report identity.
 
@@ -30,6 +30,16 @@ compose inside derived record and list parsers. JSON decoding returns
 `parse` operation for detailed errors such as `InvalidDate`, `OutOfRange` or
 `UnsupportedLeapSecond`. Both paths validate through the same temporal parser;
 serialization continues to emit canonical semantic text.
+
+== Nanosecond clock labels
+
+`NanoClockTime` is a new time of day with nanosecond precision, for data
+sources that store a time as nanoseconds since midnight, such as an Apache
+Arrow `Time64(ns)` column. It has the same operations as `ClockTime`, with
+`nanosecond` in place of `microsecond` and up to nine fractional digits in text.
+`from_clock` widens a `ClockTime` exactly. `to_clock` narrows under a
+`PosixBoundary.Rounding` policy and returns `OutOfRange` when rounding reaches
+24:00. No existing type, signature or text profile changes.
 
 == Use this release
 
