@@ -283,6 +283,7 @@ replay! = |context, { name, binary }| {
 		if replay.examples.len() != 1 or replay.examples.first()?.input_sha256 != hash_file!(raw)? {
 			return Err(MissingReplayEvidence)
 		}
+		remove_completed_ipc!(report_dir)?
 	}
 	Script.info!({
 		label: "PASS",
@@ -374,6 +375,7 @@ campaign! = |context, { name, binary, options }| {
 			exploration: RequireAcceptedInput,
 		},
 	)?
+	remove_completed_ipc!(report_dir)?
 	_ = read_corpus!(corpus)?
 	if Path.exists!(persistent)? {
 		Path.delete_all!(persistent)?
@@ -515,6 +517,7 @@ run_examples! = |context, { name, binary, action }| {
 			exploration: NotRequested,
 		},
 	)?
+	remove_completed_ipc!(report_dir)?
 	Script.info!({
 		label: "PASS",
 		message: "${name}: named examples and ${
@@ -525,6 +528,18 @@ run_examples! = |context, { name, binary, action }| {
 		} allocation baseline; ${Path.display(report_dir)}",
 	})?
 	Ok(report_dir)
+}
+
+# Complete quality reports retain decoded metrics, traces, logs and exact inputs.
+# Release each finished worker's shared-memory transport after evidence admission.
+remove_completed_ipc! : Path => Try({}, _)
+remove_completed_ipc! = |directory| {
+	for path in Path.list!(directory)? {
+		if Path.display(path).ends_with(".shared") and !Path.is_sym_link!(path)? and Path.type!(path)? == IsFile {
+			Path.delete!(path)?
+		}
+	}
+	Ok({})
 }
 
 validate_report! : Context, { directory : Path, target : Str, baseline : FuzzEvidence.Baseline, exploration : FuzzEvidence.Exploration } => Try({}, _)

@@ -461,6 +461,12 @@ construction. Totals include result construction and may include argv disposal,
 but are reported before returned values are freed. They are neither live-byte
 measurements nor a balanced allocation/free ledger.
 
+Regenerate `tests/platform/roc_platform_abi.zig` with the matching compiler's
+`src/glue/src/ZigGlue.roc` when upgrading the compiler; `tests/platform/NOTICE`
+records the source revision and hash. The host calls the generated provided
+entrypoint and uses its list allocator, including the element-count header
+needed when Roc releases an argument list containing strings.
+
 Take snapshots before and after an operation to assert its allocation cost.
 Counter queries and `Host.mark!` make no Roc allocations. Marks emit
 `ROC_TRACE protocol=1` records with a numeric ID and allocation count; the exported

@@ -6,31 +6,18 @@ with verified published examples. Preserve design requirements R01–R16.
 
 ## Remaining acceptance
 
-- Finish native builds of all three suites, replay every curated witness and
-  run each property with seed 1, 100 runs and one second. Verify failure
-  lifecycle, minimization, member selection and changed/missing baseline controls.
-- Review allocation observations for the new compiler/platform/suite layout.
-  Refresh only reviewed host/profile entries; retain raw evidence in ignored
-  temporary storage. A passing process without matched baseline evidence is
-  insufficient for the normal gate.
-- Complete `blueprint run check`, affected public examples, release dry run,
-  archive replay and documentation checks. Local Nix setup has encountered
-  insufficient disk space; direct source checks do not replace the full gate.
-- Create the integration PR, fix its Linux CI failures, and verify all required
-  checks at the final commit before merging the original PRs.
-- Publish a compatible release after verified integration, rerun the published
+- Complete `blueprint run check` on the final commit, including Linux native
+  resource fixtures with regenerated bindings and matched reviewed baselines.
+  Finish the local full-gate rerun; source-only checks do not replace it.
+- Complete the release dry run, unchanged archive replay and documentation checks.
+- Finish PR #59, verify its final checks and merge the original PRs and integration.
+- Publish compatible release 0.5.0 after verified integration, rerun the published
   nightly compatibility workflow, and close #55 only with passing release evidence.
 
-The shared release workflow's compiler asset-API transport has returned HTTP 403
-on repeated attempts. The browser route works in contributor CI, but the shared
-release caller cannot select it. Track configuration support in
+The shared release workflow's compiler asset-API transport can fail with HTTP 403
+before tests run. The browser route works in contributor CI, but the shared
+release caller cannot select it. A later source-build run passed setup without
+an upstream change. Track configuration support in
 [roc-automation #153](https://github.com/lukewilliamboswell/roc-automation/issues/153).
-
-The approved metadata aliases are temporarily promoted one level because this
-compiler cannot resolve nested types beneath aliases. Keep restoration TODOs
-linked to roc-lang/roc#11464 and the nominal-layout TODOs linked to #13077.
-The new compiler also requires format-owned codec errors; direct temporal
-parsers retain detailed validation errors. Verify both paths through the real
-public package, including nested JSON records/lists and an independent encoding.
 
 Remove this plan when the integration and published compatibility work is complete.

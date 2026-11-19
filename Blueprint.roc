@@ -87,6 +87,7 @@ config = [
 	Task("measure-zone-data", [Use("references"), Run(["scripts/measure_zone_data.roc"])]),
 	Task("measure-gregorian", [Use("dev"), Run(["scripts/measure_gregorian.roc"])]),
 	Task("fixture-platform", [Use("native"), Run(["scripts/check_fixture_platform.roc"])]),
+	Task("debug-fixture", [Use("native"), Run(["scripts/debug_fixture_platform.roc"])]),
 	Task("resource-identities", [Use("native"), Run(["scripts/check_resource_identities.roc"])]),
 	Task("stable-version", [Use("dev"), Run(["roc-stable", "version"])]),
 	Task("check-docs", [Use("docs"), Run(["scripts/build_docs.roc"])]),
