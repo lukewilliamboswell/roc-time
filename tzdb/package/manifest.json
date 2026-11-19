@@ -1995,11 +1995,11 @@
     "Zulu": "Etc/UTC"
   },
   "files": {
-    "Database.roc": "55b35da19818b812542737616e0a39c27318ef77eaaabb731f98df814c528dd5",
-    "LICENSE.txt": "df58f69ea88683035d720b5375bcef0cf5aeaa98a1d098d572e0992c378deb46",
-    "LICENSE_APACHE.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "Database.roc": "ac3de9daeff84678920d085185d9dff3179038620b3a1a669ec79ada5b28260c",
+    "zones.txt": "7289695f7a29e02da1afcfd0c9a91dbcec45aa0ebf2f2157ad1747f1d7e717b3",
     "names.txt": "d7f2601541004e40e108ee1bd18d9ab5ad6af4deb469355ce53c5ca047ef3832",
-    "zones.txt": "7289695f7a29e02da1afcfd0c9a91dbcec45aa0ebf2f2157ad1747f1d7e717b3"
+    "LICENSE.txt": "df58f69ea88683035d720b5375bcef0cf5aeaa98a1d098d572e0992c378deb46",
+    "LICENSE_APACHE.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
   },
   "limitation": "Offset-only finite profile; no abbreviation/DST-status API. Python footer expansion compared with C ZoneInfo using common pinned data; not an independent tzdb authority.",
   "generator_source_revision": "11b51ced4d122c97e71b028d857b8e80f881a9db",

@@ -50,6 +50,7 @@ check! = |roc_stable, roc_nightly| {
 	roc_nightly.run!(["check", "package/main.roc"])?
 	roc_nightly.run!(["test", "package/main.roc"])?
 	roc_nightly.run!(["check", "tzdb/package/main.roc"])?
+	roc_nightly.run!(["test", "tzdb/package/main.roc"])?
 
 	Env.with_temp_dir!(|temporary| check_applications!(roc_nightly, temporary))?
 	Script.info!({
