@@ -14,6 +14,8 @@ import time.ICalDateRule
 import time.ICalTimedRule
 import time.ScheduleDefinition
 import time.LocalDateTime
+import time.ClockTime
+import time.NanoClockTime
 
 # Positive control for compile-failure checks: the same imports and valid
 # domain combinations must succeed independently of application examples.
@@ -43,6 +45,8 @@ main! = |_args| {
 	upper = local("2026-01-01T00:00")?
 	declaration = ScheduleDefinition.from_ical({ rule: timed, context: Utc }) ?? crash "valid declaration fixture"
 	_timed_cursor = ScheduleDefinition.cursor(1.U64, declaration, { start: lower, end: upper })?
+	nano = NanoClockTime.from_nanoseconds_since_midnight(1)?
+	_clock = ClockTime.to_text(NanoClockTime.to_clock(nano, Floor)?)
 	Ok({})
 }
 

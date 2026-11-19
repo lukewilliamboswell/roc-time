@@ -6,11 +6,11 @@ Its independent model, deterministic corpus, seed provenance and resource scopes
 are described in [the local recurrence evidence](../local_recurrence/README.md).
 
 The test roots `tests/core_suite/main.roc`, `tests/civil_suite/main.roc` and
-`tests/interpretation_suite/main.roc` combine fourteen properties using
+`tests/interpretation_suite/main.roc` combine fifteen properties using
 [roc-fuzz 0.7.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
 Core groups precision, spans, coverage and events; civil groups Gregorian,
-arithmetic, calendars, clock and offsets; interpretation groups zones, patterns,
-recurrence, descriptions and interchange. The runner builds each selected suite
+arithmetic, calendars, clock, nano clock and offsets; interpretation groups
+zones, patterns, recurrence, descriptions and interchange. The runner builds each selected suite
 once and uses `--target=NAME` for each member's examples, replay and search.
 Property packages keep their pure generators and checks beside reusable
 `*Target.roc` modules, with no duplicated examples.
@@ -32,7 +32,7 @@ The runner rejects zero accepted inputs, missing baselines and incomplete
 evidence. See [baseline scope and reproduction](baselines/README.md).
 
 Each property package wires the platform to a separate pure type module (`PrecisionCase`,
-`SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, or `CalendarCase`). Generators and semantic checks live in those
+`SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, `CalendarCase`, or `NanoClockCase`). Generators and semantic checks live in those
 modules; the runner records their source hashes along with the root and public
 package modules. Moving code into type modules does not change the saved-input
 decoders, and the named-case replay checks validate that contract.
@@ -47,6 +47,7 @@ decoders, and the named-case replay checks validate that contract.
 | `calendars-v1` | R06: full Julian provider coordinates with endpoint/epoch bias; cross-calendar shared-day equality vs description identity, Gregorian overlap range errors, Julian four-year periodicity, unsupported-name rejection, local calendar conversion preserving clock labels and distinguishing position from description. Independent generated Julian oracle modules anchor the conversion algorithm. |
 | `descriptions-v1` | R02/R07/R13–R14: full-day decimal grids at all six fractional resolutions, hour/minute/second/day widths and midnight carries; independently constructed two-segment gap/fold preimages, zero-work stops and resumptions; qualification set preservation under reordering/sharing, omitted-component and duplicate-scope errors, and no inferred certain coverage from qualifiers. Finite alternative truth is compared with direct cell enumeration, including singleton/duplicate models, endpoint adjacency and resumptions. Paired and independent interval models are checked by explicit enumeration of valid pairs over up to six boundary values, including I64 extremes, every membership breakpoint and inconsistent/empty evidence. |
 | `clock-v1` | R01/R07/R08: numeric positions from -1 through 86400000000; explicit range errors, field reconstruction, microsecond adjacency and ordering. An exhaustive field-counter oracle independently checks all 86,400 seconds at three fractional positions. |
+| `nano-clock-v1` | R01/R02/R14: nanosecond positions from -1 through 86400000000000, each with its whole-microsecond floor and the rounding tie above it; explicit range errors, field reconstruction, nanosecond adjacency and ordering. Shortest and nine-digit text come from an independent digit model, and a tenth digit must fail. Each `to_clock` policy and `split_microseconds` are compared with integer quotient and remainder by 1000, including the 24:00 range error. Unit tests add an exhaustive field counter for all 86,400 seconds. |
 | `offsets-v1` | R01/R07/R08: full I64 POSIX coordinates with limit bias and full I32 offsets; both calendar projections, exact round trips, explicit offset sign and final range errors; immutable rule lookup against an independent step-function model, including excluded validity endpoints. RFC 3339 section 4.2 supplies a separate sign-convention fixture. |
 | `events-v1` | R10: up to twelve spans with source-order U64 identities, bounded numeric starts/widths; independent cell membership verifies contributor partitions, coverage projection and disconnected clipping, with duplicate-ID rejection and retained/shared source entries. |
 | `patterns-v1` | R11 candidate layer: full Gregorian years with limit/year-zero bias, monthly intervals 1–3 and period indices 0–6; month-field walking verifies period bounds, and an independently enumerated 400-year weekday cycle checks signed month-day/weekday-position intersections. Zero selectors and out-of-range exclusive ends must fail explicitly. Fixed/source oracle cases cover the other date-selector combinations. |

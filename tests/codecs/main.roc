@@ -10,6 +10,8 @@ main! = |_| {
 		civil_invalid_date: "\"1900-02-29\"",
 		civil_invalid_clock: "\"23:59:60\"",
 		civil_tokens: ["2026-09-07", "09:30", "tail"],
+		nano_clock: "{\"clock\":\"12:00:00.000000001\",\"tail\":\"kept\"}",
+		nano_clock_invalid: "\"12:00:00.1234567891\"",
 		interval_invalid: "\"2005/2004\"",
 		invalid_date: "\"2020-02-30\"",
 		invalid_stamp: "\"2020-02-30T00:00:00Z\"",
