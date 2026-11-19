@@ -17,3 +17,11 @@ https://github.com/lukewilliamboswell/roc-platform-template-zig/tree/d4db636a2f6
 Copyright © 2024 Luke Boswell and subsequent authors
 Licensed under the Universal Permissive License (UPL), Version 1.0.
 See LICENSE in this directory.
+
+Linux rcrt1.o and libc.a are restored from roc-fuzz linker inputs at source
+revision f4e6e5b95f1978bad0d878b5c212b17cc1e3337e, release
+linker-inputs-sha256-87607c935001a854a31d2f954583e0f331dfcd16920ef7fde8824adf795ce502.
+Archive SHA-256: 1e6ccfa2a16797526dcb5159b49963ad78bb77346231ff91782c12a37159b914.
+scripts/src/FixtureHost.roc verifies both the archive and individual members.
+These musl inputs support the compiler's static PIE executables. Their license
+and copyright notices are retained in MUSL-COPYRIGHT.

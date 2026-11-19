@@ -42,25 +42,38 @@ FixtureHost := [].{
 		Path.create_all!(destination)?
 		Path.copy!(Path.join(work, "build/lib/libhost.a"), Path.join(destination, "libhost.a"))?
 		if target == "x64musl" {
+			# This compiler emits static PIE. rcrt1 relocates it before musl starts;
+			# regular crt1 enters the host with unresolved pointers.
+			archive = Path.join(work, "link-inputs-x64musl.tar")
+			archive_hash = "1e6ccfa2a16797526dcb5159b49963ad78bb77346231ff91782c12a37159b914"
+			if !Path.exists!(archive)? {
+				url = "https://github.com/lukewilliamboswell/roc-fuzz/releases/download/linker-inputs-sha256-87607c935001a854a31d2f954583e0f331dfcd16920ef7fde8824adf795ce502/link-inputs-x64musl.tar"
+				Cmd.new("curl").args([
+					"--fail",
+					"--location",
+					"--max-time",
+					"60",
+					"--max-filesize",
+					"6615040",
+					OsStr.from_str(url),
+					"--output",
+					Path.to_os_str(archive),
+				]).call!()?
+			}
+			archive_actual = Script.command("sha256sum").output!([Path.to_os_str(archive)])?
+			if !archive_actual.starts_with("${archive_hash} ") {
+				return Script.fail!("instrumented link-input archive integrity mismatch")
+			}
 			for (name, expected) in [
-				("crt1.o", "ffb51a69191a69fc34acaec1003fabe245d8841da7036d124d3445718415f9ea"),
-				("libc.a", "85f5eb2316bc6f86be7bd66008488c7d2eca290942b01ad2e86f02f8b5e8c90f"),
+				("rcrt1.o", "acb752dda83e2eb0cfe37c5217bb38fc624211ed9c5a9e7d59f4dcaec6fbde3d"),
+				("libc.a", "8fcb34d47aa311d8ef9331313f881014da2d67bb62afed3bb0f096b18576968e"),
 			] {
 				file = Path.join(destination, name)
-				if !Path.exists!(file)? {
-					url = "https://raw.githubusercontent.com/lukewilliamboswell/roc-platform-template-zig/d4db636a2f606edf5ae4803f84588f7a5207d53a/platform/targets/x64musl/${name}"
-					Cmd.new("curl").args([
-						"--fail",
-						"--location",
-						"--max-time",
-						"60",
-						"--max-filesize",
-						"16777216",
-						OsStr.from_str(url),
-						"--output",
-						Path.to_os_str(file),
-					]).call!()?
+				member = Cmd.new("tar").args(["-xOf", Path.to_os_str(archive), OsStr.from_str(name)]).timeout(Duration.millis(30000)).output_limit(MaxBytes(2097152)).stdout(Capture).stderr(Capture).run!()?
+				if member.status != Exited(0) {
+					return Script.fail!("instrumented link-input extraction failed: ${name}")
 				}
+				Path.write_bytes!(file, member.stdout_bytes)?
 				actual = Script.command("sha256sum").output!([Path.to_os_str(file)])?
 				if !actual.starts_with("${expected} ") {
 					return Script.fail!("instrumented link-input integrity mismatch: ${name}")
@@ -70,7 +83,7 @@ FixtureHost := [].{
 		platform_directory = Path.utf8("tests/platform/targets/${target}")
 		Path.create_all!(platform_directory)?
 		for name in if target == "x64musl" {
-			["libhost.a", "crt1.o", "libc.a"]
+			["libhost.a", "rcrt1.o", "libc.a"]
 		} else {
 			["libhost.a"]
 		} {
