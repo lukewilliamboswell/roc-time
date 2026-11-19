@@ -29,11 +29,13 @@ runs:
           *) echo "::error::not a nightly release tag: $tag"; exit 1 ;;
         esac
 
-    - uses: roc-lang/setup-roc@30af91a173612e462a5df47f3b697c53c211f48c
+    # TODO: restore asset-api after roc-lang/setup-roc#12 is resolved and cold
+    # hosted downloads pass. This mode retains the same archive admission checks.
+    - uses: roc-lang/setup-roc@f67d42eefcb1ab8125cbba312bc5bd7edeb739c0
       with:
         version: nightly
         nightly-tag: ${{ steps.resolve.outputs.tag }}
-        download-method: browser
+        download-method: verified-browser
 
     - name: Print the package compiler version
       shell: bash
