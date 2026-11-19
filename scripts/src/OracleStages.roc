@@ -1,4 +1,6 @@
 import cli.Cmd
+import cli.OsStr
+import cli.Duration
 import cli.Monotonic
 import cli.Path
 
@@ -16,13 +18,13 @@ OracleStages := [].{
 	run! : Request => Try(Output, _)
 	run! = |{ command, cwd, logs, label, timeout_ms }| {
 		before = Monotonic.now!()
-		outcome : Try(Cmd.RunOutput, Cmd.RunErr)
-		outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(cwd).timeout_ms(timeout_ms).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()
-		seconds = (Monotonic.now!() - before).to_f64() / 1000000000
+		outcome : Try(Cmd.Output, [CmdErr(Cmd.Err), Interrupted, Closed])
+		outcome = Cmd.new(OsStr.from_str(command.first()?)).args((command.drop_first(1)).map(OsStr.from_str)).cwd(cwd).timeout(Duration.millis(timeout_ms)).manage_tree(Bool.True).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()
+		seconds = before.elapsed!().to_nanos().to_f64() / 1000000000
 		(stdout, stderr) = match outcome {
 			Ok(output) => (output.stdout_bytes, output.stderr_bytes)
-			Err(Timeout(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
-			Err(OutputLimit(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
+			Err(CmdErr(TimedOut(partial))) => (partial.stdout_bytes, partial.stderr_bytes)
+			Err(CmdErr(OutputLimitExceeded(partial))) => (partial.stdout_bytes, partial.stderr_bytes)
 			Err(_) => ([], [])
 		}
 		Path.write_bytes!(Path.join(logs, "${label}.stdout"), stdout)?

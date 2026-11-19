@@ -1,8 +1,9 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 import cli.OsStr
 import cli.Path
 import cli.Cmd
+import cli.Duration
 import src/OracleManifest
 import src/OracleStages
 import src/LocalOracle
@@ -34,14 +35,14 @@ main! = |args| {
 			"--target=${target}",
 			"--output=${resource}",
 		])?
-		short = Cmd.new_str(resource).args(["1971", "4096"]).timeout_ms(5000).exec_output!()?.stdout_utf8
-		vast = Cmd.new_str(resource).args(["200000", "4096"]).timeout_ms(5000).exec_output!()?.stdout_utf8
+		short = Cmd.new(OsStr.from_str(resource)).args(["1971", "4096"]).timeout(Duration.millis(5000)).capture!()?
+		vast = Cmd.new(OsStr.from_str(resource)).args(["200000", "4096"]).timeout(Duration.millis(5000)).capture!()?
 		if short != vast {
 			return Script.fail!("local schedule prefix allocation/work depends on horizon")
 		}
 		for stage in ["construction", "first", "resume"] {
-			match Cmd.new_str(resource).args_str(["200000", "0", stage]).timeout_ms(5000).exec_output!() {
-				Err(NonZeroExitCode(value)) if value.stderr_utf8_lossy.contains("ROC_ASSERT_FAILED") => {}
+			match Cmd.new(OsStr.from_str(resource)).args((["200000", "0", stage]).map(OsStr.from_str)).timeout(Duration.millis(5000)).capture!() {
+				Err(BadExitStatus(value)) if Str.from_utf8_lossy(value.stderr_bytes).contains("ROC_ASSERT_FAILED") => {}
 				_ => return Script.fail!("local recurrence ${stage} allocation negative control did not fail as intended")
 			}
 		}
@@ -94,7 +95,7 @@ verify_reference! = |{ compiler, target, work }| {
 			OsStr.from_str("--target=${target}"),
 			OsStr.from_str("--output=${Path.display(binary)}"),
 		])?
-		actual = Cmd.new(Path.to_os_str(binary)).timeout_ms(10000).exec_output!()?.stdout_utf8
+		actual = Cmd.new(Path.to_os_str(binary)).timeout(Duration.millis(10000)).capture!()?
 		LocalOracle.verify({ expected, actual })?
 		Script.info!({ label: "PASS", message: "108 composed local recurrence cases: ${mode}/${target}; oracle negative controls" })?
 	}

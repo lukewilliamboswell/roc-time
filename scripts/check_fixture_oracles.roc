@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -70,7 +71,7 @@ main! = |args| {
 		timeout_ms: 180000,
 	})?
 	smoke = OracleStages.run!({
-		command: [program, Path.display(source), "--"].concat(first.input),
+		command: [program, Path.display(source)].concat(first.input),
 		cwd,
 		logs: work,
 		label: "interpret",
@@ -105,7 +106,7 @@ main! = |args| {
 			if output.stdout != "PASS 146097 Gregorian days\n" {
 				return Err(MissingCycle)
 			}
-			failure = Cmd.new(Path.to_os_str(binary)).args_str(["cycle", "wrong-week"]).timeout_ms(30000).manage_tree(Bool.True).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+			failure = Cmd.new(Path.to_os_str(binary)).args((["cycle", "wrong-week"]).map(OsStr.from_str)).timeout(Duration.millis(30000)).manage_tree(Bool.True).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
 			diagnostic = "${Str.from_utf8(failure.stdout_bytes)?}${Str.from_utf8(failure.stderr_bytes)?}"
 			match failure.status {
 				Exited(code) if code != 0 and diagnostic.contains("Gregorian query differs from independent day walk") => {}

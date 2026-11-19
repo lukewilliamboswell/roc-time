@@ -1,4 +1,4 @@
-## Admission of roc-fuzz 0.5 quality evidence. A successful process alone is
+## Admission of roc-fuzz quality evidence. A successful process alone is
 ## insufficient: named examples need complete metrics and exploration must
 ## actually accept input. Baselines are accepted only by an explicit operation.
 FuzzEvidence := [].{

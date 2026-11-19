@@ -1,7 +1,8 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 
 import cli.Cmd
+import cli.Duration
 import cli.Env
 import cli.OsStr
 import cli.Path
@@ -33,7 +34,7 @@ main! = |args| {
 	ZoneDistribution.validate_source("${zi}\n", module_text)?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "zone-generation-")?
 	python = Script.env_str!("PYTHON") ?? "python3"
-	reference_result = Cmd.new_str(python).args_str(["scripts/reference_zone_database.py", Path.display(wheel)]).timeout_ms(180000).manage_tree(Bool.True).output_limit(16777216).stdout(Capture).stderr(Capture).run!()?
+	reference_result = Cmd.new(OsStr.from_str(python)).args((["scripts/reference_zone_database.py", Path.display(wheel)]).map(OsStr.from_str)).timeout(Duration.millis(180000)).manage_tree(Bool.True).output_limit(MaxBytes(16777216)).stdout(Capture).stderr(Capture).run!()?
 	Path.write_bytes!(Path.join(work, "reference.json"), reference_result.stdout_bytes)?
 	Path.write_bytes!(Path.join(work, "reference.stderr"), reference_result.stderr_bytes)?
 	if reference_result.status != Exited(0) {

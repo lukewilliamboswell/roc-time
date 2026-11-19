@@ -1,4 +1,6 @@
 import cli.Cmd
+import cli.OsStr
+import cli.Duration
 import cli.Path
 
 ## Supervise build/measurement processes without shell or Python launchers.
@@ -15,15 +17,15 @@ BenchmarkProcess := [].{
 	Output : { stdout : Str, stderr : Str }
 	run! : Request => Try(Output, _)
 	run! = |{ args, cwd, logs, label, environment, timeout_ms }| {
-		var $command = Cmd.new_str(args.first()?).args_str(args.drop_first(1)).cwd(cwd).timeout_ms(timeout_ms).manage_tree(Bool.True).output_limit(16777216).stdout(Capture).stderr(Capture)
+		var $command = Cmd.new(OsStr.from_str(args.first()?)).args((args.drop_first(1)).map(OsStr.from_str)).cwd(cwd).timeout(Duration.millis(timeout_ms)).manage_tree(Bool.True).output_limit(MaxBytes(16777216)).stdout(Capture).stderr(Capture)
 		for (key, value) in environment {
-			$command = $command.env_str(key, value)
+			$command = $command.env(OsStr.from_str(key), OsStr.from_str(value))
 		}
 		outcome = $command.run!()
 		(stdout, stderr) = match outcome {
 			Ok(output) => (output.stdout_bytes, output.stderr_bytes)
-			Err(Timeout(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
-			Err(OutputLimit(partial)) => (partial.stdout_bytes, partial.stderr_bytes)
+			Err(CmdErr(TimedOut(partial))) => (partial.stdout_bytes, partial.stderr_bytes)
+			Err(CmdErr(OutputLimitExceeded(partial))) => (partial.stdout_bytes, partial.stderr_bytes)
 			Err(_) => ([], [])
 		}
 		Path.write_bytes!(Path.join(logs, "${label}.stdout"), stdout)?

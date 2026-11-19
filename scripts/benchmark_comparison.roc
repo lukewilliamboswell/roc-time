@@ -1,6 +1,7 @@
 #!/usr/bin/env roc-stable
-app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst" }
+app [main!] { cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst" }
 import cli.Cmd
+import cli.Duration
 import cli.OsStr
 import cli.Path
 import src/BenchmarkOptions
@@ -39,7 +40,7 @@ main! = |args| {
 					args: ["verify", "1", "0", "0", "1900-02-28T01:13:17.027183-03:30"],
 				},
 			)?
-			outcome = Cmd.new_str(command.first()?).args_str(command.drop_first(1)).cwd(context.root).manage_tree(Bool.True).timeout_ms(30000).output_limit(1048576).stdout(Capture).stderr(Capture).run!()?
+			outcome = Cmd.new(OsStr.from_str(command.first()?)).args((command.drop_first(1)).map(OsStr.from_str)).cwd(context.root).manage_tree(Bool.True).timeout(Duration.millis(30000)).output_limit(MaxBytes(1048576)).stdout(Capture).stderr(Capture).run!()?
 			stderr = Str.from_utf8(outcome.stderr_bytes)?
 			Path.write_bytes!(Path.join(context.work, "tempo-fractional-offset.stderr"), outcome.stderr_bytes)?
 			match outcome.status {

@@ -1,4 +1,5 @@
 import cli.Cmd
+import cli.Duration
 import cli.OsStr
 import cli.Path
 import Script
@@ -36,7 +37,7 @@ FixtureHost := [].{
 		} else {
 			args
 		}
-		Cmd.new_str(zig).args_str(build_args).env_str("ZIG_GLOBAL_CACHE_DIR", "${Path.display(work)}/global-cache").timeout_ms(300000).exec_cmd!()?
+		Cmd.new(OsStr.from_str(zig)).args((build_args).map(OsStr.from_str)).env(OsStr.from_str("ZIG_GLOBAL_CACHE_DIR"), OsStr.from_str("${Path.display(work)}/global-cache")).timeout(Duration.millis(300000)).call!()?
 		destination = Path.join(work, "targets/${target}")
 		Path.create_all!(destination)?
 		Path.copy!(Path.join(work, "build/lib/libhost.a"), Path.join(destination, "libhost.a"))?
@@ -58,7 +59,7 @@ FixtureHost := [].{
 						OsStr.from_str(url),
 						"--output",
 						Path.to_os_str(file),
-					]).exec_cmd!()?
+					]).call!()?
 				}
 				actual = Script.command("sha256sum").output!([Path.to_os_str(file)])?
 				if !actual.starts_with("${expected} ") {

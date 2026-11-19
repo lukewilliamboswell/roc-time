@@ -1,6 +1,6 @@
 #!/usr/bin/env roc-stable
 app [main!] {
-	cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.25.0/CZsY7tYZwR3rj9kYbpaCfxki2yVAaRL8bBwMLvB2xkbA.tar.zst",
+	cli: platform "https://github.com/roc-lang/basic-cli/releases/download/0.28.1/7brgwR8YUqfeGrkdfF1V4GPPN7DnP7ftqub9KcrTEZtr.tar.zst",
 }
 
 import cli.Cmd
@@ -33,7 +33,7 @@ main! = |args| {
 		[] => {
 			check!(roc_stable, roc_nightly)?
 			harness!(roc_nightly)?
-			Cmd.new("release-package").args(["test-examples"]).env("RP_COMPILER", roc_nightly.program()).exec_cmd!()
+			Cmd.new("release-package").args(["test-examples"]).env("RP_COMPILER", roc_nightly.program()).call!()
 		}
 		["--source"] => check!(roc_stable, roc_nightly)
 		["--harness"] => harness!(roc_nightly)
@@ -61,7 +61,7 @@ check! = |roc_stable, roc_nightly| {
 harness! : Script.Command => Try({}, _)
 harness! = |roc_nightly| {
 	Script.section!("INTEGRATION CASES")?
-	Cmd.new("scripts/check_integration.roc").env("ROC_NIGHTLY", roc_nightly.program()).exec_cmd!()?
+	Cmd.new("scripts/check_integration.roc").env("ROC_NIGHTLY", roc_nightly.program()).call!()?
 	Script.info!({
 		label: "\nPASS",
 		message: "harness",
@@ -173,19 +173,19 @@ check_applications! = |roc_nightly, temporary| {
 		})?
 		expected = Path.read_utf8!(Path.join("tests/examples", "${check.name}.txt"))?
 		roc = |args| roc_nightly.cmd(args).cwd(check.directory)
-		roc(["check", "main.roc", "--no-cache"]).exec_cmd!()?
+		roc(["check", "main.roc", "--no-cache"]).call!()?
 		verify!({
 			name: check.name,
 			mode: "interpreted",
-			actual: roc(["main.roc", "--no-cache"]).exec_output!()?.stdout_utf8,
+			actual: roc(["main.roc", "--no-cache"]).capture!()?,
 			expected,
 		})?
 		binary = Path.join(build, check.name)
-		roc(["build", "main.roc", "--opt=dev", OsStr.from_str("--output=${Path.display(binary)}"), "--no-cache"]).exec_cmd!()?
+		roc(["build", "main.roc", "--opt=dev", OsStr.from_str("--output=${Path.display(binary)}"), "--no-cache"]).call!()?
 		verify!({
 			name: check.name,
 			mode: "native",
-			actual: Cmd.new(Path.to_os_str(binary)).cwd(empty).exec_output!()?.stdout_utf8,
+			actual: Cmd.new(Path.to_os_str(binary)).cwd(empty).capture!()?,
 			expected,
 		})?
 	}

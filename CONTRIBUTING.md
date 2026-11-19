@@ -366,10 +366,12 @@ Roc tests provide separate triple-fold evidence. Retain the copied tzdata licens
 notices in generated reference output. Cached replay uses no network service.
 
 
-Test applications live under `tests/<name>/main.roc`, with pure test logic in
-neighboring type modules. The precision, span, coverage, Gregorian, arithmetic, calendar-interoperability, clock, offset, zone, event, calendar-pattern, recurrence and description roots
-use the content-addressed [roc-fuzz 0.5.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.5.0)
-URL directly; corpus and dependency metadata live under `tests/fuzz/`.
+The three fuzz applications under `tests/core_suite/`, `tests/civil_suite/` and
+`tests/interpretation_suite/` use the content-addressed
+[roc-fuzz 0.7.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
+They import reusable property packages from the semantic target directories.
+Each suite compiles once per invocation; members retain independent examples,
+corpora, allocation baselines and reports. Corpus and dependency metadata live under `tests/fuzz/`.
 `scripts/fuzz.roc` is their single runner. Set `ROC_NIGHTLY` to select a package compiler:
 
 ```sh
@@ -377,7 +379,7 @@ blueprint run fuzz -- --operation all
 blueprint run fuzz -- --operation build --targets precision
 blueprint run fuzz -- --operation run --targets precision --runs 10000 --seconds 5 --seed 1
 blueprint run fuzz -- --operation replay --targets precision
-.roc-time-tmp/fuzz/coverage show tests/fuzz/corpus/coverage/subtraction-inner-loop-stop
+.roc-time-tmp/fuzz/core_suite --target=coverage-v2 show tests/fuzz/corpus/coverage/subtraction-inner-loop-stop
 blueprint run fuzz -- --operation lifecycle
 ```
 
@@ -432,8 +434,11 @@ records would bypass the semantic representation. Runtime interpolations use
 an explicit fallible `parse` call. Invalid typed literals belong in the normal
 compile-failure gate and must fail for the intended validation diagnostic.
 
-The compiler's encoding hook uses `encoding.parse_str(encoding, state)`
-and `encoding.encode_str(text, state)`. Keep the executable codec checks when
+The compiler's encoding hook uses `encoding.parse_str(encoding, state)`,
+`encoding.invalid_value(encoding, state)` and `encoding.encode_str(text, state)`.
+Parsers return the format-owned error type so records and lists compose.
+JSON reports `InvalidJson` for an invalid temporal value; call the temporal
+type's `parse` for its detailed structured error. Keep the executable codec checks when
 upgrading the compiler: documentation on the compiler's moving main branch may
 describe a different hook signature. Codec tests establish interchange strings,
 not a versioned native persistence format.

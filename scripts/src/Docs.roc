@@ -48,7 +48,7 @@ Docs := [].{
 			OsStr.from_str(version),
 			"--author",
 			"roc-time contributors",
-		]).exec_cmd!()?
+		]).call!()?
 		Path.write_utf8!(Path.join(Path.join(staged, "site"), "THIRD_PARTY_NOTICES.txt"), renderer.output!(["--licenses"])?)?
 		Path.copy_dir!(staged, destination)?
 		Path.delete_all!(temporary)
@@ -68,7 +68,7 @@ Docs := [].{
 					Path.to_os_str(temporary),
 					"--output-directory",
 					"prepared",
-				]).exec_output!()?
+				]).capture!()?
 				Path.read_utf8!(Path.join(Path.join(temporary, "prepared"), "manual.md"))
 			},
 		)
