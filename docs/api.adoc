@@ -46,6 +46,12 @@ including skipped and repeated times. Selecting all positions in a local day is
 a separate question: a skipped day can be empty, and repeated labels can produce
 separate pieces of coverage.
 
+Some data sources store a time of day as nanoseconds since midnight, such as an
+Apache Arrow `Time64(ns)` column. `NanoClockTime` keeps every nanosecond of that
+value. `NanoClockTime.to_clock` gives a `ClockTime` under a rounding policy that
+you choose; `split_microseconds` gives the `ClockTime` and the remaining
+nanoseconds without loss.
+
 [cols="1,2",options="header"]
 |===
 | Task | Modules
@@ -53,6 +59,7 @@ separate pieces of coverage.
 | Preserve supplied precision | `Calendar.Value`, `QualifiedCalendarValue`
 | Advance with an explicit calendar policy | `Calendar.Arithmetic`, `Calendar.Delta`
 | Express clock labels and resolve them | `ClockTime`, `LocalDateTime`, `FixedOffset`, `ZoneRules`
+| Keep a nanosecond time of day | `NanoClockTime`
 | Display a Gregorian date or local label in English | `EnglishGregorian`
 |===
 
