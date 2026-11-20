@@ -31,8 +31,6 @@ import ZoneRules
 ## ```roc
 ## import time.ScheduleDefinition
 ## import time.Recurrence.Timed as TimedRecurrence
-## import time.Recurrence.TimedStart as TimedStart
-## import time.Recurrence.TimedCursor as TimedCursor
 
 ## import time.ScheduleDefinition.OccurrenceCursor as OccurrenceCursor
 ## import time.Recurrence.CalendarPattern as CalendarPattern

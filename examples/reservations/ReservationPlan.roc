@@ -1,6 +1,5 @@
 import time.ICalendar.DateTime as ICalDateTime
 import time.ICalendar.TimedRule as ICalTimedRule
-import time.Recurrence.TimedStart as TimedStart
 import time.ScheduleDefinition
 
 import time.PosixSpan
@@ -34,7 +33,7 @@ ReservationPlan :: [].{
 		}
 	}
 	report = |reservation| {
-		source = TimedStart.source(ScheduleDefinition.Occurrence.start(reservation))
+		source = reservation.source()
 		date = Calendar.Date.to_fields(LocalDateTime.date(source))
 		width = PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(reservation))?
 		micros = PosixDelta.to_microseconds(width)

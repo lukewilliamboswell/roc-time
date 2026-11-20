@@ -6,7 +6,6 @@ import time.LocalDateTime
 import time.PosixDelta
 import time.PosixSpan
 import time.Recurrence.Timed as TimedRecurrence
-import time.Recurrence.TimedStart as TimedStart
 import time.ScheduleDefinition
 
 ## Monthly starts last one calendar month; an extra booking lasts one week.
@@ -47,7 +46,7 @@ LoanSchedule :: [].{
 		}
 	}
 	report = |loan| {
-		start = TimedStart.source(ScheduleDefinition.Occurrence.start(loan))
+		start = loan.source()
 		end = match ScheduleDefinition.Occurrence.calendar_anchor(loan) {
 			Some(anchor) => anchor.source
 			None => return Err(MissingCalendarReturnDate)
