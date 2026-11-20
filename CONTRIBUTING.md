@@ -664,11 +664,68 @@ are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 ## Comparative benchmarks
 
-The [cross-language benchmark guide](benchmarks/comparison/README.md) adds
-Go, Python, Jiff and Tempo adapters, dependency pins, upstream workload references
-and explicit compatibility profiles. Run its opt-in setup with
-`ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --fetch --smoke`.
-Docker and the additional language runtimes are not required by the normal gate.
+Review comparative performance for changes to designated hot paths, compiler
+upgrades, measurement protocol changes and final performance verification.
+Run on the reference host named in the benchmark guide without concurrent
+builds or tests. Review both the ratio to the fastest eligible peer and the
+change against the compatible reviewed roc-time baseline.
+
+Keep correctness expectations, external timings and reviewed roc-time results
+independently identifiable. Correctness refresh uses pinned generator, adapter
+and data inputs. Peer timing refresh uses the reviewed expectations without
+regenerating them. Review changed digests and metadata before accepting either
+refresh. A measurement never replaces a reviewed roc-time baseline by itself.
+Keep raw samples and generated bulk data under `.roc-time-tmp/`.
+
+Use independent sessions to establish reference-host timing tolerances.
+Treat an out-of-band control measurement as inconclusive. Check host load,
+power and toolchain before retrying. Investigate a compatible confirmed
+regression even when the workload still meets its competitive target. Report
+unavailable comparators, cache failures and incorrect outputs explicitly.
+Confirm all competitive rows with fresh peers before updating published figures.
+
+Run `blueprint run benchmark-replay` to build the native Roc benchmark and
+check the date and timestamp profiles against their reviewed inputs and
+checksums. It also checks the coverage, zone and recurrence fixtures against
+independent expected results. The harness gate runs the same replay and
+exercises missing, corrupted and wrong-profile expectations and invalid
+measurement records.
+`blueprint run benchmark-expectations` uses the pinned oracle to produce
+candidates under `.roc-time-tmp/benchmark-expectations-candidate/`. Compare
+their contents and manifest with `benchmarks/comparison/expectations/` and
+review the semantic changes before accepting the candidates. A pin or input
+change also requires replay against the changed public API.
+
+Run `blueprint run benchmark-comparison` for a Roc-only measurement across the
+matrix against compatible reviewed peer baselines. The runner checks each
+peer baseline's digest and identity before its timing stage. Use
+`blueprint run benchmark-peers -- --fetch --smoke` for explicit dependency setup
+and smoke verification. Follow with `blueprint run benchmark-peers` for the
+reference protocol. Inspect its raw report, target results and peer baseline
+candidate before promoting the candidate and its reported SHA-256 to
+`benchmarks/comparison/peer-baseline.json` and
+`benchmarks/comparison/peer-baseline.sha256`.
+Use `blueprint run benchmark-operations-peers -- --fetch` to acquire the
+locked interval peer. Run `blueprint run benchmark-operations-peers` for
+fresh coverage timings and the absolute named-zone and recurrence rows.
+Review its candidate and digest for
+`benchmarks/comparison/coverage-peer-baseline.json` and
+`benchmarks/comparison/coverage-peer-baseline.sha256`.
+
+Run the Roc-only comparison in at least three independent reference sessions
+to review a new `benchmarks/comparison/roc-baseline.json`. Run
+`blueprint run benchmark-comparison -- --review-roc REPORT1 REPORT2 REPORT3`
+to prepare the date and timestamp candidate. For the operational reports
+use `blueprint run benchmark-operations -- --review REPORT1 REPORT2 REPORT3`
+and review the candidate for `benchmarks/comparison/operational-roc-baseline.json`.
+The candidates retain each workload's session medians and the timing-control
+measurements before and after each run.
+The runner uses the middle session median and extends the observed range by
+one measured spread at either end. It reports a possible regression above that
+range and rejects a timing claim when the control falls outside its range.
+Review the session reports before editing this baseline.
+The [comparison guide](benchmarks/comparison/README.md) lists the profiles and
+peer requirements. Additional runtimes are needed only for peer refresh.
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
@@ -684,9 +741,11 @@ Missing toolchains, failed dependency acquisition and mismatches fail the benchm
 Cargo dependencies use the checked-in lockfile; builds run offline after the
 locked fetch. Smoke timings are correctness evidence, not performance claims.
 
-Run longer opt-in benchmarks without concurrent builds or tests. They compare
-selected date and timestamp operations, not overall library capability; their
-in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
+Run longer opt-in benchmarks without concurrent builds or tests. Scope claims
+to the documented input profiles and timing boundaries. Keep raw results under
+`.roc-time-tmp/`. The gate also runs
+`blueprint run check-wasm-timestamp-resource` to check exact coordinates and
+allocation calls for the wasm32 numeric-offset parser.
 
 ## Compilers and releases
 

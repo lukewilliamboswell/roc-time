@@ -7,7 +7,12 @@ main! = |args| {
 	iterations = U64.from_str(args.get(2) ?? "100000") ?? 100000
 	warmups = U64.from_str(args.get(3) ?? "3") ?? 3
 	samples = U64.from_str(args.get(4) ?? "7") ?? 7
-	Host.assert!(iterations > 0 and iterations <= 10000000 and warmups <= 10 and samples <= 50 and args.len() > 5)
+	Host.assert!(iterations > 0 and iterations <= 10000000 and warmups <= 10 and samples <= 50)
+	if mode == "timing_control" {
+		# Exercise the same timed loop and host clock without temporal work.
+		return sample!([1.U64, 2, 3, 4], iterations, warmups, samples, |value| value)
+	}
+	Host.assert!(args.len() > 5)
 	data = Benchmark.prepare(args.sublist({ start: 5, len: args.len() - 5 }))
 	if mode == "verify" {
 		return { bytes: "${Benchmark.verify(data)}\n".to_utf8(), work: [] }

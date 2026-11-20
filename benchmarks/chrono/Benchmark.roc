@@ -56,7 +56,7 @@ Benchmark := [].{
 
 	add_days : GregorianDate -> U64
 	add_days = |v| date_sum(
-		match GregorianDate.from_civil_day(CivilDay.from_day_number(CivilDay.to_day_number(GregorianDate.to_civil_day(v)) + 17)) {
+		match GregorianDate.add_days(v, 17) {
 			Ok(value) => value
 			Err(_) => crash "bounded date addition"
 		},
@@ -105,14 +105,13 @@ Benchmark := [].{
 	format = |v| text_sum(OffsetTimestamp.to_text(v))
 
 	end_to_end : Str -> U64
-	end_to_end = |v| text_sum(
-		OffsetTimestamp.to_text(
-			match OffsetTimestamp.parse(v) {
-				Ok(value) => value
-				Err(_) => crash "valid timestamp"
-			},
-		),
-	)
+	end_to_end = |v| {
+		timestamp = match OffsetTimestamp.parse(v) {
+			Ok(value) => value
+			Err(_) => crash "valid timestamp"
+		}
+		resolve(timestamp) + format(timestamp)
+	}
 	verify = |data| Str.join_with(
 		data.map(
 			|v| {

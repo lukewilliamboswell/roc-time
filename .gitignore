@@ -6,6 +6,7 @@ dist/
 # Platform link inputs copied from .roc-time-tmp/ by the test and benchmark scripts.
 /tests/platform/targets/
 /benchmarks/chrono/platform/targets/
+/benchmarks/operational/rust/target/
 
 __pycache__/
 

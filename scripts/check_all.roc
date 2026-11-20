@@ -63,6 +63,10 @@ harness! : Script.Command => Try({}, _)
 harness! = |roc_nightly| {
 	Script.section!("INTEGRATION CASES")?
 	Cmd.new("scripts/check_integration.roc").env("ROC_NIGHTLY", roc_nightly.program()).call!()?
+	Script.section!("BENCHMARK EXPECTATIONS")?
+	Cmd.new("scripts/benchmark_comparison.roc").args(["--replay-only"]).env("ROC_NIGHTLY", roc_nightly.program()).call!()?
+	Script.section!("WASM TIMESTAMP RESOURCES")?
+	Cmd.new("scripts/check_wasm_timestamp_resource.roc").env("ROC_NIGHTLY", roc_nightly.program()).call!()?
 	Script.info!({
 		label: "\nPASS",
 		message: "harness",
@@ -91,6 +95,7 @@ check_tooling! = |roc_stable| {
 		"FixtureOracles",
 		"ZoneDistribution",
 		"BenchmarkOptions",
+		"BenchmarkTimingCache",
 		"ComparisonOptions",
 		"FuzzEvidence",
 	] {

@@ -1,0 +1,548 @@
+{
+  "binaries": {
+    "rangemap": "7c1cd9366ea248b8c6860b202b49e045f2654b0921fdfc0206f9387c14ee5eec"
+  },
+  "identity": {
+    "host": {
+      "arch": "arm64",
+      "hardware": "Model Identifier: Mac14,2\nChip: Apple M2\nTotal Number of Cores: 8 (4 Performance and 4 Efficiency)",
+      "platform": "Darwin 25.3.0",
+      "settings": "25D771280a | Now drawing from 'Battery Power' | native scheduler"
+    },
+    "input_sha256": {
+      "coverage-adapter": "8382bb629fae3bd1c40f26793d253f80da49aaab46f055dce4d06e3230588ede",
+      "coverage-fixture": "fea85dc5bdeab7125ed38c28406912569a28ccdc943854b4c354844c7f3e976b",
+      "coverage-lock": "ec60df8689dc7bc4378f5cc3ef0bd44cc22cc642cd3b2cecf49209f32da1136b",
+      "coverage-manifest": "2fdc0efeff6e1458aa6d8a472ba2e934a215812b98efe4931dc8767280a56533",
+      "coverage-matrix": "4f0506c22bb95aeff1a2ffe086318dd4ee8f3abb4ab07c285577cc80c99b2f4a",
+      "rust-version": "8281f33cfa16ceb2de674c4c0b943232b477cad5616e7f8f3d2a13b8ea456229"
+    },
+    "iterations": 0,
+    "protocol": "coverage-half-open-v2/materialize-canonical-results/opaque-input-and-output/cargo-locked-release/rotated-monotonic",
+    "rounds": 3,
+    "samples": 9,
+    "warmups": 3
+  },
+  "rows": [
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 5.9375,
+      "profile": "sparse-0-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 5.9375,
+      "profile": "sparse-0-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 9.0583,
+      "profile": "sparse-0-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 8.475,
+      "profile": "sparse-0-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 6.5667,
+      "profile": "sparse-0-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 5.3084,
+      "profile": "sparse-0-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 5.6333,
+      "profile": "sparse-0-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 7.8458,
+      "profile": "sparse-0-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 203.0292,
+      "profile": "sparse-8-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 163.9125,
+      "profile": "sparse-8-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 236.4917,
+      "profile": "sparse-8-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 228.5958,
+      "profile": "sparse-8-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 298.6167,
+      "profile": "sparse-8-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 12.1792,
+      "profile": "sparse-8-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 11.8625,
+      "profile": "sparse-8-1",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 12.4917,
+      "profile": "sparse-8-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 13.1125,
+      "profile": "sparse-8-1",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 25.4459,
+      "profile": "sparse-8-8",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 14.3625,
+      "profile": "sparse-8-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 30.8917,
+      "profile": "sparse-8-1",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 71.7125,
+      "profile": "sparse-8-8",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 206.2375,
+      "profile": "dense-8-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 215.2875,
+      "profile": "dense-8-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 122.6667,
+      "profile": "dense-8-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 117.725,
+      "profile": "dense-8-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 159.9166,
+      "profile": "dense-8-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 11.8625,
+      "profile": "dense-8-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 10.3042,
+      "profile": "dense-8-1",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 10.6208,
+      "profile": "dense-8-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 11.8708,
+      "profile": "dense-8-1",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 17.8,
+      "profile": "dense-8-4",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 12.8083,
+      "profile": "dense-8-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 30.55,
+      "profile": "dense-8-1",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 37.3958,
+      "profile": "dense-8-4",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 202.9792,
+      "profile": "disjoint-8-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 164.1458,
+      "profile": "disjoint-8-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 546.5292,
+      "profile": "disjoint-8-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 42.0292,
+      "profile": "disjoint-8-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 169.9333,
+      "profile": "disjoint-8-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 12.175,
+      "profile": "disjoint-8-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 11.8708,
+      "profile": "disjoint-8-1",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 12.4875,
+      "profile": "disjoint-8-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 13.1208,
+      "profile": "disjoint-8-1",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 25.45,
+      "profile": "disjoint-8-8",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 14.3583,
+      "profile": "disjoint-8-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 32.0625,
+      "profile": "disjoint-8-1",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 71.35,
+      "profile": "disjoint-8-8",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 475714.5833333333,
+      "profile": "sparse-4096-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 180999.02666666667,
+      "profile": "sparse-4096-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 495326.80666666664,
+      "profile": "sparse-4096-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 495587.64,
+      "profile": "sparse-4096-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 674614.5833333334,
+      "profile": "sparse-4096-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 28.333333333333332,
+      "profile": "sparse-4096-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 28.333333333333332,
+      "profile": "sparse-4096-1",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 30.553333333333335,
+      "profile": "sparse-4096-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 30.973333333333333,
+      "profile": "sparse-4096-1",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 169.72,
+      "profile": "sparse-4096-64",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 32.5,
+      "profile": "sparse-4096-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 54.583333333333336,
+      "profile": "sparse-4096-1",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 382.63666666666666,
+      "profile": "sparse-4096-64",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 508725.28,
+      "profile": "dense-4096-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 228324.72,
+      "profile": "dense-4096-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 235419.16666666666,
+      "profile": "dense-4096-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 236330.55666666667,
+      "profile": "dense-4096-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 327428.4733333333,
+      "profile": "dense-4096-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 28.61,
+      "profile": "dense-4096-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 28.333333333333332,
+      "profile": "dense-4096-1",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 29.72,
+      "profile": "dense-4096-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 30.973333333333333,
+      "profile": "dense-4096-1",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 171.52666666666667,
+      "profile": "dense-4096-64",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 31.666666666666668,
+      "profile": "dense-4096-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 56.25,
+      "profile": "dense-4096-1",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 382.36,
+      "profile": "dense-4096-64",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 475813.19333333336,
+      "profile": "disjoint-4096-0",
+      "workload": "sorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 181171.25,
+      "profile": "disjoint-4096-0",
+      "workload": "unsorted"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 1083823.61,
+      "profile": "disjoint-4096-0",
+      "workload": "union"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 18440.27666666667,
+      "profile": "disjoint-4096-0",
+      "workload": "intersection"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 327700.13666666666,
+      "profile": "disjoint-4096-0",
+      "workload": "difference"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 28.47,
+      "profile": "disjoint-4096-0",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 28.333333333333332,
+      "profile": "disjoint-4096-1",
+      "workload": "contains"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 30.416666666666668,
+      "profile": "disjoint-4096-0",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 31.386666666666667,
+      "profile": "disjoint-4096-1",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 169.72,
+      "profile": "disjoint-4096-64",
+      "workload": "fold-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 32.5,
+      "profile": "disjoint-4096-0",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 55,
+      "profile": "disjoint-4096-1",
+      "workload": "materialize-overlap"
+    },
+    {
+      "library": "rangemap",
+      "median_ns_per_op": 391.25,
+      "profile": "disjoint-4096-64",
+      "workload": "materialize-overlap"
+    }
+  ],
+  "versions": {
+    "rangemap": "1.7.1",
+    "rust": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2"
+  }
+}

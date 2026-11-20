@@ -1,5 +1,6 @@
 import cli.OsStr
 import cli.Path
+import BenchmarkExpectations
 import BenchmarkOptions
 import BenchmarkProcess
 import FixtureHost
@@ -8,8 +9,8 @@ import Script
 ## Shared build and independent observations for Chrono and the opt-in wider
 ## comparison. Benchmark allocator artifacts never replace the resource host.
 ChronoBenchmark := [].{
-	Case : { text : Str, day : I64, microseconds : I64, canonical : Str }
-	Reference : { cases : List(Case), checksums : Dict(Str, U64) }
+	Case : BenchmarkExpectations.Case
+	Reference : BenchmarkExpectations.Reference
 	Context : {
 		work : Path,
 		root : Path,
@@ -27,8 +28,6 @@ ChronoBenchmark := [].{
 	prepare! : BenchmarkOptions.Options => Try(Context, _)
 	prepare! = |options| {
 		BenchmarkOptions.controls(Path.read_utf8!("tests/benchmark_controls/timing-positive.txt")?)?
-		compiler = Script.roc_nightly!()?
-		roc_version = compiler.output!(["version"])?
 		root = Path.absolute!(".")?
 		work = Path.absolute!(".roc-time-tmp/chrono-benchmark")?
 		Path.create_all!(work)?
@@ -62,63 +61,8 @@ ChronoBenchmark := [].{
 				timeout_ms: 180000,
 			})?
 		}
-		target = FixtureHost.build!()?
-		zig = Script.env_str!("ZIG") ?? "zig"
-		host_args = [
-			zig,
-			"build",
-			"--build-file",
-			"${Path.display(root)}/tests/platform/build.zig",
-			"--prefix",
-			"${Path.display(work)}/host",
-			"--cache-dir",
-			"${Path.display(work)}/host-cache",
-			"-Doptimize=ReleaseFast",
-			"-Dbenchmark-allocator=true",
-		]
-		_ = BenchmarkProcess.run!({
-			args: if (target == "x64musl") host_args.append("-Dtarget=x86_64-linux-musl") else host_args,
-			cwd: root,
-			logs: work,
-			label: "benchmark-host",
-			environment: [("ZIG_GLOBAL_CACHE_DIR", "${Path.display(work)}/global-cache")],
-			timeout_ms: 180000,
-		})?
-		destination = Path.utf8("benchmarks/chrono/platform/targets/${target}")
-		Path.create_all!(destination)?
-		for artifact in Path.list!(Path.utf8(".roc-time-tmp/fixture-platform/targets/${target}"))? {
-			name = Path.filename(artifact)?.to_str()?
-			Path.copy!(artifact, Path.join(destination, name))?
-		}
-		Path.copy!(Path.join(work, "host/lib/libhost.a"), Path.join(destination, "libhost.a"))?
+		{ binary: roc_binary, target, version: roc_version } = build_roc!({ options, root, work, source: "benchmarks/chrono/main.roc" })?
 		rust_target = if (target == "x64musl") "x86_64-unknown-linux-musl" else "aarch64-apple-darwin"
-		program = OsStr.display(compiler.program())
-		_ = BenchmarkProcess.run!({
-			args: [program, "check", "benchmarks/chrono/main.roc"],
-			cwd: root,
-			logs: work,
-			label: "roc-check",
-			environment: [],
-			timeout_ms: 180000,
-		})?
-		roc_binary = Path.join(work, "roc-${options.roc_opt}${if (options.debug) "-debug" else ""}")
-		build_args = [
-			program,
-			"build",
-			"benchmarks/chrono/main.roc",
-			"--opt=${options.roc_opt}",
-			"--target=${target}",
-			"--output=${Path.display(roc_binary)}",
-			"--no-cache",
-		]
-		_ = BenchmarkProcess.run!({
-			args: if (options.debug) build_args.append("--debug") else build_args,
-			cwd: root,
-			logs: work,
-			label: "roc-build",
-			environment: [],
-			timeout_ms: 180000,
-		})?
 		_ = BenchmarkProcess.run!({
 			args: [
 				"cargo",
@@ -138,13 +82,17 @@ ChronoBenchmark := [].{
 			timeout_ms: 180000,
 		})?
 		rust_binary = Path.join(work, "cargo-target/${rust_target}/release/roc-time-chrono-benchmark")
-		reference = reference!({
+		reference = BenchmarkExpectations.load!({
+			profile: "microseconds",
 			corpus: Path.utf8("benchmarks/chrono/corpus.jsonl"),
 			iterations: options.iterations,
-			logs: work,
 		})?
-		help = Script.command("env").output!(["--help"])?
-		if !help.contains("--argv0") {
+		if target == "x64musl" {
+			help = Script.command("env").output!(["--help"])?
+			if !help.contains("--argv0") {
+				return Err(Argv0LauncherUnavailable)
+			}
+		} else if options.argv0 != "benchmark" {
 			return Err(Argv0LauncherUnavailable)
 		}
 		context = {
@@ -184,23 +132,67 @@ ChronoBenchmark := [].{
 		}
 		Ok(context)
 	}
-	reference! : { corpus : Path, iterations : U64, logs : Path } => Try(Reference, _)
-	reference! = |{ corpus, iterations, logs }| {
-		python = Script.env_str!("PYTHON") ?? "python3"
-		result = BenchmarkProcess.run!({
-			args: [python, "scripts/reference_benchmarks.py", Path.display(corpus), iterations.to_str()],
-			cwd: Path.absolute!(".")?,
-			logs,
-			label: "reference",
+	build_roc! : { options : BenchmarkOptions.Options, root : Path, work : Path, source : Str } => Try({ binary : Path, target : Str, version : Str }, _)
+	build_roc! = |{ options, root, work, source }| {
+		compiler = Script.roc_nightly!()?
+		version = compiler.output!(["version"])?
+		target = FixtureHost.build!()?
+		zig = Script.env_str!("ZIG") ?? "zig"
+		host_args = [
+			zig,
+			"build",
+			"--build-file",
+			"${Path.display(root)}/tests/platform/build.zig",
+			"--prefix",
+			"${Path.display(work)}/host",
+			"--cache-dir",
+			"${Path.display(work)}/host-cache",
+			"-Doptimize=ReleaseFast",
+			"-Dbenchmark-allocator=true",
+		]
+		_ = BenchmarkProcess.run!({
+			args: if (target == "x64musl") host_args.append("-Dtarget=x86_64-linux-musl") else host_args,
+			cwd: root,
+			logs: work,
+			label: "benchmark-host",
+			environment: [("ZIG_GLOBAL_CACHE_DIR", "${Path.display(work)}/global-cache")],
+			timeout_ms: 180000,
+		})?
+		destination = Path.utf8("benchmarks/chrono/platform/targets/${target}")
+		Path.create_all!(destination)?
+		for artifact in Path.list!(Path.utf8(".roc-time-tmp/fixture-platform/targets/${target}"))? {
+			name = Path.filename(artifact)?.to_str()?
+			Path.copy!(artifact, Path.join(destination, name))?
+		}
+		Path.copy!(Path.join(work, "host/lib/libhost.a"), Path.join(destination, "libhost.a"))?
+		program = OsStr.display(compiler.program())
+		_ = BenchmarkProcess.run!({
+			args: [program, "check", source],
+			cwd: root,
+			logs: work,
+			label: "roc-check",
 			environment: [],
 			timeout_ms: 180000,
 		})?
-		reference : Reference
-		reference = Json.parse(result.stdout)?
-		if reference.cases.is_empty() or reference.cases.len() > 4096 or BenchmarkOptions.modes.any(|mode| !reference.checksums.contains(mode)) {
-			return Err(BenchmarkReference)
-		}
-		Ok(reference)
+		roc_binary = Path.join(work, "roc-${options.roc_opt}${if (options.debug) "-debug" else ""}")
+		build_args = [
+			program,
+			"build",
+			source,
+			"--opt=${options.roc_opt}",
+			"--target=${target}",
+			"--output=${Path.display(roc_binary)}",
+			"--no-cache",
+		]
+		_ = BenchmarkProcess.run!({
+			args: if (options.debug) build_args.append("--debug") else build_args,
+			cwd: root,
+			logs: work,
+			label: "roc-build",
+			environment: [],
+			timeout_ms: 180000,
+		})?
+		Ok({ binary: roc_binary, target, version })
 	}
 	Execution : {
 		binary : Path,
@@ -213,15 +205,14 @@ ChronoBenchmark := [].{
 	}
 	execute! : Context, Execution => Try(BenchmarkProcess.Output, _)
 	execute! = |context, { binary, argv0, mode, iterations, warmups, samples, label }| {
-		command = [
-			"env",
-			"--argv0=${argv0}",
+		prefix = if (context.target == "x64musl") ["env", "--argv0=${argv0}"] else []
+		command = prefix.concat([
 			Path.display(binary),
 			mode,
 			iterations.to_str(),
 			warmups.to_str(),
 			samples.to_str(),
-		].concat(context.reference.cases.map(|case| case.text))
+		]).concat(context.reference.cases.map(|case| case.text))
 		BenchmarkProcess.run!({
 			args: command,
 			cwd: context.root,

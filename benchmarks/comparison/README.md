@@ -1,33 +1,38 @@
 # Cross-language temporal benchmarks
 
-Run the real public APIs on a checked shared domain, with independent expected
-results. This is an opt-in Linux x86-64 throughput comparison. It does not measure
-complete applications, memory, recurrence, zones, or coverage, and does not
-establish a fastest-library ranking.
+The reference environment is the native Apple M2 MacBook Air (Mac14,2).
+The matrix covers Gregorian dates, fixed-offset timestamps, coverage, named
+zones and recurrence through public APIs with independent expectations.
+The first native capture and the two fresh date and timestamp confirmations
+have separate reports. [Starting baseline](starting-native-m2.md) ·
+[Gregorian and fixed-offset results](native-date-timestamp.md) ·
+[Coverage, zone and recurrence results](native-operational.md)
 
 ```sh
-# Requires a current Roc nightly, Zig 0.17.0, Rust 1.95.0
-# with x86_64-unknown-linux-musl, Go 1.26.5, CPython 3.12.3, and Docker.
-ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --fetch --smoke
-# Offline dependency reuse; builds finish before comparative measurements.
-ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --cpu 2
-# A single explicitly selected domain:
-ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --profile seconds --cpu 2
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-replay
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-peers -- --fetch --smoke
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-peers
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-operations-peers -- --fetch
+ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison
 ```
 
-`PYTHON_BENCH` selects the measured CPython executable (default `/usr/bin/python3`);
-its version must match the pin. Blueprint supplies the build/reference tools.
-The hash-verified ciso8601 wheel is extracted directly without pip.
+`PYTHON_BENCH` selects the measured CPython executable (default `/usr/bin/python3`).
+Peer runs require native Rust 1.95.0, Go 1.26.5 and CPython 3.12.3.
+On macOS, the hash-verified ciso8601 source archive builds with the selected
+CPython and its preinstalled packaging tools. On Linux, the hash-verified
+wheel is extracted directly. Tempo is currently available in the separate
+Linux environment and is reported as unavailable in native runs.
 
-Choose an available CPU (`Cpus_allowed_list` in `/proc/self/status`), preferably with an idle SMT
+On Linux, choose an available CPU (`Cpus_allowed_list` in `/proc/self/status`), preferably with an idle SMT
 sibling. CPU affinity does not establish exclusive CPU access, fixed frequency,
 or freedom from thermal throttling. Do not run other builds/tests during timings.
 The runner applies affinity to each measured child and Tempo container. It never
 changes governor settings or system configuration.
 
-`--fetch` downloads the hash-pinned CPython wheel, exact Tempo source and locked
-Hex/Cargo dependencies. Everything downloaded/built and every raw result stays
-under `.roc-time-tmp/`. Tempo runs in a digest-pinned Linux container on the host
+`--fetch` downloads the hash-pinned ciso8601 artifact and locked Cargo dependencies.
+Linux setup also downloads exact Tempo source and locked Hex dependencies.
+Downloads, builds and raw results stay under `.roc-time-tmp/`.
+Tempo runs in a digest-pinned Linux container on the host
 CPU, with one BEAM scheduler (`+S 1:1`), no network and no application startup.
 The tested pure Tempo operations need no running applications; this also avoids
 unrelated ephemeris/timezone setup. Docker/BEAM startup is outside the timer.
@@ -103,7 +108,7 @@ Workload meanings and Roc/Chrono calls are detailed in the
 | `parse` | Parse → signed POSIX microseconds → Euclidean checksum. Tempo uses `parse_datetime!` then `to_date_time` and `DateTime.to_unix`; Python uses exact timedelta components, never float `timestamp()`. Jiff uses `parse_timestamp`. |
 | `resolve` | Stored representation → microseconds. Go/Jiff already store resolved coordinates; Tempo/Roc preserve local fields. This is not equal internal work, nor isolated parser cost. |
 | `parse_only` | Parse → local fields/clock/offset checksum; see the original caveat about internal resolution. Python/Go included; no Tempo/Jiff row. |
-| `format`, `end_to_end` | Canonical text with six digits and original numeric offset; checksum visits all bytes. Python includes ASCII encoding. Only microsecond profile: Roc preserves supplied precision, whereas the other adapters force six digits. Tempo emits a different native syntax and is omitted. No Jiff formatter timing yet. |
+| `format`, `end_to_end` | Canonical text with six digits and original numeric offset. The checksum visits all bytes. Complete records also observe the exact signed POSIX coordinate. Python includes ASCII encoding. These rows use the six-digit profile. |
 
 Parsing inputs, stored values, narrow date arrays and construction fields are
 prepared before sampling. Retained inputs are immutable; transient outputs are
@@ -132,8 +137,85 @@ one warmup, three samples and one round; it proves setup only.
 
 In-process monotonic clocks exclude build, process startup, preparation and
 printing. Optimized Roc/Rust use the reviewed opaque/black-box barriers. Both
-use musl on x86-64; Go uses `CGO_ENABLED=0`, Python and BEAM use their installed
+use the native Apple target on the reference host and musl on Linux x86-64.
+Go uses `CGO_ENABLED=0`, Python and BEAM use their installed
 runtimes/allocators. The report records pins, source/corpus hashes, executable
 versions, CPU/affinity, source revision/dirty state, every sample and known
 limitations. Raw JSON remains ignored; this README intentionally contains no
 performance results.
+
+## Native performance matrix
+
+Use the native scheduler with no affinity override. Record the CPU, model,
+OS build, power and scheduling settings in the reference report. Each
+competitive cell has a 1.50× target and a reviewed roc-time baseline.
+
+| Operation | Profiles | Competitive peers |
+|---|---|---|
+| `construct` | Gregorian fields from the 32-case corpus | Chrono, Jiff, Go, Python datetime |
+| `date_to_day` | Gregorian dates from the 32-case corpus | Chrono, Go, Python datetime |
+| `roundtrip` | Gregorian date → day → checked Gregorian date, 32 cases | Chrono, Go, Python datetime |
+| `add_days` | Gregorian date +17 across month, leap and century boundaries, 32 cases | Chrono, Jiff, Go, Python datetime |
+| `parse` | 32 six-digit inputs, 34 whole-second inputs, including negative coordinates and both signs of offset | Chrono, Jiff, Go, Python datetime and ciso8601 for both profiles. Tempo qualifies for whole seconds in the separate Linux environment. |
+| `format` | 32 six-digit inputs, canonical text with the original offset | Chrono, Go, Python datetime |
+| `end_to_end` | 32 six-digit inputs, exact resolution and canonical text | Chrono, Go, Python datetime and ciso8601. Observe both the signed coordinate and every byte. |
+| `date_control`, `parse_only`, `resolve` | Date fields or representation-specific staging, both input profiles where implemented | Diagnostic measurements |
+
+The date corpus is shared with ingest so both profiles can replay the same
+public benchmark root. Native comparative date claims use the 32-case profile.
+Construct observes all returned fields. Convert observes the signed civil day
+and round trip and addition observe all resulting fields. The exact coordinate
+is observed by ingest and the text checksum visits every byte. Preparation
+occurs before timing. These are bounded constant-cost operations over the
+declared fixed-size inputs. Invalid Gregorian fields, unrepresentable calendar
+days, malformed timestamps and unsupported leap seconds use the corresponding
+package and public fuzz checks outside the throughput samples.
+
+### Coverage, zone and recurrence profiles
+
+Coverage uses signed I64 half-open ranges in repeating 16µs blocks. It uses
+zero, eight and 4,096 raw spans, with sparse, touching-dense and disjoint
+pairs. It retains prepared input across iterations. The query profiles use
+late misses, one hit and up to 64 hits. The hosted resource gate also checks
+a retained source slice with zero allocations for containment and folding.
+
+The coverage peer is Rust Rangemap 1.7.1. It coalesces touching ranges into
+canonical half-open coverage, compares the same endpoints and emits the same
+ordered full members. Both adapters produce a reusable coverage value for
+set operations and explicitly materialize overlap results in that profile.
+Both traverse all requested matches for the fold. Sorted construction
+checks input order in both adapters. The reversed-order rejection row is
+diagnostic. The remaining coverage rows have separate 1.50× targets.
+An independent bounded point model checks each profile before sampling.
+[Rangemap source and API](https://docs.rs/crate/rangemap/1.7.1/source/README.md)
+
+Zones and recurrence use absolute timings pending peers with matching
+transition data, ambiguity results, and resumable work contracts.
+The independent zone cases use both fold positions with CPython zoneinfo
+and accept exact local round trips against the pinned 2026e wheel.
+The recurrence cases use explicit Gregorian occurrence lists.
+
+| Caller operation and timed boundary | Finite inputs and observations | Expected cost and independent expectation |
+|---|---|---|
+| Import sorted availability, `Coverage.from_sorted_spans` | 0, 8 and 4,096 spans. Touching runs, disjoint spans and rejected reversed input order. Observe every canonical endpoint or `UnsortedInput`. | Linear validation and coalescing. Independent point model. |
+| Import unordered availability, `Coverage.from_spans` | Same sizes and extents in reversed order. Observe all canonical endpoints. | Sort then linear coalescing. Independent point model. |
+| Combine availability, `Coverage.union`, `intersection`, `difference` | Two sets with matching input size. Sparse overlap, dense touching inputs and disjoint pairs. Observe all canonical endpoints. | Linear in total inputs and outputs. Independent point model. |
+| Check appointment availability, `Coverage.contains` | Same sizes, with a late start hit and an exclusive-end miss. Observe membership. | Logarithmic seek, zero result allocations. Independent direct half-open endpoint tests. |
+| Search overlapping appointments, `Coverage.fold_overlaps` and `overlapping_spans` as separate rows | Same sizes, queries near the last span returning 0, 1 or up to 64 ordered whole spans. Observe every endpoint. | Logarithmic seek plus matches. Independent direct half-open overlap test. |
+| Look up or load named-zone rules, `Database.get` and `ZoneRules.from_database` separately | Pinned New York and Lord Howe records. Observe transition counts. Reject a corrupted schema. | Search the static name inventory or admit transitions in linear work. Known inventory counts from the pinned asset. |
+| Look up and resolve warm zone rules, `ZoneRules.offset_at` and `resolve` as separate rows | Same pinned zones. Ordinary times and both sides of gap/fold endpoints, plus an out-of-validity failure. Observe offset or status and every ordered exact boundary. | Lookup seeks transitions. Resolution also visits applicable segments. Use pinned zone oracle expectations including non-hour transitions. |
+| Start a series, `DateRecurrence.new` | Daily, monthly and distant profiles. Observe the validated anchor and exclusions. Reject count zero. | Construction independent of logical window length. Fixed Gregorian declaration fixtures. |
+| First consumption and resumption, `DateRecurrence.Cursor.next` | Daily and monthly short windows and one ending in year 2,000,000,000. Observe exact occurrence, work and buffered count. Time the initial cursor and the independently prepared saved cursor separately. | One buffered occurrence, with 64–65 daily steps, 256–257 monthly steps, and 8–9 steps for the distant profile. Fixed expected dates at leap and month boundaries. |
+| Evaluate a query window, `DateRecurrence.Cursor.collect` | Daily and monthly late-window cases with exclusions, plus a distant window that returns `Limited`. Observe all dates, status and work. | Same candidate budgets, four buffered and four output dates. Explicit independent occurrence lists and a bounded incomplete case. |
+
+Coverage alternates two prepared coordinate sets translated by a microsecond.
+Each adapter checks both independently, selects the timed input through an
+opaque call and consumes the complete result through the same checksum.
+Hosted resource assertions cover retained input slices and allocation separately.
+Run supported Wasm resource checks as a separate environment.
+
+The operational matrix uses three rounds, nine samples and three warmups.
+Each sample contains 300 operations for large coverage sets and zone setup,
+1,000 for recurrence, and 10,000 for the other profiles. The replay gate
+checks the same independent expectations with smaller bounds. Zone and
+recurrence reports currently record absolute elapsed time per operation.

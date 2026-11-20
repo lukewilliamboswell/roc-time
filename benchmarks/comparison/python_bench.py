@@ -23,6 +23,10 @@ def date_sum(v):
 def canonical(v):
     return v.isoformat(timespec='microseconds')
 
+def record_sum(text):
+    value = parse(text)
+    return micros(value) % 1000000007 + sum(canonical(value).encode('ascii'))
+
 if mode == 'verify':
     for v in values:
         print(f'{v.date().toordinal() - 719163}|{micros(v)}|{canonical(v)}')
@@ -45,7 +49,7 @@ operations = {
     'parse': (texts, lambda v: micros(parse(v)) % 1000000007),
     'resolve': (values, lambda v: micros(v) % 1000000007),
     'format': (values, lambda v: sum(canonical(v).encode('ascii'))),
-    'end_to_end': (texts, lambda v: sum(canonical(parse(v)).encode('ascii'))),
+    'end_to_end': (texts, record_sum),
 }
 data, operation = operations[mode]
 size = len(data)
