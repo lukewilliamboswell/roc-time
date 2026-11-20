@@ -1,5 +1,8 @@
+import ClockLabel
+
 import ClockTime
-import PosixBoundary
+import MicrosecondRounding
+import Quantize
 
 ## A local clock label at nanosecond precision, without a date, zone or scale.
 ##
@@ -15,7 +18,7 @@ import PosixBoundary
 ##     # 12:00:00.000000001 as a Time64(ns) value
 ##     received = NanoClockTime.from_nanoseconds_since_midnight(43200000000001)
 ##     received.map_ok(NanoClockTime.to_text) == Ok("12:00:00.000000001") and
-##         received.map_ok(|clock| NanoClockTime.to_clock(clock, RejectSubmicrosecond)) == Ok(Err(Submicrosecond))
+##         received.map_ok(|clock| NanoClockTime.to_clock_with_rounding(clock, RejectSubmicrosecond)) == Ok(Err(Submicrosecond))
 ## }
 ## ```
 ##
@@ -64,70 +67,15 @@ NanoClockTime :: [Nanos(I64)].{
 	## text outside the declared profile with structured errors.
 	parse : Str -> Try(NanoClockTime, Error)
 	parse = |text| {
-		if text.count_utf8_bytes() > 64 {
-			return Err(TooLarge)
-		}
-		bytes = text.to_utf8()
-		empty_fields = { hour: 0.U8, minute: 0.U8, second: 0.U8, nanosecond: 0.U32 }
-		hour = pair(bytes, 0, empty_fields)?
-		hour_fields = { ..empty_fields, hour }
-		separator(bytes, 2, 58, hour_fields)?
-		minute = pair(bytes, 3, hour_fields)?
-		minute_fields = { ..hour_fields, minute }
-		var $second = 0.U8
-		var $nanosecond = 0.U32
-		if bytes.len() > 5 {
-			separator(bytes, 5, 58, minute_fields)?
-			$second = pair(bytes, 6, minute_fields)?
-			if bytes.len() > 8 {
-				separator(bytes, 8, 46, { ..minute_fields, second: $second })?
-				if bytes.len() == 9 {
-					_ = from_fields({ ..minute_fields, second: $second })?
-					return Err(Incomplete)
-				}
-				var $position = 9.U64
-				while $position < bytes.len() {
-					byte = match bytes.get($position) {
-						Ok(found) => found
-						Err(_) => return Err(Incomplete)
-					}
-					if byte < 48 or byte > 57 {
-						return Err(Malformed)
-					}
-					if $position >= 18 {
-						return Err(UnsupportedPrecision)
-					}
-					$nanosecond = $nanosecond * 10 + (byte - 48).to_u32()
-					$position = $position + 1
-				}
-				while $position < 18 {
-					$nanosecond = $nanosecond * 10
-					$position = $position + 1
-				}
-			}
-		}
-		from_fields({ hour, minute, second: $second, nanosecond: $nanosecond })
+		fields = ClockLabel.parse(text, 9)?
+		Ok(from_validated_fields({ hour: fields.hour, minute: fields.minute, second: fields.second, nanosecond: fields.fraction }))
 	}
 
 	## Canonical output includes seconds and the shortest exact decimal fraction.
 	to_text : NanoClockTime -> Str
 	to_text = |value| {
-		fields = to_fields(value)
-		base = "${two_digits(fields.hour)}:${two_digits(fields.minute)}:${two_digits(fields.second)}"
-		if fields.nanosecond == 0 {
-			return base
-		}
-		var $fraction = fields.nanosecond
-		var $width = 9.U64
-		while U32.rem_by($fraction, 10) == 0 {
-			$fraction = U32.div_trunc_by($fraction, 10)
-			$width = $width - 1
-		}
-		var $digits = $fraction.to_str()
-		while $digits.count_utf8_bytes() < $width {
-			$digits = "0${$digits}"
-		}
-		"${base}.${$digits}"
+		fields = value.to_fields()
+		ClockLabel.to_text({ hour: fields.hour, minute: fields.minute, second: fields.second, fraction: fields.nanosecond }, 9)
 	}
 
 	## Build a decoder for one encoded clock-label string. Return the clock and
@@ -170,22 +118,11 @@ NanoClockTime :: [Nanos(I64)].{
 	## No date or timezone is attached.
 	from_fields : Fields -> Try(NanoClockTime, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidNanosecond])
 	from_fields = |fields| {
-		if fields.hour > 23 {
-			return Err(InvalidHour)
-		}
-		if fields.minute > 59 {
-			return Err(InvalidMinute)
-		}
-		if fields.second == 60 {
-			return Err(UnsupportedLeapSecond)
-		}
-		if fields.second > 59 {
-			return Err(InvalidSecond)
-		}
+		ClockLabel.validate({ hour: fields.hour, minute: fields.minute, second: fields.second, fraction: fields.nanosecond })?
 		if fields.nanosecond > 999999999 {
 			return Err(InvalidNanosecond)
 		}
-		Ok(Nanos(fields.hour.to_i64() * 3600000000000 + fields.minute.to_i64() * 60000000000 + fields.second.to_i64() * 1000000000 + fields.nanosecond.to_i64()))
+		Ok(from_validated_fields(fields))
 	}
 
 	## Construct a clock label from 0 through 86399999999999 nanoseconds since
@@ -217,8 +154,11 @@ NanoClockTime :: [Nanos(I64)].{
 	}
 
 	## Equality of clock labels within the same nominal day; values of other temporal domains must be converted explicitly.
-	is_eq : NanoClockTime, NanoClockTime -> Bool
-	is_eq = |Nanos(a), Nanos(b)| a == b
+	is_eq : _
+
+	## Order by the native scalar coordinate.
+	order_relative_to : NanoClockTime, NanoClockTime -> [Before, Same, After]
+	order_relative_to = |left, right| left.to_nanoseconds_since_midnight().order_relative_to(right.to_nanoseconds_since_midnight())
 
 	## Whether the first of two clock labels within the same nominal day precedes the second in their numeric order.
 	is_lt : NanoClockTime, NanoClockTime -> Bool
@@ -238,8 +178,7 @@ NanoClockTime :: [Nanos(I64)].{
 
 	## Hash clock labels within the same nominal day consistently with equality for dictionary and set keys.
 	## Hash values are not a stable serialization format.
-	to_hash : NanoClockTime, Hasher -> Hasher
-	to_hash = |Nanos(number), hasher| number.to_hash(hasher)
+	to_hash : _
 
 	## Return a concise diagnostic description of these clock labels within the same nominal day.
 	## Use explicit conversions or text serialization when storing or exchanging data.
@@ -250,13 +189,16 @@ NanoClockTime :: [Nanos(I64)].{
 	from_clock : ClockTime -> NanoClockTime
 	from_clock = |clock| Nanos(ClockTime.to_microseconds_since_midnight(clock) * 1000)
 
+	## Narrow an exactly aligned label to whole microseconds.
+	to_clock : NanoClockTime -> Try(ClockTime, [Submicrosecond, OutOfRange])
+	to_clock = |value| value.to_clock_with_rounding(RejectSubmicrosecond)
+
 	## Narrow to a microsecond clock label under an explicit rounding policy.
 	## RejectSubmicrosecond returns Submicrosecond for an inexact value. A value
 	## that rounds up to the next midnight returns OutOfRange; the day does not carry.
-	to_clock : NanoClockTime, PosixBoundary.Rounding -> Try(ClockTime, [Submicrosecond, OutOfRange])
-	to_clock = |Nanos(number), policy| {
-		# The rounding is the same integer quantization PosixBoundary uses for nanoseconds.
-		micros = PosixBoundary.to_microseconds(PosixBoundary.from_nanoseconds_with_rounding(number.to_i128(), policy)?)
+	to_clock_with_rounding : NanoClockTime, MicrosecondRounding -> Try(ClockTime, [Submicrosecond, OutOfRange])
+	to_clock_with_rounding = |Nanos(number), policy| {
+		micros = Quantize.to_microseconds({ value: number, divisor: 1000, rounding: policy })?
 		ClockTime.from_microseconds_since_midnight(micros)
 	}
 
@@ -285,7 +227,7 @@ NanoClockTime :: [Nanos(I64)].{
 			clock = ClockTime.from_microseconds_since_midnight(micros)?
 			wide = from_clock(clock)
 			$valid = $valid and to_nanoseconds_since_midnight(wide) == micros * 1000 and
-				to_clock(wide, RejectSubmicrosecond) == Ok(clock)
+				to_clock_with_rounding(wide, RejectSubmicrosecond) == Ok(clock)
 		}
 		$valid
 	}
@@ -312,20 +254,20 @@ NanoClockTime :: [Nanos(I64)].{
 				Err(Submicrosecond)
 			}
 			$valid = $valid and
-				to_clock(value, Floor) == expect_micros(row.floor) and
-					to_clock(value, TowardZero) == expect_micros(row.floor) and
-						to_clock(value, Ceiling) == expect_micros(row.ceiling) and
-							to_clock(value, NearestTiesEven) == expect_micros(row.nearest) and
-								to_clock(value, RejectSubmicrosecond) == exact
+				to_clock_with_rounding(value, Floor) == expect_micros(row.floor) and
+					to_clock_with_rounding(value, TowardZero) == expect_micros(row.floor) and
+						to_clock_with_rounding(value, Ceiling) == expect_micros(row.ceiling) and
+							to_clock_with_rounding(value, NearestTiesEven) == expect_micros(row.nearest) and
+								to_clock_with_rounding(value, RejectSubmicrosecond) == exact
 		}
 		$valid
 	}
 
 	# Rounding up to 24:00 fails; the last values that round down still succeed.
-	expect from_nanoseconds_since_midnight(86399999999001).map_ok(|v| to_clock(v, Ceiling)) == Ok(Err(OutOfRange))
-	expect from_nanoseconds_since_midnight(86399999999500).map_ok(|v| to_clock(v, NearestTiesEven)) == Ok(Err(OutOfRange))
-	expect from_nanoseconds_since_midnight(86399999999499).map_ok(|v| to_clock(v, NearestTiesEven)) == Ok(ClockTime.from_microseconds_since_midnight(86399999999))
-	expect from_nanoseconds_since_midnight(86399999999999).map_ok(|v| to_clock(v, Floor)) == Ok(ClockTime.from_microseconds_since_midnight(86399999999))
+	expect from_nanoseconds_since_midnight(86399999999001).map_ok(|v| to_clock_with_rounding(v, Ceiling)) == Ok(Err(OutOfRange))
+	expect from_nanoseconds_since_midnight(86399999999500).map_ok(|v| to_clock_with_rounding(v, NearestTiesEven)) == Ok(Err(OutOfRange))
+	expect from_nanoseconds_since_midnight(86399999999499).map_ok(|v| to_clock_with_rounding(v, NearestTiesEven)) == Ok(ClockTime.from_microseconds_since_midnight(86399999999))
+	expect from_nanoseconds_since_midnight(86399999999999).map_ok(|v| to_clock_with_rounding(v, Floor)) == Ok(ClockTime.from_microseconds_since_midnight(86399999999))
 
 	# The split floors to the microsecond and the remainder recombines exactly.
 	expect {
@@ -335,7 +277,7 @@ NanoClockTime :: [Nanos(I64)].{
 			parts = split_microseconds(value)
 			micros = ClockTime.to_microseconds_since_midnight(parts.clock)
 			$valid = $valid and parts.nanosecond < 1000 and micros * 1000 + parts.nanosecond.to_i64() == nanos and
-				to_clock(value, Floor) == Ok(parts.clock)
+				to_clock_with_rounding(value, Floor) == Ok(parts.clock)
 		}
 		$valid
 	}
@@ -425,53 +367,5 @@ NanoClockTime :: [Nanos(I64)].{
 	}
 }
 
-# Private syntax helpers validate completed prefixes through the public
-# constructor only on incomplete paths. Successful parses construct once.
-pair = |bytes, position, completed_fields| {
-	var $value = 0.U8
-	for index in [position, position + 1] {
-		byte = match bytes.get(index) {
-			Ok(value) => value
-			Err(_) => {
-				_ = NanoClockTime.from_fields(completed_fields)?
-				# Completed higher fields take priority; only a missing second
-				# digit can expose an impossible first-digit prefix here.
-				if index > position {
-					if position == 0 and $value > 2 {
-						return Err(InvalidHour)
-					}
-					if position == 3 and $value > 5 {
-						return Err(InvalidMinute)
-					}
-					if position == 6 and $value > 5 {
-						return Err(InvalidSecond)
-					}
-				}
-				return Err(Incomplete)
-			}
-		}
-		if byte < 48 or byte > 57 {
-			return Err(Malformed)
-		}
-		$value = $value * 10 + byte - 48
-	}
-	Ok($value)
-}
-
-separator = |bytes, position, expected, completed_fields| match bytes.get(position) {
-	Ok(byte) => if byte == expected {
-		Ok({})
-	} else {
-		Err(Malformed)
-	}
-	Err(_) => {
-		_ = NanoClockTime.from_fields(completed_fields)?
-		Err(Incomplete)
-	}
-}
-
-two_digits = |number| if number < 10 {
-	"0${number.to_str()}"
-} else {
-	number.to_str()
-}
+from_validated_fields : NanoClockTime.Fields -> NanoClockTime
+from_validated_fields = |fields| NanoClockTime.Nanos(fields.hour.to_i64() * 3600000000000 + fields.minute.to_i64() * 60000000000 + fields.second.to_i64() * 1000000000 + fields.nanosecond.to_i64())

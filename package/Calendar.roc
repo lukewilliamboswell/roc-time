@@ -163,8 +163,8 @@ CalendarArithmetic :: [].{
 	## Clamp or Carry for nonexistent intermediate destinations. Return
 	## InvalidDestination or OutOfRange rather than silently choosing a policy.
 	## Clamping is not invertible and must not be used to step RFC recurrence rules.
-	shift_day : GregorianDate, CalendarDelta, Calendar.ArithmeticPolicy -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields)])
-	shift_day = |date, delta, policy| {
+	shift_day : GregorianDate, { delta : CalendarDelta, policy : Calendar.ArithmeticPolicy } -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields)])
+	shift_day = |date, { delta, policy }| {
 		parts = CalendarDelta.to_components(delta)
 		fields = GregorianDate.to_fields(date)
 		# Explicit mapping preserves the structured error contract on the pinned
@@ -192,35 +192,35 @@ CalendarArithmetic :: [].{
 
 	expect {
 		issued = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
-		clamped = shift_day(issued, CalendarDelta.months(1), Clamp)?
+		clamped = shift_day(issued, { delta: CalendarDelta.months(1), policy: Clamp })?
 		GregorianDate.to_fields(clamped) == { year: 2025, month: 2, day: 28 } and
-			shift_day(issued, CalendarDelta.months(1), Reject) == Err(InvalidDestination({ year: 2025, month: 2, day: 31 })) and
-				GregorianDate.to_fields(shift_day(issued, CalendarDelta.months(1), Carry)?) == { year: 2025, month: 3, day: 3 } and
-					GregorianDate.to_fields(shift_day(clamped, CalendarDelta.months(-1), Clamp)?) == { year: 2025, month: 1, day: 28 }
+			shift_day(issued, { delta: CalendarDelta.months(1), policy: Reject }) == Err(InvalidDestination({ year: 2025, month: 2, day: 31 })) and
+				GregorianDate.to_fields(shift_day(issued, { delta: CalendarDelta.months(1), policy: Carry })?) == { year: 2025, month: 3, day: 3 } and
+					GregorianDate.to_fields(shift_day(clamped, { delta: CalendarDelta.months(-1), policy: Clamp })?) == { year: 2025, month: 1, day: 28 }
 	}
 
 	expect {
 		leap_day = GregorianDate.from_fields({ year: 2020, month: 2, day: 29 })?
 		ordered = CalendarDelta.from_components({ years: 1, months: 1, days: 1 })
-		GregorianDate.to_fields(shift_day(leap_day, ordered, Clamp)?) == { year: 2021, month: 3, day: 29 }
+		GregorianDate.to_fields(shift_day(leap_day, { delta: ordered, policy: Clamp })?) == { year: 2021, month: 3, day: 29 }
 	}
 
 	expect {
 		january = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
 		zero = GregorianDate.from_fields({ year: 0, month: 1, day: 31 })?
 		# A two-month component has one destination; it does not clamp in February.
-		GregorianDate.to_fields(shift_day(january, CalendarDelta.months(2), Clamp)?) == { year: 2025, month: 3, day: 31 } and
-			GregorianDate.to_fields(shift_day(zero, CalendarDelta.months(-1), Reject)?) == { year: -1, month: 12, day: 31 }
+		GregorianDate.to_fields(shift_day(january, { delta: CalendarDelta.months(2), policy: Clamp })?) == { year: 2025, month: 3, day: 31 } and
+			GregorianDate.to_fields(shift_day(zero, { delta: CalendarDelta.months(-1), policy: Reject })?) == { year: -1, month: 12, day: 31 }
 	}
 
 	expect {
 		first = GregorianDate.from_fields({ year: -2147483648, month: 1, day: 1 })?
 		last = GregorianDate.from_fields({ year: 2147483647, month: 12, day: 31 })?
-		shift_day(first, CalendarDelta.days(-1), Clamp) == Err(OutOfRange) and
-			shift_day(last, CalendarDelta.days(1), Clamp) == Err(OutOfRange) and
-				shift_day(first, CalendarDelta.months(I64.lowest), Carry) == Err(OutOfRange) and
-					shift_day(last, CalendarDelta.years(I64.highest), Reject) == Err(OutOfRange) and
-						shift_day(last, CalendarDelta.from_components({ years: 1, months: -12, days: 0 }), Clamp) == Err(OutOfRange)
+		shift_day(first, { delta: CalendarDelta.days(-1), policy: Clamp }) == Err(OutOfRange) and
+			shift_day(last, { delta: CalendarDelta.days(1), policy: Clamp }) == Err(OutOfRange) and
+				shift_day(first, { delta: CalendarDelta.months(I64.lowest), policy: Carry }) == Err(OutOfRange) and
+					shift_day(last, { delta: CalendarDelta.years(I64.highest), policy: Reject }) == Err(OutOfRange) and
+						shift_day(last, { delta: CalendarDelta.from_components({ years: 1, months: -12, days: 0 }), policy: Clamp }) == Err(OutOfRange)
 	}
 }
 
@@ -407,8 +407,8 @@ CalendarValue :: { start : { date : CalendarDate, clock : ClockTime }, precision
 	}
 
 	## Select a whole calendar month; invalid month numbers return InvalidMonth.
-	month : Calendar, I64, U8 -> Try(CalendarValue, [OutOfRange, InvalidMonth, InvalidDay])
-	month = |calendar, number, month_number| {
+	month : Calendar, { year : I64, month : U8 } -> Try(CalendarValue, [OutOfRange, InvalidMonth, InvalidDay])
+	month = |calendar, { year: number, month: month_number }| {
 		date_value = CalendarDate.from_fields(calendar, { year: number, month: month_number, day: 1 })?
 		Ok({ start: value_midnight(date_value), precision: Month })
 	}
@@ -427,16 +427,16 @@ CalendarValue :: { start : { date : CalendarDate, clock : ClockTime }, precision
 
 	## Describe the entire local minute on the supplied date. Validate hour/minute
 	## fields; omitted seconds locate its start but do not narrow its resolution.
-	minute : CalendarDate, U8, U8 -> Try(CalendarValue, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
-	minute = |date_value, h, m| {
+	minute : CalendarDate, { hour : U8, minute : U8 } -> Try(CalendarValue, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
+	minute = |date_value, { hour: h, minute: m }| {
 		clock_value = ClockTime.from_fields({ hour: h, minute: m, second: 0, microsecond: 0 })?
 		Ok({ start: { date: date_value, clock: clock_value }, precision: Minute })
 	}
 
 	## Describe the entire local second on the supplied date. Invalid clock fields
 	## and unsupported leap seconds return structured errors.
-	second : CalendarDate, U8, U8, U8 -> Try(CalendarValue, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
-	second = |date_value, h, m, s| {
+	second : CalendarDate, { hour : U8, minute : U8, second : U8 } -> Try(CalendarValue, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
+	second = |date_value, { hour: h, minute: m, second: s }| {
 		clock_value = ClockTime.from_fields({ hour: h, minute: m, second: s, microsecond: 0 })?
 		Ok({ start: { date: date_value, clock: clock_value }, precision: Second })
 	}
@@ -444,8 +444,8 @@ CalendarValue :: { start : { date : CalendarDate, clock : ClockTime }, precision
 	## fraction is the supplied decimal integer: {value: 12, digits: 2} is .12.
 	## Zero digits and values requiring more digits are malformed. More than six
 	## digits are unsupported, even when trailing zeroes could be discarded.
-	fractional_second : CalendarDate, { hour : U8, minute : U8, second : U8 }, { value : U32, digits : U8 } -> Try(CalendarValue, [InvalidFraction, UnsupportedPrecision, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
-	fractional_second = |date_value, clock_fields, fraction| {
+	fractional_second : CalendarDate, { clock : { hour : U8, minute : U8, second : U8 }, fraction : { value : U32, digits : U8 } } -> Try(CalendarValue, [InvalidFraction, UnsupportedPrecision, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
+	fractional_second = |date_value, { clock: clock_fields, fraction }| {
 		if fraction.digits == 0 {
 			return Err(InvalidFraction)
 		}

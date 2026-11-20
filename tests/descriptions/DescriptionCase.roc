@@ -46,7 +46,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			$index = $index + 1
 		}
 		fraction = (I64.mod_by(number, 1000000) // $width).to_u32_wrap()
-		value = match Calendar.Value.fractional_second(date, { hour: h, minute: m, second: s }, { value: fraction, digits: input.digits }) {
+		value = match Calendar.Value.fractional_second(date, { clock: { hour: h, minute: m, second: s }, fraction: { value: fraction, digits: input.digits } }) {
 			Ok(found) => found
 			Err(_) => crash "Valid decimal grid rejected"
 		}
@@ -57,11 +57,11 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			Ok(found) => found
 			Err(_) => crash "Valid hour"
 		}
-		minute = match Calendar.Value.minute(date, h, m) {
+		minute = match Calendar.Value.minute(date, { hour: h, minute: m }) {
 			Ok(found) => found
 			Err(_) => crash "Valid minute"
 		}
-		second = match Calendar.Value.second(date, h, m, s) {
+		second = match Calendar.Value.second(date, { hour: h, minute: m, second: s }) {
 			Ok(found) => found
 			Err(_) => crash "Valid second"
 		}
@@ -80,7 +80,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			2.I32
 		}
 		after = 2 - initial
-		rules = match ZoneRules.new_bounded("Synthetic/Description", "v1", span(start - 4000000, start + 4000000), FixedOffset.from_seconds(initial), [{ at: point(start - 1000000), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 }) {
+		rules = match ZoneRules.new_bounded({ name: "Synthetic/Description", version: "v1", validity: span(start - 4000000, start + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: point(start - 1000000), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
 			Ok(found) => found
 			Err(_) => crash "Valid synthetic rules"
 		}
@@ -145,7 +145,7 @@ check_bounds = |value, start, width| {
 
 point = |number| PosixBoundary.from_microseconds(number)
 
-span = |start, end| match PosixSpan.new(point(start), point(end)) {
+span = |start, end| match PosixSpan.new({ start: point(start), end: point(end) }) {
 	Ok(value) => value
 	Err(_) => crash "Nonempty oracle span"
 }
@@ -298,7 +298,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 			chosen = minute_start + chosen_second * 1000000 + fraction
 			h = (chosen // 3600000000).to_u8_wrap()
 			m = I64.mod_by(chosen // 60000000, 60).to_u8_wrap()
-			candidate = match Calendar.Value.fractional_second(date, { hour: h, minute: m, second: chosen_second.to_u8_wrap() }, { value: (fraction // width).to_u32_wrap(), digits: input.digits }) {
+			candidate = match Calendar.Value.fractional_second(date, { clock: { hour: h, minute: m, second: chosen_second.to_u8_wrap() }, fraction: { value: (fraction // width).to_u32_wrap(), digits: input.digits } }) {
 				Ok(found) => found
 				Err(_) => crash "Valid evidence candidate"
 			}
@@ -331,7 +331,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 		} else {
 			Possible
 		}
-		query = match CalendarEvidence.query(model, rules, point(coordinate)) {
+		query = match CalendarEvidence.query(model, { rules, point: point(coordinate) }) {
 			Ok(found) => found
 			Err(_) => crash "Valid model point rejected"
 		}
@@ -483,7 +483,7 @@ check_interval_truth = |evidence, intervals, points| {
 check_calendar_description = |input, h, m, s, fraction| {
 	for calendar in [Gregorian, Julian] {
 		date = Calendar.Date.from_fields(calendar, { year: 1970, month: 1, day: 1 }) ?? crash "valid description date"
-		fractional = Calendar.Value.fractional_second(date, { hour: h, minute: m, second: s }, { digits: input.digits, value: fraction }) ?? crash "valid fractional description"
+		fractional = Calendar.Value.fractional_second(date, { clock: { hour: h, minute: m, second: s }, fraction: { digits: input.digits, value: fraction } }) ?? crash "valid fractional description"
 		check_explanation(fractional, calendar, input, h, m, s, fraction)
 		for limit in [-2147483648.I64, 2147483647] {
 			value = Calendar.Value.year(calendar, limit) ?? crash "provider year limit rejected"

@@ -7,6 +7,6 @@ import time.PosixDelta
 
 main! = |_args| {
 	date = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
-	_invalid = Calendar.Arithmetic.shift_day(date, PosixDelta.from_microseconds(1), Clamp)
+	_invalid = Calendar.Arithmetic.shift_day(date, { delta: PosixDelta.from_microseconds(1), policy: Clamp })
 	Ok({})
 }

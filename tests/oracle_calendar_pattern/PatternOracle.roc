@@ -68,7 +68,7 @@ observe = |input| {
 			Ok(value) => value
 			Err(_) => crash "Oracle day outside range"
 		}
-		matched = match CalendarPattern.matches(pattern, index, date) {
+		matched = match CalendarPattern.matches(pattern, { period_index: index, date }) {
 			Ok(value) => value
 			Err(_) => crash "Oracle match outside range"
 		}

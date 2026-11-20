@@ -1,3 +1,5 @@
+import ClockLabel
+
 ## A local clock label at microsecond precision, without a date, zone or scale.
 ##
 ## Parse a time from an appointment form. Omitted seconds are zero; canonical
@@ -45,70 +47,15 @@ ClockTime :: [Micros(I64)].{
 	## text outside the declared profile with structured errors.
 	parse : Str -> Try(ClockTime, Error)
 	parse = |text| {
-		if text.count_utf8_bytes() > 64 {
-			return Err(TooLarge)
-		}
-		bytes = text.to_utf8()
-		empty_fields = { hour: 0.U8, minute: 0.U8, second: 0.U8, microsecond: 0.U32 }
-		hour = pair(bytes, 0, empty_fields)?
-		hour_fields = { ..empty_fields, hour }
-		separator(bytes, 2, 58, hour_fields)?
-		minute = pair(bytes, 3, hour_fields)?
-		minute_fields = { ..hour_fields, minute }
-		var $second = 0.U8
-		var $microsecond = 0.U32
-		if bytes.len() > 5 {
-			separator(bytes, 5, 58, minute_fields)?
-			$second = pair(bytes, 6, minute_fields)?
-			if bytes.len() > 8 {
-				separator(bytes, 8, 46, { ..minute_fields, second: $second })?
-				if bytes.len() == 9 {
-					_ = from_fields({ ..minute_fields, second: $second })?
-					return Err(Incomplete)
-				}
-				var $position = 9.U64
-				while $position < bytes.len() {
-					byte = match bytes.get($position) {
-						Ok(found) => found
-						Err(_) => return Err(Incomplete)
-					}
-					if byte < 48 or byte > 57 {
-						return Err(Malformed)
-					}
-					if $position >= 15 {
-						return Err(UnsupportedPrecision)
-					}
-					$microsecond = $microsecond * 10 + (byte - 48).to_u32()
-					$position = $position + 1
-				}
-				while $position < 15 {
-					$microsecond = $microsecond * 10
-					$position = $position + 1
-				}
-			}
-		}
-		from_fields({ hour, minute, second: $second, microsecond: $microsecond })
+		fields = ClockLabel.parse(text, 6)?
+		Ok(from_validated_fields({ hour: fields.hour, minute: fields.minute, second: fields.second, microsecond: fields.fraction }))
 	}
 
 	## Canonical output includes seconds and the shortest exact decimal fraction.
 	to_text : ClockTime -> Str
 	to_text = |value| {
-		fields = to_fields(value)
-		base = "${two_digits(fields.hour)}:${two_digits(fields.minute)}:${two_digits(fields.second)}"
-		if fields.microsecond == 0 {
-			return base
-		}
-		var $fraction = fields.microsecond
-		var $width = 6.U64
-		while U32.rem_by($fraction, 10) == 0 {
-			$fraction = U32.div_trunc_by($fraction, 10)
-			$width = $width - 1
-		}
-		var $digits = $fraction.to_str()
-		while $digits.count_utf8_bytes() < $width {
-			$digits = "0${$digits}"
-		}
-		"${base}.${$digits}"
+		fields = value.to_fields()
+		ClockLabel.to_text({ hour: fields.hour, minute: fields.minute, second: fields.second, fraction: fields.microsecond }, 6)
 	}
 
 	## Build a decoder for one encoded clock-label string. Return the clock and
@@ -151,22 +98,11 @@ ClockTime :: [Micros(I64)].{
 	## No date or timezone is attached.
 	from_fields : Fields -> Try(ClockTime, [InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidMicrosecond])
 	from_fields = |fields| {
-		if fields.hour > 23 {
-			return Err(InvalidHour)
-		}
-		if fields.minute > 59 {
-			return Err(InvalidMinute)
-		}
-		if fields.second == 60 {
-			return Err(UnsupportedLeapSecond)
-		}
-		if fields.second > 59 {
-			return Err(InvalidSecond)
-		}
+		ClockLabel.validate({ hour: fields.hour, minute: fields.minute, second: fields.second, fraction: fields.microsecond })?
 		if fields.microsecond > 999999 {
 			return Err(InvalidMicrosecond)
 		}
-		Ok(Micros(fields.hour.to_i64() * 3600000000 + fields.minute.to_i64() * 60000000 + fields.second.to_i64() * 1000000 + fields.microsecond.to_i64()))
+		Ok(from_validated_fields(fields))
 	}
 
 	## Construct a clock label from 0 through 86399999999 microseconds since
@@ -198,8 +134,11 @@ ClockTime :: [Micros(I64)].{
 	}
 
 	## Equality of clock labels within the same nominal day; values of other temporal domains must be converted explicitly.
-	is_eq : ClockTime, ClockTime -> Bool
-	is_eq = |Micros(a), Micros(b)| a == b
+	is_eq : _
+
+	## Order by the native scalar coordinate.
+	order_relative_to : ClockTime, ClockTime -> [Before, Same, After]
+	order_relative_to = |left, right| left.to_microseconds_since_midnight().order_relative_to(right.to_microseconds_since_midnight())
 
 	## Whether the first of two clock labels within the same nominal day precedes the second in their numeric order.
 	is_lt : ClockTime, ClockTime -> Bool
@@ -219,8 +158,7 @@ ClockTime :: [Micros(I64)].{
 
 	## Hash clock labels within the same nominal day consistently with equality for dictionary and set keys.
 	## Hash values are not a stable serialization format.
-	to_hash : ClockTime, Hasher -> Hasher
-	to_hash = |Micros(number), hasher| number.to_hash(hasher)
+	to_hash : _
 
 	## Return a concise diagnostic description of these clock labels within the same nominal day.
 	## Use explicit conversions or text serialization when storing or exchanging data.
@@ -301,53 +239,5 @@ ClockTime :: [Micros(I64)].{
 	}
 }
 
-# Private syntax helpers validate completed prefixes through the public
-# constructor only on incomplete paths. Successful parses construct once.
-pair = |bytes, position, completed_fields| {
-	var $value = 0.U8
-	for index in [position, position + 1] {
-		byte = match bytes.get(index) {
-			Ok(value) => value
-			Err(_) => {
-				_ = ClockTime.from_fields(completed_fields)?
-				# Completed higher fields take priority; only a missing second
-				# digit can expose an impossible first-digit prefix here.
-				if index > position {
-					if position == 0 and $value > 2 {
-						return Err(InvalidHour)
-					}
-					if position == 3 and $value > 5 {
-						return Err(InvalidMinute)
-					}
-					if position == 6 and $value > 5 {
-						return Err(InvalidSecond)
-					}
-				}
-				return Err(Incomplete)
-			}
-		}
-		if byte < 48 or byte > 57 {
-			return Err(Malformed)
-		}
-		$value = $value * 10 + byte - 48
-	}
-	Ok($value)
-}
-
-separator = |bytes, position, expected, completed_fields| match bytes.get(position) {
-	Ok(byte) => if byte == expected {
-		Ok({})
-	} else {
-		Err(Malformed)
-	}
-	Err(_) => {
-		_ = ClockTime.from_fields(completed_fields)?
-		Err(Incomplete)
-	}
-}
-
-two_digits = |number| if number < 10 {
-	"0${number.to_str()}"
-} else {
-	number.to_str()
-}
+from_validated_fields : ClockTime.Fields -> ClockTime
+from_validated_fields = |fields| ClockTime.Micros(fields.hour.to_i64() * 3600000000 + fields.minute.to_i64() * 60000000 + fields.second.to_i64() * 1000000 + fields.microsecond.to_i64())

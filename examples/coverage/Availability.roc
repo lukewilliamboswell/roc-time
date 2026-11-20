@@ -27,15 +27,15 @@ Availability :: { free : Coverage, bookings : EventCollection(Str) }.{
 		var $lines = ["Bookings retained: ${EventCollection.event_count(available.bookings).to_str()}"]
 		for segment in EventCollection.segments(available.bookings) {
 			if segment.contributors.len() > 1 {
-				start = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.start(segment.span), Gregorian)?
-				end = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.end(segment.span), Gregorian)?
+				start = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixSpan.start(segment.span), calendar: Gregorian })?
+				end = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixSpan.end(segment.span), calendar: Gregorian })?
 				names = Str.join_with(segment.contributors, ", ")
 				$lines = $lines.append("Booking conflict: ${names}, ${display(start)} to ${display(end)} (UTC)")
 			}
 		}
 		for span in available.free {
-			start = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.start(span), Gregorian)?
-			end = FixedOffset.project(FixedOffset.from_seconds(0), PosixSpan.end(span), Gregorian)?
+			start = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixSpan.start(span), calendar: Gregorian })?
+			end = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixSpan.end(span), calendar: Gregorian })?
 			$lines = $lines.append("Free: ${display(start)} to ${display(end)} (UTC)")
 		}
 		width = PosixDelta.to_microseconds(Coverage.coordinate_width(available.free)?)
@@ -46,7 +46,7 @@ Availability :: { free : Coverage, bookings : EventCollection(Str) }.{
 resolve_booking = |booking| {
 	start = FixedOffset.resolve(booking.offset, booking.start)?
 	end = FixedOffset.resolve(booking.offset, booking.end)?
-	PosixSpan.new(start, end)
+	PosixSpan.new({ start, end })
 }
 
 # This application's minute-aligned display, not a general timestamp serializer.

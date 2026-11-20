@@ -17,7 +17,7 @@ MeetingSchedule :: [].{
 		}
 	}
 	query = |meeting, series, window, limits| {
-		cursor = match ScheduleDefinition.cursor(series, meeting, window) {
+		cursor = match ScheduleDefinition.cursor({ series, definition: meeting, window }) {
 			Ok(value) => value
 			Err(error) => return Err(Window(error))
 		}

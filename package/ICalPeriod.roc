@@ -120,7 +120,7 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 			if ICalDateTime.form(start_value) != ICalDateTime.form(end) {
 				return Err(MixedForms)
 			}
-			if ICalDateTime.form(start_value) == Utc and LocalDateTime.compare_position(ICalDateTime.local_label(start_value), ICalDateTime.local_label(end)) != LT {
+			if ICalDateTime.form(start_value) == Utc and LocalDateTime.compare_position({ left: ICalDateTime.local_label(start_value), right: ICalDateTime.local_label(end) }) != Before {
 				return Err(InvalidPeriod)
 			}
 			End(end)
@@ -219,18 +219,18 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 	## Construction is O(n log n), with bounded input buffers; not a full RRULE
 	## parser or an ICS property adapter. Existing duration overrides must be
 	## supplied together as periods rather than merged from another schedule.
-	schedule : id, TimedRecurrence, TimedRecurrence.Window, ICalDuration, List(ICalPeriod), Context -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
-	schedule = |series, rule, window, duration, periods, context| {
-		prepared = prepare(rule, duration, periods, context)?
-		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
+	schedule : { series : id, rule : TimedRecurrence, window : TimedRecurrence.Window, duration : ICalDuration, periods : List(ICalPeriod), context : Context } -> Try(TimedSchedule(id), [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
+	schedule = |{ series, rule, window, duration, periods, context }| {
+		prepared = prepare(rule, { duration, periods, context })?
+		TimedSchedule.from_prepared({ series, rule: prepared.rule, window, endings: prepared.endings, context: prepared.context })
 	}
 
 	## Advanced preparation without a query window or occurrence enumeration.
 	## Returns checked TimedSchedule.Endings for reuse with from_prepared.
 	## The calling wrapper retains original PERIOD declarations for export;
 	## this execution record alone is not a standard storage representation.
-	prepare : TimedRecurrence, ICalDuration, List(ICalPeriod), Context -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
-	prepare = |rule, duration, periods, context| {
+	prepare : TimedRecurrence, { duration : ICalDuration, periods : List(ICalPeriod), context : Context } -> Try({ rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }, [TooManyPeriods, IncompatibleContext, TooManySelectors, InvalidDuration, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
+	prepare = |rule, { duration, periods, context }| {
 		if periods.len() > 4096 {
 			return Err(TooManyPeriods)
 		}
@@ -275,11 +275,11 @@ ICalPeriod :: { start : ICalDateTime, ending : Ending }.{
 # Constant valid constructors; no ambient rules or clock. The maximum I64
 # boundary is an exclusive validity end, never a generated starting label.
 utc_rules = |lower, upper| {
-	validity = match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
+	validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(lower), end: PosixBoundary.from_microseconds(upper) }) {
 		Ok(value) => value
 		Err(_) => crash "ordered fixed UTC bounds"
 	}
-	match ZoneRules.new_bounded("UTC", "posix-fixed-v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) {
+	match ZoneRules.new_bounded({ name: "UTC", version: "posix-fixed-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "valid fixed UTC definition"
 	}
@@ -303,10 +303,10 @@ test_period_span = |text, context, steps| {
 		Err(error) => return Err(Parse(error))
 	}
 	source = ICalDateTime.source(ICalPeriod.start(period))
-	end_date = Calendar.Arithmetic.shift_day(source.date, Calendar.Delta.days(1), Reject)?
-	window = { start: ICalDateTime.local_label(ICalPeriod.start(period)), end: LocalDateTime.new(Calendar.Date.from_gregorian(end_date), source.clock) }
+	end_date = Calendar.Arithmetic.shift_day(source.date, { delta: Calendar.Delta.days(1), policy: Reject })?
+	window = { start: ICalDateTime.local_label(ICalPeriod.start(period)), end: LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock: source.clock }) }
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	var $cursor = ICalPeriod.schedule(42.U64, rule, window, test_duration("PT1H"), [period, period], context)?
+	var $cursor = ICalPeriod.schedule({ series: 42.U64, rule, window, duration: test_duration("PT1H"), periods: [period, period], context })?
 	var $spans = []
 	var $calls = 0.U64
 	while $calls < 100 {
@@ -356,20 +356,20 @@ test_new_york = |spring| {
 	} else {
 		"20071104T060000Z"
 	}
-	validity = PosixSpan.new(ICalDateTime.utc_boundary(test_timestamp(lower))?, ICalDateTime.utc_boundary(test_timestamp(upper))?)?
+	validity = PosixSpan.new({ start: ICalDateTime.utc_boundary(test_timestamp(lower))?, end: ICalDateTime.utc_boundary(test_timestamp(upper))? })?
 	at = ICalDateTime.utc_boundary(test_timestamp(transition))?
-	ZoneRules.new_bounded(
-		"RFC5545/New_York",
-		"2007-examples",
+	ZoneRules.new_bounded({
+		name: "RFC5545/New_York",
+		version: "2007-examples",
 		validity,
-		FixedOffset.from_seconds(
+		initial: FixedOffset.from_seconds(
 			if spring {
 				-18000
 			} else {
 				-14400
 			},
 		),
-		[
+		transitions: [
 			{
 				at,
 				offset: FixedOffset.from_seconds(
@@ -381,8 +381,8 @@ test_new_york = |spring| {
 				),
 			},
 		],
-		{ minimum: -18000, maximum: -14400 },
-	)
+		bounds: { minimum: -18000, maximum: -14400 },
+	})
 }
 
 # RFC 5545 section 3.3.5 supplies the 2007 New York gap and fold meanings.
@@ -433,7 +433,7 @@ expect {
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	window = { start: ICalDateTime.local_label(ICalPeriod.start(first)), end: ICalDateTime.local_label(test_timestamp("20070312T000000")) }
 	default_duration = test_duration("PT1H")
-	cursor = ICalPeriod.schedule({}, rule, window, default_duration, [first, second], Local(rules))?
+	cursor = ICalPeriod.schedule({ series: {}, rule, window, duration: default_duration, periods: [first, second], context: Local(rules) })?
 	result = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 2 }, max_occurrences: 3 })?
 	a = result.occurrences.get(0)?
 	b = result.occurrences.get(1)?
@@ -442,7 +442,7 @@ expect {
 	valid = result.occurrences.len() == 2 and PosixSpan.start(span_a) == PosixSpan.start(span_b) and TimedOccurrence.id(a).source != TimedOccurrence.id(b).source and PosixSpan.coordinate_width(span_a) == Ok(PosixDelta.from_microseconds(3600000000)) and PosixSpan.coordinate_width(span_b) == Ok(PosixDelta.from_microseconds(7200000000))
 	# Excluding the original gap label must not exclude the other source.
 	excluded = TimedRecurrence.with_exclusions(rule, [ICalDateTime.local_label(ICalPeriod.start(first))])?
-	only_second = ICalPeriod.schedule({}, excluded, window, default_duration, [first, second], Local(rules))?
+	only_second = ICalPeriod.schedule({ series: {}, rule: excluded, window, duration: default_duration, periods: [first, second], context: Local(rules) })?
 	remaining = TimedSchedule.collect(only_second, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 2 }, max_occurrences: 3 })?
 	valid and remaining.occurrences.len() == 1 and TimedOccurrence.id(remaining.occurrences.get(0)?).source == TimedOccurrence.id(b).source
 }
@@ -453,11 +453,11 @@ expect {
 	source = ICalDateTime.source(ICalPeriod.start(first))
 	rule = TimedRecurrence.new(source, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	window = { start: ICalDateTime.local_label(ICalPeriod.start(first)), end: ICalDateTime.local_label(test_timestamp("19970102T180000Z")) }
-	conflict = match ICalPeriod.schedule({}, rule, window, test_duration("PT1H"), [first, conflicting], Utc) {
+	conflict = match ICalPeriod.schedule({ series: {}, rule, window, duration: test_duration("PT1H"), periods: [first, conflicting], context: Utc }) {
 		Err(ConflictingEnding(_)) => Bool.True
 		_ => Bool.False
 	}
-	large = match ICalPeriod.schedule({}, rule, window, test_duration("PT1H"), List.repeat(first, 4097), Utc) {
+	large = match ICalPeriod.schedule({ series: {}, rule, window, duration: test_duration("PT1H"), periods: List.repeat(first, 4097), context: Utc }) {
 		Err(TooManyPeriods) => Bool.True
 		_ => Bool.False
 	}

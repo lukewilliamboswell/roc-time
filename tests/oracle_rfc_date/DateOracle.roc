@@ -135,7 +135,7 @@ observe_timed = |input| {
 		Err(error) => crash "Timed oracle rule rejected: ${Str.inspect(error)}"
 	}
 	window = { start: midnight_label(at(input, 4)), end: midnight_label(at(input, 5)) }
-	var $cursor = match ICalTimedRule.schedule({}, parsed, window, Utc) {
+	var $cursor = match ICalTimedRule.schedule({ series: {}, rule: parsed, window, context: Utc }) {
 		Ok(value) => value
 		Err(_) => crash "Timed oracle window rejected"
 	}

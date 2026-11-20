@@ -12,8 +12,8 @@ import time.TimedRecurrence
 ## Fixed synthetic interpretation context and bounded scheduling helpers.
 ScheduleFixture :: [].{
 	rules = |offset| {
-		validity = PosixSpan.from_seconds(-2000000, 2000000, RejectSubmicrosecond)?
-		ZoneRules.new_bounded("Synthetic/Meeting", "fixture-v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(offset) }], { minimum: 0, maximum: 3600 })
+		validity = PosixSpan.from_seconds({ start: -2000000, end: 2000000, rounding: RejectSubmicrosecond })?
+		ZoneRules.new_bounded({ name: "Synthetic/Meeting", version: "fixture-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(offset) }], bounds: { minimum: 0, maximum: 3600 } })
 	}
 	meeting = |zone| {
 		imported = import_parts({ start: "19691225T090000", rule: "FREQ=WEEKLY;COUNT=4", duration: "PT1H", mode: Zoned, inclusions: [], exclusions: [], periods: [] })?
@@ -32,7 +32,7 @@ ScheduleFixture :: [].{
 	}
 	collect = |record, start, end| {
 		window = { start: local(start)?, end: local(end)? }
-		cursor = ScheduleDefinition.cursor(record.series_id, record.definition, window)?
+		cursor = ScheduleDefinition.cursor({ series: record.series_id, definition: record.definition, window })?
 		match TimedSchedule.collect(cursor, { work: { max_steps: 1000, max_buffered: 32, max_zone_segments: 100, max_zone_candidates: 2 }, max_occurrences: 10 }) {
 			Ok(value) => Ok(value)
 			Err(error) => Err(Evaluation(error))

@@ -12,7 +12,7 @@ main! = |_args| {
 	date = Calendar.Date.from_fields(Gregorian, { year: 2026, month: 6, day: 15 })?
 	local = |hour, minute| {
 		clock = ClockTime.from_fields({ hour, minute, second: 0, microsecond: 0 })?
-		Ok(LocalDateTime.new(date, clock))
+		Ok(LocalDateTime.new({ date, clock }))
 	}
 	utc = FixedOffset.from_seconds(0)
 	# The first booking supplies +02:00 explicitly; no city rules are inferred.

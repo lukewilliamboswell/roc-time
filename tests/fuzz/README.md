@@ -6,10 +6,10 @@ Its independent model, deterministic corpus, seed provenance and resource scopes
 are described in [the local recurrence evidence](../local_recurrence/README.md).
 
 The test roots `tests/core_suite/main.roc`, `tests/civil_suite/main.roc` and
-`tests/interpretation_suite/main.roc` combine fifteen properties using
+`tests/interpretation_suite/main.roc` combine seventeen properties using
 [roc-fuzz 0.7.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
-Core groups precision, spans, coverage and events; civil groups Gregorian,
-arithmetic, calendars, clock, nano clock and offsets; interpretation groups
+Core groups precision, spans, coverage, events and nano POSIX; civil groups Gregorian,
+arithmetic, calendars, clock, nano clock, offsets and nano local; interpretation groups
 zones, patterns, recurrence, descriptions and interchange. The runner builds each selected suite
 once and uses `--target=NAME` for each member's examples, replay and search.
 Property packages keep their pure generators and checks beside reusable
@@ -48,6 +48,8 @@ decoders, and the named-case replay checks validate that contract.
 | `descriptions-v1` | R02/R07/R13–R14: full-day decimal grids at all six fractional resolutions, hour/minute/second/day widths and midnight carries; independently constructed two-segment gap/fold preimages, zero-work stops and resumptions; qualification set preservation under reordering/sharing, omitted-component and duplicate-scope errors, and no inferred certain coverage from qualifiers. Finite alternative truth is compared with direct cell enumeration, including singleton/duplicate models, endpoint adjacency and resumptions. Paired and independent interval models are checked by explicit enumeration of valid pairs over up to six boundary values, including I64 extremes, every membership breakpoint and inconsistent/empty evidence. |
 | `clock-v1` | R01/R07/R08: numeric positions from -1 through 86400000000; explicit range errors, field reconstruction, microsecond adjacency and ordering. An exhaustive field-counter oracle independently checks all 86,400 seconds at three fractional positions. |
 | `nano-clock-v1` | R01/R02/R14: nanosecond positions from -1 through 86400000000000, each with its whole-microsecond floor and the rounding tie above it; explicit range errors, field reconstruction, nanosecond adjacency and ordering. Shortest and nine-digit text come from an independent digit model, and a tenth digit must fail. Each `to_clock` policy and `split_microseconds` are compared with integer quotient and remainder by 1000, including the 24:00 range error. Unit tests add an exhaustive field counter for all 86,400 seconds. |
+| `nano-posix-v1` | R01/R02/R08: signed I64 nanosecond positions and displacements, checked shifts and differences against widened integer arithmetic, and signed rounding against adjacent microsecond lattice points. |
+| `nano-local-v1` | R01/R02/R14: signed I64 naive Gregorian counts checked against independent half-open day cells, negative epoch decomposition and exact export. |
 | `offsets-v1` | R01/R07/R08: full I64 POSIX coordinates with limit bias and full I32 offsets; both calendar projections, exact round trips, explicit offset sign and final range errors; immutable rule lookup against an independent step-function model, including excluded validity endpoints. RFC 3339 section 4.2 supplies a separate sign-convention fixture. |
 | `events-v1` | R10: up to twelve spans with source-order U64 identities, bounded numeric starts/widths; independent cell membership verifies contributor partitions, coverage projection and disconnected clipping, with duplicate-ID rejection and retained/shared source entries. |
 | `patterns-v1` | R11 candidate layer: full Gregorian years with limit/year-zero bias, monthly intervals 1–3 and period indices 0–6; month-field walking verifies period bounds, and an independently enumerated 400-year weekday cycle checks signed month-day/weekday-position intersections. Zero selectors and out-of-range exclusive ends must fail explicitly. Fixed/source oracle cases cover the other date-selector combinations. |
@@ -256,3 +258,10 @@ Fuzz builds use `--opt=speed`: `nightly-2026-10-28-bad769b` rejects
 backend (`speed` or `size`). The bounded PR workload is smoke evidence, not a
 performance measurement. Ordinary executable checks still use development
 builds, with optimized variants retained where backend behavior is tested.
+
+
+The recurrence target also applies a last-supported-year date model and a
+two-segment zone fixture that varies an explicit start before a gap. The
+interchange target varies years, dates, and fractions across committed endpoint
+and annotation delimiters. These properties check independently expected
+results and errors even when the added suffix is incomplete.

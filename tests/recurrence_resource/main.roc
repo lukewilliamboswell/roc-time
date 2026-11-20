@@ -60,13 +60,15 @@ main! = |args| {
 	Host.assert!(count == 1 and consumed - constructed <= ceiling)
 	folded = match DateRecurrence.Cursor.fold(
 		cursor,
-		{ max_steps: 8, max_buffered: 1, max_occurrences: 1 },
-		0.U64,
-		|n, date| {
-			if date != anchor {
-				crash "incorrect stopped date"
-			}
-			Stop(n + 1)
+		{
+			limits: { max_steps: 8, max_buffered: 1, max_occurrences: 1 },
+			initial: 0.U64,
+			visit: |n, date| {
+				if date != anchor {
+					crash "incorrect stopped date"
+				}
+				Stop(n + 1)
+			},
 		},
 	) {
 		Ok(value) => value
@@ -135,7 +137,7 @@ main! = |args| {
 	Host.assert!(zero_count == 1 and zero_after - zero_before <= ceiling)
 	rules = fixture_rules(2000000000000000)
 	composition_before = Host.allocated_bytes!({})
-	composed = match AllDayRecurrence.new("service", rule, { start: anchor, end }, 1, rules) {
+	composed = match AllDayRecurrence.new({ series: "service", rule, window: { start: anchor, end }, days: 1, rules }) {
 		Ok(value) => value
 		Err(_) => crash "composed cursor"
 	}
@@ -230,10 +232,10 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "timed resource rule"
 	}
-	timed_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_anchor)
-	timed_end = LocalDateTime.new(Calendar.Date.from_gregorian(end), clock_anchor)
+	timed_start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_anchor })
+	timed_end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end), clock: clock_anchor })
 	timed_before = Host.allocated_bytes!({})
-	timed_cursor = match TimedRecurrence.cursor(timed_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	timed_cursor = match TimedRecurrence.cursor(timed_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "timed resource cursor"
 	}
@@ -303,7 +305,7 @@ main! = |args| {
 		Err(_) => crash "subdaily resource rule"
 	}
 	subdaily_before = Host.allocated_bytes!({})
-	subdaily_cursor = match TimedRecurrence.cursor(subdaily_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	subdaily_cursor = match TimedRecurrence.cursor(subdaily_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily resource cursor"
 	}
@@ -322,7 +324,7 @@ main! = |args| {
 		Err(_) => crash "cutoff resource rule"
 	}
 	cutoff_before = Host.allocated_bytes!({})
-	cutoff_cursor = match TimedRecurrence.cursor(cutoff_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	cutoff_cursor = match TimedRecurrence.cursor(cutoff_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "cutoff resource cursor"
 	}
@@ -345,7 +347,7 @@ main! = |args| {
 		16.I64
 	}
 	while $exclusion_index <= exclusion_count {
-		$exclusions = $exclusions.append(LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture($exclusion_index * 1000000)))
+		$exclusions = $exclusions.append(LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_fixture($exclusion_index * 1000000) }))
 		$exclusion_index = $exclusion_index + 1
 	}
 	exclusion_rule = match TimedRecurrence.with_exclusions(timed_rule, $exclusions) {
@@ -353,7 +355,7 @@ main! = |args| {
 		Err(_) => crash "resource exclusion set"
 	}
 	exclusion_before = Host.allocated_bytes!({})
-	exclusion_cursor = match TimedRecurrence.cursor(exclusion_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	exclusion_cursor = match TimedRecurrence.cursor(exclusion_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "resource exclusion cursor"
 	}
@@ -372,7 +374,7 @@ main! = |args| {
 		_ => crash "duration start"
 	}
 	fixed_before = Host.allocated_bytes!({})
-	fixed_cursor = match TimedOccurrence.cursor(1.U64, saved_start, Coordinate(time_delta(3600000000))) {
+	fixed_cursor = match TimedOccurrence.cursor({ id: 1.U64, start: saved_start, duration: Coordinate(time_delta(3600000000)) }) {
 		Ok(value) => value
 		Err(_) => crash "fixed duration"
 	}
@@ -393,7 +395,7 @@ main! = |args| {
 	duration_rules = classification_rules(duration_transitions, 200000000000)
 	duration_source = duration_start(duration_rules, local)
 	duration_before = Host.allocated_bytes!({})
-	duration_cursor = match TimedOccurrence.cursor(2.U64, duration_source, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap })) {
+	duration_cursor = match TimedOccurrence.cursor({ id: 2.U64, start: duration_source, duration: Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }) }) {
 		Ok(value) => value
 		Err(_) => crash "calendar duration cursor"
 	}
@@ -411,7 +413,7 @@ main! = |args| {
 	# outside the measurement. The resolved form needs no classification.
 	explicit_label = classification_label(86400500000)
 	explicit_before = Host.allocated_bytes!({})
-	explicit_cursor = match TimedOccurrence.cursor_with_ending(3.U64, duration_source, AtLocal({ source: explicit_label, occurrence: First, gap: RejectGap })) {
+	explicit_cursor = match TimedOccurrence.cursor_with_ending({ id: 3.U64, start: duration_source, ending: AtLocal({ source: explicit_label, occurrence: First, gap: RejectGap }) }) {
 		Ok(value) => value
 		Err(_) => crash "explicit end cursor"
 	}
@@ -426,7 +428,7 @@ main! = |args| {
 		Complete(_) => Host.assert!(False)
 	}
 	resolved_before = Host.allocated_bytes!({})
-	resolved_cursor = match TimedOccurrence.cursor_with_ending(4.U64, saved_start, AtBoundary(PosixBoundary.from_microseconds(I64.highest))) {
+	resolved_cursor = match TimedOccurrence.cursor_with_ending({ id: 4.U64, start: saved_start, ending: AtBoundary(PosixBoundary.from_microseconds(I64.highest)) }) {
 		Ok(value) => value
 		Err(_) => crash "resolved end cursor"
 	}
@@ -443,7 +445,7 @@ main! = |args| {
 	# Consume only one composed appointment from the full clock/day product.
 	# One zone segment resolves its start; a second resolves the calendar end.
 	schedule_before = Host.allocated_bytes!({})
-	schedule = match TimedSchedule.new(42.U64, timed_rule, { start: timed_start, end: timed_end }, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	schedule = match TimedSchedule.new({ series: 42.U64, rule: timed_rule, window: { start: timed_start, end: timed_end }, duration: Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "resource schedule"
 	}
@@ -511,7 +513,7 @@ main! = |args| {
 	Host.assert!(schedule_zero_count == 1 and schedule_zero_after - schedule_zero_before <= ceiling * 2)
 
 	# Normalize the explicit input outside the measured merge. The earliest
-	# inclusion precedes DTSTART and needs interpretation beside a held start.
+	# inclusion precedes DTSTART and only its own interpretation is needed.
 	var $included_starts = []
 	var $included_index = 0.I64
 	while $included_index < exclusion_count {
@@ -526,9 +528,9 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "inclusion normalization"
 	}
-	inclusion_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture(0))
+	inclusion_start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_fixture(0) })
 	inclusion_before = Host.allocated_bytes!({})
-	inclusion_cursor = match TimedRecurrence.cursor(inclusion_rule, { start: inclusion_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	inclusion_cursor = match TimedRecurrence.cursor(inclusion_rule, { window: { start: inclusion_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "inclusion cursor"
 	}
@@ -541,17 +543,17 @@ main! = |args| {
 		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == inclusion_start)
 		_ => Host.assert!(False)
 	}
-	Host.assert!(inclusion_first.steps <= 8 and inclusion_first.zone_segments == 2 and inclusion_after - inclusion_before <= ceiling)
+	Host.assert!(inclusion_first.steps <= 8 and inclusion_first.zone_segments == 1 and inclusion_after - inclusion_before <= ceiling)
 
 	# Duration definitions are normalized outside consumption. Lookup must
 	# not scan or copy the whole 16/4096-entry table for each emitted start.
-	var $overrides = [{ source: timed_start, duration: Coordinate(time_delta(7200000000)) }]
+	var $overrides = [{ source: timed_start, ending: After(Coordinate(time_delta(7200000000))) }]
 	var $override_index = 1.I64
 	while $override_index < exclusion_count {
-		$overrides = $overrides.append({ source: LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture($override_index * 1000000)), duration: Coordinate(time_delta(7200000000)) })
+		$overrides = $overrides.append({ source: LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_fixture($override_index * 1000000) }), ending: After(Coordinate(time_delta(7200000000))) })
 		$override_index = $override_index + 1
 	}
-	overridden = match TimedSchedule.new_with_overrides(42.U64, timed_rule, { start: timed_start, end: timed_end }, Coordinate(time_delta(3600000000)), $overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	overridden = match TimedSchedule.new({ series: 42.U64, rule: timed_rule, window: { start: timed_start, end: timed_end }, duration: Coordinate(time_delta(3600000000)), overrides: $overrides, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "override normalization"
 	}
@@ -596,7 +598,7 @@ main! = |args| {
 		$description_transitions = $description_transitions.append({ at: PosixBoundary.from_microseconds(description_start + $description_index * 1000000), offset: FixedOffset.from_seconds(0) })
 		$description_index = $description_index + 1
 	}
-	description_rules = match ZoneRules.new_bounded("Synthetic/YearSelection", "v1", description_span(description_start - 86400000000, description_end + 86400000000), FixedOffset.from_seconds(0), $description_transitions, { minimum: 0, maximum: 0 }) {
+	description_rules = match ZoneRules.new_bounded({ name: "Synthetic/YearSelection", version: "v1", validity: description_span(description_start - 86400000000, description_end + 86400000000), initial: FixedOffset.from_seconds(0), transitions: $description_transitions, bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "Description fixture rules"
 	}
@@ -640,7 +642,7 @@ main! = |args| {
 		Err(_) => crash "Evidence model"
 	}
 	evidence_before = Host.allocated_bytes!({})
-	evidence_query = match CalendarEvidence.query(evidence, description_rules, PosixBoundary.from_microseconds(description_start)) {
+	evidence_query = match CalendarEvidence.query(evidence, { rules: description_rules, point: PosixBoundary.from_microseconds(description_start) }) {
 		Ok(value) => value
 		Err(_) => crash "Evidence point query"
 	}
@@ -676,28 +678,28 @@ fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day
 }
 
 fixture_rules = |upper| {
-	validity = match PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(upper)) {
+	validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(upper) }) {
 		Ok(value) => value
 		Err(_) => crash "validity"
 	}
-	match ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) {
+	match ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "rules"
 	}
 }
 
 classification_rules = |transitions, upper| {
-	validity = match PosixSpan.new(PosixBoundary.from_microseconds(-2000000), PosixBoundary.from_microseconds(upper)) {
+	validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(-2000000), end: PosixBoundary.from_microseconds(upper) }) {
 		Ok(value) => value
 		Err(_) => crash "classification validity"
 	}
-	match ZoneRules.new_bounded("Synthetic/Long", "v1", validity, FixedOffset.from_seconds(0), transitions, { minimum: -8192, maximum: 0 }) {
+	match ZoneRules.new_bounded({ name: "Synthetic/Long", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions, bounds: { minimum: -8192, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "classification rules"
 	}
 }
 
-classification_label = |micros| match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(micros), Gregorian) {
+classification_label = |micros| match FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(micros), calendar: Gregorian }) {
 	Ok(value) => value
 	Err(_) => crash "classification label"
 }
@@ -721,7 +723,7 @@ duration_start = |rules, source| {
 		Ok(value) => value
 		Err(_) => crash "duration fixture rule"
 	}
-	cursor = match TimedRecurrence.cursor(rule, { start: source, end: classification_label(1500000) }, { rules, occurrence: First, gap: RejectGap }) {
+	cursor = match TimedRecurrence.cursor(rule, { window: { start: source, end: classification_label(1500000) }, context: { rules, occurrence: First, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "duration fixture cursor"
 	}
@@ -735,7 +737,7 @@ duration_start = |rules, source| {
 	}
 }
 
-description_span = |start, end| match PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end)) {
+description_span = |start, end| match PosixSpan.new({ start: PosixBoundary.from_microseconds(start), end: PosixBoundary.from_microseconds(end) }) {
 	Ok(value) => value
 	Err(_) => crash "Description validity span"
 }

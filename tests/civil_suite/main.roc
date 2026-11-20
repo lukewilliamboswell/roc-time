@@ -5,6 +5,7 @@ app [target] {
 	fuzz: platform "https://github.com/lukewilliamboswell/roc-fuzz/releases/download/0.7.0/HBigHQhVZWEF2EkLxpYK35u8P6UNsAmPYxpNFTxXK1Br.tar.zst",
 	gregorian: "../gregorian/package.roc",
 	nano_clock: "../nano_clock/package.roc",
+	nano_local: "../nano_local/package.roc",
 	offsets: "../offsets/package.roc",
 	time: "../../package/main.roc",
 }
@@ -17,6 +18,8 @@ import clock.ClockTarget
 import nano_clock.NanoClockTarget
 import offsets.OffsetsTarget
 
+import nano_local.NanoLocalTarget
+
 target = Fuzz.suite([
 	GregorianTarget.target,
 	ArithmeticTarget.target,
@@ -24,4 +27,5 @@ target = Fuzz.suite([
 	ClockTarget.target,
 	NanoClockTarget.target,
 	OffsetsTarget.target,
+	NanoLocalTarget.target,
 ])

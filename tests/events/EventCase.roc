@@ -28,8 +28,8 @@ EventCase := { spans : List(Spec) }.{
 			return Fuzz.reject
 		}
 		entries = input.spans.map_with_index(
-			|value, id| {
-				{ id, span: make_span(value.start.to_i64() - 8, value.start.to_i64() - 8 + value.width.to_i64()) }
+			|value, index| {
+				{ id: U64.highest - index, span: make_span(value.start.to_i64() - 8, value.start.to_i64() - 8 + value.width.to_i64()) }
 			},
 		)
 		events = match EventCollection.from_entries(entries) {
@@ -57,7 +57,7 @@ EventCase := { spans : List(Spec) }.{
 			for value in input.spans {
 				start = value.start.to_i64() - 8
 				if start <= $tick and $tick < start + value.width.to_i64() {
-					$expected = $expected.append($index)
+					$expected = $expected.append(U64.highest - $index)
 				}
 				$index = $index + 1
 			}
@@ -100,7 +100,7 @@ EventCase := { spans : List(Spec) }.{
 		}
 		match entries.get(0) {
 			Ok(first) => match EventCollection.from_entries(entries.append(first)) {
-				Err(DuplicateId(0)) => {}
+				Err(DuplicateId(id)) if id == first.id => {}
 				_ => crash "Duplicate identity accepted"
 			}
 			Err(_) => {}
@@ -111,7 +111,7 @@ EventCase := { spans : List(Spec) }.{
 
 point = |n| PosixBoundary.from_microseconds(n)
 
-make_span = |a, b| match PosixSpan.new(point(a), point(b)) {
+make_span = |a, b| match PosixSpan.new({ start: point(a), end: point(b) }) {
 	Ok(value) => value
 	Err(_) => crash "Invalid generated span"
 }

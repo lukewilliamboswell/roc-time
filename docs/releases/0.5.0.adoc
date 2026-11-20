@@ -37,9 +37,16 @@ serialization continues to emit canonical semantic text.
 sources that store a time as nanoseconds since midnight, such as an Apache
 Arrow `Time64(ns)` column. It has the same operations as `ClockTime`, with
 `nanosecond` in place of `microsecond` and up to nine fractional digits in text.
-`from_clock` widens a `ClockTime` exactly. `to_clock` narrows under a
-`PosixBoundary.Rounding` policy and returns `OutOfRange` when rounding reaches
-24:00. No existing type, signature or text profile changes.
+`from_clock` widens a `ClockTime` exactly. `to_clock` requires exact narrowing.
+`to_clock_with_rounding` takes a `MicrosecondRounding` policy and returns
+`OutOfRange` when rounding reaches 24:00.
+
+== Precision and named arguments
+
+The nanosecond companions also cover POSIX positions, POSIX coordinate
+displacements and unresolved local date-times. Exact narrowing is the default.
+Choose an explicit rounding policy when discarding precision is intended.
+Span and interval bounds, zone options and schedule inputs now use named records.
 
 == Use this release
 

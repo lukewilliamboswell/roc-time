@@ -22,12 +22,12 @@ import time.NanoClockTime
 main! = |_args| {
 	start = PosixBoundary.from_microseconds(0)
 	end = PosixBoundary.shift(start, PosixDelta.from_microseconds(1))?
-	span = PosixSpan.new(start, end)?
+	span = PosixSpan.new({ start, end })?
 	_events = EventCollection.from_entries([{ id: 0.U64, span }])?
 	_width = Coverage.coordinate_width(Coverage.from_spans([span]))?
 	date = GregorianDate.from_fields({ year: 2000, month: 1, day: 1 })?
 	pattern = CalendarPattern.new(date, CalendarPattern.defaults(Monthly))?
-	_matches = CalendarPattern.matches(pattern, 0, date)?
+	_matches = CalendarPattern.matches(pattern, { period_index: 0, date })?
 	rule = DateRecurrence.new(date, { pattern: CalendarPattern.defaults(Monthly), termination: Count(3), by_set_pos: [], inclusions: [], exclusions: [] })?
 	_exported = match ICalDateRule.to_parts(rule) {
 		Ok(value) => value
@@ -44,9 +44,9 @@ main! = |_args| {
 	lower = local("2025-01-01T00:00")?
 	upper = local("2026-01-01T00:00")?
 	declaration = ScheduleDefinition.from_ical({ rule: timed, context: Utc }) ?? crash "valid declaration fixture"
-	_timed_cursor = ScheduleDefinition.cursor(1.U64, declaration, { start: lower, end: upper })?
+	_timed_cursor = ScheduleDefinition.cursor({ series: 1.U64, definition: declaration, window: { start: lower, end: upper } })?
 	nano = NanoClockTime.from_nanoseconds_since_midnight(1)?
-	_clock = ClockTime.to_text(NanoClockTime.to_clock(nano, Floor)?)
+	_clock = ClockTime.to_text(NanoClockTime.to_clock_with_rounding(nano, Floor)?)
 	Ok({})
 }
 

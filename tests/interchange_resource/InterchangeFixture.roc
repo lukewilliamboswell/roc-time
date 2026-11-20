@@ -21,11 +21,11 @@ InterchangeFixture := [].{
 			})
 			$i = $i + 1
 		}
-		validity = match PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(2000000 + count.to_i64())) {
+		validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(2000000 + count.to_i64()) }) {
 			Ok(v) => v
 			Err(_) => crash "fixture validity"
 		}
-		match ZoneRules.new("Fixture/Many", "resource-v1", validity, FixedOffset.from_seconds(0), $transitions) {
+		match ZoneRules.new({ name: "Fixture/Many", version: "resource-v1", validity, initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
 			Ok(v) => v
 			Err(_) => crash "fixture rules"
 		}

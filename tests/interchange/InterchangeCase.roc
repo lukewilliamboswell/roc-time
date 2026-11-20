@@ -58,6 +58,7 @@ InterchangeCase := { year : U16, month : U8, day : U8, precision : U8, qualifier
 		check_timestamp(input, day, date_text)
 		check_timestamp_format_limits(input)
 		check_malformed(input, date_text)
+		check_committed_prefixes(input, date_text)
 		Fuzz.Outcome.Keep
 	}
 }
@@ -317,7 +318,7 @@ check_timestamp = |input, day, date_text| {
 	}
 	expected = (elapsed_days * 86400 + input.seconds.to_i64() - offset_seconds) * 1000000 + micros.to_i64()
 	if OffsetTimestamp.boundary(parsed) != Ok(PosixBoundary.from_microseconds(expected)) or
-		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(expected), expected_offset, input.digits) != Ok(parsed) {
+		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(expected), { offset: expected_offset, fraction_digits: input.digits }) != Ok(parsed) {
 		crash "Timestamp boundary differs from independent Gregorian day count"
 	}
 	check_exact_interval(input, date_text, parsed, expected, elapsed_days)
@@ -373,7 +374,7 @@ ascii_text = |bytes| match Str.from_utf8(bytes) {
 # ordering must never replace ordering of resolved boundaries.
 check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
 	# A whole second preserves every generated decimal precision exactly.
-	end = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(expected + 1000000), UnassertedUtc, input.digits) {
+	end = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(expected + 1000000), { offset: UnassertedUtc, fraction_digits: input.digits }) {
 		Ok(value) => value
 		Err(_) => crash "In-range generated interval end rejected"
 	}
@@ -386,10 +387,10 @@ check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
 	expected_span = model_span(expected, expected + 1000000)
 	check_exact_explanation(interval, expected_span, input.digits, timestamp, end)
 	if ExactInterval.span(interval) != expected_span or ExactInterval.to_text(interval) != source or
-		ExactInterval.parse(ExactInterval.to_text(interval)) != Ok(interval) or ExactInterval.new(timestamp, end) != Ok(interval) {
+		ExactInterval.parse(ExactInterval.to_text(interval)) != Ok(interval) or ExactInterval.new({ start: timestamp, end }) != Ok(interval) {
 		crash "Exact interval differs from independent endpoint extent"
 	}
-	converted = match ExactInterval.from_span(expected_span, UnassertedUtc, input.digits) {
+	converted = match ExactInterval.from_span(expected_span, { offset: UnassertedUtc, fraction_digits: input.digits }) {
 		Ok(value) => value
 		Err(_) => crash "Aligned exact span serialization rejected"
 	}
@@ -410,12 +411,12 @@ check_exact_interval = |input, date_text, timestamp, expected, elapsed_days| {
 		crash "Different-offset interval differs from independent hour model"
 	}
 	if ExactInterval.parse("${date_text}T09:00:00Z/${date_text}T10:00:00+02:00") != Err(ReversedBounds) or
-		ExactInterval.new(timestamp, timestamp) != Err(EmptySpan) {
+		ExactInterval.new({ start: timestamp, end: timestamp }) != Err(EmptySpan) {
 		crash "Exact interval invalid endpoint order was accepted"
 	}
 }
 
-model_span = |start, end| match PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end)) {
+model_span = |start, end| match PosixSpan.new({ start: PosixBoundary.from_microseconds(start), end: PosixBoundary.from_microseconds(end) }) {
 	Ok(value) => value
 	Err(_) => crash "Ordered independent oracle span"
 }
@@ -518,7 +519,7 @@ check_ixdtf = |input, timestamp, expected| {
 	}
 }
 
-constant_rules = |boundary, offset, version| match ZoneRules.new_bounded("Synthetic/Interchange", version, model_span(boundary - 172800000000, boundary + 172800000000), FixedOffset.from_seconds(offset), [], { minimum: offset, maximum: offset }) {
+constant_rules = |boundary, offset, version| match ZoneRules.new_bounded({ name: "Synthetic/Interchange", version, validity: model_span(boundary - 172800000000, boundary + 172800000000), initial: FixedOffset.from_seconds(offset), transitions: [], bounds: { minimum: offset, maximum: offset } }) {
 	Ok(value) => value
 	Err(_) => crash "Valid fixed synthetic interpretation context"
 }
@@ -694,7 +695,7 @@ check_snapshot = |snapshot, expected, expected_offset| {
 }
 
 check_transition_snapshot = |coordinate| {
-	timestamp = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(coordinate), UnassertedUtc, 6) {
+	timestamp = match OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(coordinate), { offset: UnassertedUtc, fraction_digits: 6 }) {
 		Ok(value) => value
 		Err(_) => crash "Bounded model UTC timestamp rejected"
 	}
@@ -707,7 +708,7 @@ check_transition_snapshot = |coordinate| {
 	validity = model_span(coordinate - 1, coordinate + 4)
 	var $snapshots = []
 	for later_offset in [1.I32, 2] {
-		rules = match ZoneRules.new_bounded("Synthetic/Context", "same-version", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], { minimum: 0, maximum: 2 }) {
+		rules = match ZoneRules.new_bounded({ name: "Synthetic/Context", version: "same-version", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], bounds: { minimum: 0, maximum: 2 } }) {
 			Ok(value) => value
 			Err(_) => crash "Microsecond synthetic transition fixture rejected"
 		}
@@ -754,7 +755,7 @@ check_civil_snapshot = |origin| {
 	upper = civil_fixture_label(origin + 750000, Julian)
 	expected = Coverage.from_spans([model_span(origin - 1500000, origin - 1250000), model_span(origin + 500000, origin + 750000)])
 	for choice in [{ policy: First, position: origin - 1500000, offset: 2.I32 }, { policy: Last, position: origin + 500000, offset: 0.I32 }, { policy: MatchingOffset(FixedOffset.from_seconds(2)), position: origin - 1500000, offset: 2.I32 }, { policy: MatchingOffset(FixedOffset.from_seconds(0)), position: origin + 500000, offset: 0.I32 }] {
-		snapshot = match ResolvedBoundary.resolve(fold, lower, choice.policy) {
+		snapshot = match ResolvedBoundary.resolve(fold, { local: lower, occurrence: choice.policy }) {
 			Ok(found) => found
 			Err(_) => crash "Independent fold occurrence fixture rejected"
 		}
@@ -772,12 +773,12 @@ check_civil_snapshot = |origin| {
 		check_civil_context(source, 1, fold)
 		check_declaration_limits(source, 1)
 	}
-	match ResolvedBoundary.resolve(gap, lower, First) {
+	match ResolvedBoundary.resolve(gap, { local: lower, occurrence: First }) {
 		Err(Gap) => {}
 		_ => crash "Gap occurrence invented a resolved boundary"
 	}
 	for fixture in [{ rules: fold, extent: expected }, { rules: gap, extent: Coverage.empty }] {
-		snapshot = match ResolvedSelection.resolve(fixture.rules, lower, upper) {
+		snapshot = match ResolvedSelection.resolve(fixture.rules, { start: lower, end: upper }) {
 			Ok(found) => found
 			Err(_) => crash "Independent civil selection fixture rejected"
 		}
@@ -796,12 +797,12 @@ check_civil_snapshot = |origin| {
 	}
 }
 
-civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded("Synthetic/CivilModel", "v1", model_span(origin - 4000000, origin + 4000000), FixedOffset.from_seconds(initial), [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 }) {
+civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded({ name: "Synthetic/CivilModel", version: "v1", validity: model_span(origin - 4000000, origin + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
 	Ok(found) => found
 	Err(_) => crash "Valid two-segment civil fixture rules"
 }
 
-civil_fixture_label = |coordinate, calendar| match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(coordinate), calendar) {
+civil_fixture_label = |coordinate, calendar| match FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(coordinate), calendar }) {
 	Ok(found) => found
 	Err(_) => crash "Bounded civil fixture label"
 }
@@ -828,7 +829,7 @@ check_civil_explanation = |snapshot, lower, upper, rules, members| {
 	}
 	check_declaration_limits(coverage_source, 1)
 	check_declaration_limits(source, 1)
-	cursor = match ZoneRules.selection_cursor(rules, lower, upper) {
+	cursor = match ZoneRules.selection_cursor(rules, { start: lower, end: upper }) {
 		Ok(value) => value
 		Err(_) => crash "Bounded selection cursor fixture rejected"
 	}
@@ -987,7 +988,7 @@ check_edtf_interval = |input, _day, date_text| {
 		end_date = EdtfDate.parse(end_text) ?? crash "Generated valid end rejected"
 		parts = CalendarInterval.endpoints(EdtfInterval.description(value))
 		if parts != { start: Known(EdtfDate.description(start_date)), end: Known(EdtfDate.description(end_date)) } or
-			EdtfInterval.new(parts.start, parts.end) != Ok(value) or
+			EdtfInterval.new({ start: parts.start, end: parts.end }) != Ok(value) or
 				EdtfInterval.parse(EdtfInterval.to_text(value)) != Ok(value) {
 			crash "EDTF interval lost independently generated endpoint declarations"
 		}
@@ -1028,5 +1029,43 @@ expect {
 	} == {
 		boundary_is_tested: Bool.True,
 		outside_is_rejected: Bool.True,
+	}
+}
+
+# R14: generated calendar years, dates and fractions exercise the boundary
+# between a recoverable suffix and an earlier component that has been closed.
+check_committed_prefixes : InterchangeCase, Str -> {}
+check_committed_prefixes = |input, day| {
+	malformed_month = "${input.year.to_str()}-2"
+	local = "${day}T00:00:00"
+	stamp = "${local}Z"
+	seven_digits = "${local}.${pad(input.fraction.to_u64(), 6)}1"
+	if OffsetTimestamp.parse(malformed_month) != Err(InvalidDate) or
+		OffsetTimestamp.parse("${seven_digits}+") != Err(UnsupportedPrecision) or
+			ExactInterval.parse("${local}/${stamp}") != Err(Start(Malformed)) or
+				Ixdtf.parse("${local}[UTC]") != Err(Base(Malformed)) or
+					Ixdtf.parse("${stamp}[UTC][label==") != Err(Malformed) or
+						Ixdtf.parse("${stamp}[UTC][label=value-") != Err(Incomplete) {
+		crash "Delimiter or suffix completion changed a committed prefix diagnosis"
+	}
+	# Fifteen 260-byte elective annotations leave room for a final tag.
+	# Reserve one byte for its closing bracket and vary the value spelling.
+	token = if (input.fraction % 2 == 0) "a" else "7"
+	closed = "[x=${token.repeat(256)}]"
+	prefix = "${stamp}${closed.repeat(15)}[x="
+	value = token.repeat(4095 - prefix.count_utf8_bytes())
+	fits = "${prefix}${value}"
+	needs_value_byte = "${prefix}${token.repeat(4094 - prefix.count_utf8_bytes())}-"
+	if Ixdtf.parse(fits) != Err(Incomplete) or
+		Ixdtf.parse("${fits}${token}") != Err(TooLarge) or
+			Ixdtf.parse(needs_value_byte) != Err(TooLarge) {
+		crash "Annotation completion must fit the remaining byte budget"
+	}
+	match Ixdtf.parse("${fits}]") {
+		Ok(_) => {}
+		Err(_) => crash "A complete annotation may end at the byte limit"
+	}
+	if Ixdtf.parse("${stamp}[UTC][x=ab][x=ac][!x=a") != Err(Malformed) {
+		crash "An unknown critical tag has no valid completion"
 	}
 }

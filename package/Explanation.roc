@@ -497,7 +497,7 @@ expect {
 }
 expect {
 	date = Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
-	value = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 120, digits: 3 })?
+	value = Calendar.Value.fractional_second(date, { clock: { hour: 12, minute: 30, second: 0 }, fraction: { value: 120, digits: 3 } })?
 	report = Explanation.plain(Explanation.new(CalendarValue(value)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.status == Complete and report.text.contains("fraction .120 (3 supplied digits)")
 }

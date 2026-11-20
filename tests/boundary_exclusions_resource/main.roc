@@ -19,7 +19,7 @@ main! = |args| {
 	anchor = BoundaryFixture.label(0)
 	date = Calendar.Date.as_gregorian(LocalDateTime.date(anchor)) ?? crash "anchor date"
 	end_date = GregorianDate.from_fields({ year: horizon, month: 1, day: 1 }) ?? crash "horizon date"
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), LocalDateTime.clock(anchor))
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock: LocalDateTime.clock(anchor) })
 	rules = BoundaryFixture.rules({})
 	base = TimedRecurrence.new({ date, clock: LocalDateTime.clock(anchor) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Forever, by_set_pos: [] }) ?? crash "base recurrence"
 	before_input = Host.allocated_bytes!({})
@@ -43,7 +43,7 @@ main! = |args| {
 	after_access = Host.allocated_bytes!({})
 	Host.assert!(after_access == after_construct and definition.boundary_exclusions.len() == count)
 	before_cursor = Host.allocated_bytes!({})
-	cursor = TimedRecurrence.cursor(rule, { start: anchor, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) ?? crash "boundary cursor"
+	cursor = TimedRecurrence.cursor(rule, { window: { start: anchor, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) ?? crash "boundary cursor"
 	after_cursor = Host.allocated_bytes!({})
 	first = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "boundary prefix"
 	after_first = Host.allocated_bytes!({})

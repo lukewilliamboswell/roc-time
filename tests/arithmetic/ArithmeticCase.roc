@@ -59,7 +59,7 @@ ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64,
 		}
 		for policy in [Reject, Clamp, Carry] {
 			expected = model(fields, input.years, input.months, input.days, policy)
-			actual = match Calendar.Arithmetic.shift_day(date, Calendar.Delta.from_components({ years: input.years, months: input.months, days: input.days }), policy) {
+			actual = match Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.from_components({ years: input.years, months: input.months, days: input.days }), policy }) {
 				Ok(value) => Ok(GregorianDate.to_fields(value))
 				Err(error) => Err(error)
 			}
@@ -68,9 +68,9 @@ ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64,
 			}
 		}
 		# Deliberate full-width components must fail, never wrap into a valid year.
-		if Calendar.Arithmetic.shift_day(date, Calendar.Delta.months(I64.lowest), Carry) != Err(OutOfRange) or
-			Calendar.Arithmetic.shift_day(date, Calendar.Delta.years(I64.highest), Clamp) != Err(OutOfRange) or
-				Calendar.Arithmetic.shift_day(date, Calendar.Delta.days(I64.highest), Reject) != Err(OutOfRange) {
+		if Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.months(I64.lowest), policy: Carry }) != Err(OutOfRange) or
+			Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.years(I64.highest), policy: Clamp }) != Err(OutOfRange) or
+				Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.days(I64.highest), policy: Reject }) != Err(OutOfRange) {
 			crash "R05 unbounded component wrapped or accepted"
 		}
 		Fuzz.keep

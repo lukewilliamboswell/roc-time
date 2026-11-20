@@ -53,7 +53,7 @@ ZoneOracle :: [].{
 			zone = List.get($rules, case.zone)?
 			date = Calendar.Date.from_fields(Gregorian, case.date)?
 			clock = ClockTime.from_fields(case.clock)?
-			result = ZoneRules.resolve(zone, LocalDateTime.new(date, clock))?
+			result = ZoneRules.resolve(zone, LocalDateTime.new({ date, clock }))?
 			actual = match result {
 				Gap => []
 				Unique(boundary) => [PosixBoundary.to_microseconds(boundary)]
@@ -107,7 +107,7 @@ ZoneOracle :: [].{
 		rules = rules_for(fixture)?
 		date = Calendar.Date.from_fields(Gregorian, { year, month, day })?
 		clock = ClockTime.from_fields({ hour, minute, second, microsecond })?
-		resolution = ZoneRules.resolve(rules, LocalDateTime.new(date, clock))?
+		resolution = ZoneRules.resolve(rules, LocalDateTime.new({ date, clock }))?
 		Ok(
 			match resolution {
 				Gap => []

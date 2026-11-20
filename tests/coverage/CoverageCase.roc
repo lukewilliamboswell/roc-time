@@ -61,13 +61,13 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		for retained in [a, from_slice] {
 			if Coverage.union(Coverage.empty, retained) != retained or
 				Coverage.union(retained, Coverage.empty) != retained or
-					Coverage.difference(retained, Coverage.empty) != retained {
+					Coverage.difference({ base: retained, subtract: Coverage.empty }) != retained {
 				return Ok(Bool.False)
 			}
 		}
 		union = Coverage.union(a, b)
 		intersection = Coverage.intersection(a, b)
-		difference = Coverage.difference(a, b)
+		difference = Coverage.difference({ base: a, subtract: b })
 		complement = Coverage.complement_within(a, window)
 		if Coverage.union(b, a) != union or Coverage.intersection(b, a) != intersection {
 			return Ok(Bool.False)
@@ -133,7 +133,7 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 	}
 }
 
-make_span = |s| PosixSpan.new(PosixBoundary.from_microseconds(s.lo), PosixBoundary.from_microseconds(s.lo + U8.to_i64(s.width)))
+make_span = |s| PosixSpan.new({ start: PosixBoundary.from_microseconds(s.lo), end: PosixBoundary.from_microseconds(s.lo + U8.to_i64(s.width)) })
 
 make_spans = |specs| {
 	var $spans = []

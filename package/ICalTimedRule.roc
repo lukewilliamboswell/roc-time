@@ -107,7 +107,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 				if value.mode == Floating {
 					return Err(Incompatible("floating DTSTART requires local UNTIL"))
 				}
-				local = match FixedOffset.project(FixedOffset.from_seconds(0), boundary, Gregorian) {
+				local = match FixedOffset.project(FixedOffset.from_seconds(0), { boundary, calendar: Gregorian }) {
 					Ok(label) => label
 					Err(_) => return Err(OutOfRange("UNTIL"))
 				}
@@ -131,7 +131,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 			return Err(Unsupported("boundary exclusions require zoned DTSTART"))
 		}
 		for boundary in data.boundary_exclusions {
-			local = match FixedOffset.project(FixedOffset.from_seconds(0), boundary, Gregorian) {
+			local = match FixedOffset.project(FixedOffset.from_seconds(0), { boundary, calendar: Gregorian }) {
 				Ok(label) => label
 				Err(_) => return Err(OutOfRange("EXDATE"))
 			}
@@ -258,10 +258,10 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 	## application for this evaluation; no timezone is inferred. Rules remain
 	## immutable in the native cursor. Start/end selection follows RFC first-fold
 	## and before-gap policies, and all native schedule budgets remain available.
-	schedule : id, ICalTimedRule, TimedRecurrence.Window, ICalPeriod.Context -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
-	schedule = |series, value, window, context| {
+	schedule : { series : id, rule : ICalTimedRule, window : TimedRecurrence.Window, context : ICalPeriod.Context } -> Try(TimedSchedule(id), [IncompatibleContext, TooManyPeriods, TooManySelectors, InvalidDuration, EmptyWindow, ReversedWindow, OutOfRange, TooManyOverrides, ConflictingEnding(LocalDateTime)])
+	schedule = |{ series, rule: value, window, context }| {
 		prepared = prepare(value, context)?
-		TimedSchedule.from_prepared(series, prepared.rule, window, prepared.endings, prepared.context)
+		TimedSchedule.from_prepared({ series, rule: prepared.rule, window, endings: prepared.endings, context: prepared.context })
 	}
 
 	## Advanced context validation and checked ending preparation, without
@@ -277,7 +277,7 @@ ICalTimedRule :: { rule : TimedRecurrence, duration : ICalDuration, periods : Li
 		if !compatible {
 			return Err(IncompatibleContext)
 		}
-		ICalPeriod.prepare(value.rule, value.duration, value.periods, context)
+		ICalPeriod.prepare(value.rule, { duration: value.duration, periods: value.periods, context })
 	}
 
 	## Counts facts describing the mode, duration, PERIOD additions and effective
@@ -455,7 +455,7 @@ test_observe = |parts, context, lower, upper| {
 		Err(error) => return Err(Parse(error))
 	}
 	window = { start: ICalDateTime.local_label(test_timestamp(lower)), end: ICalDateTime.local_label(test_timestamp(upper)) }
-	var $cursor = ICalTimedRule.schedule(42.U64, parsed, window, context)?
+	var $cursor = ICalTimedRule.schedule({ series: 42.U64, rule: parsed, window, context })?
 	var $occurrences = []
 	var $calls = 0.U64
 	while $calls < 2000 {
@@ -489,8 +489,8 @@ expect {
 # https://www.rfc-editor.org/errata/eid3883
 # The September 1997 New York fixture is UTC-04:00 throughout this window.
 expect {
-	validity = PosixSpan.new(ICalDateTime.utc_boundary(test_timestamp("19970901T000000Z"))?, ICalDateTime.utc_boundary(test_timestamp("19970904T000000Z"))?)?
-	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
+	validity = PosixSpan.new({ start: ICalDateTime.utc_boundary(test_timestamp("19970901T000000Z"))?, end: ICalDateTime.utc_boundary(test_timestamp("19970904T000000Z"))? })?
+	rules = ZoneRules.new_bounded({ name: "RFC5545/New_York", version: "1997-example", validity, initial: FixedOffset.from_seconds(-14400), transitions: [], bounds: { minimum: -14400, maximum: -14400 } })?
 	var $valid = Bool.True
 	for case in [{ until: "19970902T210000Z", expected: [9.U8, 12, 15] }, { until: "19970902T170000Z", expected: [9, 12] }, { until: "19970902T190000Z", expected: [9, 12, 15] }] {
 		parts = { ..test_parts("19970902T090000", "FREQ=HOURLY;INTERVAL=3;UNTIL=${case.until}", Zoned), duration: "PT1H" }

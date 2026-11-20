@@ -14,7 +14,7 @@ Each module documents a *profile*: the syntax and meaning it accepts. The API pa
 | Calendars | Convert Gregorian/Julian dates and calculate Gregorian deadlines. Their rules apply in all supported years; historical national reforms aren't inferred.
 | Named zones | Interpret local labels with the optional IANA data package. Supply rules that cover the requested time range.
 | Timestamp/interval text | Parse supported explicit-offset timestamps and exact intervals. These profiles reject leap seconds and sub-microsecond input.
-| Nanosecond clock labels | `NanoClockTime` keeps a time of day with up to nine fractional digits. Other types take it only through an explicit conversion to `ClockTime`; timestamps, spans and zones stay at microseconds.
+| Nanosecond scalar companions | `NanoClockTime` and `NanoLocalDateTime` keep civil labels with up to nine fractional digits. `PosixNanoBoundary` and `PosixNanoDelta` preserve signed I64 POSIX nanosecond counts. Convert explicitly to use microsecond spans and zone operations.
 | EDTF | Retain supported date precision and qualifications. The date adapter supports a subset of EDTF; check its grammar before importing a wider form.
 | IXDTF | Retain annotations and check supplied offset/zone assertions. An annotation can be retained without supporting its presentation; unknown critical extensions fail.
 | Recurrence | Import supported extracted RFC 5545 DATE/DATE-TIME values. There is no general ICS reader, and recurrence rules differ from repeated clamped arithmetic.

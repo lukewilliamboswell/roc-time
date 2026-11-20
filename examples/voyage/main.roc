@@ -12,7 +12,7 @@ import time.LocalDateTime
 main! = |_args| {
 	date = Calendar.Date.from_fields(Gregorian, { year: 2026, month: 7, day: 1 })?
 	clock = ClockTime.from_fields({ hour: 12, minute: 0, second: 0, microsecond: 0 })?
-	local = LocalDateTime.new(date, clock)
+	local = LocalDateTime.new({ date, clock })
 	original = ZoneRules.from_database(ShipClock.get("Voyage/Research", Published)?)?
 	saved = Briefing.book(original, local)?
 	updated = ZoneRules.from_database(ShipClock.get("Voyage/Research", Revised)?)?

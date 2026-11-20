@@ -14,11 +14,11 @@ SelectionReview :: [].{
 		if ICalDateTime.form(start) != Local or ICalDateTime.form(end) != Local {
 			return Err(ExpectedLocalLabels)
 		}
-		validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(86400000000))?
-		rules = ZoneRules.new_bounded("Synthetic/Fallback", "example-v1", validity, FixedOffset.from_seconds(3600), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 3600 })?
+		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(86400000000) })?
+		rules = ZoneRules.new_bounded({ name: "Synthetic/Fallback", version: "example-v1", validity, initial: FixedOffset.from_seconds(3600), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 3600 } })?
 		local = ICalDateTime.local_label(start)
-		appointment = ResolvedBoundary.resolve(rules, local, Last)?
-		cursor = ZoneRules.selection_cursor(rules, local, ICalDateTime.local_label(end))?
+		appointment = ResolvedBoundary.resolve(rules, { local, occurrence: Last })?
+		cursor = ZoneRules.selection_cursor(rules, { start: local, end: ICalDateTime.local_label(end) })?
 		paused = ResolvedSelection.collect(cursor, { max_segments: 1, max_members: 2 })?
 		remaining = match paused.status {
 			Limited(progress) => progress.cursor

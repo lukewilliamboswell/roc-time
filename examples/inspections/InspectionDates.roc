@@ -16,7 +16,7 @@ InspectionDates :: [].{
 		var $first = None
 		while $day < end {
 			date = GregorianDate.from_civil_day(CivilDay.from_day_number($day))?
-			if CalendarPattern.matches(pattern, 0, date)? {
+			if CalendarPattern.matches(pattern, { period_index: 0, date })? {
 				$first = Some(date)
 			}
 			$day = $day + 1

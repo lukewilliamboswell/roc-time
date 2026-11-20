@@ -15,8 +15,8 @@ AnnotationExplanation :: [].{
 		# Explicit narrow fixture for RFC 9557 section 3.3, not a Paris database.
 		start = "2022-07-08T00:00:00Z"
 		end = "2022-07-08T01:00:00Z"
-		validity = PosixSpan.new(OffsetTimestamp.boundary(start)?, OffsetTimestamp.boundary(end)?)?
-		rules = ZoneRules.new_bounded("Europe/Paris", "rfc9557-example", validity, FixedOffset.from_seconds(7200), [], { minimum: 7200, maximum: 7200 })?
+		validity = PosixSpan.new({ start: OffsetTimestamp.boundary(start)?, end: OffsetTimestamp.boundary(end)? })?
+		rules = ZoneRules.new_bounded({ name: "Europe/Paris", version: "rfc9557-example", validity, initial: FixedOffset.from_seconds(7200), transitions: [], bounds: { minimum: 7200, maximum: 7200 } })?
 		snapshot = match Ixdtf.resolve(declaration, Some(rules)) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))

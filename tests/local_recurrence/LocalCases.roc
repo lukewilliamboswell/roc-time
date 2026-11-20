@@ -237,9 +237,9 @@ observe = |input, start_minute, steps| {
 	# schedule directly, avoiding a deliberately incompatible export/import.
 	rules = fixture_rules(input.shift)
 	var $cursor = if input.termination == 1 {
-		ICalPeriod.schedule("local-corpus", rule, { start: label(start_minute), end: label(2880) }, definition.duration, definition.periods, Local(rules)) ?? crash "native local schedule"
+		ICalPeriod.schedule({ series: "local-corpus", rule, window: { start: label(start_minute), end: label(2880) }, duration: definition.duration, periods: definition.periods, context: Local(rules) }) ?? crash "native local schedule"
 	} else {
-		ICalTimedRule.schedule("local-corpus", parsed, { start: label(start_minute), end: label(2880) }, Local(rules)) ?? crash "local schedule"
+		ICalTimedRule.schedule({ series: "local-corpus", rule: parsed, window: { start: label(start_minute), end: label(2880) }, context: Local(rules) }) ?? crash "local schedule"
 	}
 	# Every zero budget must produce explicit incompleteness and preserve a
 	# continuation, then successful calls resume that exact state.
@@ -339,14 +339,14 @@ observe = |input, start_minute, steps| {
 }
 
 fixture_rules = |shift| {
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(345600000000)) ?? crash "validity"
-	ZoneRules.new_bounded(
-		"Synthetic/Composed",
-		"integer-minute-v1",
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(345600000000) }) ?? crash "validity"
+	ZoneRules.new_bounded({
+		name: "Synthetic/Composed",
+		version: "integer-minute-v1",
 		validity,
-		FixedOffset.from_seconds(0),
-		[{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(shift.to_i32_wrap() * 60) }],
-		{
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(shift.to_i32_wrap() * 60) }],
+		bounds: {
 			minimum: if shift < 0 {
 				shift.to_i32_wrap() * 60
 			} else {
@@ -358,7 +358,7 @@ fixture_rules = |shift| {
 				0
 			},
 		},
-	) ?? crash "rules"
+	}) ?? crash "rules"
 }
 
 validate = |expected, actual| if expected == actual {

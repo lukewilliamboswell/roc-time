@@ -23,7 +23,7 @@ ReservationPlan :: [].{
 			Ok(value) => value
 			Err(error) => return Err(Recurrence(error))
 		}
-		cursor = ICalTimedRule.schedule("equipment", rule, { start: ICalDateTime.local_label(start), end: ICalDateTime.local_label(end) }, Utc)?
+		cursor = ICalTimedRule.schedule({ series: "equipment", rule, window: { start: ICalDateTime.local_label(start), end: ICalDateTime.local_label(end) }, context: Utc })?
 		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 }) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))

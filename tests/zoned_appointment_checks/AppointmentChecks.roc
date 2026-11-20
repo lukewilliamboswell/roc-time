@@ -20,17 +20,17 @@ AppointmentChecks :: [].{
 		] {
 			local = parse_fixture(fixture.text)
 			date = Calendar.Date.as_gregorian(LocalDateTime.date(local))?
-			next_date = Calendar.Arithmetic.shift_day(date, Calendar.Delta.days(1), Reject)?
-			next = LocalDateTime.new(Calendar.Date.from_gregorian(next_date), LocalDateTime.clock(local))
+			next_date = Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.days(1), policy: Reject })?
+			next = LocalDateTime.new({ date: Calendar.Date.from_gregorian(next_date), clock: LocalDateTime.clock(local) })
 			if LocalDateTime.to_gregorian_text(next) != Ok(fixture.next) {
 				crash "calendar day drift"
 			}
-			first = ZoneRules.resolve_occurrence(paris, local, RequireUnique)?
-			second = ZoneRules.resolve_occurrence(paris, next, RequireUnique)?
+			first = ZoneRules.resolve_occurrence(paris, { local, occurrence: RequireUnique })?
+			second = ZoneRules.resolve_occurrence(paris, { local: next, occurrence: RequireUnique })?
 			if PosixBoundary.to_microseconds(first) != fixture.first or PosixBoundary.to_microseconds(second) != fixture.second {
 				crash "source zone coordinate oracle"
 			}
-			if PosixDelta.to_microseconds(PosixBoundary.difference(second, first)?) != fixture.width {
+			if PosixDelta.to_microseconds(PosixBoundary.difference({ left: second, right: first })?) != fixture.width {
 				crash "calendar day coordinate width"
 			}
 			check_projection(new_york, first, fixture.ny_first)?
@@ -42,16 +42,16 @@ AppointmentChecks :: [].{
 		if ZoneRules.resolve(paris, fold) != Ok(Fold([first, last])) {
 			crash "fold alternatives oracle"
 		}
-		if ZoneRules.resolve_occurrence(paris, fold, RequireUnique) != Err(Ambiguous) or ZoneRules.resolve_occurrence(paris, fold, First) != Ok(first) or ZoneRules.resolve_occurrence(paris, fold, Last) != Ok(last) {
+		if ZoneRules.resolve_occurrence(paris, { local: fold, occurrence: RequireUnique }) != Err(Ambiguous) or ZoneRules.resolve_occurrence(paris, { local: fold, occurrence: First }) != Ok(first) or ZoneRules.resolve_occurrence(paris, { local: fold, occurrence: Last }) != Ok(last) {
 			crash "explicit fold policy"
 		}
-		if ZoneRules.resolve_occurrence(paris, fold, MatchingOffset(FixedOffset.from_seconds(7200))) != Ok(first) or ZoneRules.resolve_occurrence(paris, fold, MatchingOffset(FixedOffset.from_seconds(3600))) != Ok(last) {
+		if ZoneRules.resolve_occurrence(paris, { local: fold, occurrence: MatchingOffset(FixedOffset.from_seconds(7200)) }) != Ok(first) or ZoneRules.resolve_occurrence(paris, { local: fold, occurrence: MatchingOffset(FixedOffset.from_seconds(3600)) }) != Ok(last) {
 			crash "fold offset choice"
 		}
 		check_projection(new_york, first, "2026-10-24T20:30:00")?
 		check_projection(new_york, last, "2026-10-24T21:30:00")?
 		gap = parse_fixture("2026-03-29T02:30")
-		if ZoneRules.resolve(paris, gap) != Ok(Gap) or ZoneRules.resolve_occurrence(paris, gap, First) != Err(Gap) {
+		if ZoneRules.resolve(paris, gap) != Ok(Gap) or ZoneRules.resolve_occurrence(paris, { local: gap, occurrence: First }) != Err(Gap) {
 			crash "gap is not an occurrence"
 		}
 		if Database.get(missing_zone) != Err(UnknownZone(missing_zone)) {
@@ -61,7 +61,7 @@ AppointmentChecks :: [].{
 			crash "exclusive rule horizon"
 		}
 		far_future = parse_fixture("2500-01-01T09:30")
-		if ZoneRules.resolve_occurrence(paris, far_future, RequireUnique) != Err(OutsideValidity) {
+		if ZoneRules.resolve_occurrence(paris, { local: far_future, occurrence: RequireUnique }) != Err(OutsideValidity) {
 			crash "outside horizon is not gap"
 		}
 		Ok({})
@@ -74,14 +74,14 @@ parse_fixture = |text| match LocalDateTime.parse_gregorian(text) {
 }
 
 check_projection = |rules, boundary, expected| {
-	{ local, offset } = ZoneRules.project(rules, boundary, Gregorian)?
+	{ local, offset } = ZoneRules.project(rules, { boundary, calendar: Gregorian })?
 	if FixedOffset.to_seconds(offset) != -14400 {
 		crash "target offset oracle"
 	}
 	if LocalDateTime.to_gregorian_text(local) != Ok(expected) {
 		crash "target local fields oracle"
 	}
-	if ZoneRules.resolve_occurrence(rules, local, MatchingOffset(offset)) != Ok(boundary) {
+	if ZoneRules.resolve_occurrence(rules, { local, occurrence: MatchingOffset(offset) }) != Ok(boundary) {
 		crash "projection changed boundary"
 	}
 	Ok({})

@@ -21,7 +21,7 @@ main! = |_args| {
 	match ZonedAppointment.classify(paris, fold)? {
 		Fold(boundaries) => for boundary in boundaries {
 			offset = ZoneRules.offset_at(paris, boundary)?
-			stamp = match OffsetTimestamp.from_boundary(boundary, Asserted(offset), 0) {
+			stamp = match OffsetTimestamp.from_boundary(boundary, { offset: Asserted(offset), fraction_digits: 0 }) {
 				Ok(value) => value
 				Err(error) => return Err(Timestamp(error))
 			}

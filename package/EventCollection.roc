@@ -47,7 +47,15 @@ EventCollection(id) :: [Events(List({ id : id, span : PosixSpan }))].{
 	clip = |Events(entries), window| {
 		var $result = []
 		for entry in entries {
-			clipped = Coverage.intersection(Coverage.from_spans([entry.span]), window)
+			builder = window.fold_overlaps({
+				query: entry.span,
+				initial: Coverage.SortedBuilder.empty,
+				step: |prior, member| match PosixSpan.intersection(entry.span, member) {
+					Span(piece) => prior.append(piece) ?? crash "EventCollection.clip: intersections follow window order"
+					Empty => crash "EventCollection.clip: overlap fold yielded a disjoint member"
+				},
+			})
+			clipped = builder.to_coverage()
 			if Coverage.member_count(clipped) > 0 {
 				$result = $result.append({ id: entry.id, coverage: clipped })
 			}
@@ -57,46 +65,43 @@ EventCollection(id) :: [Events(List({ id : id, span : PosixSpan }))].{
 
 	## Partition occupied time at every event boundary. Each segment contains
 	## exactly its active IDs, in source order. No per-microsecond enumeration.
-	## O(n log n + n² + c) work, O(n + c) output/storage, where c counts emitted
-	## contributor IDs. This scan is not an interval index or a coverage sweep.
+	## Sort the endpoints once, then maintain an active set of source indexes.
+	## Sort only active contributors for each occupied segment.
 	segments : EventCollection(id) -> List({ span : PosixSpan, contributors : List(id) })
 	segments = |Events(entries)| {
-		var $endpoints = []
+		var $endpoints = List.with_capacity(entries.len() * 2)
+		var $index = 0.U64
 		for entry in entries {
-			$endpoints = $endpoints.append(PosixSpan.start(entry.span)).append(PosixSpan.end(entry.span))
+			$endpoints = $endpoints
+				.append({ at: entry.span.start(), change: Start($index) })
+				.append({ at: entry.span.end(), change: End($index) })
+			$index = $index + 1
 		}
-		sorted = $endpoints.sort_with(
-			|a, b| match PosixBoundary.compare(a, b) {
-				LT => Before
-				EQ => Same
-				GT => After
-			},
-		)
+		sorted = $endpoints.sort_with(|left, right| left.at.order_relative_to(right.at))
+		var $active = Set.empty()
 		var $previous = None
 		var $result = []
-		for boundary in sorted {
+		for endpoint in sorted {
 			match $previous {
-				Some(start) => {
-					if start < boundary {
-						var $contributors = []
-						for entry in entries {
-							if PosixSpan.contains(entry.span, start) {
-								$contributors = $contributors.append(entry.id)
-							}
-						}
-						if !$contributors.is_empty() {
-							# Sorted distinct boundaries establish the span invariant.
-							span = match PosixSpan.new(start, boundary) {
-								Ok(value) => value
-								Err(_) => crash "Ordered event boundaries"
-							}
-							$result = $result.append({ span, contributors: $contributors })
-						}
-					}
+				Some(start) if start < endpoint.at and !$active.is_empty() => {
+					contributors = $active.to_list().sort().map(
+						|index| {
+							entry = entries.get(index) ?? crash "EventCollection.segments: active source index"
+							entry.id
+						},
+					)
+					span = PosixSpan.new({ start, end: endpoint.at }) ?? crash "EventCollection.segments: ordered distinct endpoints"
+					$result = $result.append({ span, contributors })
 				}
-				None => {}
+				_ => {}
 			}
-			$previous = Some(boundary)
+			# All changes at one coordinate are applied before emitting the
+			# next half-open segment. Their relative order is immaterial.
+			$active = match endpoint.change {
+				Start(source) => $active.insert(source)
+				End(source) => $active.remove(source)
+			}
+			$previous = Some(endpoint.at)
 		}
 		$result
 	}
@@ -106,7 +111,7 @@ EventCollection(id) :: [Events(List({ id : id, span : PosixSpan }))].{
 	to_inspect = |events| "EventCollection(events=${event_count(events).to_str()})"
 }
 
-test_eventcollection_span = |a, b| match PosixSpan.new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b)) {
+test_eventcollection_span = |a, b| match PosixSpan.new({ start: PosixBoundary.from_microseconds(a), end: PosixBoundary.from_microseconds(b) }) {
 	Ok(value) => value
 	Err(_) => crash "Invalid test test_eventcollection_span"
 }

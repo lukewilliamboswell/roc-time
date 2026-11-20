@@ -112,7 +112,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 
 	## Returns the supplied Gregorian clock label without applying its offset. Use boundary for a resolved POSIX coordinate.
 	local_label : OffsetTimestamp -> LocalDateTime
-	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
+	local_label = |value| LocalDateTime.new({ date: Calendar.Date.from_gregorian(value.date), clock: value.clock })
 
 	## This source label is UTC for UnassertedUtc and offset-local otherwise.
 	boundary : OffsetTimestamp -> Try(PosixBoundary, [OutOfRange])
@@ -120,8 +120,8 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 
 	## Explicit projection for canonical timestamp output. The requested width
 	## must represent the position exactly; this operation never rounds.
-	from_boundary : PosixBoundary, Offset, U8 -> Try(OffsetTimestamp, Error)
-	from_boundary = |point, offset, fraction_digits| {
+	from_boundary : PosixBoundary, { offset : Offset, fraction_digits : U8 } -> Try(OffsetTimestamp, Error)
+	from_boundary = |point, { offset, fraction_digits }| {
 		if fraction_digits > 6 {
 			return Err(UnsupportedPrecision)
 		}
@@ -134,7 +134,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 				}
 			}
 		}
-		local = match FixedOffset.project(effective_offset(offset), point, Gregorian) {
+		local = match FixedOffset.project(effective_offset(offset), { boundary: point, calendar: Gregorian }) {
 			Ok(value) => value
 			Err(_) => return Err(OutOfRange)
 		}
@@ -255,14 +255,17 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		}
 		fields = { year: $date_digits // 10000, month: ($date_digits // 100) % 100, day: $date_digits % 100, hour: ($packed // 10000) % 100, minute: ($packed // 100) % 100, second: $packed % 100 }
 		tail = { fraction_seen: $fraction_seen, fractional: $fractional, count: $count, marker: $marker, offset_count: $offset_count, hours: $hours, minutes: $minutes, offset_malformed: $offset_malformed, trailing: $trailing }
-		if length >= 7 and (fields.month < 1 or fields.month > 12) {
+		if (length == 6 and fields.month > 12) or (length >= 7 and (fields.month < 1 or fields.month > 12)) {
 			return Err(InvalidDate)
 		}
-		if length >= 13 and fields.hour > 23 {
+		if length >= 12 and fields.hour > 23 {
 			return Err(InvalidTime)
 		}
-		if length >= 16 and fields.minute > 59 {
+		if length >= 15 and fields.minute > 59 {
 			return Err(InvalidTime)
+		}
+		if length == 9 and (fields.day > 31 or (fields.day != 0 and GregorianDate.from_fields({ year: fields.year.to_i64(), month: fields.month.to_u8_wrap(), day: fields.day.to_u8_wrap() }).is_err())) {
+			return Err(InvalidDate)
 		}
 		if length < 10 {
 			return Err(Incomplete)
@@ -270,6 +273,9 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		date = match GregorianDate.from_fields({ year: fields.year.to_i64(), month: fields.month.to_u8_wrap(), day: fields.day.to_u8_wrap() }) {
 			Ok(value) => value
 			Err(_) => return Err(InvalidDate)
+		}
+		if length == 18 and fields.second > 59 {
+			return if (fields.second == 60) Err(UnsupportedLeapSecond) else Err(InvalidTime)
 		}
 		if length < 19 {
 			return Err(Incomplete)
@@ -293,7 +299,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			Err(_) => return Err(InvalidTime)
 		}
 		marker = match tail.marker {
-			None => return Err(Incomplete)
+			None => return if (tail.count > 6) Err(UnsupportedPrecision) else Err(Incomplete)
 			Some(value) => value
 		}
 		var $offset = UnassertedUtc
@@ -303,11 +309,11 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			if tail.offset_malformed {
 				return Err(Malformed)
 			}
-			if tail.offset_count >= 3 and tail.hours > 23 {
+			if (tail.offset_count == 2 and tail.hours > 2) or (tail.offset_count >= 3 and tail.hours > 23) or (tail.offset_count == 5 and tail.minutes > 5) {
 				return Err(InvalidOffset)
 			}
 			if tail.offset_count < 6 {
-				return Err(Incomplete)
+				return if (tail.count > 6) Err(UnsupportedPrecision) else Err(Incomplete)
 			}
 			if tail.minutes > 59 {
 				return Err(InvalidOffset)
@@ -512,11 +518,11 @@ expect {
 }
 
 expect {
-	value = OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), UnassertedUtc, 6)?
+	value = OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), { offset: UnassertedUtc, fraction_digits: 6 })?
 	OffsetTimestamp.to_text(value) == "1969-12-31T23:59:59.999999Z" and
-		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), UnassertedUtc, 5) == Err(UnsupportedPrecision) and
-			OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.highest), UnassertedUtc, 6) == Err(OutOfRange) and
-				OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.lowest), UnassertedUtc, 6) == Err(OutOfRange)
+		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), { offset: UnassertedUtc, fraction_digits: 5 }) == Err(UnsupportedPrecision) and
+			OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.highest), { offset: UnassertedUtc, fraction_digits: 6 }) == Err(OutOfRange) and
+				OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.lowest), { offset: UnassertedUtc, fraction_digits: 6 }) == Err(OutOfRange)
 }
 expect {
 	OffsetTimestamp.parse(Str.join_with(List.repeat("x", 257), "")) == Err(TooLarge) and
@@ -526,7 +532,7 @@ expect {
 expect {
 	OffsetTimestamp.parse("2000-01-01T00:00:00.1234567garbage") == Err(Malformed) and
 		OffsetTimestamp.parse("2000-01-01T00:00:00.1234567+24:00") == Err(InvalidOffset) and
-			OffsetTimestamp.parse("2000-01-01T00:00:00.1234567") == Err(Incomplete) and
+			OffsetTimestamp.parse("2000-01-01T00:00:00.1234567") == Err(UnsupportedPrecision) and
 				OffsetTimestamp.parse("2000-99-01T") == Err(InvalidDate) and
 					OffsetTimestamp.parse("2001-02-29T") == Err(InvalidDate) and
 						OffsetTimestamp.parse("2000-01-01T24:") == Err(InvalidTime) and
@@ -577,3 +583,17 @@ expect {
 	}
 	$valid
 }
+
+## An incomplete result requires a possible completion of every supplied field.
+expect {
+	OffsetTimestamp.parse("2024-2") == Err(InvalidDate) and
+		OffsetTimestamp.parse("2024-02-3") == Err(InvalidDate) and
+			OffsetTimestamp.parse("2024-01-01T3") == Err(InvalidTime) and
+				OffsetTimestamp.parse("2024-01-01T00:00:7") == Err(InvalidTime) and
+					OffsetTimestamp.parse("2024-01-01T00:00:00+3") == Err(InvalidOffset) and
+						OffsetTimestamp.parse("2024-01-01T00:00:00+01:7") == Err(InvalidOffset) and
+							OffsetTimestamp.parse("2024-01-01T00:00:6") == Err(UnsupportedLeapSecond)
+}
+
+## An unfinished offset does not hide already unsupported precision.
+expect OffsetTimestamp.parse("2024-01-01T00:00:00.0000000+") == Err(UnsupportedPrecision)

@@ -1,3 +1,4 @@
+import MicrosecondRounding
 import PosixBoundary
 import PosixDelta
 
@@ -15,7 +16,7 @@ import PosixDelta
 ## expect {
 ##     start = PosixBoundary.from_microseconds(0)
 ##     end = PosixBoundary.from_microseconds(1000000)
-##     span = PosixSpan.new(start, end)?
+##     span = PosixSpan.new({ start, end })?
 ##     PosixSpan.contains(span, start) and !PosixSpan.contains(span, end)
 ## }
 ## ```
@@ -25,20 +26,20 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 
 	## Construct a nonempty half-open span [start, end). Equal endpoints return
 	## EmptySpan; a start after the end returns ReversedBounds.
-	new : PosixBoundary, PosixBoundary -> Try(PosixSpan, [EmptySpan, ReversedBounds])
-	new = |start_value, end_value| {
-		match PosixBoundary.compare(start_value, end_value) {
-			LT => Ok({ start: start_value, end: end_value })
-			EQ => Err(EmptySpan)
-			GT => Err(ReversedBounds)
+	new : { start : PosixBoundary, end : PosixBoundary } -> Try(PosixSpan, [EmptySpan, ReversedBounds])
+	new = |{ start: start_value, end: end_value }| {
+		match PosixBoundary.order_relative_to(start_value, end_value) {
+			Before => Ok({ start: start_value, end: end_value })
+			Same => Err(EmptySpan)
+			After => Err(ReversedBounds)
 		}
 	}
 
 	## Interpret decimal seconds since the POSIX epoch with one rounding policy
 	## for both endpoints. Equal/reversed source bounds are rejected before
 	## conversion; rounding that collapses a nonempty span returns EmptySpan.
-	from_seconds : Dec, Dec, PosixBoundary.Rounding -> Try(PosixSpan, [EmptySpan, ReversedBounds, Submicrosecond, OutOfRange])
-	from_seconds = |lo, hi, policy| {
+	from_seconds : { start : Dec, end : Dec, rounding : MicrosecondRounding } -> Try(PosixSpan, [EmptySpan, ReversedBounds, Submicrosecond, OutOfRange])
+	from_seconds = |{ start: lo, end: hi, rounding: policy }| {
 		if lo == hi {
 			return Err(EmptySpan)
 		}
@@ -47,7 +48,7 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 		}
 		start_value = PosixBoundary.from_seconds(lo, policy)?
 		end_value = PosixBoundary.from_seconds(hi, policy)?
-		new(start_value, end_value)
+		new({ start: start_value, end: end_value })
 	}
 
 	## Read the inclusive lower boundary of this span.
@@ -61,7 +62,7 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## Return end minus start as a POSIX displacement. A valid span can still
 	## return OutOfRange when its width exceeds I64 microseconds.
 	coordinate_width : PosixSpan -> Try(PosixDelta, [OutOfRange])
-	coordinate_width = |span| PosixBoundary.difference(span.end, span.start)
+	coordinate_width = |span| PosixBoundary.difference({ left: span.end, right: span.start })
 
 	## Construct [point, point + one microsecond). The greatest representable
 	## position returns OutOfRange because its exclusive end cannot be represented.
@@ -89,12 +90,12 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## The smallest span containing both inputs, including any gap between them.
 	hull : PosixSpan, PosixSpan -> PosixSpan
 	hull = |a, b| {
-		lower = if PosixBoundary.compare(a.start, b.start) == LT {
+		lower = if PosixBoundary.order_relative_to(a.start, b.start) == Before {
 			a.start
 		} else {
 			b.start
 		}
-		upper = if PosixBoundary.compare(a.end, b.end) == GT {
+		upper = if PosixBoundary.order_relative_to(a.end, b.end) == After {
 			a.end
 		} else {
 			b.end
@@ -106,17 +107,17 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## only touch at an endpoint.
 	intersection : PosixSpan, PosixSpan -> [Empty, Span(PosixSpan)]
 	intersection = |a, b| {
-		lower = if PosixBoundary.compare(a.start, b.start) == GT {
+		lower = if PosixBoundary.order_relative_to(a.start, b.start) == After {
 			a.start
 		} else {
 			b.start
 		}
-		upper = if PosixBoundary.compare(a.end, b.end) == LT {
+		upper = if PosixBoundary.order_relative_to(a.end, b.end) == Before {
 			a.end
 		} else {
 			b.end
 		}
-		if PosixBoundary.compare(lower, upper) == LT {
+		if PosixBoundary.order_relative_to(lower, upper) == Before {
 			Span({ start: lower, end: upper })
 		} else {
 			Empty
@@ -127,58 +128,58 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 	## do not overlap because the upper boundary is exclusive.
 	overlaps : PosixSpan, PosixSpan -> Bool
 	overlaps = |a, b| {
-		PosixBoundary.compare(a.start, b.end) == LT and PosixBoundary.compare(b.start, a.end) == LT
+		PosixBoundary.order_relative_to(a.start, b.end) == Before and PosixBoundary.order_relative_to(b.start, a.end) == Before
 	}
 
 	## Whether a position is at or after start and strictly before end.
 	contains : PosixSpan, PosixBoundary -> Bool
 	contains = |span, point| {
-		PosixBoundary.compare(span.start, point) != GT and PosixBoundary.compare(point, span.end) == LT
+		PosixBoundary.order_relative_to(span.start, point) != After and PosixBoundary.order_relative_to(point, span.end) == Before
 	}
 
 	## Classify the first span relative to the second using the thirteen Allen
 	## interval relations. Meets and MetBy describe touching without overlap.
-	relation : PosixSpan, PosixSpan -> [Before, Meets, Overlaps, Starts, During, Finishes, Equal, FinishedBy, Contains, StartedBy, OverlappedBy, MetBy, After]
-	relation = |a, b| {
-		if PosixBoundary.compare(a.end, b.start) == LT {
+	relation : { left : PosixSpan, right : PosixSpan } -> [Before, Meets, Overlaps, Starts, During, Finishes, Equal, FinishedBy, Contains, StartedBy, OverlappedBy, MetBy, After]
+	relation = |{ left: a, right: b }| {
+		if PosixBoundary.order_relative_to(a.end, b.start) == Before {
 			return Before
 		}
 		if a.end == b.start {
 			return Meets
 		}
-		if PosixBoundary.compare(a.start, b.end) == GT {
+		if PosixBoundary.order_relative_to(a.start, b.end) == After {
 			return After
 		}
 		if a.start == b.end {
 			return MetBy
 		}
-		match (PosixBoundary.compare(a.start, b.start), PosixBoundary.compare(a.end, b.end)) {
-			(LT, LT) => Overlaps
-			(LT, EQ) => FinishedBy
-			(LT, GT) => Contains
-			(EQ, LT) => Starts
-			(EQ, EQ) => Equal
-			(EQ, GT) => StartedBy
-			(GT, LT) => During
-			(GT, EQ) => Finishes
-			(GT, GT) => OverlappedBy
+		match (PosixBoundary.order_relative_to(a.start, b.start), PosixBoundary.order_relative_to(a.end, b.end)) {
+			(Before, Before) => Overlaps
+			(Before, Same) => FinishedBy
+			(Before, After) => Contains
+			(Same, Before) => Starts
+			(Same, Same) => Equal
+			(Same, After) => StartedBy
+			(After, Before) => During
+			(After, Same) => Finishes
+			(After, After) => OverlappedBy
 		}
 	}
 
-	expect new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(0)) == Err(EmptySpan)
-	expect new(PosixBoundary.from_microseconds(1), PosixBoundary.from_microseconds(0)) == Err(ReversedBounds)
+	expect new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(0) }) == Err(EmptySpan)
+	expect new({ start: PosixBoundary.from_microseconds(1), end: PosixBoundary.from_microseconds(0) }) == Err(ReversedBounds)
 
 	expect microsecond_at(PosixBoundary.from_microseconds(9223372036854775807)) == Err(OutOfRange)
-	expect from_seconds(0.0000001.Dec, 0.0000002.Dec, Floor) == Err(EmptySpan)
-	expect from_seconds(0.0000002.Dec, 0.0000001.Dec, Ceiling) == Err(ReversedBounds)
+	expect from_seconds({ start: 0.0000001.Dec, end: 0.0000002.Dec, rounding: Floor }) == Err(EmptySpan)
+	expect from_seconds({ start: 0.0000002.Dec, end: 0.0000001.Dec, rounding: Ceiling }) == Err(ReversedBounds)
 	expect {
-		span = new(PosixBoundary.from_microseconds(-9223372036854775808), PosixBoundary.from_microseconds(9223372036854775807))?
+		span = new({ start: PosixBoundary.from_microseconds(-9223372036854775808), end: PosixBoundary.from_microseconds(9223372036854775807) })?
 		coordinate_width(span) == Err(OutOfRange)
 	}
 
 	# One representative for each strict endpoint ordering, including inverses.
 	expect {
-		anchor = new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(3))?
+		anchor = new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(3) })?
 		var $valid = Bool.True
 		for (lo, hi, expected) in [
 			(4.I64, 5.I64, Before),
@@ -195,8 +196,8 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 			(-1, 0, MetBy),
 			(-2, -1, After),
 		] {
-			other = new(PosixBoundary.from_microseconds(lo), PosixBoundary.from_microseconds(hi))?
-			$valid = $valid and relation(anchor, other) == expected
+			other = new({ start: PosixBoundary.from_microseconds(lo), end: PosixBoundary.from_microseconds(hi) })?
+			$valid = $valid and relation({ left: anchor, right: other }) == expected
 		}
 		$valid
 	}
@@ -210,15 +211,15 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 				for c in [-2.I64, -1, 0, 1] {
 					for d in [-1.I64, 0, 1, 2] {
 						if a < b and c < d {
-							left = new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b))?
-							right = new(PosixBoundary.from_microseconds(c), PosixBoundary.from_microseconds(d))?
+							left = new({ start: PosixBoundary.from_microseconds(a), end: PosixBoundary.from_microseconds(b) })?
+							right = new({ start: PosixBoundary.from_microseconds(c), end: PosixBoundary.from_microseconds(d) })?
 							var $shared = Bool.False
 							for p in [-2.I64, -1, 0, 1, 2] {
 								$shared = $shared or (a <= p and p < b and c <= p and p < d)
 							}
 							$valid = $valid and overlaps(left, right) == $shared
 							# Relations agree with inverse classification and overlap semantics.
-							inverse = match relation(left, right) {
+							inverse = match relation({ left, right }) {
 								Before => After
 								After => Before
 								Meets => MetBy
@@ -233,7 +234,7 @@ PosixSpan :: { start : PosixBoundary, end : PosixBoundary }.{
 								FinishedBy => Finishes
 								Equal => Equal
 							}
-							$valid = $valid and relation(right, left) == inverse
+							$valid = $valid and relation({ left: right, right: left }) == inverse
 						}
 					}
 				}

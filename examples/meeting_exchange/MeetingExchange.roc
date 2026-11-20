@@ -42,7 +42,7 @@ MeetingExchange :: [].{
 			Ok(value) => value
 			Err(error) => return Err(Definition(error))
 		}
-		schedule = ScheduleDefinition.cursor("team-meeting", meeting, window)?
+		schedule = ScheduleDefinition.cursor({ series: "team-meeting", definition: meeting, window })?
 		batch = match TimedSchedule.collect(
 			schedule,
 			{
@@ -88,7 +88,7 @@ MeetingExchange :: [].{
 }
 
 utc = |boundary| {
-	timestamp = match OffsetTimestamp.from_boundary(boundary, UnassertedUtc, 0) {
+	timestamp = match OffsetTimestamp.from_boundary(boundary, { offset: UnassertedUtc, fraction_digits: 0 }) {
 		Ok(value) => value
 		Err(error) => return Err(TimestampOutput(error))
 	}

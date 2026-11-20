@@ -48,7 +48,8 @@ separate pieces of coverage.
 
 Some data sources store a time of day as nanoseconds since midnight, such as an
 Apache Arrow `Time64(ns)` column. `NanoClockTime` keeps every nanosecond of that
-value. `NanoClockTime.to_clock` gives a `ClockTime` under a rounding policy that
+value. `NanoClockTime.to_clock` requires an exact conversion.
+`NanoClockTime.to_clock_with_rounding` takes a rounding policy that
 you choose; `split_microseconds` gives the `ClockTime` and the remaining
 nanoseconds without loss.
 
@@ -111,3 +112,15 @@ roc docs package/main.roc --output=.roc-time-tmp/api-main
 ----
 
 Use documentation matching the package in your application header. Source documentation may describe APIs not yet included in your chosen release.
+
+== Nanosecond engine values
+
+Use `NanoClockTime` for a time of day, `PosixNanoBoundary` for a POSIX epoch
+position, `PosixNanoDelta` for a POSIX coordinate displacement, and
+`NanoLocalDateTime` for a naive civil timestamp. Preserve source unit and
+column metadata at the engine boundary. All four support exact conversion
+to their microsecond counterparts where representable and an explicit
+`MicrosecondRounding` policy when precision reduction is wanted.
+
+Use `ZoneRules.inspect_snapshot` for a bounded diagnostic of the validity
+and transition count of a rules snapshot.

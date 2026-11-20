@@ -13,8 +13,8 @@ AnnotationReview :: [].{
 		# not a general Paris provider. Applications supply their own loaded rules.
 		start = timestamp("2022-07-08T00:00:00Z")?
 		end = timestamp("2022-07-08T01:00:00Z")?
-		validity = PosixSpan.new(OffsetTimestamp.boundary(start)?, OffsetTimestamp.boundary(end)?)?
-		rules = ZoneRules.new_bounded("Europe/Paris", "rfc9557-example", validity, FixedOffset.from_seconds(7200), [], { minimum: 7200, maximum: 7200 })?
+		validity = PosixSpan.new({ start: OffsetTimestamp.boundary(start)?, end: OffsetTimestamp.boundary(end)? })?
+		rules = ZoneRules.new_bounded({ name: "Europe/Paris", version: "rfc9557-example", validity, initial: FixedOffset.from_seconds(7200), transitions: [], bounds: { minimum: 7200, maximum: 7200 } })?
 		var $lines = []
 		for text in texts {
 			value = match Ixdtf.parse(text) {

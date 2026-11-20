@@ -147,7 +147,7 @@ DateRecurrence :: {
 		var $anchor_position = None
 		while $day < number(frame.end) {
 			date = from_number($day)?
-			if CalendarPattern.matches(pattern, 0, date)? {
+			if CalendarPattern.matches(pattern, { period_index: 0, date })? {
 				if date == anchor {
 					$anchor_position = Some($count)
 				}
@@ -522,10 +522,10 @@ expect {
 expect {
 	rule = DateRecurrence.new(test_daterecurrence_date(2025, 1, 31), { ..test_daterecurrence_spec, inclusions: [test_daterecurrence_date(2025, 1, 1), test_daterecurrence_date(2025, 1, 31)] })?
 	cursor = DateRecurrence.cursor(rule, test_daterecurrence_window)?
-	first = DateRecurrenceCursor.fold(cursor, test_daterecurrence_limits, "", |text, value| Stop("${text}${GregorianDate.to_fields(value).day.to_str()}"))?
+	first = DateRecurrenceCursor.fold(cursor, { limits: test_daterecurrence_limits, initial: "", visit: |text, value| Stop("${text}${GregorianDate.to_fields(value).day.to_str()}") })?
 	match first.status {
 		Stopped(after_first) => {
-			second = DateRecurrenceCursor.fold(after_first, test_daterecurrence_limits, first.value, |text, value| Stop("${text},${GregorianDate.to_fields(value).day.to_str()}"))?
+			second = DateRecurrenceCursor.fold(after_first, { limits: test_daterecurrence_limits, initial: first.value, visit: |text, value| Stop("${text},${GregorianDate.to_fields(value).day.to_str()}") })?
 			match second.status {
 				Stopped(after_second) => first.value == "1" and second.value == "1,31" and
 					first.occurrences == 1 and second.occurrences == 1 and
@@ -542,10 +542,10 @@ expect {
 expect {
 	rule = DateRecurrence.new(test_daterecurrence_date(2025, 1, 31), { ..test_daterecurrence_spec, termination: Count(1) })?
 	cursor = DateRecurrence.cursor(rule, test_daterecurrence_window)?
-	batch = DateRecurrenceCursor.fold(cursor, test_daterecurrence_limits, 10.U64, |total, _| Stop(total + 1))?
+	batch = DateRecurrenceCursor.fold(cursor, { limits: test_daterecurrence_limits, initial: 10.U64, visit: |total, _| Stop(total + 1) })?
 	match batch.status {
 		Stopped(remaining) => {
-			last = DateRecurrenceCursor.fold(remaining, test_daterecurrence_limits, batch.value, |_, _| crash "Visitor called after exhaustion")?
+			last = DateRecurrenceCursor.fold(remaining, { limits: test_daterecurrence_limits, initial: batch.value, visit: |_, _| crash "Visitor called after exhaustion" })?
 			match last.status {
 				Complete => batch.value == 11 and last.value == 11 and last.occurrences == 0
 				_ => False
@@ -564,7 +564,7 @@ expect {
 	var $finished = False
 	var $batches = 0.U64
 	while $finished == False and $batches < 1000 {
-		batch = DateRecurrenceCursor.fold($current, { ..test_daterecurrence_limits, max_steps: 1, max_occurrences: 1 }, $sum, |total, value| Continue(total + GregorianDate.to_fields(value).month.to_u64()))?
+		batch = DateRecurrenceCursor.fold($current, { limits: { ..test_daterecurrence_limits, max_steps: 1, max_occurrences: 1 }, initial: $sum, visit: |total, value| Continue(total + GregorianDate.to_fields(value).month.to_u64()) })?
 		$sum = batch.value
 		if batch.steps > 1 or batch.occurrences > 1 {
 			crash "Fold exceeded budget"
@@ -694,7 +694,7 @@ DateRecurrenceCursor :: {
 	## Shared cursors may copy a period buffer; no scan hides inside one step.
 	collect : DateRecurrenceCursor, DateRecurrence.Limits -> Try(DateRecurrence.Batch, [OutOfRange])
 	collect = |initial, limits| {
-		batch = fold(initial, limits, [], |dates, date| Continue(dates.append(date)))?
+		batch = fold(initial, { limits, initial: [], visit: |dates, date| Continue(dates.append(date)) })?
 		status = match batch.status {
 			Complete => Complete
 			Limited(progress) => Limited(progress)
@@ -709,8 +709,8 @@ DateRecurrenceCursor :: {
 	## max_occurrences limits visitor calls; steps account for engine work,
 	## not the caller's visitor. No intermediate output list is constructed.
 	## Resume with the returned cursor and value to preserve the accumulator.
-	fold : DateRecurrenceCursor, DateRecurrence.Limits, acc, (acc, GregorianDate -> [Continue(acc), Stop(acc)]) -> Try(DateRecurrence.FoldBatch(acc), [OutOfRange])
-	fold = |initial, limits, initial_value, visit| {
+	fold : DateRecurrenceCursor, { limits : DateRecurrence.Limits, initial : acc, visit : (acc, GregorianDate -> [Continue(acc), Stop(acc)]) } -> Try(DateRecurrence.FoldBatch(acc), [OutOfRange])
+	fold = |initial, { limits, initial: initial_value, visit }| {
 		var $state = initial
 		var $value = initial_value
 		var $occurrences = 0.U64
@@ -769,15 +769,16 @@ DateRecurrenceCursor :: {
 			} else {
 				match $state.phase {
 					StartPeriod => {
-						frame = CalendarPattern.period($state.rule.pattern, $state.period)?
-						stop = frame.start >= $state.window.end or match $state.rule.termination {
-							Until(end) => frame.start > end
+						order = $state.rule.pattern.start_relative_to({ period_index: $state.period, boundary: $state.window.end })
+						stop = order != Before or match $state.rule.termination {
+							Until(end) => $state.rule.pattern.start_relative_to({ period_index: $state.period, boundary: end }) == After
 							Count(count) => $state.count >= count
 							Forever => False
 						}
 						$state = if stop {
 							{ ..$state, phase: Done, buffer: [] }
 						} else {
+							frame = CalendarPattern.period($state.rule.pattern, $state.period)?
 							{ ..$state, phase: Scan({ day: number(frame.start), end: number(frame.end) }) }
 						}
 					}
@@ -786,7 +787,7 @@ DateRecurrenceCursor :: {
 							$state = { ..$state, phase: Emit({ index: 0, end: scan.end }) }
 						} else {
 							date = from_number(scan.day)?
-							if CalendarPattern.matches($state.rule.pattern, $state.period, date)? {
+							if CalendarPattern.matches($state.rule.pattern, { period_index: $state.period, date })? {
 								if $state.buffer.len() == limits.max_buffered {
 									return Ok(limited($state, $value, $occurrences, $steps, BufferLimit))
 								}
@@ -851,7 +852,7 @@ DateRecurrenceCursor :: {
 	## exhaustion; Limited needs more work/capacity and is not end-of-series.
 	next : DateRecurrenceCursor, { max_steps : U64, max_buffered : U64 } -> Try(DateRecurrence.Next, [OutOfRange])
 	next = |initial, budget| {
-		batch = fold(initial, { max_steps: budget.max_steps, max_buffered: budget.max_buffered, max_occurrences: 1 }, None, |_, date| Stop(Some(date)))?
+		batch = fold(initial, { limits: { max_steps: budget.max_steps, max_buffered: budget.max_buffered, max_occurrences: 1 }, initial: None, visit: |_, date| Stop(Some(date)) })?
 		status = match batch.status {
 			Complete => End
 			Limited(progress) => Limited(progress)
@@ -899,4 +900,17 @@ DateRecurrenceCursor :: {
 	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : DateRecurrenceCursor -> Str
 	to_inspect = |state| "DateRecurrence.Cursor(period=${state.period.to_str()}, counted=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
+}
+
+## A finite window does not require constructing an unreachable period.
+expect {
+	start = GregorianDate.from_fields({ year: 2147483647, month: 1, day: 1 })?
+	end = GregorianDate.from_fields({ year: 2147483647, month: 3, day: 1 })?
+	rule = DateRecurrence.new(start, { pattern: { ..CalendarPattern.defaults(Monthly), interval: 12 }, termination: Forever, by_set_pos: [], inclusions: [], exclusions: [] })?
+	cursor = DateRecurrence.cursor(rule, { start, end })?
+	batch = DateRecurrence.Cursor.collect(cursor, { max_steps: 1000, max_buffered: 32, max_occurrences: 10 })?
+	match batch.status {
+		Complete => batch.dates == [start]
+		Limited(_) => False
+	}
 }

@@ -54,6 +54,8 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 		if !is_in_domain(input) {
 			return Fuzz.reject
 		}
+		check_unreachable_period(input)
+		check_inclusion_before_gap(input)
 		# Independent two-segment local model composed with exclusions/endings.
 		LocalCases.check({
 			shift: if input.last_monday {
@@ -379,17 +381,19 @@ check_consumers = |initial, limits, expected| {
 	while $done == False and $calls < 5000 {
 		result = match DateRecurrence.Cursor.fold(
 			$current,
-			limits,
-			$value,
-			|acc, candidate| {
-				fields = GregorianDate.to_fields(candidate)
-				count = acc.count + 1
-				updated = { count, weighted: acc.weighted + count * (fields.month.to_u64() * 31 + fields.day.to_u64()) }
-				if U64.mod_by(count, 2) == 0 {
-					Stop(updated)
-				} else {
-					Continue(updated)
-				}
+			{
+				limits,
+				initial: $value,
+				visit: |acc, candidate| {
+					fields = GregorianDate.to_fields(candidate)
+					count = acc.count + 1
+					updated = { count, weighted: acc.weighted + count * (fields.month.to_u64() * 31 + fields.day.to_u64()) }
+					if U64.mod_by(count, 2) == 0 {
+						Stop(updated)
+					} else {
+						Continue(updated)
+					}
+				},
 			},
 		) {
 			Ok(batch) => batch
@@ -466,7 +470,7 @@ month_length = |year, month| match month {
 # 86400-second selection for each generated date, with a stable source ID.
 check_all_day = |rule, window, expected| {
 	rules = fixture_rules(2000000000000000)
-	var $current = match AllDayRecurrence.new(42.U64, rule, window, 1, rules) {
+	var $current = match AllDayRecurrence.new({ series: 42.U64, rule, window, days: 1, rules }) {
 		Ok(value) => value
 		Err(_) => crash "all-day construction"
 	}
@@ -505,11 +509,11 @@ check_all_day = |rule, window, expected| {
 }
 
 fixture_rules = |upper| {
-	validity = match PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(upper)) {
+	validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(upper) }) {
 		Ok(value) => value
 		Err(_) => crash "validity"
 	}
-	match ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) {
+	match ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "rules"
 	}
@@ -542,7 +546,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 		Ok(value) => value
 		Err(_) => crash "timed construction"
 	}
-	excluded_label = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), anchor_clock)
+	excluded_label = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: anchor_clock })
 	rule = match TimedRecurrence.with_exclusions(
 		base_rule,
 		if input.exclude_anchor {
@@ -558,7 +562,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 	start = local(window.start, 0)
 	end = local(window.end, 0)
 	rules = fixture_rules(2000000000000000)
-	var $current = match TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	var $current = match TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "timed window"
 	}
@@ -598,7 +602,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 	# R11/R14: restored definitions are evaluated against the independently
 	# walked calendar/clock grid, not merely against their own serialization.
 	restored = export_native(rule, Utc)
-	restored_cursor = match TimedRecurrence.cursor(restored, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	restored_cursor = match TimedRecurrence.cursor(restored, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "restored timed window"
 	}
@@ -647,7 +651,7 @@ clock = |hour| match ClockTime.from_fields({ hour, minute: 0, second: 0, microse
 	Err(_) => crash "model clock"
 }
 
-local = |date_value, hour| LocalDateTime.new(Calendar.Date.from_gregorian(date_value), clock(hour))
+local = |date_value, hour| LocalDateTime.new({ date: Calendar.Date.from_gregorian(date_value), clock: clock(hour) })
 
 check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
 	var $current = initial
@@ -714,8 +718,8 @@ check_subdaily = |input| {
 		Err(_) => crash "subdaily anchor clock"
 	}
 	anchor = date(1970, 1, 1)
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), anchor_clock)
-	query = match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds((anchor_second + 30) * 1000000), Gregorian) {
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: anchor_clock })
+	query = match FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds((anchor_second + 30) * 1000000), calendar: Gregorian }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily query"
 	}
@@ -763,7 +767,7 @@ check_subdaily = |input| {
 		Ok(value) => value
 		Err(_) => crash "whole second anchor"
 	}
-	whole_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), whole_anchor)
+	whole_start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: whole_anchor })
 	whole = match TimedRecurrence.from_definition({ ..declaration, anchor: whole_start, exclusions: [whole_start] }) {
 		Ok(value) => export_native(value, Utc)
 		Err(_) => crash "whole second edited declaration"
@@ -773,7 +777,7 @@ check_subdaily = |input| {
 	} else {
 		start
 	}
-	var $current = match TimedRecurrence.cursor(rebuilt, { start: window_start, end }, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
+	var $current = match TimedRecurrence.cursor(rebuilt, { window: { start: window_start, end }, context: { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily grid cursor"
 	}
@@ -810,13 +814,13 @@ check_subdaily = |input| {
 		},
 		end,
 	}
-	whole_cursor = match TimedRecurrence.cursor(whole, whole_window, { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap }) {
+	whole_cursor = match TimedRecurrence.cursor(whole, { window: whole_window, context: { rules: fixture_rules(259200000000), occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "restored whole-second subdaily cursor"
 	}
 	whole_boundaries = $expected.map(|micros| PosixBoundary.from_microseconds(micros - fraction))
 	whole_sources = whole_boundaries.map(
-		|boundary| match FixedOffset.project(FixedOffset.from_seconds(0), boundary, Gregorian) {
+		|boundary| match FixedOffset.project(FixedOffset.from_seconds(0), { boundary, calendar: Gregorian }) {
 			Ok(value) => value
 			Err(_) => crash "bounded expected source"
 		},
@@ -829,9 +833,9 @@ check_subdaily = |input| {
 	fractional_window = { start: window_start, end }
 	fractional_duration = Coordinate(PosixDelta.from_microseconds(1))
 	fractional_definition = checked_definition(ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation")
-	fractional_cursor = ScheduleDefinition.cursor(73.U64, fractional_definition, fractional_window) ?? crash "fractional prepared cursor"
+	fractional_cursor = ScheduleDefinition.cursor({ series: 73.U64, definition: fractional_definition, window: fractional_window }) ?? crash "fractional prepared cursor"
 	check_fractional_schedule(fractional_cursor, input.work.to_u64(), $expected)
-	fractional_direct = TimedSchedule.new(73.U64, rebuilt, fractional_window, fractional_duration, fractional_context) ?? crash "fractional direct cursor"
+	fractional_direct = TimedSchedule.new({ series: 73.U64, rule: rebuilt, window: fractional_window, duration: fractional_duration, context: fractional_context }) ?? crash "fractional direct cursor"
 	check_fractional_schedule(fractional_direct, input.work.to_u64(), $expected)
 	var $observed = []
 	var $calls = 0.U64
@@ -923,7 +927,7 @@ check_duration = |start, amount| {
 	if ICalDuration.parse(ICalDuration.to_text(parsed)) != Ok(parsed) or ICalDuration.parse("${text}S") != Err(Malformed) {
 		crash "duration grammar or semantic round trip"
 	}
-	parsed_cursor = match TimedOccurrence.cursor(42.U64, start, ICalDuration.to_duration(parsed)) {
+	parsed_cursor = match TimedOccurrence.cursor({ id: 42.U64, start, duration: ICalDuration.to_duration(parsed) }) {
 		Ok(value) => value
 		Err(_) => crash "parsed duration construction"
 	}
@@ -941,7 +945,7 @@ check_duration = |start, amount| {
 
 	base = PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(start))
 	for duration in [Coordinate(PosixDelta.from_microseconds(3600000000)), Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })] {
-		cursor = match TimedOccurrence.cursor(42.U64, start, duration) {
+		cursor = match TimedOccurrence.cursor({ id: 42.U64, start, duration }) {
 			Ok(value) => value
 			Err(_) => crash "duration construction"
 		}
@@ -982,13 +986,13 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		$position = $position + 1
 	}
 	for inclusion in inclusions {
-		source = LocalDateTime.new(Calendar.Date.from_gregorian(inclusion.date), inclusion.clock)
+		source = LocalDateTime.new({ date: Calendar.Date.from_gregorian(inclusion.date), clock: inclusion.clock })
 		var $duplicate = Bool.False
 		for item in $expected {
 			$duplicate = $duplicate or LocalDateTime.same_position(item.source, source)
 		}
 		removed = exclude_anchor and inclusion.date == anchor and inclusion.clock == anchor_clock
-		if !$duplicate and !removed and LocalDateTime.compare_position(source, window.start) != LT and LocalDateTime.compare_position(source, window.end) == LT {
+		if !$duplicate and !removed and LocalDateTime.compare_position({ left: source, right: window.start }) != Before and LocalDateTime.compare_position({ left: source, right: window.end }) == Before {
 			fields = GregorianDate.to_fields(inclusion.date)
 			days = if fields.month == 1 {
 				fields.day.to_i64() - 1
@@ -1010,7 +1014,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	)
 	expected_sources = $expected.map(|item| item.source)
 	expected_boundaries = $expected.map(|item| item.boundary)
-	anchor_source = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), anchor_clock)
+	anchor_source = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: anchor_clock })
 	extra_source = local(date(2024, 2, 4), 9)
 	# The generator constrains work to 1..128.
 	short : TimedOccurrence.Duration
@@ -1042,8 +1046,8 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		default_duration = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
 		context = { rules, occurrence: RequireUnique, gap: RejectGap }
 		declaration = checked_definition(ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition")
-		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "native definition cursor"
-		direct_cursor = match TimedSchedule.new_with_endings(42.U64, rule, window, default_duration, overrides, context) {
+		prepared_cursor = ScheduleDefinition.cursor({ series: 42.U64, definition: declaration, window }) ?? crash "native definition cursor"
+		direct_cursor = match TimedSchedule.new({ series: 42.U64, rule, window, duration: default_duration, overrides, context }) {
 			Ok(value) => value
 			Err(_) => crash "schedule construction"
 		}
@@ -1078,8 +1082,8 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		# the existing independent grid below checks restored identities/widths.
 		restored = export_wrapper(parsed)
 		declaration = checked_definition(ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition")
-		prepared_cursor = ScheduleDefinition.cursor(42.U64, declaration, window) ?? crash "iCalendar definition cursor"
-		direct_cursor = match ICalTimedRule.schedule(42.U64, restored, window, Local(rules)) {
+		prepared_cursor = ScheduleDefinition.cursor({ series: 42.U64, definition: declaration, window }) ?? crash "iCalendar definition cursor"
+		direct_cursor = match ICalTimedRule.schedule({ series: 42.U64, rule: restored, window, context: Local(rules) }) {
 			Ok(value) => value
 			Err(_) => crash "timed RFC schedule adaptation"
 		}
@@ -1162,13 +1166,13 @@ check_boundary_cutoff = |input| {
 	} else {
 		3600.I32
 	}
-	rules = match ZoneRules.new_bounded(
-		"Synthetic/Grid",
-		"v1",
+	rules = match ZoneRules.new_bounded({
+		name: "Synthetic/Grid",
+		version: "v1",
 		validity,
-		FixedOffset.from_seconds(0),
-		[{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(offset) }],
-		{
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(offset) }],
+		bounds: {
 			minimum: if offset < 0 {
 				offset
 			} else {
@@ -1180,7 +1184,7 @@ check_boundary_cutoff = |input| {
 				0
 			},
 		},
-	) {
+	}) {
 		Ok(value) => value
 		Err(_) => crash "grid rules"
 	}
@@ -1198,7 +1202,7 @@ check_boundary_cutoff = |input| {
 			$expected = $expected.append({ source, boundary })
 		}
 	}
-	var $cursor = match TimedRecurrence.cursor(rule, { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, { rules, occurrence: First, gap: UseOffsetBeforeGap }) {
+	var $cursor = match TimedRecurrence.cursor(rule, { window: { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } }) {
 		Ok(value) => value
 		Err(_) => crash "grid cursor"
 	}
@@ -1228,7 +1232,7 @@ check_boundary_cutoff = |input| {
 	crash "cutoff grid did not terminate under finite resumption budget"
 }
 
-cutoff_span = |lower, upper| match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
+cutoff_span = |lower, upper| match PosixSpan.new({ start: PosixBoundary.from_microseconds(lower), end: PosixBoundary.from_microseconds(upper) }) {
 	Ok(value) => value
 	Err(_) => crash "valid cutoff fixture span"
 }
@@ -1478,13 +1482,13 @@ check_boundary_exclusions = |input| {
 	} else {
 		3600.I32
 	}
-	rules = ZoneRules.new_bounded(
-		"Synthetic/ExclusionGrid",
-		"v1",
-		cutoff_span(-86400000000, 172800000000),
-		FixedOffset.from_seconds(0),
-		[{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(offset) }],
-		{
+	rules = ZoneRules.new_bounded({
+		name: "Synthetic/ExclusionGrid",
+		version: "v1",
+		validity: cutoff_span(-86400000000, 172800000000),
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(offset) }],
+		bounds: {
 			minimum: if offset < 0 {
 				offset
 			} else {
@@ -1496,7 +1500,7 @@ check_boundary_exclusions = |input| {
 				0
 			},
 		},
-	) ?? crash "exclusion grid rules"
+	}) ?? crash "exclusion grid rules"
 	count = input.count.to_u64() + 3
 	base = TimedRecurrence.new({ date: d, clock: clock(0) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2, 3, 4, 5], minutes: [0, 30], seconds: [] }, termination: Count(count), by_set_pos: [] }) ?? crash "exclusion grid base"
 	included = TimedRecurrence.with_inclusions(base, [{ date: d, clock: clock(3) }, { date: d, clock: clock(5) }]) ?? crash "exclusion grid inclusions"
@@ -1530,7 +1534,7 @@ check_boundary_exclusions = |input| {
 			$expected = $expected.append({ source, boundary })
 		}
 	}
-	var $cursor = TimedRecurrence.cursor(rule, { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, { rules, occurrence: First, gap: UseOffsetBeforeGap }) ?? crash "exclusion cursor"
+	var $cursor = TimedRecurrence.cursor(rule, { window: { start: local(d, 0), end: local(date(1970, 1, 2), 0) }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } }) ?? crash "exclusion cursor"
 	# One slot may expose a non-progressing merge BufferLimit when an explicit
 	# inclusion precedes a held rule item. Resume that exact state with the two
 	# slots required by the merge; work and zone budgets remain unchanged.
@@ -1583,5 +1587,109 @@ expect {
 	} == {
 		boundary_is_tested: Bool.True,
 		outside_is_rejected: Bool.True,
+	}
+}
+
+# R11–R12: a period anchored in the last supported Gregorian year.
+# The bounded window includes January 1 only. An interval of 12–14 months
+# puts every later period outside that window and beyond the provider.
+check_unreachable_period : RecurrenceCase -> {}
+check_unreachable_period = |input| {
+	start = date(2147483647, 1, 1)
+	end = date(2147483647, 1 + input.interval, 1)
+	spec = {
+		pattern: { ..CalendarPattern.defaults(Monthly), interval: input.interval.to_i64() + 11 },
+		termination: Forever,
+		by_set_pos: [],
+		inclusions: [],
+		exclusions: [],
+	}
+	rule = DateRecurrence.new(start, spec) ?? crash "Last-year rule is valid"
+	cursor = DateRecurrence.cursor(rule, { start, end }) ?? crash "Last-year query is valid"
+	result = DateRecurrence.Cursor.collect(cursor, { max_steps: input.work.to_u64() + 64, max_buffered: 32, max_occurrences: 2 }) ?? crash "Out-of-window period was constructed"
+	match result.status {
+		Complete => if result.dates != [start] {
+			crash "Finite last-year window must contain January 1 only"
+		}
+		Limited(_) => crash "Last-year one-period model fits the supplied budget"
+	}
+}
+
+# R07/R11/R12: a positive offset jump makes a later source ambiguous to
+# interpret as a real local time. The inclusion before it has a unique,
+# independently calculated boundary under the initial zero offset.
+check_inclusion_before_gap : RecurrenceCase -> {}
+check_inclusion_before_gap = |input| {
+	anchor = date(1970, 1, 1)
+	variant = input.count
+	{ prior, end_date, anchor_hour, transition_second, early_seconds, hours, positions, count } = if input.last_monday {
+		selection = match variant {
+			1 => { anchor_hour: 3.U8, positions: [-1.I16], count: 2.U64 }
+			2 => { anchor_hour: 2.U8, positions: [-2.I16], count: 2.U64 }
+			4 => { anchor_hour: 2.U8, positions: [2.I16], count: 2.U64 }
+			5 => { anchor_hour: 0.U8, positions: [1.I16, 2, 3, 1], count: 4.U64 }
+			_ => { anchor_hour: 0.U8, positions: [1.I16, 2], count: 4.U64 }
+		}
+		minute = input.query_month.to_i64() * 60
+		early = match variant {
+			5 => 3600 + minute
+			6 => 0
+			_ => minute
+		}
+		hour_choices = if (variant == 5) [0.U8, 1, 2] else [0.U8, 2, 3]
+		{ prior: date(1970, 1, 2), end_date: date(1970, 1, 3), anchor_hour: selection.anchor_hour, transition_second: 93600.I64, early_seconds: early, hours: hour_choices, positions: selection.positions, count: selection.count }
+	} else {
+		{ prior: date(1969, 12, 31), end_date: date(1970, 1, 2), anchor_hour: 0.U8, transition_second: 0.I64, early_seconds: input.query_month.to_i64() * 3600, hours: [], positions: [], count: input.count.to_u64() }
+	}
+	early_clock = ClockTime.from_microseconds_since_midnight(early_seconds * 1000000) ?? crash "Early clock fixture"
+	shift = input.interval.to_i32() * 60
+	point = PosixBoundary.from_microseconds
+	validity = PosixSpan.new({ start: point(-172800000000), end: point(259200000000) }) ?? crash "Gap fixture validity"
+	rules = ZoneRules.new_bounded({
+		name: "Synthetic/FuzzPrefix",
+		version: "1",
+		validity,
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: point(transition_second * 1000000), offset: FixedOffset.from_seconds(shift) }],
+		bounds: { minimum: 0, maximum: shift },
+	}) ?? crash "Gap fixture transition"
+	base = TimedRecurrence.new({ date: anchor, clock: clock(anchor_hour) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours, minutes: [], seconds: [] }, termination: Count(count), by_set_pos: positions }) ?? crash "Gap fixture recurrence"
+	with_inclusion = TimedRecurrence.with_inclusions(base, [{ date: prior, clock: early_clock }]) ?? crash "Gap fixture inclusion"
+	rule = if input.last_monday and (variant == 3 or variant == 5) {
+		TimedRecurrence.with_exclusions(with_inclusion, [local(prior, 0)]) ?? crash "Gap fixture exclusion"
+	} else with_inclusion
+	start = if input.last_monday and variant == 2 {
+		start_clock = ClockTime.from_microseconds_since_midnight(early_seconds * 500000) ?? crash "Clipped window clock"
+		LocalDateTime.new({ date: Calendar.Date.from_gregorian(prior), clock: start_clock })
+	} else local(prior, 0)
+	end = local(end_date, 0)
+	cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) ?? crash "Gap fixture query"
+	limits = { max_steps: input.work.to_u64() + 64, max_buffered: if (input.last_monday) 4 else 1, max_zone_segments: 32, max_zone_candidates: 1 }
+	first = TimedRecurrence.Cursor.next(cursor, limits) ?? crash "Later rule error suppressed the valid inclusion"
+	match first.status {
+		Item(item) => {
+			expected_day = if (input.last_monday) 86400 else -86400
+			expected = point((expected_day + early_seconds) * 1000000)
+			if item.occurrence.boundary() != expected {
+				crash "Explicit start must retain its pre-transition boundary"
+			}
+			match TimedRecurrence.Cursor.next(item.cursor, limits) {
+				Err(Gap) => {}
+				_ => crash "Later gap must remain visible"
+			}
+		}
+		_ => crash "Inclusion must fit the fixture budget"
+	}
+	if input.last_monday and variant == 6 {
+		# Include the next period so a duplicate that failed to consume
+		# COUNT would produce an extra occurrence.
+		adjusted = TimedRecurrence.cursor(rule, { window: { start, end: local(date(1970, 1, 3), 12) }, context: { rules, occurrence: RequireUnique, gap: UseOffsetBeforeGap } }) ?? crash "Adjusted gap fixture query"
+		batch = TimedRecurrence.Cursor.collect(adjusted, { work: limits, max_occurrences: 3 }) ?? crash "Adjusted gap fixture evaluation"
+		match batch.status {
+			Complete => if batch.occurrences.map(|item| item.boundary()) != [point(86400000000), point(93600000000)] {
+				crash "Equal inclusion must emit once while the rule still consumes COUNT"
+			}
+			Limited(_) => crash "Equal inclusion fixture fits its budget"
+		}
 	}
 }

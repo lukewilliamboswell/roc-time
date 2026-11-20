@@ -25,8 +25,8 @@ AllDayRecurrence(id) :: {
 	## Create a cursor for positive-duration all-day events within a source-date window.
 	## Empty/reversed windows and zero days fail; actual zone interpretation is deferred until
 	## consumption.
-	new : id, DateRecurrence, DateRecurrence.Window, U64, ZoneRules -> Try(AllDayRecurrence(id), [InvalidDuration, EmptyWindow, ReversedWindow])
-	new = |series, rule, window, days, rules| {
+	new : { series : id, rule : DateRecurrence, window : DateRecurrence.Window, days : U64, rules : ZoneRules } -> Try(AllDayRecurrence(id), [InvalidDuration, EmptyWindow, ReversedWindow])
+	new = |{ series, rule, window, days, rules }| {
 		if days == 0 {
 			return Err(InvalidDuration)
 		}
@@ -113,7 +113,7 @@ AllDayRecurrence(id) :: {
 					}
 					Item(item) => {
 						date = Calendar.Date.from_gregorian(item.date)
-						pending = match AllDayOccurrence.cursor({ series: $state.series, date: item.date }, date, $state.days, $state.rules) {
+						pending = match AllDayOccurrence.cursor({ id: { series: $state.series, date: item.date }, date, days: $state.days, rules: $state.rules }) {
 							Ok(value) => value
 							Err(InvalidDuration) => crash "validated positive duration"
 							Err(OutOfRange) => return Err(OutOfRange)
@@ -182,9 +182,9 @@ expect {
 	start = test_alldayrecurrence_date(1)?
 	end = test_alldayrecurrence_date(4)?
 	rule = DateRecurrence.new(start, { pattern: CalendarPattern.defaults(Daily), termination: Count(2), by_set_pos: [], inclusions: [], exclusions: [] })?
-	validity = PosixSpan.new(test_alldayrecurrence_point(-259200000000), test_alldayrecurrence_point(432000000000))?
-	rules = ZoneRules.new_bounded("Synthetic/Skip", "v1", validity, FixedOffset.from_seconds(0), [{ at: test_alldayrecurrence_point(0), offset: FixedOffset.from_seconds(86400) }], { minimum: 0, maximum: 86400 })?
-	initial = AllDayRecurrence.new("service", rule, { start, end }, 1, rules)?
+	validity = PosixSpan.new({ start: test_alldayrecurrence_point(-259200000000), end: test_alldayrecurrence_point(432000000000) })?
+	rules = ZoneRules.new_bounded({ name: "Synthetic/Skip", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: test_alldayrecurrence_point(0), offset: FixedOffset.from_seconds(86400) }], bounds: { minimum: 0, maximum: 86400 } })?
+	initial = AllDayRecurrence.new({ series: "service", rule, window: { start, end }, days: 1, rules })?
 	budget = { max_date_steps: 8.U64, max_date_buffered: 1.U64, max_zone_segments: 0.U64, max_zone_members: 1.U64 }
 	first = AllDayRecurrence.next(initial, budget)?
 	var $valid = Bool.True

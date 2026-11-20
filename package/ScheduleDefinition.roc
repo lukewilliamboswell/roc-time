@@ -26,7 +26,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 
 	## Native recurrence, default duration, source-specific endings and explicit immutable start
 	## context. End policies remain part of each calendar/local ending.
-	NativeSpec : { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndOverride), context : TimedRecurrence.Context }
+	NativeSpec : { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndingEntry), context : TimedRecurrence.Context }
 
 	## Checked extracted iCalendar rule plus a compatible context: UTC for UTC declarations or
 	## explicit rules for local/floating declarations.
@@ -67,8 +67,8 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## Fresh execution state for each window; COUNT remains anchored at DTSTART.
 	## Definition validation is not repeated. Interpretation errors remain lazy
 	## checked results of TimedSchedule consumption under its normal budgets.
-	cursor : id, ScheduleDefinition, TimedRecurrence.Window -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
-	cursor = |series, value, window| TimedSchedule.from_prepared(series, value.rule, window, value.endings, value.context)
+	cursor : { series : id, definition : ScheduleDefinition, window : TimedRecurrence.Window } -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
+	cursor = |{ series, definition: value, window }| TimedSchedule.from_prepared({ series, rule: value.rule, window, endings: value.endings, context: value.context })
 
 	## Declaration equality includes origin, retained selectors/exception labels,
 	## ending intent and complete immutable context. It does not establish that
@@ -148,7 +148,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 test_local = |day| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
+	Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock }))
 }
 
 test_native = || {
@@ -158,8 +158,8 @@ test_native = || {
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(3), by_set_pos: [] })?
 	excluded = TimedRecurrence.with_exclusions(rule, [test_local(2)?])?
 	included = TimedRecurrence.with_inclusions(excluded, [{ date: GregorianDate.from_fields({ year: 1970, month: 1, day: 5 })?, clock }])?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(864000000000))?
-	rules = ZoneRules.new_bounded("Fixture/UTC", "epoch-grid-v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(864000000000) })?
+	rules = ZoneRules.new_bounded({ name: "Fixture/UTC", version: "epoch-grid-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	Ok({ rule: included, duration: Coordinate(PosixDelta.from_microseconds(3600000000)), overrides: [{ source: test_local(5)?, ending: After(Coordinate(PosixDelta.from_microseconds(7200000000))) }], context: { rules, occurrence: RequireUnique, gap: RejectGap } })
 }
 
@@ -171,9 +171,9 @@ expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(123)?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(3), by_set_pos: [] })?
-	second = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
-	third = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
-	local_end = LocalDateTime.new(LocalDateTime.date(third), ClockTime.from_microseconds_since_midnight(456)?)
+	second = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock })
+	third = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock })
+	local_end = LocalDateTime.new({ date: LocalDateTime.date(third), clock: ClockTime.from_microseconds_since_midnight(456)? })
 	duration = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(500), occurrence: Last, gap: UseOffsetBeforeGap })
 	overrides = [{ source: second, ending: AtLocal({ source: local_end, occurrence: First, gap: RejectGap }) }, { source: third, ending: AtBoundary(PosixBoundary.from_microseconds(176400000789)) }]
 	definition = ScheduleDefinition.from_native({ ..spec, rule, duration, overrides })?
@@ -193,7 +193,7 @@ expect {
 		}
 		_ => Bool.False
 	}
-	cursor = ScheduleDefinition.cursor("fractional", definition, { start: test_local(1)?, end: test_local(4)? })?
+	cursor = ScheduleDefinition.cursor({ series: "fractional", definition, window: { start: test_local(1)?, end: test_local(4)? } })?
 	batch = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 4 })?
 	var $valid = declaration_valid and match batch.status {
 		Complete => Bool.True
@@ -219,7 +219,7 @@ expect {
 	definition = ScheduleDefinition.from_native(test_native()?)?
 	var $valid = Bool.True
 	for case in [{ first: 1.U8, end: 4.U8, expected: [0.I64, 172800000000] }, { first: 3, end: 6, expected: [172800000000, 345600000000] }] {
-		cursor = ScheduleDefinition.cursor("series", definition, { start: test_local(case.first)?, end: test_local(case.end)? })?
+		cursor = ScheduleDefinition.cursor({ series: "series", definition, window: { start: test_local(case.first)?, end: test_local(case.end)? } })?
 		batch = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 4 })?
 		$valid = $valid and match batch.status {
 			Complete => Bool.True

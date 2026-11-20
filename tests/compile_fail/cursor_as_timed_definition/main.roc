@@ -6,7 +6,7 @@ main! = |_args| {
 	rule = timed_parse({ start: "20250101T090000Z", rule: "FREQ=DAILY", duration: "PT1H", inclusions: [], exclusions: [], periods: [], mode: Utc })?
 	start = local("2025-01-01T00:00")?
 	end = local("2026-01-01T00:00")?
-	cursor = ICalTimedRule.schedule(1.U64, rule, { start, end }, Utc)?
+	cursor = ICalTimedRule.schedule({ series: 1.U64, rule, window: { start, end }, context: Utc })?
 	_ = ICalTimedRule.to_parts(cursor)
 	Ok({})
 }

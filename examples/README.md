@@ -57,3 +57,6 @@ applications available when that release was built, which may be fewer.
 | [Archive intervals](archive_intervals/main.roc) | Import and save mixed-precision creation dates, preserving unknown versus open ends without inventing exact appointments |
 | [Archive search](archive_search/main.roc) | Import EDTF dates and offset timestamps; preserve search precision and unresolved qualifications |
 | [Recorder handoff](sample_windows/main.roc) | Classify consecutive microsecond sample windows without losing exact boundaries |
+
+- [Nanosecond columns](nanosecond_columns/main.roc) converts decoded clock,
+  POSIX, civil, and displacement columns without dropping their precision.

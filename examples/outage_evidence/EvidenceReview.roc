@@ -7,7 +7,7 @@ EvidenceReview :: [].{
 	compare = |reports, notes, probes| {
 		var $spans = []
 		for report in reports {
-			$spans = $spans.append(PosixSpan.new(boundary(report.start)?, boundary(report.end)?)?)
+			$spans = $spans.append(PosixSpan.new({ start: boundary(report.start)?, end: boundary(report.end)? })?)
 		}
 		paired = IntervalEvidence.paired($spans)?
 		var $starts = []

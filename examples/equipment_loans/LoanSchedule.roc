@@ -15,9 +15,9 @@ LoanSchedule :: [].{
 	upcoming = |rules| {
 		date = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
 		clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond: 0 })?
-		start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+		start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 		end_date = GregorianDate.from_fields({ year: 2025, month: 4, day: 1 })?
-		end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), clock)
+		end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock })
 		monthly = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Monthly), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
 		extra_date = GregorianDate.from_fields({ year: 2025, month: 2, day: 14 })?
 		rule = TimedRecurrence.with_inclusions(monthly, [{ date: extra_date, clock }])?
@@ -27,8 +27,8 @@ LoanSchedule :: [].{
 		monthly_duration = Calendar({ delta: Calendar.Delta.months(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 		extra_duration : TimedOccurrence.Duration
 		extra_duration = Calendar({ delta: Calendar.Delta.days(7), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
-		overrides = [{ source: LocalDateTime.new(Calendar.Date.from_gregorian(extra_date), clock), duration: extra_duration }]
-		cursor = TimedSchedule.new_with_overrides(series, rule, { start, end }, monthly_duration, overrides, { rules, occurrence: RequireUnique, gap: RejectGap })?
+		overrides = [{ source: LocalDateTime.new({ date: Calendar.Date.from_gregorian(extra_date), clock }), ending: After(extra_duration) }]
+		cursor = TimedSchedule.new({ series, rule, window: { start, end }, duration: monthly_duration, overrides: overrides, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 10000, max_buffered: 2, max_zone_segments: 100000, max_zone_candidates: 2 }, max_occurrences: 4 }) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))

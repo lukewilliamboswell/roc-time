@@ -63,15 +63,15 @@ OffsetCase := { number : I64, seconds : I32 }.{
 		boundary = PosixBoundary.from_microseconds(input.number)
 		offset = FixedOffset.from_seconds(input.seconds)
 		span = rule_span(I64.lowest, I64.highest)
-		rules = match ZoneRules.new(
-			"Synthetic/Step",
-			"v1",
-			span,
-			FixedOffset.from_seconds(0),
-			[
+		rules = match ZoneRules.new({
+			name: "Synthetic/Step",
+			version: "v1",
+			validity: span,
+			initial: FixedOffset.from_seconds(0),
+			transitions: [
 				{ at: PosixBoundary.from_microseconds(0), offset },
 			],
-		) {
+		}) {
 			Ok(value) => value
 			Err(_) => crash "valid synthetic rules rejected"
 		}
@@ -86,7 +86,7 @@ OffsetCase := { number : I64, seconds : I32 }.{
 			crash "rule lookup disagrees with independent step function"
 		}
 		for calendar in [Gregorian, Julian] {
-			local = match FixedOffset.project(offset, boundary, calendar) {
+			local = match FixedOffset.project(offset, { boundary, calendar }) {
 				Ok(value) => value
 				Err(_) => crash "full POSIX range projection failed"
 			}
@@ -107,7 +107,7 @@ OffsetCase := { number : I64, seconds : I32 }.{
 	}
 }
 
-rule_span = |lower, upper| match PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper)) {
+rule_span = |lower, upper| match PosixSpan.new({ start: PosixBoundary.from_microseconds(lower), end: PosixBoundary.from_microseconds(upper) }) {
 	Ok(value) => value
 	Err(_) => crash "valid synthetic rule range rejected"
 }

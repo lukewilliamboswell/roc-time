@@ -102,11 +102,11 @@ check_position = |number| {
 	} else {
 		Err(Submicrosecond)
 	}
-	if NanoClockTime.to_clock(value, Floor) != ClockTime.from_microseconds_since_midnight(quotient) or
-		NanoClockTime.to_clock(value, TowardZero) != ClockTime.from_microseconds_since_midnight(quotient) or
-			NanoClockTime.to_clock(value, Ceiling) != ClockTime.from_microseconds_since_midnight(up) or
-				NanoClockTime.to_clock(value, NearestTiesEven) != ClockTime.from_microseconds_since_midnight(nearest) or
-					NanoClockTime.to_clock(value, RejectSubmicrosecond) != exact {
+	if NanoClockTime.to_clock_with_rounding(value, Floor) != ClockTime.from_microseconds_since_midnight(quotient) or
+		NanoClockTime.to_clock_with_rounding(value, TowardZero) != ClockTime.from_microseconds_since_midnight(quotient) or
+			NanoClockTime.to_clock_with_rounding(value, Ceiling) != ClockTime.from_microseconds_since_midnight(up) or
+				NanoClockTime.to_clock_with_rounding(value, NearestTiesEven) != ClockTime.from_microseconds_since_midnight(nearest) or
+					NanoClockTime.to_clock_with_rounding(value, RejectSubmicrosecond) != exact {
 		crash "nanosecond clock rounding differs from integer model"
 	}
 	parts = NanoClockTime.split_microseconds(value)

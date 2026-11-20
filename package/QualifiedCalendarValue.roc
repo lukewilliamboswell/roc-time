@@ -176,7 +176,7 @@ scope_rank = |scope| match scope {
 
 expect {
 	year = Calendar.Value.year(Gregorian, 2004)?
-	month = Calendar.Value.month(Gregorian, 2004, 6)?
+	month = Calendar.Value.month(Gregorian, { year: 2004, month: 6 })?
 	group = QualifiedCalendarValue.new(month, [{ scope: YearMonth, qualifier: Approximate }])?
 	whole = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: Approximate }])?
 	individual = QualifiedCalendarValue.new(month, [{ scope: Month, qualifier: Approximate }])?
@@ -193,7 +193,7 @@ expect {
 			QualifiedCalendarValue.new(year, List.repeat({ scope: Year, qualifier: Uncertain }, 10)) == Err(TooManyQualifications)
 }
 expect {
-	month = Calendar.Value.month(Gregorian, 2004, 6)?
+	month = Calendar.Value.month(Gregorian, { year: 2004, month: 6 })?
 	a = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: Uncertain }, { scope: Month, qualifier: Approximate }])?
 	b = QualifiedCalendarValue.new(month, [{ scope: Month, qualifier: Approximate }, { scope: Whole, qualifier: Uncertain }])?
 	c = QualifiedCalendarValue.new(month, [{ scope: Whole, qualifier: UncertainApproximate }])?
@@ -207,8 +207,8 @@ expect {
 	value = Calendar.Value.day(date)
 	month_only = QualifiedCalendarValue.new(value, [{ scope: Month, qualifier: Approximate }])?
 	whole = QualifiedCalendarValue.new(value, [{ scope: Whole, qualifier: Approximate }])?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
-	rules = ZoneRules.new_bounded("UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
+	rules = ZoneRules.new_bounded({ name: "UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	denied = match QualifiedCalendarValue.selection_cursor(month_only, rules) {
 		Err(NeedsModel) => True
 		_ => False

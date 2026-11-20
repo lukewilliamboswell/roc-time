@@ -14,7 +14,7 @@ BookingExchange :: [].{
 		for span in computed {
 			# The application requests exact microsecond output in UTC. This
 			# does not reconstruct the original bookings from merged coverage.
-			value = match ExactInterval.from_span(span, UnassertedUtc, 6) {
+			value = match ExactInterval.from_span(span, { offset: UnassertedUtc, fraction_digits: 6 }) {
 				Ok(found) => found
 				Err(error) => return Err(Output(error))
 			}

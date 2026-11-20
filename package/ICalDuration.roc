@@ -286,13 +286,13 @@ expect ICalDuration.parse("P${"0".repeat(256)}D") == Err(TooLarge)
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	source = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	source = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	end_date = GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), clock)
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(259200000000))?
-	rules = ZoneRules.new_bounded("Synthetic/Duration", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(43200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock })
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(259200000000) })?
+	rules = ZoneRules.new_bounded({ name: "Synthetic/Duration", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(43200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	cursor = TimedRecurrence.cursor(rule, { start: source, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+	cursor = TimedRecurrence.cursor(rule, { window: { start: source, end }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })?
 	batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 10, max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 })?
 	start = match batch.status {
 		Item(item) => item.occurrence
@@ -301,7 +301,7 @@ expect {
 	var $valid = Bool.True
 	for case in [{ text: "P1D", hours: 23.I64 }, { text: "PT24H", hours: 24 }, { text: "P1DT1H", hours: 24 }] {
 		parsed = ICalDuration.parse(case.text)?
-		pending = TimedOccurrence.cursor({}, start, ICalDuration.to_duration(parsed))?
+		pending = TimedOccurrence.cursor({ id: {}, start, duration: ICalDuration.to_duration(parsed) })?
 		paused = TimedOccurrence.Cursor.collect(pending, { max_segments: 0, max_candidates: 1 })?
 		result = match paused.status {
 			Complete(value) => value

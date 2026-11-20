@@ -26,7 +26,7 @@ SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
 	evaluate : SpanCase -> Try(Bool, [EmptySpan, ReversedBounds])
 	evaluate = |input| {
 		for (a, b) in [(input.a, input.b), (input.c, input.d)] {
-			constructed = PosixSpan.new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b))
+			constructed = PosixSpan.new({ start: PosixBoundary.from_microseconds(a), end: PosixBoundary.from_microseconds(b) })
 			if a == b and constructed != Err(EmptySpan) {
 				return Ok(Bool.False)
 			}
@@ -71,7 +71,7 @@ SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
 		c = PosixBoundary.to_microseconds(PosixSpan.start(right))
 		d = PosixBoundary.to_microseconds(PosixSpan.end(right))
 		# Independent order predicates, rather than the production decision tree.
-		correct = match PosixSpan.relation(left, right) {
+		correct = match PosixSpan.relation({ left, right }) {
 			Before => b < c
 			Meets => b == c
 			Overlaps => a < c and c < b and b < d
@@ -86,7 +86,7 @@ SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
 			MetBy => a == d
 			After => d < a
 		}
-		inverse = match PosixSpan.relation(right, left) {
+		inverse = match PosixSpan.relation({ left: right, right: left }) {
 			Before => After
 			Meets => MetBy
 			Overlaps => OverlappedBy
@@ -101,7 +101,7 @@ SpanCase := { a : I64, b : I64, c : I64, d : I64 }.{
 			MetBy => Meets
 			After => Before
 		}
-		Ok(correct and PosixSpan.relation(left, right) == inverse and PosixSpan.overlaps(left, right) == (a < d and c < b))
+		Ok(correct and PosixSpan.relation({ left, right }) == inverse and PosixSpan.overlaps(left, right) == (a < d and c < b))
 	}
 
 	check : SpanCase -> Fuzz.Outcome
@@ -135,5 +135,5 @@ ordered_span = |a, b| {
 	} else {
 		a + 1
 	}
-	PosixSpan.new(PosixBoundary.from_microseconds(lower), PosixBoundary.from_microseconds(upper))
+	PosixSpan.new({ start: PosixBoundary.from_microseconds(lower), end: PosixBoundary.from_microseconds(upper) })
 }

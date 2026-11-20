@@ -54,7 +54,7 @@ PrecisionCase := { a : I64, b : I64, nanos : U64 }.{
 		if PosixBoundary.shift(a, PosixDelta.from_microseconds(input.b)) != expected_sum {
 			crash "R01 checked shift differs from I128 oracle"
 		}
-		if PosixBoundary.difference(a, b) != expected_difference {
+		if PosixBoundary.difference({ left: a, right: b }) != expected_difference {
 			crash "R01 checked difference differs from I128 oracle"
 		}
 		nanoseconds = I64.to_i128(input.a) * 1000 + U64.to_i128(input.nanos) - 1000

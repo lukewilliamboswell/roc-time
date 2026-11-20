@@ -106,12 +106,12 @@ PatternCase := { year : I64, month : U8, interval : U8, index : U8, weekday : U8
 		while $day <= length {
 			month_match = input.month_day.to_i64() == $day.to_i64() or input.month_day.to_i64() == $day.to_i64() - length.to_i64() - 1
 			expected = month_match and $selected_weekdays.contains($day)
-			if CalendarPattern.matches(pattern, input.index.to_u64(), date($year, $month, $day)) != Ok(expected) {
+			if CalendarPattern.matches(pattern, { period_index: input.index.to_u64(), date: date($year, $month, $day) }) != Ok(expected) {
 				crash "Date selector differs from weekday enumeration"
 			}
 			$day = $day + 1
 		}
-		if CalendarPattern.matches(pattern, input.index.to_u64(), frame.end) != Ok(False) {
+		if CalendarPattern.matches(pattern, { period_index: input.index.to_u64(), date: frame.end }) != Ok(False) {
 			crash "Exclusive period end included"
 		}
 		Fuzz.keep

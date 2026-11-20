@@ -276,6 +276,19 @@
       "path": "examples/meeting_exchange/main.roc"
     },
     {
+      "path": "examples/nanosecond_columns/main.roc",
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Opening: 12:00:00.000000001 (43200000000001 ns)\nClosing: null\nTimestamp: -1 ns, zone metadata Europe/Paris\nNaive: 1969-12-31T23:59:59.999999999 (-1 ns)\nPOSIX displacement: -1500 ns\n"
+        }
+      ]
+    },
+    {
       "cases": [
         {
           "args": [],

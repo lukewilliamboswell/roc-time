@@ -26,7 +26,7 @@ main! = |args| {
 	anchor = DefinitionFixture.label(0)
 	date = Calendar.Date.as_gregorian(LocalDateTime.date(anchor)) ?? crash "Gregorian anchor"
 	end_date = GregorianDate.from_fields({ year: horizon, month: 1, day: 1 }) ?? crash "bounded horizon"
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), LocalDateTime.clock(anchor))
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock: LocalDateTime.clock(anchor) })
 	rules = DefinitionFixture.rules({})
 	rule = TimedRecurrence.new({ date, clock: LocalDateTime.clock(anchor) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Forever, by_set_pos: [] }) ?? crash "valid native rule"
 	before_input = Host.allocated_bytes!({})
@@ -54,7 +54,7 @@ main! = |args| {
 		ICal(_) => crash "native origin changed"
 	}
 	before_cursor = Host.allocated_bytes!({})
-	cursor = ScheduleDefinition.cursor(42.U64, definition, { start: anchor, end }) ?? crash "valid window"
+	cursor = ScheduleDefinition.cursor({ series: 42.U64, definition, window: { start: anchor, end } }) ?? crash "valid window"
 	after_cursor = Host.allocated_bytes!({})
 	first = TimedSchedule.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "first bounded occurrence"
 	after_first = Host.allocated_bytes!({})

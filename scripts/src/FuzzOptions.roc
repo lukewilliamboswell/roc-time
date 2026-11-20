@@ -13,8 +13,10 @@ FuzzOptions := [].{
 		"clock",
 		"nano_clock",
 		"offsets",
+		"nano_local",
 		"zones",
 		"events",
+		"nano_posix",
 		"patterns",
 		"recurrence",
 		"descriptions",
@@ -24,8 +26,8 @@ FuzzOptions := [].{
 	## Properties keep independent corpus/baseline identities inside three builds.
 	suite : Str -> Str
 	suite = |name| match name {
-		"precision" | "spans" | "coverage" | "events" => "core_suite"
-		"gregorian" | "arithmetic" | "calendars" | "clock" | "nano_clock" | "offsets" => "civil_suite"
+		"precision" | "spans" | "coverage" | "events" | "nano_posix" => "core_suite"
+		"gregorian" | "arithmetic" | "calendars" | "clock" | "nano_clock" | "offsets" | "nano_local" => "civil_suite"
 		"zones" | "patterns" | "recurrence" | "descriptions" | "interchange" => "interpretation_suite"
 		_ => name
 	}
@@ -34,6 +36,8 @@ FuzzOptions := [].{
 	member = |name| match name {
 		"coverage" => "coverage-v2"
 		"nano_clock" => "nano-clock-v1"
+		"nano_posix" => "nano-posix-v1"
+		"nano_local" => "nano-local-v1"
 		_ => "${name}-v1"
 	}
 

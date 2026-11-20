@@ -19,6 +19,7 @@
   {"name":"civil_as_posix","fragments":["first argument","CivilDay","PosixBoundary"]},
   {"name":"delta_as_boundary","fragments":["first argument","PosixDelta","PosixBoundary"]},
   {"name":"nano_clock_as_clock","fragments":["first argument","has the type:\n\n    NanoClockTime","to be:\n\n    ClockTime"]},
+  {"name":"naive_as_posix","fragments":["first argument","NanoLocalDateTime","PosixNanoBoundary"]},
   {"name":"raw_integer_as_boundary","fragments":["first argument","I64","PosixBoundary"]},
   {"name":"forge_events","fragments":["annotation says","EventCollection(U64)","List(_a)"]},
   {"name":"forge_span","fragments":["annotation says","PosixSpan","{ end: PosixBoundary, start: PosixBoundary }"]},

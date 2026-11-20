@@ -14,7 +14,7 @@ IntervalFixture := [].{
 		while $i < n.to_i64() {
 			$starts = $starts.append(PosixBoundary.from_microseconds(-($i) - 1))
 			$ends = $ends.append(PosixBoundary.from_microseconds($i + 1))
-			span = match PosixSpan.new(PosixBoundary.from_microseconds($i * 3), PosixBoundary.from_microseconds($i * 3 + 1)) {
+			span = match PosixSpan.new({ start: PosixBoundary.from_microseconds($i * 3), end: PosixBoundary.from_microseconds($i * 3 + 1) }) {
 				Ok(value) => value
 				Err(_) => crash "bounded fixture span"
 			}

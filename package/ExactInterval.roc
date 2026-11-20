@@ -69,8 +69,8 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 	profile = "exact-offset-interval-v1"
 
 	## Constructs a nonempty half-open interval from two timestamp declarations. Rejects equal/reversed resolved boundaries and endpoint range failures.
-	new : OffsetTimestamp, OffsetTimestamp -> Try(ExactInterval, Error)
-	new = |start, end| {
+	new : { start : OffsetTimestamp, end : OffsetTimestamp } -> Try(ExactInterval, Error)
+	new = |{ start, end }| {
 		low = match OffsetTimestamp.boundary(start) {
 			Ok(value) => value
 			Err(_) => return Err(Start(OutOfRange))
@@ -79,7 +79,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 			Ok(value) => value
 			Err(_) => return Err(End(OutOfRange))
 		}
-		extent = match PosixSpan.new(low, high) {
+		extent = match PosixSpan.new({ start: low, end: high }) {
 			Ok(value) => value
 			Err(EmptySpan) => return Err(EmptySpan)
 			Err(ReversedBounds) => return Err(ReversedBounds)
@@ -100,6 +100,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 		start_text = parts.first() ?? ""
 		start = match OffsetTimestamp.parse(start_text) {
 			Ok(value) => value
+			Err(Incomplete) if parts.len() == 2 => return Err(Start(Malformed))
 			Err(error) => return Err(Start(error))
 		}
 		if parts.len() < 2 {
@@ -110,7 +111,7 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 			Ok(value) => value
 			Err(error) => return Err(End(error))
 		}
-		new(start, end)
+		new({ start, end })
 	}
 
 	## Returns the retained start/end declarations, including their fractional widths and offset assertions.
@@ -127,17 +128,17 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 
 	## Explicit offset and exact fractional width for computed coverage output.
 	## Precision loss fails; output never silently rounds a boundary.
-	from_span : PosixSpan, OffsetTimestamp.Offset, U8 -> Try(ExactInterval, Error)
-	from_span = |extent, offset, fraction_digits| {
-		start = match OffsetTimestamp.from_boundary(PosixSpan.start(extent), offset, fraction_digits) {
+	from_span : PosixSpan, { offset : OffsetTimestamp.Offset, fraction_digits : U8 } -> Try(ExactInterval, Error)
+	from_span = |extent, { offset, fraction_digits }| {
+		start = match OffsetTimestamp.from_boundary(PosixSpan.start(extent), { offset, fraction_digits }) {
 			Ok(value) => value
 			Err(error) => return Err(Start(error))
 		}
-		end = match OffsetTimestamp.from_boundary(PosixSpan.end(extent), offset, fraction_digits) {
+		end = match OffsetTimestamp.from_boundary(PosixSpan.end(extent), { offset, fraction_digits }) {
 			Ok(value) => value
 			Err(error) => return Err(End(error))
 		}
-		new(start, end)
+		new({ start, end })
 	}
 
 	## Compares endpoint declarations as well as their extent. Compare spans when only occupied time matters.
@@ -212,12 +213,12 @@ expect {
 expect {
 	a = ExactInterval.parse("1970-01-01T00:00:00.12Z/1970-01-01T00:00:00.13Z")?
 	b = ExactInterval.parse("1970-01-01T00:00:00.120Z/1970-01-01T00:00:00.130Z")?
-	a != b and ExactInterval.span(a) == ExactInterval.span(b) and ExactInterval.from_span(ExactInterval.span(b), UnassertedUtc, 2) == Ok(a) and ExactInterval.from_span(ExactInterval.span(b), UnassertedUtc, 1) == Err(Start(UnsupportedPrecision))
+	a != b and ExactInterval.span(a) == ExactInterval.span(b) and ExactInterval.from_span(ExactInterval.span(b), { offset: UnassertedUtc, fraction_digits: 2 }) == Ok(a) and ExactInterval.from_span(ExactInterval.span(b), { offset: UnassertedUtc, fraction_digits: 1 }) == Err(Start(UnsupportedPrecision))
 }
 expect {
-	ExactInterval.parse("1964/2008") == Err(Start(Incomplete)) and
+	ExactInterval.parse("1964/2008") == Err(Start(Malformed)) and
 		ExactInterval.parse("1970-01-01T00:00:00Z/") == Err(End(Incomplete)) and
-			ExactInterval.parse("/1970-01-01T00:00:00Z") == Err(Start(Incomplete)) and
+			ExactInterval.parse("/1970-01-01T00:00:00Z") == Err(Start(Malformed)) and
 				ExactInterval.parse("1970-01-01T00:00:00Z") == Err(Incomplete) and
 					ExactInterval.parse("1970-01-01T00:00:00Z/P1D") == Err(End(Malformed)) and
 						ExactInterval.parse("1970-01-01T00:00:00Z/..") == Err(End(Malformed)) and

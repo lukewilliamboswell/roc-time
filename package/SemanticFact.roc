@@ -282,7 +282,7 @@ expect {
 }
 
 expect {
-	local = FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(0), Gregorian)?
+	local = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(0), calendar: Gregorian })?
 	position = SemanticFact.new(ResolvedPosition({ boundary: PosixBoundary.from_microseconds(I64.lowest), offset: FixedOffset.from_seconds(I32.lowest), local }))
 	timestamp = SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local, fraction_digits: 255, offset: Asserted(FixedOffset.from_seconds(I32.lowest)), zone_present: True, annotation_count: U64.highest }))
 	SemanticFact.summary(position).count_utf8_bytes() <= 160 and SemanticFact.summary(timestamp).count_utf8_bytes() <= 256
@@ -294,8 +294,8 @@ local_text = |local, digits| {
 }
 
 expect {
-	local = FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(-1), Gregorian)?
-	span = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+	local = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(-1), calendar: Gregorian })?
+	span = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
 	SemanticFact.summary(
 		SemanticFact.new(
 			ExactIntervalDescription(
@@ -310,7 +310,7 @@ expect {
 expect {
 	date = Calendar.Date.from_fields(Julian, { year: -2147483648, month: 12, day: 31 })?
 	clock = ClockTime.from_fields({ hour: 23, minute: 59, second: 59, microsecond: 999999 })?
-	local = LocalDateTime.new(date, clock)
+	local = LocalDateTime.new({ date, clock })
 	boundary = SemanticFact.new(CivilBoundaryDescription({ source: local, policy: MatchingOffset(FixedOffset.from_seconds(I32.lowest)), boundary: PosixBoundary.from_microseconds(I64.lowest), offset: FixedOffset.from_seconds(I32.lowest) }))
 	selection = SemanticFact.new(CivilSelectionDescription({ start: local, end: local, member_count: U64.highest }))
 	evaluation = SemanticFact.new(SelectionEvaluation({ status: Limited(BufferLimit), segments: U64.highest, buffered: U64.highest }))

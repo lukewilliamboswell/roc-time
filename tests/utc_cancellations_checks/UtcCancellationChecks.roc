@@ -28,8 +28,8 @@ parts = |start, rule, exclusions| { start, rule, exclusions, mode: Zoned, durati
 expected = |source, position, width| { source, position, width }
 
 synthetic = |suffix| {
-	validity = PosixSpan.from_seconds(-172800, 345600, RejectSubmicrosecond) ?? crash "Synthetic validity"
-	rules = ZoneRules.new_bounded("Synthetic/Cancellation", "epoch-gap-v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 }) ?? crash "Synthetic rules"
+	validity = PosixSpan.from_seconds({ start: -172800, end: 345600, rounding: RejectSubmicrosecond }) ?? crash "Synthetic validity"
+	rules = ZoneRules.new_bounded({ name: "Synthetic/Cancellation", version: "epoch-gap-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } }) ?? crash "Synthetic rules"
 	base = parts("19691231T003000", "FREQ=DAILY;COUNT=4;BYHOUR=0,1;BYMINUTE=30", ["19700101T003000Z"])
 	before = [expected("1969-12-31T00:30:00", -84600000000, 3600000000), expected("1969-12-31T01:30:00", -81000000000, 3600000000)]
 	verify(base, rules, "19691231T000000", "19700103T000000", before, suffix)
@@ -55,7 +55,7 @@ synthetic = |suffix| {
 new_york = |suffix| {
 	# RFC 5545 §3.3.5: 2007-03-11 02:30 uses pre-gap -05:00,
 	# yielding 07:30Z; 2007-11-04 01:30 selects first -04:00, 05:30Z.
-	spring = ZoneRules.new_bounded("RFC5545/New_York", "2007-spring-fixture", PosixSpan.new(point(1173398400000000), point(1173744000000000)) ?? crash "Spring validity", FixedOffset.from_seconds(-18000), [{ at: point(1173596400000000), offset: FixedOffset.from_seconds(-14400) }], { minimum: -18000, maximum: -14400 }) ?? crash "Spring rules"
+	spring = ZoneRules.new_bounded({ name: "RFC5545/New_York", version: "2007-spring-fixture", validity: PosixSpan.new({ start: point(1173398400000000), end: point(1173744000000000) }) ?? crash "Spring validity", initial: FixedOffset.from_seconds(-18000), transitions: [{ at: point(1173596400000000), offset: FixedOffset.from_seconds(-14400) }], bounds: { minimum: -18000, maximum: -14400 } }) ?? crash "Spring rules"
 	spring_parts = parts("20070310T023000", "FREQ=DAILY;COUNT=3", ["20070311T073000Z"])
 	verify(
 		spring_parts,
@@ -70,7 +70,7 @@ new_york = |suffix| {
 	)
 	# An adjacent wrong UTC exclusion must not cancel the adjusted source.
 	verify({ ..spring_parts, exclusions: ["20070311T063000Z"] }, spring, "20070311T000000", "20070312T000000", [expected("2007-03-11T02:30:00", 1173598200000000, 3600000000)], suffix)
-	fall = ZoneRules.new_bounded("RFC5545/New_York", "2007-fall-fixture", PosixSpan.new(point(1193961600000000), point(1194307200000000)) ?? crash "Fall validity", FixedOffset.from_seconds(-14400), [{ at: point(1194156000000000), offset: FixedOffset.from_seconds(-18000) }], { minimum: -18000, maximum: -14400 }) ?? crash "Fall rules"
+	fall = ZoneRules.new_bounded({ name: "RFC5545/New_York", version: "2007-fall-fixture", validity: PosixSpan.new({ start: point(1193961600000000), end: point(1194307200000000) }) ?? crash "Fall validity", initial: FixedOffset.from_seconds(-14400), transitions: [{ at: point(1194156000000000), offset: FixedOffset.from_seconds(-18000) }], bounds: { minimum: -18000, maximum: -14400 } }) ?? crash "Fall rules"
 	fall_parts = parts("20071103T013000", "FREQ=DAILY;COUNT=3", ["20071104T063000Z"])
 	verify(fall_parts, fall, "20071104T000000", "20071105T000000", [expected("2007-11-04T01:30:00", 1194154200000000, 3600000000)], suffix)
 	verify(
@@ -110,8 +110,8 @@ verify = |input, rules, lower, upper, expected_values, suffix| {
 	}
 	window = { start: label(lower), end: label(upper) }
 	series = "cancel${suffix}"
-	direct = ICalTimedRule.schedule(series, original, window, Local(rules)) ?? crash "Original schedule rejected"
-	reimported = ScheduleDefinition.cursor(series, definition, window) ?? crash "Reimported cursor rejected"
+	direct = ICalTimedRule.schedule({ series, rule: original, window, context: Local(rules) }) ?? crash "Original schedule rejected"
+	reimported = ScheduleDefinition.cursor({ series, definition, window }) ?? crash "Reimported cursor rejected"
 	if collect(direct, Bool.False, series) != expected_values or collect(reimported, Bool.True, series) != expected_values {
 		crash "UTC cancellations differ from independent model"
 	}

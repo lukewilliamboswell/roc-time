@@ -2,6 +2,7 @@ app [target] {
 	coverage: "../coverage/package.roc",
 	events: "../events/package.roc",
 	fuzz: platform "https://github.com/lukewilliamboswell/roc-fuzz/releases/download/0.7.0/HBigHQhVZWEF2EkLxpYK35u8P6UNsAmPYxpNFTxXK1Br.tar.zst",
+	nano_posix: "../nano_posix/package.roc",
 	precision: "../precision/package.roc",
 	spans: "../spans/package.roc",
 	time: "../../package/main.roc",
@@ -13,9 +14,12 @@ import spans.SpansTarget
 import coverage.CoverageTarget
 import events.EventsTarget
 
+import nano_posix.NanoPosixTarget
+
 target = Fuzz.suite([
 	PrecisionTarget.target,
 	SpansTarget.target,
 	CoverageTarget.target,
 	EventsTarget.target,
+	NanoPosixTarget.target,
 ])

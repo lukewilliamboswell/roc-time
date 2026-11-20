@@ -19,15 +19,15 @@ ZonedAppointment :: [].{
 
 	next_day = |local| {
 		date = Calendar.Date.as_gregorian(LocalDateTime.date(local))?
-		advanced = Calendar.Arithmetic.shift_day(date, Calendar.Delta.days(1), Reject)?
-		Ok(LocalDateTime.new(Calendar.Date.from_gregorian(advanced), LocalDateTime.clock(local)))
+		advanced = Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.days(1), policy: Reject })?
+		Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(advanced), clock: LocalDateTime.clock(local) }))
 	}
 
-	resolve = |zone, local, policy| ZoneRules.resolve_occurrence(zone, local, policy)
+	resolve = |zone, local, policy| ZoneRules.resolve_occurrence(zone, { local, occurrence: policy })
 	classify = |zone, local| ZoneRules.resolve(zone, local)
 
 	project = |zone, boundary| {
-		{ offset, local } = ZoneRules.project(zone, boundary, Gregorian)?
+		{ offset, local } = ZoneRules.project(zone, { boundary, calendar: Gregorian })?
 		text = match EnglishGregorian.local_datetime(local, Exact) {
 			Ok(value) => value
 			Err(error) => return Err(Presentation(error))
@@ -42,7 +42,7 @@ ZonedAppointment :: [].{
 		next = resolve(source, next_local, policy)?
 		first_display = project(target, first)?.text
 		next_display = project(target, next)?.text
-		width = PosixBoundary.difference(next, first)?
+		width = PosixBoundary.difference({ left: next, right: first })?
 		Ok({ first, next, first_local, next_local, first_display, next_display, coordinate_microseconds: PosixDelta.to_microseconds(width) })
 	}
 }

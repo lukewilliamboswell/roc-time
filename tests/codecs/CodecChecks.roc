@@ -149,7 +149,7 @@ check_civil = |source, invalid_date, invalid_clock| {
 		Json.to_str(value) != "{\"clock\":\"09:30:00\",\"date\":\"2026-09-07\",\"tail\":\"kept\"}" {
 		crash "Civil record text changed date/clock meaning or exposed backing fields"
 	}
-	local = LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
+	local = LocalDateTime.new({ date: Calendar.Date.from_gregorian(value.date), clock: value.clock })
 	if LocalDateTime.parse_gregorian("2026-09-07T09:30") != Ok(local) or
 		LocalDateTime.to_gregorian_text(local) != Ok("2026-09-07T09:30:00") {
 		crash "Civil record did not compose into an unzoned local appointment"

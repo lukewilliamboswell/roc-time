@@ -21,8 +21,8 @@ DispatchDeadlines :: [].{
 			},
 		)?
 		# Waiving January does not add a replacement deadline in May.
-		rule = TimedRecurrence.with_exclusions(base_rule, [LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)])?
-		cursor = TimedRecurrence.cursor(rule, window, { rules, occurrence: RequireUnique, gap: RejectGap })?
+		rule = TimedRecurrence.with_exclusions(base_rule, [LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })])?
+		cursor = TimedRecurrence.cursor(rule, { window, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 		batch = TimedRecurrence.Cursor.collect(
 			cursor,
 			{
@@ -37,13 +37,13 @@ DispatchDeadlines :: [].{
 	}
 	report = |deadline| {
 		source = TimedRecurrence.Occurrence.source(deadline)
-		utc = FixedOffset.project(FixedOffset.from_seconds(0), TimedRecurrence.Occurrence.boundary(deadline), Gregorian)?
+		utc = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: TimedRecurrence.Occurrence.boundary(deadline), calendar: Gregorian })?
 		Ok("${display(source)} Melbourne / ${display(utc)} UTC\n")
 	}
 	midnight = |year, month, day| {
 		date = GregorianDate.from_fields({ year, month, day })?
 		clock = ClockTime.from_microseconds_since_midnight(0)?
-		Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
+		Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock }))
 	}
 }
 

@@ -181,7 +181,7 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "calendar fixture"
 	}
-	julian_local = LocalDateTime.new(julian_date, clock)
+	julian_local = LocalDateTime.new({ date: julian_date, clock })
 	Host.mark!(12)
 	e0 = Host.allocated_bytes!({})
 	english_date = EnglishGregorian.date(date)
