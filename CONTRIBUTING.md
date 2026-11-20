@@ -204,6 +204,14 @@ compile-failure tests, and executable examples. It exercises semantic laws and
 independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
+When a defect reveals an invariant, identify the existing target, add a
+generator or fixture that can reach the failing interaction, and express the
+expected outcome using an independent model or law. For example, a merge must
+emit a valid earlier inclusion before a later gap error. Generate both in one
+query, vary the transition and work budget, and retain the smallest case for
+deterministic replay. Report the target, seed, budget, and failing control in
+the change review.
+
 External oracle comparisons are opt-in development tools, not routine PR CI.
 Use them when investigating temporal behavior or changing an algorithm; the PR
 gate runs invariant fuzz targets, retained regressions, public examples,

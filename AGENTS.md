@@ -57,6 +57,19 @@ At completion, incorporate only newly established architectural contracts into `
 
 [roc-fuzz](https://github.com/lukewilliamboswell/roc-fuzz) is the default property-based testing platform for temporal implementation work. For changes to temporal semantics, add or extend a test root under `tests/` through the real public modules. Where generated testing is unsuitable, explain the alternative executable evidence. The platform release URL and integrity metadata are pinned in `tests/fuzz/dependency.json`; each fuzz test must use that exact URL. Update the pin and test declarations together when deliberately upgrading the dependency. `scripts/fuzz.roc` is the single runner for builds, replay, bounded searches, and failure-lifecycle checks. See [contributor guide](CONTRIBUTING.md#tests) for commands.
 
+Treat newly discovered invariants as executable properties. A finding from a code
+review, bug report, or failed experiment should name the general law, the inputs
+that can falsify it, and the independent expectation. Extend the existing
+public-API target when it can express the law. Add a target to the appropriate
+suite when the law needs a different input model. In review, ask where the law
+runs in CI. If generated testing cannot express it, document the reason and the
+executable evidence that checks it.
+
+- Generate the interaction that failed, and vary the inputs that matter. A
+  generator that exercises gaps and inclusions separately provides no evidence
+  about a gap after a valid inclusion. Keep the smallest counterexample as a
+  named example or curated regression, and show it fails on the unfixed
+  behavior. Run the property with a bounded search in addition to replay.
 - State the applicable requirement IDs, input domain, property preconditions, and independent oracle or semantic law. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
 - Generate useful valid inputs directly and deliberately include signed limits, adjacent endpoints, empty collections, duplicates, and touching/overlapping spans as applicable. Exercise owned, shared, and sliced collections where ownership can affect behavior. Small exhaustive models complement exploration across the full supported range.
 - Test malformed public inputs for the required structured errors. Reject a generated input only when it is outside the property's domain; do not discard expected error paths or turn ordinary public errors into harness crashes.
