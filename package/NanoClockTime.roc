@@ -7,9 +7,10 @@ import Quantize
 ## A local clock label at nanosecond precision, without a date, zone or scale.
 ##
 ## Use it for a time of day that a data source stores as nanoseconds since
-## midnight, such as an Apache Arrow Time64(ns) value. The value keeps every
-## nanosecond; conversion to the microsecond ClockTime takes an explicit
-## rounding policy.
+## midnight, such as an Apache Arrow Time64(ns) value. Reading fields, comparing
+## values, and writing the nanosecond count back all preserve full precision.
+## When an API needs a microsecond ClockTime, `to_clock` accepts whole
+## microseconds and `to_clock_with_rounding` lets you choose a rounding policy.
 ##
 ## ```roc
 ## import time.NanoClockTime
@@ -18,7 +19,7 @@ import Quantize
 ##     # 12:00:00.000000001 as a Time64(ns) value
 ##     received = NanoClockTime.from_nanoseconds_since_midnight(43200000000001)
 ##     received.map_ok(NanoClockTime.to_text) == Ok("12:00:00.000000001") and
-##         received.map_ok(|clock| NanoClockTime.to_clock_with_rounding(clock, RejectSubmicrosecond)) == Ok(Err(Submicrosecond))
+##         received.map_ok(NanoClockTime.to_nanoseconds_since_midnight) == Ok(43200000000001)
 ## }
 ## ```
 ##
