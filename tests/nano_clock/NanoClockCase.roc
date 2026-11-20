@@ -1,6 +1,6 @@
 import fuzz.Fuzz
 import time.ClockTime
-import time.NanoClockTime
+import time.Nanosecond.ClockTime as NanoClockTime
 
 # R01/R02/R14: nanosecond clock positions, malformed numeric positions and the
 # explicit narrowing to microsecond ClockTime.

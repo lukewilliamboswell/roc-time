@@ -1,5 +1,5 @@
 import fuzz.Fuzz
-import time.CalendarPattern
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.GregorianDate
 
 # R11 calendar candidates: field walking and a 400-year weekday counter oracle.

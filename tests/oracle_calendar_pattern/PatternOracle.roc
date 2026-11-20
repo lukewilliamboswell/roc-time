@@ -1,6 +1,6 @@
-import time.CalendarPattern
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.GregorianDate
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 
 PatternOracle :: [].{
 	run_args = |args| {

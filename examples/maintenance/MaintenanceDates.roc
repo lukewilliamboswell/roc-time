@@ -1,6 +1,6 @@
-import time.ICalDateRule
-import time.AllDayRecurrence
-import time.AllDayOccurrence
+import time.ICalendar.DateRule as ICalDateRule
+import time.Recurrence.AllDay as AllDayRecurrence
+import time.Recurrence.AllDayOccurrence as AllDayOccurrence
 import time.Coverage
 import time.PosixDelta
 import time.GregorianDate

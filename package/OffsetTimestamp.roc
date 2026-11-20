@@ -325,22 +325,26 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		}
 	}
 
-	## One bounded semantic fact, retaining supplied decimal width and offset
-	## assertion. Reading facts never resolves a zone or materializes coverage.
-	fact_count : OffsetTimestamp -> U64
-	fact_count = |_| 1
+	## Indexed semantic facts for bounded diagnostics and explanation.
+	Facts :: [].{
 
-	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
-	fact_at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
-	fact_at = |value, index| if index == 0 {
-		Item(SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local: local_label(value), fraction_digits: value.fraction_digits, offset: value.offset, zone_present: Bool.False, annotation_count: 0 })))
-	} else {
-		End
+		## One bounded semantic fact, retaining supplied decimal width and offset
+		## assertion. Reading facts never resolves a zone or materializes coverage.
+		count : OffsetTimestamp -> U64
+		count = |_| 1
+
+		## Returns the zero-based semantic fact, or End when the index is outside count. Facts describe meaning, not a serialized record.
+		at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
+		at = |value, index| if index == 0 {
+			Item(SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local: local_label(value), fraction_digits: value.fraction_digits, offset: value.offset, zone_present: Bool.False, annotation_count: 0 })))
+		} else {
+			End
+		}
 	}
 
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : OffsetTimestamp -> Str
-	to_inspect = |value| match fact_at(value, 0) {
+	to_inspect = |value| match Facts.at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "Timestamp has one semantic fact"
 	}
@@ -676,11 +680,11 @@ expect {
 expect {
 	shorter = OffsetTimestamp.parse("1970-01-01T00:00:00.12Z")?
 	longer = OffsetTimestamp.parse("1970-01-01T00:00:00.120+00:00")?
-	left = match OffsetTimestamp.fact_at(shorter, 0) {
+	left = match OffsetTimestamp.Facts.at(shorter, 0) {
 		Item(fact) => Ok(SemanticFact.kind(fact))
 		End => Err(MissingFact)
 	}?
-	right = match OffsetTimestamp.fact_at(longer, 0) {
+	right = match OffsetTimestamp.Facts.at(longer, 0) {
 		Item(fact) => Ok(SemanticFact.kind(fact))
 		End => Err(MissingFact)
 	}?
@@ -691,8 +695,8 @@ expect {
 					!a.zone_present and a.annotation_count == 0
 		_ => Bool.False
 	}
-	facts_match and OffsetTimestamp.fact_count(shorter) == 1 and OffsetTimestamp.fact_at(shorter, 1) == End and
-		OffsetTimestamp.fact_at(longer, U64.highest) == End and OffsetTimestamp.to_inspect(longer).count_utf8_bytes() <= 256
+	facts_match and OffsetTimestamp.Facts.count(shorter) == 1 and OffsetTimestamp.Facts.at(shorter, 1) == End and
+		OffsetTimestamp.Facts.at(longer, U64.highest) == End and OffsetTimestamp.to_inspect(longer).count_utf8_bytes() <= 256
 }
 
 # R01/R14: precedence is part of the public parser contract. A malformed

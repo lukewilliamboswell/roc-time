@@ -16,8 +16,9 @@ import GregorianDate
 ##
 ## ```roc
 ## import time.GregorianDate
-## import time.CalendarPattern
-## import time.DateRecurrence
+## import time.Recurrence.CalendarPattern as CalendarPattern
+## import time.Recurrence.Date as DateRecurrence
+## import time.Recurrence.DateCursor as DateCursor
 ##
 ## expect {
 ##     start = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
@@ -28,7 +29,7 @@ import GregorianDate
 ##         by_set_pos: [], inclusions: [], exclusions: [],
 ##     })?
 ##     cursor = DateRecurrence.cursor(rule, { start, end })?
-##     batch = DateRecurrence.Cursor.collect(cursor, {
+##     batch = DateCursor.collect(cursor, {
 ##         max_steps: 1000, max_buffered: 31, max_occurrences: 4,
 ##     })?
 ##     months = batch.dates.map(|date| GregorianDate.to_fields(date).month)

@@ -1,8 +1,9 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Explanation
-import time.Ixdtf
-import time.SemanticFact
+import time.Interchange.Ixdtf as Ixdtf
+import time.Interchange.IxdtfSnapshot as IxdtfSnapshot
+import time.Explanation.Fact as SemanticFact
 import time.PosixBoundary
 import ExplanationFixture
 
@@ -31,14 +32,14 @@ main! = |args| {
 	facts_before = Host.allocated_bytes!({})
 	var $reads = 0.U32
 	while $reads < 100000 {
-		match Ixdtf.Snapshot.fact_at(snapshot, 0) {
+		match IxdtfSnapshot.fact_at(snapshot, 0) {
 			Item(fact) => match SemanticFact.kind(fact) {
 				ResolvedPosition(position) => Host.assert!(position.boundary == PosixBoundary.from_microseconds(1000000))
 				_ => Host.assert!(False)
 			}
 			End => Host.assert!(False)
 		}
-		match Ixdtf.Snapshot.fact_at(snapshot, 1) {
+		match IxdtfSnapshot.fact_at(snapshot, 1) {
 			Item(fact) => match SemanticFact.kind(fact) {
 				Presentation(UnsupportedCalendar(name)) => Host.assert!(name == "hebrew")
 				_ => Host.assert!(False)
@@ -80,7 +81,7 @@ main! = |args| {
 	summary = Str.inspect(snapshot)
 	summary_after = Host.allocated_bytes!({})
 	Host.assert!(summary.count_utf8_bytes() <= 256 and summary_after - summary_before <= ceiling)
-	Host.assert!(Ixdtf.Snapshot.boundary(snapshot) == PosixBoundary.from_microseconds(1000000))
+	Host.assert!(IxdtfSnapshot.boundary(snapshot) == PosixBoundary.from_microseconds(1000000))
 	match Explanation.fact_at(explanation, 0) {
 		Item(fact) => match SemanticFact.kind(fact) {
 			ResolvedPosition(position) => Host.assert!(position.boundary == PosixBoundary.from_microseconds(1000000))

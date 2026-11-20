@@ -1,9 +1,11 @@
-import time.CalendarPattern
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.Calendar
 import time.ClockTime
 import time.GregorianDate
 import time.LocalDateTime
-import time.TimedRecurrence
+import time.Recurrence.Timed as TimedRecurrence
+import time.Recurrence.TimedStart as TimedStart
+import time.Recurrence.TimedCursor as TimedCursor
 import time.FixedOffset
 
 ## Four monthly dispatch deadlines: the final Monday's final pickup slot.
@@ -23,7 +25,7 @@ DispatchDeadlines :: [].{
 		# Waiving January does not add a replacement deadline in May.
 		rule = TimedRecurrence.with_exclusions(base_rule, [LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })])?
 		cursor = TimedRecurrence.cursor(rule, { window, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
-		batch = TimedRecurrence.Cursor.collect(
+		batch = TimedCursor.collect(
 			cursor,
 			{
 				work: { max_steps: 10000, max_buffered: 10, max_zone_segments: 100000, max_zone_candidates: 2 },
@@ -36,8 +38,8 @@ DispatchDeadlines :: [].{
 		}
 	}
 	report = |deadline| {
-		source = TimedRecurrence.Occurrence.source(deadline)
-		utc = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: TimedRecurrence.Occurrence.boundary(deadline), calendar: Gregorian })?
+		source = TimedStart.source(deadline)
+		utc = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: TimedStart.boundary(deadline), calendar: Gregorian })?
 		Ok("${display(source)} Melbourne / ${display(utc)} UTC\n")
 	}
 	midnight = |year, month, day| {

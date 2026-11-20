@@ -1,4 +1,4 @@
-import time.EdtfDate
+import time.Interchange.EdtfDate as EdtfDate
 import time.OffsetTimestamp
 
 ## Store catalogue dates as EDTF and recording timestamps as RFC 3339.

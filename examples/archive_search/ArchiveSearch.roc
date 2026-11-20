@@ -1,8 +1,9 @@
 import time.Calendar
-import time.CalendarEvidence
-import time.QualifiedCalendarValue
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.CalendarQuery as CalendarQuery
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
 import time.OffsetTimestamp
-import time.EdtfDate
+import time.Interchange.EdtfDate as EdtfDate
 import time.FixedOffset
 import time.PosixSpan
 import time.PosixBoundary
@@ -15,7 +16,7 @@ ArchiveSearch :: [].{
 	## Preserve imported archive dates before asking for an exact selection.
 	import_dates = |texts, recording_times| {
 		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
-		rules = ZoneRules.new_bounded({ name: "Archive/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Archive/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 		var $recordings = []
 		for text in recording_times {
 			timestamp = match OffsetTimestamp.parse(text) {
@@ -41,7 +42,7 @@ ArchiveSearch :: [].{
 		minute = Calendar.Value.minute(date, { hour: 9, minute: 30 })?
 		second = Calendar.Value.second(date, { hour: 9, minute: 30, second: 0 })?
 		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
-		rules = ZoneRules.new_bounded({ name: "Archive/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Archive/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 		var $recordings = []
 		for text in recording_times {
 			timestamp = match OffsetTimestamp.parse(text) {
@@ -69,7 +70,7 @@ ArchiveSearch :: [].{
 		var $definite = 0.U64
 		for point in $recordings {
 			cursor = CalendarEvidence.query(model, { rules, point })?
-			batch = CalendarEvidence.Query.collect(cursor, { max_alternatives: 3 })
+			batch = CalendarQuery.collect(cursor, { max_alternatives: 3 })
 			match batch.status {
 				Complete(Definite) => {
 					$definite = $definite + 1

@@ -5,6 +5,15 @@ This map helps you choose a starting module. It describes the current source;
 follow your https://github.com/lukewilliamboswell/roc-time/releases[release's API link]
 for the exact functions available in your package.
 
+[cols="1,2",options="header"]
+|===
+| Task | Start with
+| Calculate an invoice date | `GregorianDate`, `Calendar.Arithmetic.shift_day`, and an explicit month-end policy
+| Find booking availability | `ExactInterval.parse` and `Coverage.complement_within`
+| Resolve a named-zone appointment | `ZoneRules.from_database` and `ZoneRules.appointment`
+| Page a schedule | `ScheduleDefinition.from_native` or `ScheduleDefinition.from_ical`, then `definition.cursor({ series, window })`
+|===
+
 == Exact time and availability
 
 For booking availability, start with `ExactInterval.parse`, project each booking
@@ -27,6 +36,12 @@ timeline; `PosixDelta` represents a displacement between positions.
 | Keep event identities | `EventCollection`
 |===
 
+For a finite unordered iterator, `Coverage.from_iter` collects its input before
+sorting. For ordered input, append each validated span to `Coverage.SortedBuilder`
+with `for` or `for!`. The
+https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange[booking exchange example]
+consumes a fallible ordered stream and propagates input errors.
+
 == Calendar meaning and interpretation
 
 `Calendar.Date` holds a validated date; `Calendar.Delta` says how far to shift it
@@ -47,20 +62,20 @@ a separate question: a skipped day can be empty, and repeated labels can produce
 separate pieces of coverage.
 
 Some data sources store a time of day as nanoseconds since midnight, such as an
-Apache Arrow `Time64(ns)` column. `NanoClockTime` keeps every nanosecond of that
-value. `NanoClockTime.to_clock` requires an exact conversion.
-`NanoClockTime.to_clock_with_rounding` takes a rounding policy that
+Apache Arrow `Time64(ns)` column. `Nanosecond.ClockTime` keeps every nanosecond of that
+value. `Nanosecond.ClockTime.to_clock` requires an exact conversion.
+`Nanosecond.ClockTime.to_clock_with_rounding` takes a rounding policy that
 you choose; `split_microseconds` gives the `ClockTime` and the remaining
 nanoseconds without loss.
 
 [cols="1,2",options="header"]
 |===
 | Task | Modules
-| Construct and convert civil dates | `GregorianDate`, `JulianDate`, `Calendar.Date`
-| Preserve supplied precision | `Calendar.Value`, `QualifiedCalendarValue`
+| Construct and convert civil dates | `GregorianDate`, `Calendar.JulianDate`, `Calendar.Date`
+| Preserve supplied precision | `Calendar.Value`, `CalendarDescription.QualifiedValue`
 | Advance with an explicit calendar policy | `Calendar.Arithmetic`, `Calendar.Delta`
 | Express clock labels and resolve them | `ClockTime`, `LocalDateTime`, `FixedOffset`, `ZoneRules`
-| Keep a nanosecond time of day | `NanoClockTime`
+| Keep a nanosecond time of day | `Nanosecond.ClockTime`
 | Display a Gregorian date or local label in English | `EnglishGregorian`
 |===
 
@@ -68,33 +83,35 @@ nanoseconds without loss.
 
 For reusable timed appointments, `ScheduleDefinition.from_ical` imports a
 supported iCalendar definition and `from_native` accepts a native one. Create a
-cursor for the start-date window you want, then call `TimedSchedule.collect`
+cursor for the start-date window you want, then call `ScheduleDefinition.Cursor.collect`
 with work and output limits. A `Limited` batch includes the cursor needed to
 continue; keep it with the partial output. xref:schedules.adoc#schedules[Schedules]
-explains what the query selects.
+explains what the query selects. Use `.stream()` on a pure iterator to drive
+effectful export. Handle `Limited` and resume with its cursor. Stream exhaustion
+alone does not establish a complete temporal result.
 
-Start with `DateRecurrence` for date-only rules. The lower-level patterns and
-`TimedRecurrence` are useful when composing selectors or working with starts
+Start with `Recurrence.Date` for date-only rules. The lower-level patterns and
+`Recurrence.Timed` are useful when composing selectors or working with starts
 without appointment endings; ordinary scheduling need not begin there.
 
-If you're composing execution inputs directly, `TimedSchedule.Endings` validates
+If you're composing execution inputs directly, `ScheduleDefinition.Endings` validates
 ending definitions for reuse. The adapters' `prepare` operations and
-`TimedSchedule.from_prepared` expose that advanced path. To retain a declaration
+`ScheduleDefinition.Cursor.from_prepared` expose that advanced path. To retain a declaration
 for later queries, keep its `ScheduleDefinition`; prepared execution inputs
 aren't a storage format.
 
 [cols="1,2",options="header"]
 |===
 | Task | Modules
-| Generate calendar dates | `DateRecurrence`, `CalendarPattern`
-| Query reusable timed appointments | `ScheduleDefinition`, `TimedSchedule`
-| Compose timed recurrence starts | `TimedRecurrence`
-| Import extracted iCalendar values | `ICalDateRule`, `ICalTimedRule`
-| Preserve imported descriptions | `EdtfDate`, `Ixdtf`
+| Generate calendar dates | `Recurrence.Date`, `Recurrence.CalendarPattern`
+| Query reusable timed appointments | `ScheduleDefinition`, `ScheduleDefinition.Cursor`
+| Compose timed recurrence starts | `Recurrence.Timed`
+| Import extracted iCalendar values | `ICalendar.DateRule`, `ICalendar.TimedRule`
+| Preserve imported descriptions | `Interchange.EdtfDate`, `Interchange.Ixdtf`
 | Explain a supported value | `Explanation`
 |===
 
-Version 0.3.0 adds `CalendarInterval` and `EdtfInterval`
+Use `CalendarDescription.Interval` and `Interchange.EdtfInterval`
 for independently described interval endpoints, including unknown and open
 ends. They retain those meanings for storage without claiming resolved
 coverage. xref:profiles.adoc#archive-interval-descriptions-in-development[The archive interval guide]
@@ -115,12 +132,12 @@ Use documentation matching the package in your application header. Source docume
 
 == Nanosecond engine values
 
-Use `NanoClockTime` for a time of day, `PosixNanoBoundary` for a POSIX epoch
-position, `PosixNanoDelta` for a POSIX coordinate displacement, and
-`NanoLocalDateTime` for a naive civil timestamp. Preserve source unit and
+Use `Nanosecond.ClockTime` for a time of day, `Nanosecond.PosixBoundary` for a POSIX epoch
+position, `Nanosecond.PosixDelta` for a POSIX coordinate displacement, and
+`Nanosecond.LocalDateTime` for a naive civil timestamp. Preserve source unit and
 column metadata at the engine boundary. All four support exact conversion
 to their microsecond counterparts where representable and an explicit
-`MicrosecondRounding` policy when precision reduction is wanted.
+`Nanosecond.Rounding` policy when precision reduction is wanted.
 
 Use `ZoneRules.inspect_snapshot` for a bounded diagnostic of the validity
 and transition count of a rules snapshot.

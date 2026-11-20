@@ -24,9 +24,10 @@ import ICalRuleText
 ## Timed values and unsupported extensions return explicit errors.
 ##
 ## ```roc
-## import time.ICalDateRule
+## import time.ICalendar.DateRule as ICalDateRule
 ## import time.GregorianDate
-## import time.DateRecurrence
+## import time.Recurrence.Date as DateRecurrence
+## import time.Recurrence.DateCursor as DateCursor
 ##
 ## expect {
 ##     rule = ICalDateRule.parse({
@@ -38,7 +39,7 @@ import ICalRuleText
 ##     start = GregorianDate.from_fields({ year: 2025, month: 1, day: 1 })?
 ##     end = GregorianDate.from_fields({ year: 2025, month: 6, day: 1 })?
 ##     cursor = DateRecurrence.cursor(rule, { start, end })?
-##     batch = DateRecurrence.Cursor.collect(cursor, {
+##     batch = DateCursor.collect(cursor, {
 ##         max_steps: 1000, max_buffered: 31, max_occurrences: 4,
 ##     })?
 ##     batch.dates.map(|date| GregorianDate.to_fields(date).month) == [1.U8, 5]

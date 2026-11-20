@@ -1,4 +1,4 @@
-import time.ICalDateTime
+import time.ICalendar.DateTime as ICalDateTime
 import fuzz.Fuzz
 import time.FixedOffset
 import time.PosixBoundary
@@ -63,7 +63,7 @@ OffsetCase := { number : I64, seconds : I32 }.{
 		boundary = PosixBoundary.from_microseconds(input.number)
 		offset = FixedOffset.from_seconds(input.seconds)
 		span = rule_span(I64.lowest, I64.highest)
-		rules = match ZoneRules.new({
+		rules = match ZoneRules.Provider.new({
 			name: "Synthetic/Step",
 			version: "v1",
 			validity: span,

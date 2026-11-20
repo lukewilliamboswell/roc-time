@@ -1,5 +1,5 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.ICalTimedRule
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.LocalDateTime
 
 main! = |_args| {

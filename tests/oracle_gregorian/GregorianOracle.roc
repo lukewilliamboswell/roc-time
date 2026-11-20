@@ -1,6 +1,6 @@
-import time.ICalDateTime
+import time.ICalendar.DateTime as ICalDateTime
 import time.PosixBoundary
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 import time.GregorianDate
 
 ## Public inputs and typed observations; generated expectations never call roc-time.

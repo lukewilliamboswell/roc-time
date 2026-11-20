@@ -1,5 +1,6 @@
-import time.CalendarPattern
-import time.DateRecurrence
+import time.Recurrence.CalendarPattern as CalendarPattern
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
 import time.GregorianDate
 
 ## Bounded checks use explicit calendar expectations. The daily window spans a
@@ -49,7 +50,7 @@ RecurrenceWorkload := [].{
 		initial = DateRecurrence.cursor(rule, { start: window_start, end }) ?? crash "nonempty fixture window"
 		max_steps = if (profile == "distant") 8 else if (profile == "monthly") 256 else 64
 		cursor = if mode == Resume {
-			prefix = DateRecurrence.Cursor.next(initial, { max_steps, max_buffered: 1 }) ?? crash "fixture prefix"
+			prefix = DateCursor.next(initial, { max_steps, max_buffered: 1 }) ?? crash "fixture prefix"
 			match prefix.status {
 				Item(item) if item.date == anchor => item.cursor
 				_ => crash "fixture prefix changed"
@@ -69,7 +70,7 @@ RecurrenceWorkload := [].{
 		{ anchor, spec, cursor, max_steps, expected }
 	}
 
-	run : Mode, { anchor : GregorianDate, spec : DateRecurrence.Spec, cursor : DateRecurrence.Cursor, max_steps : U64, expected : Outcome } -> Observation
+	run : Mode, { anchor : GregorianDate, spec : DateRecurrence.Spec, cursor : DateCursor, max_steps : U64, expected : Outcome } -> Observation
 	run = |mode, fixture| match mode {
 		Construct | InvalidCount => {
 			spec = if (mode == InvalidCount) { ..fixture.spec, termination: Count(0) } else fixture.spec
@@ -84,7 +85,7 @@ RecurrenceWorkload := [].{
 			{ outcome, steps: 0, buffered: 0 }
 		}
 		First | Resume => {
-			next = DateRecurrence.Cursor.next(fixture.cursor, { max_steps: fixture.max_steps, max_buffered: 1 }) ?? crash "fixture next"
+			next = DateCursor.next(fixture.cursor, { max_steps: fixture.max_steps, max_buffered: 1 }) ?? crash "fixture next"
 			outcome = match next.status {
 				Item(item) => FirstDate(item.date)
 				_ => crash "fixture expected next date"
@@ -92,7 +93,7 @@ RecurrenceWorkload := [].{
 			{ outcome, steps: next.steps, buffered: next.buffered }
 		}
 		Window => {
-			batch = DateRecurrence.Cursor.collect(fixture.cursor, { max_steps: fixture.max_steps, max_buffered: 4, max_occurrences: 4 }) ?? crash "fixture query"
+			batch = DateCursor.collect(fixture.cursor, { max_steps: fixture.max_steps, max_buffered: 4, max_occurrences: 4 }) ?? crash "fixture query"
 			outcome = match batch.status {
 				Complete => Dates(batch.dates)
 				Limited({ reason: WorkLimit, .. }) if batch.dates.is_empty() => Limited

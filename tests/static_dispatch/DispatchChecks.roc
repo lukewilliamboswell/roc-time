@@ -1,21 +1,21 @@
 import time.Calendar
-import time.CalendarEvidence
-import time.IntervalEvidence
-import time.QualifiedCalendarValue
-import time.ICalPeriod
-import time.ICalDateTime
-import time.EdtfDate
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.Interval as IntervalEvidence
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
+import time.ICalendar.Period as ICalPeriod
+import time.ICalendar.DateTime as ICalDateTime
+import time.Interchange.EdtfDate as EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
-import time.Ixdtf
-import time.ICalDuration
-import time.CivilDay
+import time.Interchange.Ixdtf as Ixdtf
+import time.ICalendar.Duration as ICalDuration
+import time.Calendar.CivilDay as CivilDay
 import time.GregorianDate
 import time.PosixBoundary
 import time.PosixDelta
 import time.PosixSpan
-import time.TimedSchedule
-import time.ICalTimedRule
+import time.ScheduleDefinition.Endings as ScheduleEndings
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.Coverage
 
 DispatchChecks :: [].{
@@ -234,18 +234,18 @@ interval_model = |starts, ends| match IntervalEvidence.independent({ starts, end
 
 check_endings = |_| {
 	duration = Coordinate(PosixDelta.from_microseconds(3600000000))
-	endings : TimedSchedule.Endings
-	endings = TimedSchedule.Endings.new(duration, []) ?? crash "valid ending fixture"
-	same : TimedSchedule.Endings
-	same = TimedSchedule.Endings.new(endings.definition().duration, []) ?? crash "valid ending fixture"
+	endings : ScheduleEndings
+	endings = ScheduleEndings.new(duration, []) ?? crash "valid ending fixture"
+	same : ScheduleEndings
+	same = ScheduleEndings.new(endings.definition().duration, []) ?? crash "valid ending fixture"
 	if endings != same or Dict.get(Dict.insert(Dict.empty(), endings, 7.U8), same) != Ok(7) {
 		return Err(Failed)
 	}
 	input = ICalTimedRule.parse({ start: "19700101T090000Z", rule: "FREQ=DAILY;COUNT=2", duration: "PT1H", mode: Utc, inclusions: [], exclusions: [], periods: [] }) ?? crash "valid rule fixture"
 	prepared = ICalTimedRule.prepare(input, Utc) ?? crash "valid preparation fixture"
-	checked : TimedSchedule.Endings
+	checked : ScheduleEndings
 	checked = prepared.endings
-	if checked != endings or TimedSchedule.Endings.new(Coordinate(PosixDelta.from_microseconds(0)), []) != Err(InvalidDuration) {
+	if checked != endings or ScheduleEndings.new(Coordinate(PosixDelta.from_microseconds(0)), []) != Err(InvalidDuration) {
 		return Err(Failed)
 	}
 	local = ICalTimedRule.parse({ start: "19700101T090000", rule: "FREQ=DAILY;COUNT=2", duration: "PT1H", mode: Floating, inclusions: [], exclusions: [], periods: [] }) ?? crash "valid local fixture"

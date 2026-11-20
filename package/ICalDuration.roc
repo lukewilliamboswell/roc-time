@@ -25,7 +25,7 @@ import TimedOccurrence
 ## boundary or provider ranges. No rules are consulted during parsing.
 ##
 ## ```roc
-## import time.ICalDuration
+## import time.ICalendar.Duration as ICalDuration
 ## expect {
 ##     value = ICalDuration.parse("P15DT5H0M20S")?
 ##     ICalDuration.components(value) == { days: 15.I64, seconds: 18020.I64 }
@@ -290,7 +290,7 @@ expect {
 	end_date = GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?
 	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock })
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(259200000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/Duration", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(43200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Duration", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(43200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
 	cursor = TimedRecurrence.cursor(rule, { window: { start: source, end }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })?
 	batch = TimedRecurrence.Cursor.next(cursor, { max_steps: 10, max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 })?

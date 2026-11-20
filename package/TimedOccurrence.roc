@@ -103,7 +103,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			}
 			shifted = Calendar.Arithmetic.shift_day(date, { delta: spec.delta, policy: spec.invalid_date })?
 			end_source = LocalDateTime.new({ date: Calendar.Date.from_gregorian(shifted), clock: LocalDateTime.clock(source_value) })
-			pending = match ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start_value), end_source) {
+			pending = match ZoneRules.ClassificationCursor.from_local(TimedRecurrence.Occurrence.rules(start_value), end_source) {
 				Ok(value) => value
 				Err(OutOfRange) => return Err(OutOfRange)
 				Err(OutsideValidity) => return Err(OutsideValidity)
@@ -125,7 +125,7 @@ TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : E
 			Ok(Ready(value))
 		}
 		AtLocal(spec) => {
-			pending = ZoneRules.classification_cursor(TimedRecurrence.Occurrence.rules(start_value), spec.source)?
+			pending = ZoneRules.ClassificationCursor.from_local(TimedRecurrence.Occurrence.rules(start_value), spec.source)?
 			Ok(Explicit({ id: id_value, start: start_value, spec, pending }))
 		}
 	}
@@ -210,7 +210,7 @@ test_start_at = |rules, policy, date| {
 
 test_rules = |offset, at| {
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-172800000000), end: PosixBoundary.from_microseconds(259200000000) })?
-	ZoneRules.new_bounded({
+	ZoneRules.Provider.new_bounded({
 		name: "Synthetic/Duration",
 		version: "v1",
 		validity,
@@ -268,7 +268,7 @@ expect {
 
 expect {
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(6000000000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	start = test_start_at(rules, RequireUnique, GregorianDate.from_fields({ year: 1970, month: 1, day: 31 })?)?
 	spec = { delta: Calendar.Delta.months(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }
 	rejected = match TimedOccurrence.cursor({ id: "loan", start, duration: Calendar(spec) }) {

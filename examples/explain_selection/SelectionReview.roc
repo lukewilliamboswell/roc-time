@@ -1,10 +1,10 @@
-import time.ICalDateTime
+import time.ICalendar.DateTime as ICalDateTime
 import time.ZoneRules
 import time.FixedOffset
 import time.PosixBoundary
 import time.PosixSpan
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 import time.Explanation
 
 ## Review an appointment choice and a selection that crosses a synthetic fold.
@@ -15,10 +15,10 @@ SelectionReview :: [].{
 			return Err(ExpectedLocalLabels)
 		}
 		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(86400000000) })?
-		rules = ZoneRules.new_bounded({ name: "Synthetic/Fallback", version: "example-v1", validity, initial: FixedOffset.from_seconds(3600), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 3600 } })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Fallback", version: "example-v1", validity, initial: FixedOffset.from_seconds(3600), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 3600 } })?
 		local = ICalDateTime.local_label(start)
 		appointment = ResolvedBoundary.resolve(rules, { local, occurrence: Last })?
-		cursor = ZoneRules.selection_cursor(rules, { start: local, end: ICalDateTime.local_label(end) })?
+		cursor = ZoneRules.SelectionCursor.from_bounds(rules, { start: local, end: ICalDateTime.local_label(end) })?
 		paused = ResolvedSelection.collect(cursor, { max_segments: 1, max_members: 2 })?
 		remaining = match paused.status {
 			Limited(progress) => progress.cursor

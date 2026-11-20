@@ -1,8 +1,7 @@
-import time.ICalTimedRule
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.ScheduleDefinition
-import time.TimedSchedule
+
 import time.LocalDateTime
-import time.TimedOccurrence
 
 ## Prepare one reusable declaration; each bounded query preserves its whole batch.
 MeetingSchedule :: [].{
@@ -17,16 +16,16 @@ MeetingSchedule :: [].{
 		}
 	}
 	query = |meeting, series, window, limits| {
-		cursor = match ScheduleDefinition.cursor({ series, definition: meeting, window }) {
+		cursor = match meeting.cursor({ series, window }) {
 			Ok(value) => value
 			Err(error) => return Err(Window(error))
 		}
-		match TimedSchedule.collect(cursor, limits) {
+		match ScheduleDefinition.Cursor.collect(cursor, limits) {
 			Ok(value) => Ok(value)
 			Err(error) => Err(Evaluation(error))
 		}
 	}
-	resume = |cursor, limits| match TimedSchedule.collect(cursor, limits) {
+	resume = |cursor, limits| match ScheduleDefinition.Cursor.collect(cursor, limits) {
 		Ok(value) => Ok(value)
 		Err(error) => Err(Evaluation(error))
 	}
@@ -34,5 +33,5 @@ MeetingSchedule :: [].{
 		Ok(value) => Ok(value)
 		Err(error) => Err(LocalInput(error))
 	}
-	describe = |item| LocalDateTime.to_gregorian_text(TimedOccurrence.source(item))
+	describe = |item| LocalDateTime.to_gregorian_text(ScheduleDefinition.Occurrence.source(item))
 }

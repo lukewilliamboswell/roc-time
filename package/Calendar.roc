@@ -1,8 +1,8 @@
 import ClockTime
 import CalendarDescriptionText
-import CivilDay
+import CivilDay as CivilDayType
 import GregorianDate
-import JulianDate
+import JulianDate as JulianDateType
 
 ## Calendar profiles and their related dates, quantities and selections.
 ## Calendar.Date retains calendar identity; Calendar.Delta describes calendar components;
@@ -12,6 +12,13 @@ import JulianDate
 # method shadowing issue is fixed for our supported nightly:
 # https://github.com/roc-lang/roc/issues/13077
 Calendar := [Gregorian, Julian].{
+
+	## JulianDate operations and types.
+	JulianDate : JulianDateType
+
+	## CivilDay operations and types.
+	CivilDay : CivilDayType
+
 	# TODO: Restore Arithmetic.Policy, Date.Fields, Delta.Components and
 	# Value.Resolution/Description when nested lookup through aliases works on
 	# our compiler: https://github.com/roc-lang/roc/issues/11464
@@ -75,7 +82,7 @@ Calendar := [Gregorian, Julian].{
 	## Minute 12:30 differs from second 12:30:00; .12 differs from .120.
 	## Construction validates once in constant work, without choosing a zone or
 	## computing an exclusive upper bound. Bounds outside the provider range
-	## fail only when requested. Use ZoneRules.calendar_selection_cursor for
+	## fail only when requested. Use ZoneRules.SelectionCursor.from_calendar_value for
 	## bounded interpretation, preserving disconnected folds and empty gaps.
 	Resolution : [Year, Month, Day, Hour, Minute, Second, Fraction(U8)]
 
@@ -220,7 +227,7 @@ CalendarArithmetic :: [].{
 	}
 }
 
-CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
+CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDateType)].{
 
 	## Astronomical year and one-based month/day fields in the chosen calendar.
 
@@ -229,7 +236,7 @@ CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 	from_gregorian = |date| Gregorian(date)
 
 	## Retain a validated Julian date with its calendar identity, without conversion.
-	from_julian : JulianDate -> CalendarDate
+	from_julian : JulianDateType -> CalendarDate
 	from_julian = |date| Julian(date)
 
 	## Access a stored Gregorian date without converting another calendar.
@@ -249,7 +256,7 @@ CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 			Ok(date) => Ok(Gregorian(date))
 			Err(error) => Err(error)
 		}
-		Julian => match JulianDate.from_fields(fields) {
+		Julian => match JulianDateType.from_fields(fields) {
 			Ok(date) => Ok(Julian(date))
 			Err(error) => Err(error)
 		}
@@ -257,13 +264,13 @@ CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 
 	## Describe a shared civil-day coordinate in the selected calendar. Return
 	## OutOfRange when the date is outside that calendar's supported years.
-	from_civil_day : Calendar, CivilDay -> Try(CalendarDate, [OutOfRange])
+	from_civil_day : Calendar, CivilDayType -> Try(CalendarDate, [OutOfRange])
 	from_civil_day = |calendar_value, coordinate| match calendar_value {
 		Gregorian => match GregorianDate.from_civil_day(coordinate) {
 			Ok(date) => Ok(Gregorian(date))
 			Err(error) => Err(error)
 		}
-		Julian => match JulianDate.from_civil_day(coordinate) {
+		Julian => match JulianDateType.from_civil_day(coordinate) {
 			Ok(date) => Ok(Julian(date))
 			Err(error) => Err(error)
 		}
@@ -271,10 +278,10 @@ CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 
 	## Read the shared civil-day coordinate, allowing equal-day comparison across
 	## calendars without introducing a timezone.
-	to_civil_day : CalendarDate -> CivilDay
+	to_civil_day : CalendarDate -> CivilDayType
 	to_civil_day = |date| match date {
 		Gregorian(value) => GregorianDate.to_civil_day(value)
-		Julian(value) => JulianDate.to_civil_day(value)
+		Julian(value) => JulianDateType.to_civil_day(value)
 	}
 
 	## Read the calendar retained by this date description.
@@ -289,7 +296,7 @@ CalendarDate :: [Gregorian(GregorianDate), Julian(JulianDate)].{
 	to_fields : CalendarDate -> Calendar.DateFields
 	to_fields = |date| match date {
 		Gregorian(value) => GregorianDate.to_fields(value)
-		Julian(value) => JulianDate.to_fields(value)
+		Julian(value) => JulianDateType.to_fields(value)
 	}
 
 	## Convert to a description of the same civil day in the requested calendar.
@@ -505,8 +512,8 @@ CalendarValue :: { start : { date : CalendarDate, clock : ClockTime }, precision
 				# next midnight. All arithmetic is bounded by two civil days.
 				total = ClockTime.to_microseconds_since_midnight(value.start.clock) + width
 				if total == 86400000000 {
-					next_day = CivilDay.to_day_number(CalendarDate.to_civil_day(selected_date)) + 1
-					following = CalendarDate.from_civil_day(calendar, CivilDay.from_day_number(next_day))?
+					next_day = CivilDayType.to_day_number(CalendarDate.to_civil_day(selected_date)) + 1
+					following = CalendarDate.from_civil_day(calendar, CivilDayType.from_day_number(next_day))?
 					value_midnight(following)
 				} else {
 					{ date: selected_date, clock: value_checked_clock(total) }

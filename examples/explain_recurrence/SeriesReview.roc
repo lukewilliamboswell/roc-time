@@ -1,5 +1,5 @@
-import time.ICalDateRule
-import time.ICalTimedRule
+import time.ICalendar.DateRule as ICalDateRule
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.Explanation
 
 ## Review imported declarations before selecting a query window or zone rules.

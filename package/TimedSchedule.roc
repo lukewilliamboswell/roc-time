@@ -29,10 +29,13 @@ import ZoneRules
 ## [equipment loans](https://github.com/lukewilliamboswell/roc-time/tree/main/examples/equipment_loans).
 ##
 ## ```roc
-## import time.TimedSchedule
-## import time.TimedRecurrence
-## import time.TimedOccurrence
-## import time.CalendarPattern
+## import time.ScheduleDefinition
+## import time.Recurrence.Timed as TimedRecurrence
+## import time.Recurrence.TimedStart as TimedStart
+## import time.Recurrence.TimedCursor as TimedCursor
+
+## import time.ScheduleDefinition.OccurrenceCursor as OccurrenceCursor
+## import time.Recurrence.CalendarPattern as CalendarPattern
 ## import time.GregorianDate
 ## import time.Calendar
 ## import time.ClockTime
@@ -50,7 +53,7 @@ import ZoneRules
 ##     start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 ##     end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock })
 ##     validity = PosixSpan.from_seconds({ start: -1, end: 345600, rounding: RejectSubmicrosecond })?
-##     rules = ZoneRules.new_bounded({ name: "UTC", version: "fixed", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+##     rules = ZoneRules.Provider.new_bounded({ name: "UTC", version: "fixed", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 ##     rule = TimedRecurrence.new({ date, clock }, {
 ##         calendar: CalendarPattern.defaults(Daily),
 ##         clocks: { hours: [], minutes: [], seconds: [] },
@@ -58,12 +61,12 @@ import ZoneRules
 ##         by_set_pos: [],
 ##     })?
 ##     duration = Coordinate(PosixDelta.from_microseconds(3600000000))
-##     schedule = TimedSchedule.new({ series: 42.U64, rule, window: { start, end }, duration, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
+##     schedule = ScheduleDefinition.Cursor.new({ series: 42.U64, rule, window: { start, end }, duration, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 ##     work = {
 ##         max_steps: 100, max_buffered: 1,
 ##         max_zone_segments: 10, max_zone_candidates: 1,
 ##     }
-##     result = TimedSchedule.collect(schedule, {
+##     result = ScheduleDefinition.Cursor.collect(schedule, {
 ##         work, max_occurrences: 3,
 ##     })
 ##     match result {
@@ -274,7 +277,7 @@ test_schedule_until = |count, validity_end| {
 	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 4 })?), clock })
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(count), by_set_pos: [] })?
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(validity_end) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	TimedSchedule.new({ series: "service", rule, window: { start, end }, duration: Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }), context: { rules, occurrence: RequireUnique, gap: RejectGap } })
 }
 
@@ -433,7 +436,7 @@ test_overrides = |exclude, window_day, work| {
 		},
 	)?
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(518400000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	calendar : TimedOccurrence.Duration
 	calendar = Calendar({ delta: Calendar.Delta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 	short : TimedOccurrence.Duration
@@ -520,7 +523,7 @@ expect {
 	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock: ClockTime.from_fields({ hour: 4, minute: 0, second: 0, microsecond: 0 })? })
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [2, 3], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(172800000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/Gap", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Gap", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
 	initial = TimedSchedule.new({ series: 42.U64, rule, window: { start: source, end }, duration: Coordinate(PosixDelta.from_microseconds(3600000000)), overrides: [{ source, ending: After(Coordinate(PosixDelta.from_microseconds(7200000000))) }], context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })?
 	batch = match TimedSchedule.collect(initial, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 100, max_zone_candidates: 2 }, max_occurrences: 3 }) {
 		Ok(value) => value

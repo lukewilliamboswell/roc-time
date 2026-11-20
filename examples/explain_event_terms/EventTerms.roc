@@ -1,6 +1,6 @@
 import time.Explanation
-import time.ICalDuration
-import time.ICalPeriod
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.Period as ICalPeriod
 import time.ExactInterval
 
 ## Review imported scheduling terms before selecting interpretation context.

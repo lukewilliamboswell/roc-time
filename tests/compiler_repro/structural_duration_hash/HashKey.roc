@@ -1,7 +1,7 @@
-import time.TimedOccurrence
+import time.ScheduleDefinition
 import time.PosixDelta
 import time.Calendar
-HashKey :: { duration : TimedOccurrence.Duration }.{
+HashKey :: { duration : ScheduleDefinition.Occurrence.Duration }.{
 	new : I64 -> HashKey
 	new = |n| { duration: Coordinate(PosixDelta.from_microseconds(n)) }
 	is_eq : HashKey, HashKey -> Bool

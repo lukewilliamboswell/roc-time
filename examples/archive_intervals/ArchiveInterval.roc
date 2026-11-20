@@ -1,5 +1,5 @@
-import time.EdtfInterval
-import time.CalendarInterval
+import time.Interchange.EdtfInterval as EdtfInterval
+import time.CalendarDescription.Interval as CalendarInterval
 
 ## Import catalog date ranges without inventing dates the archivist did not know.
 ArchiveInterval := [].{

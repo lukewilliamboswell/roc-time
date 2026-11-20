@@ -1,0 +1,70 @@
+= API organization upgrade
+
+Update imports to the public paths below. Import the owning module and use the qualified path for parameterized aliases such as `ScheduleDefinition.Cursor(id)` and `ScheduleDefinition.Occurrence(id)`. For other types, an import alias can preserve the existing local name.
+
+[cols="1,1",options="header"]
+|===
+| Old import | New import
+|`time.AllDayOccurrence` |`time.Recurrence.AllDayOccurrence`
+|`time.AllDayRecurrence` |`time.Recurrence.AllDay`
+|`time.CalendarEvidence` |`time.Evidence.Calendar`
+|`time.CalendarInterval` |`time.CalendarDescription.Interval`
+|`time.CalendarPattern` |`time.Recurrence.CalendarPattern`
+|`time.CivilDay` |`time.Calendar.CivilDay`
+|`time.ClockPattern` |`time.Recurrence.ClockPattern`
+|`time.DateRecurrence` |`time.Recurrence.Date`
+|`time.EdtfDate` |`time.Interchange.EdtfDate`
+|`time.EdtfInterval` |`time.Interchange.EdtfInterval`
+|`time.ICalDateRule` |`time.ICalendar.DateRule`
+|`time.ICalDateTime` |`time.ICalendar.DateTime`
+|`time.ICalDuration` |`time.ICalendar.Duration`
+|`time.ICalPeriod` |`time.ICalendar.Period`
+|`time.ICalTimedRule` |`time.ICalendar.TimedRule`
+|`time.IntervalEvidence` |`time.Evidence.Interval`
+|`time.Ixdtf` |`time.Interchange.Ixdtf`
+|`time.JulianDate` |`time.Calendar.JulianDate`
+|`time.MicrosecondRounding` |`time.Nanosecond.Rounding`
+|`time.NanoClockTime` |`time.Nanosecond.ClockTime`
+|`time.NanoLocalDateTime` |`time.Nanosecond.LocalDateTime`
+|`time.PosixNanoBoundary` |`time.Nanosecond.PosixBoundary`
+|`time.PosixNanoDelta` |`time.Nanosecond.PosixDelta`
+|`time.QualifiedCalendarValue` |`time.CalendarDescription.QualifiedValue`
+|`time.ResolvedBoundary` |`time.ZoneSnapshot.Boundary`
+|`time.ResolvedSelection` |`time.ZoneSnapshot.Selection`
+|`time.SemanticFact` |`time.Explanation.Fact`
+|`time.SubdailyPattern` |`time.Recurrence.SubdailyPattern`
+|`time.TimedOccurrence` |`time.ScheduleDefinition.Occurrence`
+|`time.TimedRecurrence` |`time.Recurrence.Timed`
+|`time.TimedSchedule` |`time.ScheduleDefinition.Cursor`
+|===
+
+[cols="1,1",options="header"]
+|===
+| Old path | New path
+|`AllDayOccurrence.Cursor` |`Recurrence.AllDayOccurrenceCursor`
+|`CalendarEvidence.Query` |`Evidence.CalendarQuery`
+|`CalendarPattern.Filter` |`Recurrence.CalendarFilter`
+|`Coverage.SortedBuilder.append_retaining` |`Coverage.SortedBuilder.append_bounded`
+|`Coverage.fact_at` |`Coverage.Facts.at`
+|`Coverage.fact_count` |`Coverage.Facts.count`
+|`DateRecurrence.Cursor` |`Recurrence.DateCursor`
+|`ExactInterval.fact_at` |`ExactInterval.Facts.at`
+|`ExactInterval.fact_count` |`ExactInterval.Facts.count`
+|`Ixdtf.Snapshot` |`Interchange.IxdtfSnapshot`
+|`OffsetTimestamp.fact_at` |`OffsetTimestamp.Facts.at`
+|`OffsetTimestamp.fact_count` |`OffsetTimestamp.Facts.count`
+|`TimedOccurrence.Cursor` |`ScheduleDefinition.OccurrenceCursor`
+|`TimedRecurrence.Cursor` |`Recurrence.TimedCursor`
+|`TimedRecurrence.Occurrence` |`Recurrence.TimedStart`
+|`TimedSchedule.Endings` |`ScheduleDefinition.Endings`
+|`ZoneRules.calendar_selection_cursor` |`ZoneRules.SelectionCursor.from_calendar_value`
+|`ZoneRules.classification_cursor` |`ZoneRules.ClassificationCursor.from_local`
+|`ZoneRules.definition` |`ZoneRules.Provider.definition`
+|`ZoneRules.from_definition` |`ZoneRules.Provider.from_definition`
+|`ZoneRules.new` |`ZoneRules.Provider.new`
+|`ZoneRules.new_bounded` |`ZoneRules.Provider.new_bounded`
+|`ZoneRules.offset_bounds` |`ZoneRules.Provider.offset_bounds`
+|`ZoneRules.selection_cursor` |`ZoneRules.SelectionCursor.from_bounds`
+|===
+
+Call `definition.cursor({ series, window })` on a checked schedule. Bounded coverage append now returns the original builder in `Full(builder)`. Bind reusable iCalendar property records with an explicit `ICalendar.TimedRule.Parts` annotation so Roc applies the empty-list defaults.

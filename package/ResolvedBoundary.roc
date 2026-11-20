@@ -54,12 +54,12 @@ ResolvedBoundary :: {
 	## Description/evidence identity includes policy and complete retained rules.
 	## Use same_position to compare only the resulting POSIX coordinate.
 	is_eq : ResolvedBoundary, ResolvedBoundary -> Bool
-	is_eq = |a, b| a.source == b.source and a.policy == b.policy and a.boundary == b.boundary and a.offset == b.offset and ZoneRules.definition(a.rules) == ZoneRules.definition(b.rules)
+	is_eq = |a, b| a.source == b.source and a.policy == b.policy and a.boundary == b.boundary and a.offset == b.offset and ZoneRules.Provider.definition(a.rules) == ZoneRules.Provider.definition(b.rules)
 
 	## Hash the source, policy, result and complete rules consistently with is_eq.
 	## Work includes the retained transition table; this is not a position-only hash.
 	to_hash : ResolvedBoundary, Hasher -> Hasher
-	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.offset.to_hash(value.boundary.to_hash(value.policy.to_hash(value.source.to_hash(hasher)))))
+	to_hash = |value, hasher| ZoneRules.Provider.definition(value.rules).to_hash(value.offset.to_hash(value.boundary.to_hash(value.policy.to_hash(value.source.to_hash(hasher)))))
 
 	## Facts read only stored source, policy, result and context metadata.
 	fact_count : ResolvedBoundary -> U64

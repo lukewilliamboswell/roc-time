@@ -1,14 +1,14 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Explanation
-import time.SemanticFact
+import time.Explanation.Fact as SemanticFact
 import time.Coverage
 import time.PosixSpan
 import time.PosixBoundary
 import time.FixedOffset
 import time.ZoneRules
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 import SelectionFixture
 
 # R07/R09/R15/R16: input construction precedes counters. The runtime matrix
@@ -41,7 +41,7 @@ main! = |args| {
 		Ok(v) => v
 		Err(_) => crash "selection"
 	}
-	cursor = match ZoneRules.selection_cursor(rules, { start, end }) {
+	cursor = match ZoneRules.SelectionCursor.from_bounds(rules, { start, end }) {
 		Ok(v) => v
 		Err(_) => crash "cursor"
 	}

@@ -1,7 +1,7 @@
-import time.NanoClockTime
-import time.NanoLocalDateTime
-import time.PosixNanoBoundary
-import time.PosixNanoDelta
+import time.Nanosecond.ClockTime as NanoClockTime
+import time.Nanosecond.LocalDateTime as NanoLocalDateTime
+import time.Nanosecond.PosixBoundary as PosixNanoBoundary
+import time.Nanosecond.PosixDelta as PosixNanoDelta
 
 ## The caller has decoded Arrow nanosecond values and retains nulls and column metadata.
 NanosecondColumns :: [].{

@@ -1,19 +1,19 @@
 import fuzz.Fuzz
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 import time.Coverage
 import time.Explanation
-import time.SemanticFact
-import time.ICalDateTime
-import time.ICalDuration
-import time.ICalPeriod
+import time.Explanation.Fact as SemanticFact
+import time.ICalendar.DateTime as ICalDateTime
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.Period as ICalPeriod
 import time.PosixDelta
-import time.CalendarInterval
-import time.EdtfInterval
-import time.EdtfDate
+import time.CalendarDescription.Interval as CalendarInterval
+import time.Interchange.EdtfInterval as EdtfInterval
+import time.Interchange.EdtfDate as EdtfDate
 import time.OffsetTimestamp
 import time.Calendar
-import time.QualifiedCalendarValue
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
 import time.LocalDateTime
 import time.ClockTime
 import time.FixedOffset
@@ -21,7 +21,8 @@ import time.GregorianDate
 import time.PosixSpan
 import time.ZoneRules
 import time.ExactInterval
-import time.Ixdtf
+import time.Interchange.Ixdtf as Ixdtf
+import time.Interchange.IxdtfSnapshot as IxdtfSnapshot
 import time.PosixBoundary
 
 # R02/R13/R14: generated valid Gregorian dates in 1900..2100, supplied EDTF
@@ -454,15 +455,15 @@ check_ixdtf = |input, timestamp, expected| {
 		Ok(value) => value
 		Err(_) => crash "Matching generated IXDTF interpretation failed"
 	}
-	if Ixdtf.Snapshot.boundary(snapshot) != PosixBoundary.from_microseconds(expected) or
-		Ixdtf.Snapshot.source(snapshot) != parsed or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) {
+	if IxdtfSnapshot.boundary(snapshot) != PosixBoundary.from_microseconds(expected) or
+		IxdtfSnapshot.source(snapshot) != parsed or IxdtfSnapshot.offset(snapshot) != FixedOffset.from_seconds(offset) {
 		crash "IXDTF snapshot changed source position or rule offset"
 	}
 	_ = check_snapshot(snapshot, expected, offset)
 	check_transition_snapshot(expected)
 	check_civil_snapshot(expected)
 	check_snapshot_explanation(snapshot, expected, Gregorian, input.precision.to_u64())
-	presentation = match Ixdtf.Snapshot.presentation(snapshot) {
+	presentation = match IxdtfSnapshot.presentation(snapshot) {
 		Ok(value) => value
 		Err(_) => crash "First elective Gregorian calendar did not win"
 	}
@@ -475,18 +476,18 @@ check_ixdtf = |input, timestamp, expected| {
 	}
 	changed_rules = constant_rules(expected, offset + 60, "v2")
 	if input.qualifier < 2 {
-		changed = match Ixdtf.Snapshot.reresolve(snapshot, Some(changed_rules)) {
+		changed = match IxdtfSnapshot.reresolve(snapshot, Some(changed_rules)) {
 			Ok(value) => value
 			Err(_) => crash "Unasserted UTC rejected changed local rules"
 		}
-		if Ixdtf.Snapshot.boundary(changed) != PosixBoundary.from_microseconds(expected) or
-			Ixdtf.Snapshot.offset(changed) != FixedOffset.from_seconds(offset + 60) or
-				Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(offset) or
-					Ixdtf.Snapshot.presentation(snapshot) != Ok(presentation) {
+		if IxdtfSnapshot.boundary(changed) != PosixBoundary.from_microseconds(expected) or
+			IxdtfSnapshot.offset(changed) != FixedOffset.from_seconds(offset + 60) or
+				IxdtfSnapshot.offset(snapshot) != FixedOffset.from_seconds(offset) or
+					IxdtfSnapshot.presentation(snapshot) != Ok(presentation) {
 			crash "IXDTF changed rules mutated retained snapshot or UTC position"
 		}
 	} else {
-		match Ixdtf.Snapshot.reresolve(snapshot, Some(changed_rules)) {
+		match IxdtfSnapshot.reresolve(snapshot, Some(changed_rules)) {
 			Err(OffsetConflict) => {}
 			_ => crash "Asserted numeric offset ignored rule conflict"
 		}
@@ -500,8 +501,8 @@ check_ixdtf = |input, timestamp, expected| {
 		Ok(value) => value
 		Err(_) => crash "Elective calendar reinterpreted Gregorian timestamp"
 	}
-	if Ixdtf.Snapshot.boundary(hebrew_snapshot) != PosixBoundary.from_microseconds(expected) or
-		Ixdtf.Snapshot.presentation(hebrew_snapshot) != Err(UnsupportedCalendar("hebrew")) {
+	if IxdtfSnapshot.boundary(hebrew_snapshot) != PosixBoundary.from_microseconds(expected) or
+		IxdtfSnapshot.presentation(hebrew_snapshot) != Err(UnsupportedCalendar("hebrew")) {
 		crash "Calendar presentation preference changed timestamp meaning"
 	}
 	_ = check_snapshot(
@@ -520,7 +521,7 @@ check_ixdtf = |input, timestamp, expected| {
 	}
 }
 
-constant_rules = |boundary, offset, version| match ZoneRules.new_bounded({ name: "Synthetic/Interchange", version, validity: model_span(boundary - 172800000000, boundary + 172800000000), initial: FixedOffset.from_seconds(offset), transitions: [], bounds: { minimum: offset, maximum: offset } }) {
+constant_rules = |boundary, offset, version| match ZoneRules.Provider.new_bounded({ name: "Synthetic/Interchange", version, validity: model_span(boundary - 172800000000, boundary + 172800000000), initial: FixedOffset.from_seconds(offset), transitions: [], bounds: { minimum: offset, maximum: offset } }) {
 	Ok(value) => value
 	Err(_) => crash "Valid fixed synthetic interpretation context"
 }
@@ -690,7 +691,7 @@ check_declaration_limits = |source, bytes| {
 
 # R09: compare immutable snapshot observations with independent coordinates.
 check_snapshot = |snapshot, expected, expected_offset| {
-	if Ixdtf.Snapshot.boundary(snapshot) != PosixBoundary.from_microseconds(expected) or Ixdtf.Snapshot.offset(snapshot) != FixedOffset.from_seconds(expected_offset) {
+	if IxdtfSnapshot.boundary(snapshot) != PosixBoundary.from_microseconds(expected) or IxdtfSnapshot.offset(snapshot) != FixedOffset.from_seconds(expected_offset) {
 		crash "Snapshot differs from independent position and offset"
 	}
 }
@@ -709,7 +710,7 @@ check_transition_snapshot = |coordinate| {
 	validity = model_span(coordinate - 1, coordinate + 4)
 	var $snapshots = []
 	for later_offset in [1.I32, 2] {
-		rules = match ZoneRules.new_bounded({ name: "Synthetic/Context", version: "same-version", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], bounds: { minimum: 0, maximum: 2 } }) {
+		rules = match ZoneRules.Provider.new_bounded({ name: "Synthetic/Context", version: "same-version", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(coordinate + 1), offset: FixedOffset.from_seconds(later_offset) }], bounds: { minimum: 0, maximum: 2 } }) {
 			Ok(value) => value
 			Err(_) => crash "Microsecond synthetic transition fixture rejected"
 		}
@@ -718,7 +719,7 @@ check_transition_snapshot = |coordinate| {
 			Err(_) => crash "Synthetic point before transition failed"
 		}
 		check_snapshot(snapshot, coordinate, 0)
-		retained = match Ixdtf.Snapshot.context(snapshot) {
+		retained = match IxdtfSnapshot.context(snapshot) {
 			Some(value) => value
 			None => crash "Named snapshot lost its rules"
 		}
@@ -736,7 +737,7 @@ check_transition_snapshot = |coordinate| {
 		Ok(value) => value
 		Err(_) => crash "Two-table model invariant"
 	}
-	if first == second or !Ixdtf.Snapshot.same_position(first, second) {
+	if first == second or !IxdtfSnapshot.same_position(first, second) {
 		crash "Snapshot evidence equality confused with compatible-axis position"
 	}
 	keyed = Dict.insert(Dict.insert(Dict.empty(), first, 1.U8), second, 2.U8)
@@ -764,7 +765,7 @@ check_civil_snapshot = |origin| {
 		if ResolvedBoundary.boundary(snapshot) != PosixBoundary.from_microseconds(choice.position) or
 			ResolvedBoundary.offset(snapshot) != FixedOffset.from_seconds(choice.offset) or
 				ResolvedBoundary.source(snapshot) != lower or ResolvedBoundary.policy(snapshot) != choice.policy or
-					ZoneRules.definition(ResolvedBoundary.rules(snapshot)) != ZoneRules.definition(fold) {
+					ZoneRules.Provider.definition(ResolvedBoundary.rules(snapshot)) != ZoneRules.Provider.definition(fold) {
 			crash "Civil boundary changed independently modeled occurrence or policy"
 		}
 		source = Explanation.new(ResolvedBoundary(snapshot))
@@ -786,7 +787,7 @@ check_civil_snapshot = |origin| {
 
 		if ResolvedSelection.coverage(snapshot) != fixture.extent or ResolvedSelection.start(snapshot) != lower or
 			ResolvedSelection.end(snapshot) != upper or
-				ZoneRules.definition(ResolvedSelection.rules(snapshot)) != ZoneRules.definition(fixture.rules) {
+				ZoneRules.Provider.definition(ResolvedSelection.rules(snapshot)) != ZoneRules.Provider.definition(fixture.rules) {
 			crash "Civil selection erased empty/disconnected coverage or endpoint calendar identity"
 		}
 		members = if fixture.extent == Coverage.empty {
@@ -798,7 +799,7 @@ check_civil_snapshot = |origin| {
 	}
 }
 
-civil_fixture_rules = |origin, initial, after| match ZoneRules.new_bounded({ name: "Synthetic/CivilModel", version: "v1", validity: model_span(origin - 4000000, origin + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
+civil_fixture_rules = |origin, initial, after| match ZoneRules.Provider.new_bounded({ name: "Synthetic/CivilModel", version: "v1", validity: model_span(origin - 4000000, origin + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: PosixBoundary.from_microseconds(origin), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
 	Ok(found) => found
 	Err(_) => crash "Valid two-segment civil fixture rules"
 }
@@ -830,7 +831,7 @@ check_civil_explanation = |snapshot, lower, upper, rules, members| {
 	}
 	check_declaration_limits(coverage_source, 1)
 	check_declaration_limits(source, 1)
-	cursor = match ZoneRules.selection_cursor(rules, { start: lower, end: upper }) {
+	cursor = match ZoneRules.SelectionCursor.from_bounds(rules, { start: lower, end: upper }) {
 		Ok(value) => value
 		Err(_) => crash "Bounded selection cursor fixture rejected"
 	}
@@ -877,7 +878,7 @@ check_civil_explanation = |snapshot, lower, upper, rules, members| {
 }
 
 check_civil_context = |source, index, rules| {
-	definition = ZoneRules.definition(rules)
+	definition = ZoneRules.Provider.definition(rules)
 	if explanation_fact(source, index) != Context({ name: definition.name, version: definition.version, validity: definition.validity, provenance: definition.provenance }) {
 		crash "Civil explanation changed retained immutable context metadata"
 	}

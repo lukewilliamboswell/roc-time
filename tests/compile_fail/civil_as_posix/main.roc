@@ -1,7 +1,7 @@
 app [main!] {
 	time: "../../../package/main.roc",
 }
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 import time.PosixBoundary
 import time.PosixSpan
 
