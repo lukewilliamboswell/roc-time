@@ -12,7 +12,7 @@ battery power, native scheduling. Roc `nightly-2026-11-18-a520eed`,
 LLVM speed, `arm64mac`, Zig 0.17.0. Rust 1.95.0, Chrono 0.4.45 and Jiff
 0.2.35, Go 1.26.5, CPython 3.12.3 and ciso8601 2.3.3. Each session uses
 three process rounds with three warmups and nine 100,000-operation samples
-per subject in each round. [Starting baseline and build flags](starting-native-m2.md)
+per subject in each round.
 
 | Competitive workload | Roc ns/op, A | Fastest peer ns/op, A | Ratio, A | Roc ns/op, B | Fastest peer ns/op, B | Ratio, B |
 |---|---:|---:|---:|---:|---:|---:|
@@ -32,7 +32,8 @@ report, based on `8539f5623387c555f8c109f1c394688b0fc01bc4`. Raw session reports
 digests, options, timings, and per-profile verification. The retained peer
 cache uses the independent starting peer measurements. Three later Roc-only
 sessions produced the regression baseline and timing-control observations.
-[Peer cache](peer-baseline.json) · [Roc baseline](roc-baseline.json)
+Timing baselines and their digests are stored locally under
+`.roc-time-tmp/benchmark-baselines/`.
 
 | Measured source file | SHA-256 |
 |---|---|

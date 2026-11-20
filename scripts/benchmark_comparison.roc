@@ -317,8 +317,8 @@ timing_identity! = |options| {
 
 measure_cached! : List((Str, Str)) => Try({}, _)
 measure_cached! = |profiles| {
-	baseline = Path.utf8("benchmarks/comparison/peer-baseline.json")
-	digest = Path.utf8("benchmarks/comparison/peer-baseline.sha256")
+	baseline = Path.utf8(".roc-time-tmp/benchmark-baselines/peer-baseline.json")
+	digest = Path.utf8(".roc-time-tmp/benchmark-baselines/peer-baseline.sha256")
 	cache = BenchmarkEvidence.load_peer_baseline!({ baseline, digest })?
 	options = ComparisonOptions.parse([])?
 	identity = timing_identity!(options)?
@@ -332,7 +332,7 @@ measure_cached! = |profiles| {
 	before = timing_control!({ binary, cwd: root, logs: work, label: "control-before" })?
 	workloads = required.map(|{ profile, workload, .. }| (profile, workload)).fold([], |unique, key| if (unique.contains(key)) unique else unique.append(key))
 	compiler = Script.roc_nightly!()?.output!(["version"])?
-	reviewed_path = Path.utf8("benchmarks/comparison/roc-baseline.json")
+	reviewed_path = Path.utf8(".roc-time-tmp/benchmark-baselines/roc-baseline.json")
 	reviewed = if Path.exists!(reviewed_path)? {
 		reference : BenchmarkTimingCache.RocBaseline
 		reference = Json.parse(Path.read_utf8!(reviewed_path)?)?

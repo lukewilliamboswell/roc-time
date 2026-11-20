@@ -4,14 +4,14 @@ Both fresh sessions on 2026-11-20 UTC met all 86 coverage targets against
 Rangemap 1.7.1. The highest ratios were 1.475× and 1.476× for subtracting
 empty coverage from empty coverage. The other 59 rows record diagnostic or
 absolute timings across coverage rejection, named-zone interpretation and
-bounded recurrence. [Complete workload results](native-operational-results.tsv)
+bounded recurrence.
 
 Apple M2 MacBook Air (Mac14,2), macOS 26.3.1(a) build 25D771280a,
 battery power, native scheduling. Roc `nightly-2026-11-18-a520eed`,
 LLVM speed, `arm64mac`, Zig 0.17.0. Rangemap builds with pinned Rust 1.95.0
 using `--offline --locked --release --target aarch64-apple-darwin`. Each
 session uses three independent process rounds with three warmups and nine
-samples. Operations per sample are in the result table.
+samples. The local session reports record operations per sample.
 
 Each coverage adapter validates both selected inputs against the independent
 point model and observes all required results. Zone rows use the pinned IANA
@@ -33,7 +33,8 @@ The development source is based on `8539f5623387c555f8c109f1c394688b0fc01bc4`.
 Raw reports `results-20261120T043957Z.json` and `results-20261120T044141Z.json`
 under `.roc-time-tmp/benchmark-operational/` record every sample, paired
 inputs, executable and file digests, and before/after timing controls.
-[Reviewed coverage peer cache](coverage-peer-baseline.json) · [Reviewed Roc baseline](operational-roc-baseline.json)
+Timing baselines and the per-workload export are stored locally under
+`.roc-time-tmp/benchmark-baselines/`.
 
 A subsequent cached run passed correctness replay, the timing control and all
 coverage targets with the peer executables removed from their build paths.

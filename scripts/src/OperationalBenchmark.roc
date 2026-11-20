@@ -38,8 +38,8 @@ OperationalBenchmark := [].{
 		peer : [Cached(BenchmarkTimingCache.Cache), Fresh({ binary : Path, rust_version : Str })]
 		peer = match operation {
 			Measure => {
-				baseline = Path.utf8("benchmarks/comparison/coverage-peer-baseline.json")
-				digest = Path.utf8("benchmarks/comparison/coverage-peer-baseline.sha256")
+				baseline = Path.utf8(".roc-time-tmp/benchmark-baselines/coverage-peer-baseline.json")
+				digest = Path.utf8(".roc-time-tmp/benchmark-baselines/coverage-peer-baseline.sha256")
 				if !Path.exists!(baseline)? or !Path.exists!(digest)? {
 					return Err(MissingCoveragePeerBaseline("blueprint run benchmark-operations-peers"))
 				}
@@ -143,7 +143,7 @@ OperationalBenchmark := [].{
 				Script.info!({ label: "SHA256", message: BenchmarkEvidence.hash!(candidate)? })?
 				BenchmarkEvidence.hash!(candidate)?
 			}
-			Cached(_) => BenchmarkEvidence.hash!(Path.utf8("benchmarks/comparison/coverage-peer-baseline.json"))?
+			Cached(_) => BenchmarkEvidence.hash!(Path.utf8(".roc-time-tmp/benchmark-baselines/coverage-peer-baseline.json"))?
 		}
 		files = BenchmarkEvidence.collect_sources!(Path.utf8("benchmarks/operational"), Dict.empty())?
 		report = {
@@ -213,7 +213,7 @@ roc_identity! = |identity| {
 
 load_roc_baseline! : { identity : BenchmarkTimingCache.Identity, compiler : Str } => Try(List(BenchmarkTimingCache.RocBaseline), _)
 load_roc_baseline! = |{ identity, compiler }| {
-	path = Path.utf8("benchmarks/comparison/operational-roc-baseline.json")
+	path = Path.utf8(".roc-time-tmp/benchmark-baselines/operational-roc-baseline.json")
 	if !Path.exists!(path)? {
 		return Ok([])
 	}

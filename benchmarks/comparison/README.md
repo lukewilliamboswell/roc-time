@@ -4,8 +4,7 @@ The reference environment is the native Apple M2 MacBook Air (Mac14,2).
 The matrix covers Gregorian dates, fixed-offset timestamps, coverage, named
 zones and recurrence through public APIs with independent expectations.
 The first native capture and the two fresh date and timestamp confirmations
-have separate reports. [Starting baseline](starting-native-m2.md) ·
-[Gregorian and fixed-offset results](native-date-timestamp.md) ·
+have separate reports. [Gregorian and fixed-offset results](native-date-timestamp.md) ·
 [Coverage, zone and recurrence results](native-operational.md)
 
 ```sh

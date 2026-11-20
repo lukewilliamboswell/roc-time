@@ -696,6 +696,10 @@ their contents and manifest with `benchmarks/comparison/expectations/` and
 review the semantic changes before accepting the candidates. A pin or input
 change also requires replay against the changed public API.
 
+Keep timing baselines, their digests, and raw reports under ignored
+`.roc-time-tmp/` storage. Correctness replay uses the versioned expectations
+without requiring any local timing baseline.
+
 Run `blueprint run benchmark-comparison` for a Roc-only measurement across the
 matrix against compatible reviewed peer baselines. The runner checks each
 peer baseline's digest and identity before its timing stage. Use
@@ -703,21 +707,21 @@ peer baseline's digest and identity before its timing stage. Use
 and smoke verification. Follow with `blueprint run benchmark-peers` for the
 reference protocol. Inspect its raw report, target results and peer baseline
 candidate before promoting the candidate and its reported SHA-256 to
-`benchmarks/comparison/peer-baseline.json` and
-`benchmarks/comparison/peer-baseline.sha256`.
+`.roc-time-tmp/benchmark-baselines/peer-baseline.json` and
+`.roc-time-tmp/benchmark-baselines/peer-baseline.sha256`.
 Use `blueprint run benchmark-operations-peers -- --fetch` to acquire the
 locked interval peer. Run `blueprint run benchmark-operations-peers` for
 fresh coverage timings and the absolute named-zone and recurrence rows.
 Review its candidate and digest for
-`benchmarks/comparison/coverage-peer-baseline.json` and
-`benchmarks/comparison/coverage-peer-baseline.sha256`.
+`.roc-time-tmp/benchmark-baselines/coverage-peer-baseline.json` and
+`.roc-time-tmp/benchmark-baselines/coverage-peer-baseline.sha256`.
 
 Run the Roc-only comparison in at least three independent reference sessions
-to review a new `benchmarks/comparison/roc-baseline.json`. Run
+to review a new `.roc-time-tmp/benchmark-baselines/roc-baseline.json`. Run
 `blueprint run benchmark-comparison -- --review-roc REPORT1 REPORT2 REPORT3`
 to prepare the date and timestamp candidate. For the operational reports
 use `blueprint run benchmark-operations -- --review REPORT1 REPORT2 REPORT3`
-and review the candidate for `benchmarks/comparison/operational-roc-baseline.json`.
+and review the candidate for `.roc-time-tmp/benchmark-baselines/operational-roc-baseline.json`.
 The candidates retain each workload's session medians and the timing-control
 measurements before and after each run.
 The runner uses the middle session median and extends the observed range by
