@@ -211,7 +211,7 @@ expect {
 }
 test_rules = || {
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
-	ZoneRules.new_bounded({ name: "UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })
+	ZoneRules.Provider.new_bounded({ name: "UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })
 }
 
 CalendarEvidenceQuery :: { evidence : CalendarEvidence, rules : ZoneRules, point : PosixBoundary, local : LocalDateTime, index : U64, yes : Bool, no : Bool }.{

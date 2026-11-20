@@ -1,9 +1,9 @@
 app [main!] { pf: platform "../../platform/main.roc", time: "../../../package/main.roc" }
 import pf.Host
-import time.TimedRecurrence
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.CalendarPattern
+import time.Recurrence.Timed as TimedRecurrence
+import time.ScheduleDefinition
+
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.Calendar
 import time.GregorianDate
 import time.ClockTime
@@ -33,14 +33,14 @@ main! = |args| {
 	end_date = GregorianDate.from_fields({ year, month: 1, day: 1 }) ?? crash "horizon"
 	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock })
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) }) ?? crash "validity"
-	rules = ZoneRules.new_bounded({ name: "Synthetic/Composed", version: "integer-minute-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } }) ?? crash "rules"
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Composed", version: "integer-minute-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } }) ?? crash "rules"
 	rule = TimedRecurrence.new({ date: anchor_date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [1, 2, 3, 4], minutes: [30], seconds: [] }, termination: Forever, by_set_pos: [] }) ?? crash "rule"
 	end_clock = ClockTime.from_fields({ hour: 5, minute: 30, second: 0, microsecond: 0 }) ?? crash "end clock"
 	ending = AtLocal({ source: LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor_date), clock: end_clock }), occurrence: First, gap: UseOffsetBeforeGap })
 	overrides = [{ source: anchor, ending }]
 	default = Coordinate(PosixDelta.from_microseconds(3600000000))
 	before = Host.allocated_bytes!({})
-	cursor = TimedSchedule.new({ series: "prefix", rule, window: { start: anchor, end }, duration: default, overrides, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } }) ?? crash "cursor"
+	cursor = ScheduleDefinition.Cursor.new({ series: "prefix", rule, window: { start: anchor, end }, duration: default, overrides, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } }) ?? crash "cursor"
 	constructed = Host.allocated_bytes!({})
 	Host.assert!(constructed - before <= limit("construction"))
 	var $current = cursor
@@ -50,13 +50,13 @@ main! = |args| {
 	var $first_work = 0.U64
 	var $work = 0.U64
 	while $calls < 100 and $seen < 2 {
-		batch = TimedSchedule.collect($current, { work: { max_steps: 1, max_buffered: 4, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "bounded prefix"
+		batch = ScheduleDefinition.Cursor.collect($current, { work: { max_steps: 1, max_buffered: 4, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "bounded prefix"
 		Host.assert!(batch.steps <= 1 and batch.zone_segments <= 1 and batch.occurrences.len() <= 1)
 		$work = $work + batch.steps + batch.zone_segments
 		for occurrence in batch.occurrences {
-			span = TimedOccurrence.span(occurrence)
+			span = ScheduleDefinition.Occurrence.span(occurrence)
 			if $seen == 0 {
-				Host.assert!(TimedOccurrence.id(occurrence) == { series: "prefix", source: anchor })
+				Host.assert!(ScheduleDefinition.Occurrence.id(occurrence) == { series: "prefix", source: anchor })
 				Host.assert!(PosixBoundary.to_microseconds(PosixSpan.start(span)) == 5400000000 and PosixBoundary.to_microseconds(PosixSpan.end(span)) == 16200000000)
 				$first_bytes = Host.allocated_bytes!({})
 				$first_work = $work
@@ -79,16 +79,16 @@ main! = |args| {
 	Host.assert!(consumed - $first_bytes <= limit("resume"))
 	# Reusing the saved snapshot starts at the original source, independently
 	# of the resumed cursor. These checks run after the recorded scopes.
-	Host.assert!(TimedSchedule.to_inspect(cursor).count_utf8_bytes() <= 256)
+	Host.assert!(ScheduleDefinition.Cursor.to_inspect(cursor).count_utf8_bytes() <= 256)
 	var $saved = cursor
 	var $saved_calls = 0.U64
 	var $replayed = Bool.False
 	while $saved_calls < 100 and !$replayed {
-		batch = TimedSchedule.collect($saved, { work: { max_steps: 1, max_buffered: 4, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "saved cursor prefix"
+		batch = ScheduleDefinition.Cursor.collect($saved, { work: { max_steps: 1, max_buffered: 4, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "saved cursor prefix"
 		Host.assert!(batch.steps <= 1 and batch.zone_segments <= 1)
 		for occurrence in batch.occurrences {
-			Host.assert!(TimedOccurrence.id(occurrence) == { series: "prefix", source: anchor })
-			span = TimedOccurrence.span(occurrence)
+			Host.assert!(ScheduleDefinition.Occurrence.id(occurrence) == { series: "prefix", source: anchor })
+			span = ScheduleDefinition.Occurrence.span(occurrence)
 			Host.assert!(PosixBoundary.to_microseconds(PosixSpan.start(span)) == 5400000000 and PosixBoundary.to_microseconds(PosixSpan.end(span)) == 16200000000)
 			$replayed = Bool.True
 		}

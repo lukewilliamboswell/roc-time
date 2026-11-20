@@ -1,5 +1,5 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.EdtfDate
+import time.Interchange.EdtfDate as EdtfDate
 
 main! = |_args| {
 	date : EdtfDate

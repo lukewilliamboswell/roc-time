@@ -1,5 +1,5 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.Ixdtf
+import time.Interchange.Ixdtf as Ixdtf
 
 main! = |_args| {
 	value = parse("1970-01-01T00:00:00Z")?

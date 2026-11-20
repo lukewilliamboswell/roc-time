@@ -1,7 +1,9 @@
-import time.CalendarPattern
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.GregorianDate
-import time.CivilDay
-import time.DateRecurrence
+import time.Calendar.CivilDay as CivilDay
+import time.Recurrence.Date as DateRecurrence
+
+import time.Recurrence.DateCursor as DateCursor
 
 ## Plan equipment inspections on the last Tuesday every three months.
 InspectionDates :: [].{
@@ -28,7 +30,7 @@ InspectionDates :: [].{
 		rule = DateRecurrence.new(anchor, { pattern: spec, termination: Count(4), by_set_pos: [], inclusions: [], exclusions: [] })?
 		window_end = GregorianDate.from_fields({ year, month: 12, day: 1 })?
 		cursor = DateRecurrence.cursor(rule, { start: february, end: window_end })?
-		batch = DateRecurrence.Cursor.collect(cursor, { max_steps: 1000, max_buffered: 31, max_occurrences: 4 })?
+		batch = DateCursor.collect(cursor, { max_steps: 1000, max_buffered: 31, max_occurrences: 4 })?
 		match batch.status {
 			Complete => Ok(batch.dates)
 			Limited(progress) => Err(InspectionLimit(progress.reason))

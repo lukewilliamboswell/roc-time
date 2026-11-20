@@ -76,7 +76,7 @@ zone! = |name, count| {
 			{ data, rules }
 		},
 	)
-	definition = ZoneRules.definition(observed.value.rules)
+	definition = ZoneRules.Provider.definition(observed.value.rules)
 	if definition.transitions.len() != count or observed.value.data.transitions.len() != count {
 		crash "pinned 2026e transition count changed"
 	}

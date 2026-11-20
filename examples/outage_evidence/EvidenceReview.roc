@@ -1,6 +1,6 @@
-import time.ICalDateTime
+import time.ICalendar.DateTime as ICalDateTime
 import time.PosixSpan
-import time.IntervalEvidence
+import time.Evidence.Interval as IntervalEvidence
 
 ## Keep report correlation while reviewing uncertain outage membership.
 EvidenceReview :: [].{

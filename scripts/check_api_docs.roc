@@ -27,12 +27,21 @@ main! = |_args| {
 			message: "${count.to_str()} documented API entries for ${root}",
 		})?
 	}
+	for name in ["TimedSchedule", "TimedRecurrence", "DateRecurrence", "ICalTimedRule", "Ixdtf", "NanoClockTime", "SemanticFact"] {
+		if Path.exists!(Path.join(work, "core/${name}/index.html"))? {
+			return Script.fail!("obsolete root module in API reference: ${name}")
+		}
+	}
 	for (owner, names) in [
 		("Calendar.Date", ["from_fields", "as_gregorian", "in_calendar", "same_day", "to_hash"]),
 		("Calendar.Arithmetic", ["shift_day"]),
 		("Calendar.Delta", ["from_components", "to_components", "days", "months"]),
 		("Calendar.Value", ["minute", "fractional_second", "resolution", "bounds", "to_hash"]),
-		("TimedSchedule.Endings", ["new", "definition", "is_eq", "to_hash"]),
+		("ScheduleDefinition.Endings", ["new", "definition", "is_eq", "to_hash"]),
+		("ICalendar.TimedRule", ["parse", "to_parts"]),
+		("Recurrence.TimedCursor", ["collect", "outcomes"]),
+		("Coverage", ["from_iter", "from_sorted_spans", "iter"]),
+		("ZoneRules.Provider", ["new", "from_definition"]),
 		("Database", ["get"]),
 	] {
 		page = if owner == "Database" {

@@ -1,29 +1,33 @@
 import fuzz.Fuzz
 import local.LocalCases
 import time.Explanation
-import time.SemanticFact
-import time.TimedSchedule
+import time.Explanation.Fact as SemanticFact
+
 import time.ScheduleDefinition
-import time.TimedOccurrence
+
+import time.ScheduleDefinition.OccurrenceCursor as OccurrenceCursor
 import time.Calendar
-import time.TimedRecurrence
+import time.Recurrence.Timed as TimedRecurrence
+import time.Recurrence.TimedStart as TimedStart
+import time.Recurrence.TimedCursor as TimedCursor
 import time.ClockTime
 import time.LocalDateTime
-import time.AllDayRecurrence
-import time.AllDayOccurrence
+import time.Recurrence.AllDay as AllDayRecurrence
+import time.Recurrence.AllDayOccurrence as AllDayOccurrence
 import time.Coverage
 import time.PosixDelta
 import time.PosixSpan
 import time.PosixBoundary
 import time.FixedOffset
 import time.ZoneRules
-import time.CalendarPattern
-import time.DateRecurrence
+import time.Recurrence.CalendarPattern as CalendarPattern
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
 import time.GregorianDate
-import time.ICalTimedRule
-import time.ICalPeriod
-import time.ICalDuration
-import time.ICalDateRule
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.Period as ICalPeriod
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.DateRule as ICalDateRule
 
 # R11–R12: a finite calendar-table model, independent of CalendarPattern and
 # cursor execution. Enumerate 2024–2025 before applying count/union/exclusions.
@@ -254,7 +258,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 		var $observed = []
 		var $batches = 0.U64
 		while $batches < 5000 {
-			batch = match DateRecurrence.Cursor.collect($current, limits) {
+			batch = match DateCursor.collect($current, limits) {
 				Ok(value) => value
 				Err(_) => crash "Supported recurrence failed"
 			}
@@ -267,7 +271,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 					if $observed != $normalized {
 						crash "Recurrence differs from finite calendar model"
 					}
-					parsed_batch = match DateRecurrence.Cursor.collect(parsed_cursor, { max_steps: 10000, max_buffered: 366, max_occurrences: 100 }) {
+					parsed_batch = match DateCursor.collect(parsed_cursor, { max_steps: 10000, max_buffered: 366, max_occurrences: 100 }) {
 						Ok(value) => value
 						Err(_) => crash "Parsed recurrence failed"
 					}
@@ -350,7 +354,7 @@ check_consumers = |initial, limits, expected| {
 	var $calls = 0.U64
 	var $done = False
 	while $done == False and $calls < 5000 {
-		result = match DateRecurrence.Cursor.next($current, { max_steps: limits.max_steps, max_buffered: limits.max_buffered }) {
+		result = match DateCursor.next($current, { max_steps: limits.max_steps, max_buffered: limits.max_buffered }) {
 			Ok(value) => value
 			Err(_) => crash "Next failed within the reference range"
 		}
@@ -379,7 +383,7 @@ check_consumers = |initial, limits, expected| {
 	$done = False
 	var $value = { count: 0.U64, weighted: 0.U64 }
 	while $done == False and $calls < 5000 {
-		result = match DateRecurrence.Cursor.fold(
+		result = match DateCursor.fold(
 			$current,
 			{
 				limits,
@@ -429,7 +433,7 @@ check_consumers = |initial, limits, expected| {
 	var $chunked = []
 	var $complete = False
 	var $chunks = 0.U64
-	for result in DateRecurrence.Cursor.chunks(initial, limits) {
+	for result in DateCursor.chunks(initial, limits) {
 		batch = match result {
 			Ok(chunk) => chunk
 			Err(_) => crash "Chunk iterator failed in reference range"
@@ -513,7 +517,7 @@ fixture_rules = |upper| {
 		Ok(value) => value
 		Err(_) => crash "validity"
 	}
-	match ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
+	match ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "rules"
 	}
@@ -613,7 +617,7 @@ check_timed = |input, anchor, pattern, window, dates| {
 	var $boundaries = []
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = match TimedRecurrence.Cursor.next($current, { max_steps: input.work.to_u64(), max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }) {
+		batch = match TimedCursor.next($current, { max_steps: input.work.to_u64(), max_buffered: 10, max_zone_segments: 1, max_zone_candidates: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "timed interpretation"
 		}
@@ -632,9 +636,9 @@ check_timed = |input, anchor, pattern, window, dates| {
 			}
 			Item(item) => {
 				check_duration(item.occurrence, input.work)
-				$sources = $sources.append(TimedRecurrence.Occurrence.source(item.occurrence))
-				$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(item.occurrence))
-				match TimedRecurrence.Occurrence.adjustment(item.occurrence) {
+				$sources = $sources.append(TimedStart.source(item.occurrence))
+				$boundaries = $boundaries.append(TimedStart.boundary(item.occurrence))
+				match TimedStart.adjustment(item.occurrence) {
 					Exact => {}
 					BeforeGap(_) => crash "UTC adjustment"
 				}
@@ -659,7 +663,7 @@ check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
 	var $boundaries = []
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = match TimedRecurrence.Cursor.collect(
+		batch = match TimedCursor.collect(
 			$current,
 			{
 				work: { max_steps: work, max_buffered: 10, max_zone_segments: 2, max_zone_candidates: 1 },
@@ -673,8 +677,8 @@ check_timed_batches = |initial, work, expected_sources, expected_boundaries| {
 			crash "timed batch exceeded shared work or output budget"
 		}
 		for occurrence in batch.occurrences {
-			$sources = $sources.append(TimedRecurrence.Occurrence.source(occurrence))
-			$boundaries = $boundaries.append(TimedRecurrence.Occurrence.boundary(occurrence))
+			$sources = $sources.append(TimedStart.source(occurrence))
+			$boundaries = $boundaries.append(TimedStart.boundary(occurrence))
 		}
 		match batch.status {
 			Complete => {
@@ -833,14 +837,14 @@ check_subdaily = |input| {
 	fractional_window = { start: window_start, end }
 	fractional_duration = Coordinate(PosixDelta.from_microseconds(1))
 	fractional_definition = checked_definition(ScheduleDefinition.from_native({ rule: rebuilt, duration: fractional_duration, overrides: [], context: fractional_context }) ?? crash "fractional schedule preparation")
-	fractional_cursor = ScheduleDefinition.cursor({ series: 73.U64, definition: fractional_definition, window: fractional_window }) ?? crash "fractional prepared cursor"
+	fractional_cursor = fractional_definition.cursor({ series: 73.U64, window: fractional_window }) ?? crash "fractional prepared cursor"
 	check_fractional_schedule(fractional_cursor, input.work.to_u64(), $expected)
-	fractional_direct = TimedSchedule.new({ series: 73.U64, rule: rebuilt, window: fractional_window, duration: fractional_duration, context: fractional_context }) ?? crash "fractional direct cursor"
+	fractional_direct = ScheduleDefinition.Cursor.new({ series: 73.U64, rule: rebuilt, window: fractional_window, duration: fractional_duration, context: fractional_context }) ?? crash "fractional direct cursor"
 	check_fractional_schedule(fractional_direct, input.work.to_u64(), $expected)
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = match TimedRecurrence.Cursor.collect($current, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 2 }) {
+		batch = match TimedCursor.collect($current, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 2 }) {
 			Ok(value) => value
 			Err(_) => crash "subdaily grid execution"
 		}
@@ -848,7 +852,7 @@ check_subdaily = |input| {
 			crash "subdaily grid budget"
 		}
 		for occurrence in batch.occurrences {
-			$observed = $observed.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(occurrence)))
+			$observed = $observed.append(PosixBoundary.to_microseconds(TimedStart.boundary(occurrence)))
 		}
 		match batch.status {
 			Complete => {
@@ -880,13 +884,13 @@ check_fractional_schedule = |initial, work, expected| {
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = TimedSchedule.collect($cursor, { work: { max_steps: work, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "fractional schedule execution"
+		batch = ScheduleDefinition.Cursor.collect($cursor, { work: { max_steps: work, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "fractional schedule execution"
 		if batch.steps > work or batch.zone_segments > 1 or batch.occurrences.len() > 1 {
 			crash "fractional schedule budget"
 		}
 		for item in batch.occurrences {
-			span = TimedOccurrence.span(item)
-			if TimedOccurrence.id(item).series != 73 or PosixSpan.coordinate_width(span) != Ok(PosixDelta.from_microseconds(1)) {
+			span = ScheduleDefinition.Occurrence.span(item)
+			if ScheduleDefinition.Occurrence.id(item).series != 73 or PosixSpan.coordinate_width(span) != Ok(PosixDelta.from_microseconds(1)) {
 				crash "fractional schedule identity or width"
 			}
 			$observed = $observed.append(PosixBoundary.to_microseconds(PosixSpan.start(span)))
@@ -927,29 +931,29 @@ check_duration = |start, amount| {
 	if ICalDuration.parse(ICalDuration.to_text(parsed)) != Ok(parsed) or ICalDuration.parse("${text}S") != Err(Malformed) {
 		crash "duration grammar or semantic round trip"
 	}
-	parsed_cursor = match TimedOccurrence.cursor({ id: 42.U64, start, duration: ICalDuration.to_duration(parsed) }) {
+	parsed_cursor = match ScheduleDefinition.Occurrence.cursor({ id: 42.U64, start, duration: ICalDuration.to_duration(parsed) }) {
 		Ok(value) => value
 		Err(_) => crash "parsed duration construction"
 	}
-	parsed_batch = match TimedOccurrence.Cursor.collect(parsed_cursor, { max_segments: 0, max_candidates: 0 }) {
+	parsed_batch = match OccurrenceCursor.collect(parsed_cursor, { max_segments: 0, max_candidates: 0 }) {
 		Ok(value) => value
 		Err(_) => crash "parsed duration execution"
 	}
 	expected_width = amount.to_i64() * 3661000000
 	match parsed_batch.status {
-		Complete(value) => if PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(expected_width)) {
+		Complete(value) => if PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) != Ok(PosixDelta.from_microseconds(expected_width)) {
 			crash "parsed duration differs from integer-second oracle"
 		}
 		Limited(_) => crash "coordinate duration used zone budget"
 	}
 
-	base = PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(start))
+	base = PosixBoundary.to_microseconds(TimedStart.boundary(start))
 	for duration in [Coordinate(PosixDelta.from_microseconds(3600000000)), Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })] {
-		cursor = match TimedOccurrence.cursor({ id: 42.U64, start, duration }) {
+		cursor = match ScheduleDefinition.Occurrence.cursor({ id: 42.U64, start, duration }) {
 			Ok(value) => value
 			Err(_) => crash "duration construction"
 		}
-		batch = match TimedOccurrence.Cursor.collect(cursor, { max_segments: 1, max_candidates: 1 }) {
+		batch = match OccurrenceCursor.collect(cursor, { max_segments: 1, max_candidates: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "duration resolution"
 		}
@@ -961,7 +965,7 @@ check_duration = |start, amount| {
 			Coordinate(_) => 3600000000.I64
 			Calendar(_) => 90000000000.I64
 		}
-		if TimedOccurrence.id(value) != 42 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(expected)) or PosixSpan.start(TimedOccurrence.span(value)) != PosixBoundary.from_microseconds(base) {
+		if ScheduleDefinition.Occurrence.id(value) != 42 or PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) != Ok(PosixDelta.from_microseconds(expected)) or PosixSpan.start(ScheduleDefinition.Occurrence.span(value)) != PosixBoundary.from_microseconds(base) {
 			crash "duration differs from UTC grid"
 		}
 	}
@@ -1017,9 +1021,9 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	anchor_source = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: anchor_clock })
 	extra_source = local(date(2024, 2, 4), 9)
 	# The generator constrains work to 1..128.
-	short : TimedOccurrence.Duration
+	short : ScheduleDefinition.Occurrence.Duration
 	short = Coordinate(PosixDelta.from_microseconds(work.to_i64_wrap() * 3600000000))
-	extra : TimedOccurrence.Duration
+	extra : ScheduleDefinition.Occurrence.Duration
 	extra = Calendar({ delta: Calendar.Delta.days(2), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 	anchor_boundary = match FixedOffset.resolve(FixedOffset.from_seconds(0), anchor_source) {
 		Ok(value) => value
@@ -1046,8 +1050,8 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		default_duration = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(3600000000), occurrence: RequireUnique, gap: RejectGap })
 		context = { rules, occurrence: RequireUnique, gap: RejectGap }
 		declaration = checked_definition(ScheduleDefinition.from_native({ rule, duration: default_duration, overrides, context }) ?? crash "native schedule definition")
-		prepared_cursor = ScheduleDefinition.cursor({ series: 42.U64, definition: declaration, window }) ?? crash "native definition cursor"
-		direct_cursor = match TimedSchedule.new({ series: 42.U64, rule, window, duration: default_duration, overrides, context }) {
+		prepared_cursor = declaration.cursor({ series: 42.U64, window }) ?? crash "native definition cursor"
+		direct_cursor = match ScheduleDefinition.Cursor.new({ series: 42.U64, rule, window, duration: default_duration, overrides, context }) {
 			Ok(value) => value
 			Err(_) => crash "schedule construction"
 		}
@@ -1082,7 +1086,7 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 		# the existing independent grid below checks restored identities/widths.
 		restored = export_wrapper(parsed)
 		declaration = checked_definition(ScheduleDefinition.from_ical({ rule: restored, context: Local(rules) }) ?? crash "iCalendar schedule definition")
-		prepared_cursor = ScheduleDefinition.cursor({ series: 42.U64, definition: declaration, window }) ?? crash "iCalendar definition cursor"
+		prepared_cursor = declaration.cursor({ series: 42.U64, window }) ?? crash "iCalendar definition cursor"
 		direct_cursor = match ICalTimedRule.schedule({ series: 42.U64, rule: restored, window, context: Local(rules) }) {
 			Ok(value) => value
 			Err(_) => crash "timed RFC schedule adaptation"
@@ -1095,12 +1099,12 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 	var $index = 0.U64
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = match TimedSchedule.collect($current, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+		batch = match ScheduleDefinition.Cursor.collect($current, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "schedule collection"
 		}
-		direct_batch = TimedSchedule.collect($direct, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "direct schedule collection"
-		if direct_batch.occurrences.map(|item| { id: TimedOccurrence.id(item), span: TimedOccurrence.span(item) }) != batch.occurrences.map(|item| { id: TimedOccurrence.id(item), span: TimedOccurrence.span(item) }) {
+		direct_batch = ScheduleDefinition.Cursor.collect($direct, { work: { max_steps: work, max_buffered: 11, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "direct schedule collection"
+		if direct_batch.occurrences.map(|item| { id: ScheduleDefinition.Occurrence.id(item), span: ScheduleDefinition.Occurrence.span(item) }) != batch.occurrences.map(|item| { id: ScheduleDefinition.Occurrence.id(item), span: ScheduleDefinition.Occurrence.span(item) }) {
 			crash "prepared schedule changed direct identities or spans"
 		}
 		match (direct_batch.status, batch.status) {
@@ -1129,8 +1133,8 @@ check_schedule = |base_rule, window, rules, work, base_sources, base_boundaries,
 			} else {
 				90000000000.I64
 			}
-			identity = TimedOccurrence.id(occurrence)
-			if identity.series != 42 or identity.source != expected_source or TimedOccurrence.source(occurrence) != expected_source or PosixSpan.start(TimedOccurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(expected_width)) {
+			identity = ScheduleDefinition.Occurrence.id(occurrence)
+			if identity.series != 42 or identity.source != expected_source or ScheduleDefinition.Occurrence.source(occurrence) != expected_source or PosixSpan.start(ScheduleDefinition.Occurrence.span(occurrence)) != expected_boundary or PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(occurrence)) != Ok(PosixDelta.from_microseconds(expected_width)) {
 				crash "schedule differs from independent UTC grid"
 			}
 			$index = $index + 1
@@ -1166,7 +1170,7 @@ check_boundary_cutoff = |input| {
 	} else {
 		3600.I32
 	}
-	rules = match ZoneRules.new_bounded({
+	rules = match ZoneRules.Provider.new_bounded({
 		name: "Synthetic/Grid",
 		version: "v1",
 		validity,
@@ -1209,12 +1213,12 @@ check_boundary_cutoff = |input| {
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 500 {
-		batch = match TimedRecurrence.Cursor.collect($cursor, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
+		batch = match TimedCursor.collect($cursor, { work: { max_steps: input.work.to_u64(), max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "grid cutoff execution"
 		}
 		for value in batch.occurrences {
-			$observed = $observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))), boundary: PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)) })
+			$observed = $observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedStart.source(value))), boundary: PosixBoundary.to_microseconds(TimedStart.boundary(value)) })
 		}
 		match batch.status {
 			Complete => {
@@ -1482,7 +1486,7 @@ check_boundary_exclusions = |input| {
 	} else {
 		3600.I32
 	}
-	rules = ZoneRules.new_bounded({
+	rules = ZoneRules.Provider.new_bounded({
 		name: "Synthetic/ExclusionGrid",
 		version: "v1",
 		validity: cutoff_span(-86400000000, 172800000000),
@@ -1542,12 +1546,12 @@ check_boundary_exclusions = |input| {
 	var $observed = []
 	var $calls = 0.U64
 	while $calls < 500 {
-		batch = TimedRecurrence.Cursor.collect($cursor, { work: { max_steps: input.work.to_u64(), max_buffered: $buffer_limit, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "exclusion collection"
+		batch = TimedCursor.collect($cursor, { work: { max_steps: input.work.to_u64(), max_buffered: $buffer_limit, max_zone_segments: 1, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "exclusion collection"
 		if batch.steps > input.work.to_u64() or batch.zone_segments > 1 or batch.occurrences.len() > 1 {
 			crash "exclusion execution exceeded budget"
 		}
 		for value in batch.occurrences {
-			$observed = $observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedRecurrence.Occurrence.source(value))), boundary: PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(value)) })
+			$observed = $observed.append({ source: ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(TimedStart.source(value))), boundary: PosixBoundary.to_microseconds(TimedStart.boundary(value)) })
 		}
 		match batch.status {
 			Complete => {
@@ -1606,7 +1610,7 @@ check_unreachable_period = |input| {
 	}
 	rule = DateRecurrence.new(start, spec) ?? crash "Last-year rule is valid"
 	cursor = DateRecurrence.cursor(rule, { start, end }) ?? crash "Last-year query is valid"
-	result = DateRecurrence.Cursor.collect(cursor, { max_steps: input.work.to_u64() + 64, max_buffered: 32, max_occurrences: 2 }) ?? crash "Out-of-window period was constructed"
+	result = DateCursor.collect(cursor, { max_steps: input.work.to_u64() + 64, max_buffered: 32, max_occurrences: 2 }) ?? crash "Out-of-window period was constructed"
 	match result.status {
 		Complete => if result.dates != [start] {
 			crash "Finite last-year window must contain January 1 only"
@@ -1645,7 +1649,7 @@ check_inclusion_before_gap = |input| {
 	shift = input.interval.to_i32() * 60
 	point = PosixBoundary.from_microseconds
 	validity = PosixSpan.new({ start: point(-172800000000), end: point(259200000000) }) ?? crash "Gap fixture validity"
-	rules = ZoneRules.new_bounded({
+	rules = ZoneRules.Provider.new_bounded({
 		name: "Synthetic/FuzzPrefix",
 		version: "1",
 		validity,
@@ -1665,7 +1669,7 @@ check_inclusion_before_gap = |input| {
 	end = local(end_date, 0)
 	cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) ?? crash "Gap fixture query"
 	limits = { max_steps: input.work.to_u64() + 64, max_buffered: if (input.last_monday) 4 else 1, max_zone_segments: 32, max_zone_candidates: 1 }
-	first = TimedRecurrence.Cursor.next(cursor, limits) ?? crash "Later rule error suppressed the valid inclusion"
+	first = TimedCursor.next(cursor, limits) ?? crash "Later rule error suppressed the valid inclusion"
 	match first.status {
 		Item(item) => {
 			expected_day = if (input.last_monday) 86400 else -86400
@@ -1673,7 +1677,7 @@ check_inclusion_before_gap = |input| {
 			if item.occurrence.boundary() != expected {
 				crash "Explicit start must retain its pre-transition boundary"
 			}
-			match TimedRecurrence.Cursor.next(item.cursor, limits) {
+			match TimedCursor.next(item.cursor, limits) {
 				Err(Gap) => {}
 				_ => crash "Later gap must remain visible"
 			}
@@ -1684,7 +1688,7 @@ check_inclusion_before_gap = |input| {
 		# Include the next period so a duplicate that failed to consume
 		# COUNT would produce an extra occurrence.
 		adjusted = TimedRecurrence.cursor(rule, { window: { start, end: local(date(1970, 1, 3), 12) }, context: { rules, occurrence: RequireUnique, gap: UseOffsetBeforeGap } }) ?? crash "Adjusted gap fixture query"
-		batch = TimedRecurrence.Cursor.collect(adjusted, { work: limits, max_occurrences: 3 }) ?? crash "Adjusted gap fixture evaluation"
+		batch = TimedCursor.collect(adjusted, { work: limits, max_occurrences: 3 }) ?? crash "Adjusted gap fixture evaluation"
 		match batch.status {
 			Complete => if batch.occurrences.map(|item| item.boundary()) != [point(86400000000), point(93600000000)] {
 				crash "Equal inclusion must emit once while the rule still consumes COUNT"

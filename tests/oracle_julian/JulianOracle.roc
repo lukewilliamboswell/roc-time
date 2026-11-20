@@ -1,5 +1,5 @@
-import time.CivilDay
-import time.JulianDate
+import time.Calendar.CivilDay as CivilDay
+import time.Calendar.JulianDate as JulianDate
 
 ## Public inputs and typed observations; generated expectations never call roc-time.
 JulianOracle := [Forward(I64, U8, U8), Inverse(I64)].{

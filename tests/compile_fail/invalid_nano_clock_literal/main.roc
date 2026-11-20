@@ -1,5 +1,5 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.NanoClockTime
+import time.Nanosecond.ClockTime as NanoClockTime
 
 main! = |_args| {
 	clock : NanoClockTime

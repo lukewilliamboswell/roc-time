@@ -79,12 +79,12 @@ ResolvedSelection :: {
 	## Equality/hashing preserve civil source identity and complete rule evidence.
 	## same_extent instead compares only the resulting compatible-axis coverage.
 	is_eq : ResolvedSelection, ResolvedSelection -> Bool
-	is_eq = |a, b| a.start == b.start and a.end == b.end and a.coverage == b.coverage and ZoneRules.definition(a.rules) == ZoneRules.definition(b.rules)
+	is_eq = |a, b| a.start == b.start and a.end == b.end and a.coverage == b.coverage and ZoneRules.Provider.definition(a.rules) == ZoneRules.Provider.definition(b.rules)
 
 	## Hash the source labels, complete coverage and retained rules consistently
 	## with is_eq. Work includes coverage members and rule transitions.
 	to_hash : ResolvedSelection, Hasher -> Hasher
-	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.coverage.to_hash(value.end.to_hash(value.start.to_hash(hasher))))
+	to_hash = |value, hasher| ZoneRules.Provider.definition(value.rules).to_hash(value.coverage.to_hash(value.end.to_hash(value.start.to_hash(hasher))))
 
 	## Complete snapshots expose stored canonical members without reevaluation.
 	fact_count : ResolvedSelection -> U64
@@ -101,7 +101,7 @@ ResolvedSelection :: {
 			return Item(context_fact(snapshot.rules))
 		}
 		# Subtract only after the fixed header cases; huge indexes safely End.
-		Coverage.fact_at(snapshot.coverage, index - 1)
+		Coverage.Facts.at(snapshot.coverage, index - 1)
 	}
 
 	## Limited batches explain inputs and work state, not partial coverage.
@@ -151,7 +151,7 @@ expect {
 	# Three distinct preimages; a one-member buffer must stop and resume
 	# without losing the segment that could not be appended.
 	span = PosixSpan.new({ start: test_zonerules_point(-10000000), end: test_zonerules_point(10000000) })?
-	rules = ZoneRules.new_bounded({
+	rules = ZoneRules.Provider.new_bounded({
 		name: "Synthetic/Chunked",
 		version: "v1",
 		validity: span,
@@ -162,7 +162,7 @@ expect {
 		],
 		bounds: { minimum: 0, maximum: 4 },
 	})?
-	initial = ZoneRules.selection_cursor(rules, { start: test_zonerules_local_label(2500000)?, end: test_zonerules_local_label(2750000)? })?
+	initial = ZoneRules.SelectionCursor.from_bounds(rules, { start: test_zonerules_local_label(2500000)?, end: test_zonerules_local_label(2750000)? })?
 	zero = ZoneRules.SelectionCursor.collect(initial, { max_segments: 0, max_members: 1 })?
 	zero_valid = match zero.status {
 		Limited(progress) => progress.reason == WorkLimit and zero.segments == 0
@@ -196,18 +196,18 @@ expect {
 
 expect {
 	span = PosixSpan.new({ start: test_zonerules_point(-10000000000), end: test_zonerules_point(10000000000) })?
-	old_rules = ZoneRules.new_bounded({ name: "Synthetic/Changed", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
+	old_rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Changed", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
 	# Deliberately reuse the same name/version with different contents:
 	# metadata is not a substitute for retaining the actual immutable rules.
-	new_rules = ZoneRules.new_bounded({ name: "Synthetic/Changed", version: "v1", validity: span, initial: FixedOffset.from_seconds(3600), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
-	other_version = ZoneRules.new_bounded({ name: "Synthetic/Changed", version: "v2", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
+	new_rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Changed", version: "v1", validity: span, initial: FixedOffset.from_seconds(3600), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
+	other_version = ZoneRules.Provider.new_bounded({ name: "Synthetic/Changed", version: "v2", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
 	local = test_zonerules_local_label(0)?
 	original = ResolvedBoundary.resolve(old_rules, { local, occurrence: RequireUnique })?
 	changed = ResolvedBoundary.reresolve(original, new_rules)?
 	equivalent = ResolvedBoundary.reresolve(original, other_version)?
 	end = test_zonerules_local_label(1000000)?
 	selection = ResolvedSelection.resolve(old_rules, { start: local, end })?
-	cursor = ZoneRules.selection_cursor(old_rules, { start: local, end })?
+	cursor = ZoneRules.SelectionCursor.from_bounds(old_rules, { start: local, end })?
 	limited = ResolvedSelection.collect(cursor, { max_segments: 0, max_members: 1 })?
 	resumed_valid = match limited.status {
 		Complete(_) => False
@@ -241,7 +241,7 @@ expect {
 expect {
 	# Synthetic dateline move: the whole local epoch day is skipped.
 	span = PosixSpan.new({ start: test_zonerules_point(-259200000000), end: test_zonerules_point(259200000000) })?
-	rules = ZoneRules.new_bounded({
+	rules = ZoneRules.Provider.new_bounded({
 		name: "Synthetic/SkippedDay",
 		version: "v1",
 		validity: span,
@@ -256,7 +256,7 @@ expect {
 	second = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 2 })?
 	third = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 3 })?
 	expected = PosixSpan.new({ start: test_zonerules_point(0), end: test_zonerules_point(86400000000) })?
-	cursor = ZoneRules.selection_cursor(rules, { start: LocalDateTime.new({ date: first, clock: midnight }), end: LocalDateTime.new({ date: second, clock: midnight }) })?
+	cursor = ZoneRules.SelectionCursor.from_bounds(rules, { start: LocalDateTime.new({ date: first, clock: midnight }), end: LocalDateTime.new({ date: second, clock: midnight }) })?
 	batch = ResolvedSelection.collect(cursor, { max_segments: 2, max_members: 0 })?
 	empty_snapshot = match batch.status {
 		Limited(_) => False
@@ -270,7 +270,7 @@ expect {
 
 expect {
 	span = PosixSpan.new({ start: test_zonerules_point(-10000000), end: test_zonerules_point(10000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/Finite", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Finite", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	start = test_zonerules_local_label(0)?
 	end = test_zonerules_local_label(10000000)?
 	beyond = test_zonerules_local_label(10000001)?
@@ -282,15 +282,15 @@ expect {
 
 expect {
 	span = PosixSpan.new({ start: test_zonerules_point(-10000000), end: test_zonerules_point(10000000) })?
-	bad_bounds = match ZoneRules.new_bounded({ name: "Synthetic", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 1, maximum: -1 } }) {
+	bad_bounds = match ZoneRules.Provider.new_bounded({ name: "Synthetic", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 1, maximum: -1 } }) {
 		Err(InvalidOffsetBounds) => Bool.True
 		_ => Bool.False
 	}
-	bad_initial = match ZoneRules.new_bounded({ name: "Synthetic", version: "v1", validity: span, initial: FixedOffset.from_seconds(3), transitions: [], bounds: { minimum: -2, maximum: 2 } }) {
+	bad_initial = match ZoneRules.Provider.new_bounded({ name: "Synthetic", version: "v1", validity: span, initial: FixedOffset.from_seconds(3), transitions: [], bounds: { minimum: -2, maximum: 2 } }) {
 		Err(OffsetOutsideBounds) => Bool.True
 		_ => Bool.False
 	}
-	bad_transition = match ZoneRules.new_bounded({ name: "Synthetic", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [{ at: test_zonerules_point(0), offset: FixedOffset.from_seconds(-3) }], bounds: { minimum: -2, maximum: 2 } }) {
+	bad_transition = match ZoneRules.Provider.new_bounded({ name: "Synthetic", version: "v1", validity: span, initial: FixedOffset.from_seconds(0), transitions: [{ at: test_zonerules_point(0), offset: FixedOffset.from_seconds(-3) }], bounds: { minimum: -2, maximum: 2 } }) {
 		Err(OffsetOutsideBounds) => Bool.True
 		_ => Bool.False
 	}
@@ -302,7 +302,7 @@ expect {
 	for first in [-2.I32, 0, 2] {
 		for second in [-2.I32, 0, 2] {
 			span = PosixSpan.new({ start: test_zonerules_point(-10000000), end: test_zonerules_point(10000000) })?
-			rules = ZoneRules.new_bounded({
+			rules = ZoneRules.Provider.new_bounded({
 				name: "Synthetic/Enumeration",
 				version: "v1",
 				validity: span,
@@ -355,7 +355,7 @@ expect {
 
 expect {
 	span = PosixSpan.new({ start: test_zonerules_point(-10000000), end: test_zonerules_point(10000000) })?
-	rules = ZoneRules.new_bounded({
+	rules = ZoneRules.Provider.new_bounded({
 		name: "Synthetic/Triple",
 		version: "v1",
 		validity: span,
@@ -421,10 +421,10 @@ expect {
 	# distinct segments. Limited facts must never pretend to describe coverage.
 	point = PosixBoundary.from_microseconds
 	validity = PosixSpan.new({ start: point(-10000000), end: point(10000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/SelectionFacts", version: "facts-v1", validity, initial: FixedOffset.from_seconds(4), transitions: [{ at: point(0), offset: FixedOffset.from_seconds(2) }, { at: point(1000000), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 4 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/SelectionFacts", version: "facts-v1", validity, initial: FixedOffset.from_seconds(4), transitions: [{ at: point(0), offset: FixedOffset.from_seconds(2) }, { at: point(1000000), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 4 } })?
 	start = test_zonerules_local_label(2500000)?
 	end = test_zonerules_local_label(2750000)?
-	cursor = ZoneRules.selection_cursor(rules, { start, end })?
+	cursor = ZoneRules.SelectionCursor.from_bounds(rules, { start, end })?
 	zero = ResolvedSelection.collect(cursor, { max_segments: 0, max_members: 1 })?
 	blocked = ResolvedSelection.collect(cursor, { max_segments: 3, max_members: 1 })?
 	complete = ResolvedSelection.collect(cursor, { max_segments: 3, max_members: 3 })?
@@ -447,10 +447,10 @@ expect {
 	# zero-work limited batch despite both reporting zero buffered members.
 	point = PosixBoundary.from_microseconds
 	validity = PosixSpan.new({ start: point(-10000000), end: point(10000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/GapFacts", version: "facts-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: point(0), offset: FixedOffset.from_seconds(2) }], bounds: { minimum: 0, maximum: 2 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/GapFacts", version: "facts-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: point(0), offset: FixedOffset.from_seconds(2) }], bounds: { minimum: 0, maximum: 2 } })?
 	start = test_zonerules_local_label(500000)?
 	end = test_zonerules_local_label(750000)?
-	cursor = ZoneRules.selection_cursor(rules, { start, end })?
+	cursor = ZoneRules.SelectionCursor.from_bounds(rules, { start, end })?
 	complete = ResolvedSelection.collect(cursor, { max_segments: 2, max_members: 0 })?
 	match complete.status {
 		Limited(_) => False

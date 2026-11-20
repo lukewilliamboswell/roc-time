@@ -18,7 +18,7 @@ There are three choices to make:
 2. *Interpretation:* which timezone rules and repeated/skipped-time policies apply to those local starts?
 3. *Query:* which start-date window do you want, and how much work and output can this call produce?
 
-`ScheduleDefinition` retains the declaration and context for fresh queries. `TimedSchedule.collect` collects a bounded batch from a cursor. For dates without clock times or appointment endings, start with `DateRecurrence`.
+`ScheduleDefinition` retains the declaration and context for fresh queries. `ScheduleDefinition.Cursor.collect` collects a bounded batch from a cursor. For dates without clock times or appointment endings, start with `Recurrence.Date`.
 
 A query selects appointment *starts*. A booking starting at 16:00 can end after a 17:00 query boundary. To find every booking overlapping a reporting window, account for bookings that started earlier as well; a start query alone doesn't answer that question.
 
@@ -30,7 +30,7 @@ Work and output limits serve different purposes. A rule might examine many dates
 
 == Importing iCalendar values
 
-`ICalDateRule` and `ICalTimedRule` accept supported RFC 5545 property values after your application has extracted them. They don't read a whole `.ics` file, unfold content lines or accept arbitrary parameters. Check the chosen adapter's profile before importing an external calendar.
+`ICalendar.DateRule` and `ICalendar.TimedRule` accept supported RFC 5545 property values after your application has extracted them. They don't read a whole `.ics` file, unfold content lines or accept arbitrary parameters. Check the chosen adapter's profile before importing an external calendar.
 
 For example, a rule's `COUNT` counts its anchored recurrence before exclusions. Canceling one of four rule occurrences doesn't create a fifth. A `PERIOD` addition can instead contribute a separate appointment with its own end. An occurrence's original local label stays meaningful even if a gap policy moves its resolved start.
 
@@ -46,4 +46,4 @@ Repository examples show the development API. Check your release archive and API
 
 == API reference
 
-`DateRecurrence`, `TimedRecurrence`, `TimedSchedule`, `ScheduleDefinition` and `ICalTimedRule` appear in xref:api.adoc#api[the API map].
+`Recurrence.Date`, `Recurrence.Timed`, `ScheduleDefinition.Cursor`, `ScheduleDefinition` and `ICalendar.TimedRule` appear in xref:api.adoc#api[the API map].

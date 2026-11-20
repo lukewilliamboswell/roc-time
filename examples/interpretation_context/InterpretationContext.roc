@@ -1,4 +1,5 @@
-import time.Ixdtf
+import time.Interchange.Ixdtf as Ixdtf
+import time.Interchange.IxdtfSnapshot as IxdtfSnapshot
 import time.OffsetTimestamp
 import time.PosixBoundary
 import time.FixedOffset
@@ -9,26 +10,32 @@ import time.ZoneRules
 ## Their provenance labels identify this example's fixtures, not real zone data.
 InterpretationContext :: [].{
 	review = |inputs| {
-		source = (match Ixdtf.parse(inputs.source) {
-			Ok(result) => Ok(result)
-			Err(error) => Err(Source(error))
-		})?
+		source = (
+			match Ixdtf.parse(inputs.source) {
+				Ok(result) => Ok(result)
+				Err(error) => Err(Source(error))
+			}
+		)?
 		first_second = whole_second(inputs.valid_from)?
 		last_second = whole_second(inputs.valid_until)?
 		original_rules = fixture(first_second, last_second, 3600, "synthetic-original")?
 		updated_rules = fixture(first_second, last_second, 7200, "synthetic-updated")?
-		original = (match Ixdtf.resolve(source, Some(original_rules)) {
-			Ok(result) => Ok(result)
-			Err(error) => Err(Resolution(error))
-		})?
+		original = (
+			match Ixdtf.resolve(source, Some(original_rules)) {
+				Ok(result) => Ok(result)
+				Err(error) => Err(Resolution(error))
+			}
+		)?
 		# The in-memory snapshot retains its immutable context. The standard
 		# declaration alone would require explicit rules again after loading.
 		retained = original
-		reinterpreted = (match Ixdtf.Snapshot.reresolve(retained, Some(updated_rules)) {
-			Ok(result) => Ok(result)
-			Err(error) => Err(Reinterpretation(error))
-		})?
-		presentation = match Ixdtf.Snapshot.presentation(retained) {
+		reinterpreted = (
+			match IxdtfSnapshot.reresolve(retained, Some(updated_rules)) {
+				Ok(result) => Ok(result)
+				Err(error) => Err(Reinterpretation(error))
+			}
+		)?
+		presentation = match IxdtfSnapshot.presentation(retained) {
 			Ok(_) => "Gregorian presentation is available"
 			Err(UnsupportedCalendar(calendar)) => "Preferred calendar ${calendar} is retained; presentation is unsupported"
 		}
@@ -53,10 +60,12 @@ InterpretationContext :: [].{
 
 whole_second = |text| {
 	point = OffsetTimestamp.boundary(
-		(match OffsetTimestamp.parse(text) {
-			Ok(result) => Ok(result)
-			Err(error) => Err(FixtureTimestamp(error))
-		})?,
+		(
+			match OffsetTimestamp.parse(text) {
+				Ok(result) => Ok(result)
+				Err(error) => Err(FixtureTimestamp(error))
+			}
+		)?,
 	)?
 	micros = PosixBoundary.to_microseconds(point)
 	if I64.rem_by(micros, 1000000) != 0 {
@@ -83,7 +92,7 @@ fixture = |start_second, end_second, offset, digest| ZoneRules.from_database({
 })
 
 describe = |snapshot| {
-	rules = match Ixdtf.Snapshot.context(snapshot) {
+	rules = match IxdtfSnapshot.context(snapshot) {
 		Some(value) => value
 		None => return Err(MissingStoredRules)
 	}
@@ -91,5 +100,5 @@ describe = |snapshot| {
 		DatabaseSource(data) => data.source_digest
 		Supplied => "supplied rules"
 	}
-	Ok("offset ${FixedOffset.to_seconds(Ixdtf.Snapshot.offset(snapshot)).to_str()} seconds; provenance ${digest}")
+	Ok("offset ${FixedOffset.to_seconds(IxdtfSnapshot.offset(snapshot)).to_str()} seconds; provenance ${digest}")
 }

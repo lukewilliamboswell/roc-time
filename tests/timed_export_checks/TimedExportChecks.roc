@@ -1,8 +1,7 @@
-import time.ICalTimedRule
-import time.ICalDateTime
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.TimedRecurrence
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.DateTime as ICalDateTime
+
+import time.Recurrence.Timed as TimedRecurrence
 import time.PosixBoundary
 import time.PosixSpan
 import time.ZoneRules
@@ -11,7 +10,7 @@ import time.LocalDateTime
 import time.GregorianDate
 import time.Calendar
 import time.ClockTime
-import time.ICalDuration
+import time.ICalendar.Duration as ICalDuration
 import time.ScheduleDefinition
 import time.PosixDelta
 
@@ -63,7 +62,7 @@ TimedExportChecks :: [].{
 		}
 		first = collect(original, window, context, Bool.True)
 		second = collect(restored, window, context, Bool.False)
-		third = collect_cursor(ScheduleDefinition.cursor({ series: 42.U64, definition: saved, window }) ?? crash "Definition cursor rejected", Bool.True)
+		third = collect_cursor(saved.cursor({ series: 42.U64, window }) ?? crash "Definition cursor rejected", Bool.True)
 		if first != second or first != third {
 			crash "Export changed bounded execution"
 		}
@@ -73,7 +72,7 @@ TimedExportChecks :: [].{
 			native_context = { rules: context_rules(context), occurrence: First, gap: UseOffsetBeforeGap }
 			spec = { rule: definition.rule, duration: ICalDuration.to_duration(definition.duration), overrides: [], context: native_context }
 			native_saved = ScheduleDefinition.from_native(spec) ?? crash "Native definition rejected"
-			fourth = collect_cursor(ScheduleDefinition.cursor({ series: 42.U64, definition: native_saved, window }) ?? crash "Native cursor rejected", Bool.False)
+			fourth = collect_cursor(native_saved.cursor({ series: 42.U64, window }) ?? crash "Native cursor rejected", Bool.False)
 			if first != fourth {
 				crash "Native definition changed independent expected execution"
 			}
@@ -239,7 +238,7 @@ context_rules = |context| match context {
 	Local(value) => value
 	Utc => {
 		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) }) ?? crash "UTC fixture validity"
-		ZoneRules.new_bounded({ name: "UTC", version: "fixed-test", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) ?? crash "UTC fixture rules"
+		ZoneRules.Provider.new_bounded({ name: "UTC", version: "fixed-test", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) ?? crash "UTC fixture rules"
 	}
 }
 
@@ -275,7 +274,7 @@ rules = |name| {
 		[{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(final) }]
 	}
 	validity = PosixSpan.from_seconds({ start: -1000000, end: 1000000, rounding: RejectSubmicrosecond }) ?? crash "Fixture validity"
-	ZoneRules.new_bounded({ name: "Synthetic/Export", version: name, validity, initial: FixedOffset.from_seconds(initial), transitions, bounds: { minimum: 0, maximum: 7200 } }) ?? crash "Fixture zone rejected"
+	ZoneRules.Provider.new_bounded({ name: "Synthetic/Export", version: name, validity, initial: FixedOffset.from_seconds(initial), transitions, bounds: { minimum: 0, maximum: 7200 } }) ?? crash "Fixture zone rejected"
 }
 
 collect = |rule, window, context, tiny| {
@@ -291,7 +290,7 @@ collect_cursor = |cursor, tiny| {
 	var $output = []
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = TimedSchedule.collect(
+		batch = ScheduleDefinition.Cursor.collect(
 			$cursor,
 			{
 				work: {
@@ -316,13 +315,13 @@ collect_cursor = |cursor, tiny| {
 			},
 		) ?? crash "Execution rejected"
 		for value in batch.occurrences {
-			span = TimedOccurrence.span(value)
-			identity = TimedOccurrence.id(value)
-			if identity.series != 42 or identity.source != TimedOccurrence.source(value) {
+			span = ScheduleDefinition.Occurrence.span(value)
+			identity = ScheduleDefinition.Occurrence.id(value)
+			if identity.series != 42 or identity.source != ScheduleDefinition.Occurrence.source(value) {
 				crash "Schedule changed series or source identity"
 			}
 			$output = $output.append({
-				source: LocalDateTime.to_gregorian_text(TimedOccurrence.source(value)) ?? crash "Source calendar",
+				source: LocalDateTime.to_gregorian_text(ScheduleDefinition.Occurrence.source(value)) ?? crash "Source calendar",
 				start: PosixBoundary.to_microseconds(PosixSpan.start(span)),
 				end: PosixBoundary.to_microseconds(PosixSpan.end(span)),
 			})

@@ -1,7 +1,7 @@
 import fuzz.Fuzz
 import time.Calendar
-import time.CivilDay
-import time.JulianDate
+import time.Calendar.CivilDay as CivilDay
+import time.Calendar.JulianDate as JulianDate
 import time.ClockTime
 import time.LocalDateTime
 import time.EnglishGregorian

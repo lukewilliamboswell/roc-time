@@ -1,6 +1,6 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.CalendarPattern
-import time.DateRecurrence
+import time.Recurrence.CalendarPattern as CalendarPattern
+import time.Recurrence.Date as DateRecurrence
 import time.GregorianDate
 main! = |_args| {
 	start = GregorianDate.from_fields({ year: 2025, month: 1, day: 1 })?

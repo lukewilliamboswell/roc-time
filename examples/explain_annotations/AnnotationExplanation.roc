@@ -1,5 +1,5 @@
 import time.Explanation
-import time.Ixdtf
+import time.Interchange.Ixdtf as Ixdtf
 import time.OffsetTimestamp
 import time.PosixSpan
 import time.ZoneRules
@@ -16,7 +16,7 @@ AnnotationExplanation :: [].{
 		start = "2022-07-08T00:00:00Z"
 		end = "2022-07-08T01:00:00Z"
 		validity = PosixSpan.new({ start: OffsetTimestamp.boundary(start)?, end: OffsetTimestamp.boundary(end)? })?
-		rules = ZoneRules.new_bounded({ name: "Europe/Paris", version: "rfc9557-example", validity, initial: FixedOffset.from_seconds(7200), transitions: [], bounds: { minimum: 7200, maximum: 7200 } })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Europe/Paris", version: "rfc9557-example", validity, initial: FixedOffset.from_seconds(7200), transitions: [], bounds: { minimum: 7200, maximum: 7200 } })?
 		snapshot = match Ixdtf.resolve(declaration, Some(rules)) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))

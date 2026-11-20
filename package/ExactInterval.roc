@@ -149,44 +149,48 @@ ExactInterval :: { start : OffsetTimestamp, end : OffsetTimestamp, extent : Posi
 	to_hash : ExactInterval, Hasher -> Hasher
 	to_hash = |value, hasher| value.end.to_hash(value.start.to_hash(hasher))
 
-	## Stored extent plus original endpoint declarations, without re-resolution.
-	fact_count : ExactInterval -> U64
-	fact_count = |_| 3
+	## Indexed semantic facts for bounded diagnostics and explanation.
+	Facts :: [].{
 
-	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
-	fact_at : ExactInterval, U64 -> [End, Item(SemanticFact)]
-	fact_at = |value, index| {
-		if index == 0 {
-			return Item(SemanticFact.new(ExactIntervalDescription({ span: value.extent })))
+		## Stored extent plus original endpoint declarations, without re-resolution.
+		count : ExactInterval -> U64
+		count = |_| 3
+
+		## Returns the zero-based semantic fact, or End when the index is outside count. Facts describe meaning, not a serialized record.
+		at : ExactInterval, U64 -> [End, Item(SemanticFact)]
+		at = |value, index| {
+			if index == 0 {
+				return Item(SemanticFact.new(ExactIntervalDescription({ span: value.extent })))
+			}
+			if index > 2 {
+				return End
+			}
+			endpoint = if index == 1 {
+				value.start
+			} else {
+				value.end
+			}
+			parts = OffsetTimestamp.parts(endpoint)
+			Item(
+				SemanticFact.new(
+					OffsetEndpoint({
+						role: if index == 1 {
+							Start
+						} else {
+							End
+						},
+						local: OffsetTimestamp.local_label(endpoint),
+						fraction_digits: parts.fraction_digits,
+						offset: parts.offset,
+					}),
+				),
+			)
 		}
-		if index > 2 {
-			return End
-		}
-		endpoint = if index == 1 {
-			value.start
-		} else {
-			value.end
-		}
-		parts = OffsetTimestamp.parts(endpoint)
-		Item(
-			SemanticFact.new(
-				OffsetEndpoint({
-					role: if index == 1 {
-						Start
-					} else {
-						End
-					},
-					local: OffsetTimestamp.local_label(endpoint),
-					fraction_digits: parts.fraction_digits,
-					offset: parts.offset,
-				}),
-			),
-		)
 	}
 
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : ExactInterval -> Str
-	to_inspect = |value| match fact_at(value, 0) {
+	to_inspect = |value| match Facts.at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "ExactInterval always exposes its stored extent at index zero"
 	}
@@ -233,16 +237,16 @@ expect {
 	span = ExactInterval.span(value)
 	first = ExactInterval.endpoints(value).start
 	last = ExactInterval.endpoints(value).end
-	ExactInterval.fact_count(value) == 3 and
+	ExactInterval.Facts.count(value) == 3 and
 		PosixBoundary.to_microseconds(PosixSpan.start(span)) == 0 and PosixBoundary.to_microseconds(PosixSpan.end(span)) == 3600000000 and
-			ExactInterval.fact_at(value, 0) == Item(
+			ExactInterval.Facts.at(value, 0) == Item(
 				SemanticFact.new(
 					ExactIntervalDescription(
 						{ span: span },
 					),
 				),
 			) and
-				ExactInterval.fact_at(value, 1) == Item(SemanticFact.new(OffsetEndpoint({ role: Start, local: OffsetTimestamp.local_label(first), fraction_digits: 3, offset: OffsetTimestamp.parts(first).offset }))) and
-					ExactInterval.fact_at(value, 2) == Item(SemanticFact.new(OffsetEndpoint({ role: End, local: OffsetTimestamp.local_label(last), fraction_digits: 3, offset: OffsetTimestamp.parts(last).offset }))) and
-						ExactInterval.fact_at(value, 3) == End and ExactInterval.fact_at(value, U64.highest) == End
+				ExactInterval.Facts.at(value, 1) == Item(SemanticFact.new(OffsetEndpoint({ role: Start, local: OffsetTimestamp.local_label(first), fraction_digits: 3, offset: OffsetTimestamp.parts(first).offset }))) and
+					ExactInterval.Facts.at(value, 2) == Item(SemanticFact.new(OffsetEndpoint({ role: End, local: OffsetTimestamp.local_label(last), fraction_digits: 3, offset: OffsetTimestamp.parts(last).offset }))) and
+						ExactInterval.Facts.at(value, 3) == End and ExactInterval.Facts.at(value, U64.highest) == End
 }

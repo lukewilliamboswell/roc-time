@@ -1,5 +1,6 @@
 import fuzz.Fuzz
-import time.AllDayOccurrence
+import time.Recurrence.AllDayOccurrence as AllDayOccurrence
+import time.Recurrence.AllDayOccurrenceCursor as AllDayOccurrenceCursor
 import time.Calendar
 import time.ClockTime
 import time.Coverage
@@ -7,8 +8,8 @@ import time.FixedOffset
 import time.LocalDateTime
 import time.PosixBoundary
 import time.ZoneRules
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 
 ZoneCase := { number : I64, first : I32, second : I32 }.{
 	parser_for : _
@@ -78,7 +79,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		if ZoneRules.resolve(rules, local) != Ok(classification) {
 			crash "zone resolution differs from independent timeline enumeration"
 		}
-		var $classification_cursor = match ZoneRules.classification_cursor(rules, local) {
+		var $classification_cursor = match ZoneRules.ClassificationCursor.from_local(rules, local) {
 			Ok(value) => value
 			Err(_) => crash "classification cursor"
 		}
@@ -198,7 +199,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Ok(value) => value
 			Err(_) => crash "complete local selection rejected"
 		}
-		var $cursor = match ZoneRules.selection_cursor(rules, { start: local, end: LocalDateTime.new({ date: end_date, clock: end_clock }) }) {
+		var $cursor = match ZoneRules.SelectionCursor.from_bounds(rules, { start: local, end: LocalDateTime.new({ date: end_date, clock: end_clock }) }) {
 			Ok(value) => value
 			Err(_) => crash "selection cursor rejected fixture"
 		}
@@ -277,7 +278,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Ok(value) => value
 			Err(_) => crash "day cursor"
 		}
-		day_batch = match AllDayOccurrence.Cursor.collect(day_cursor, { max_segments: 3, max_members: 3 }) {
+		day_batch = match AllDayOccurrenceCursor.collect(day_cursor, { max_segments: 3, max_members: 3 }) {
 			Ok(value) => value
 			Err(_) => crash "day resolution"
 		}

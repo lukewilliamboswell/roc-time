@@ -25,7 +25,7 @@ InterchangeFixture := [].{
 			Ok(v) => v
 			Err(_) => crash "fixture validity"
 		}
-		match ZoneRules.new({ name: "Fixture/Many", version: "resource-v1", validity, initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
+		match ZoneRules.Provider.new({ name: "Fixture/Many", version: "resource-v1", validity, initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
 			Ok(v) => v
 			Err(_) => crash "fixture rules"
 		}

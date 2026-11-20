@@ -1,4 +1,4 @@
-import time.ResolvedBoundary
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
 import time.ZoneRules
 import time.FixedOffset
 import time.LocalDateTime

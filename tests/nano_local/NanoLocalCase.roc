@@ -1,7 +1,7 @@
 import time.Calendar
-import time.CivilDay
-import time.NanoClockTime
-import time.NanoLocalDateTime
+import time.Calendar.CivilDay as CivilDay
+import time.Nanosecond.ClockTime as NanoClockTime
+import time.Nanosecond.LocalDateTime as NanoLocalDateTime
 import fuzz.Fuzz
 
 NanoLocalCase := { number : I64 }.{

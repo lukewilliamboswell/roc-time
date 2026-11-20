@@ -26,7 +26,7 @@ ExplanationFixture := [].{
 			Ok(v) => v
 			Err(_) => crash "fixture validity"
 		}
-		match ZoneRules.new({ name: "Fixture/Explanation", version, validity, initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
+		match ZoneRules.Provider.new({ name: "Fixture/Explanation", version, validity, initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
 			Ok(v) => v
 			Err(_) => crash "fixture rules"
 		}

@@ -1,11 +1,12 @@
 import fuzz.Fuzz
 import time.LocalDateTime
 import time.Explanation
-import time.SemanticFact
+import time.Explanation.Fact as SemanticFact
 import time.Calendar
-import time.IntervalEvidence
-import time.CalendarEvidence
-import time.QualifiedCalendarValue
+import time.Evidence.Interval as IntervalEvidence
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.CalendarQuery as CalendarQuery
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
 import time.FixedOffset
 import time.PosixBoundary
 import time.PosixSpan
@@ -80,7 +81,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			2.I32
 		}
 		after = 2 - initial
-		rules = match ZoneRules.new_bounded({ name: "Synthetic/Description", version: "v1", validity: span(start - 4000000, start + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: point(start - 1000000), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
+		rules = match ZoneRules.Provider.new_bounded({ name: "Synthetic/Description", version: "v1", validity: span(start - 4000000, start + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: point(start - 1000000), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
 			Ok(found) => found
 			Err(_) => crash "Valid synthetic rules"
 		}
@@ -335,7 +336,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 			Ok(found) => found
 			Err(_) => crash "Valid model point rejected"
 		}
-		zero = CalendarEvidence.Query.collect(query, { max_alternatives: 0 })
+		zero = CalendarQuery.collect(query, { max_alternatives: 0 })
 		var $cursor = match zero.status {
 			Limited(found) => found
 			Complete(_) => crash "Zero work claimed complete evidence"
@@ -343,7 +344,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 		var $finished = Bool.False
 		var $calls = 0.U64
 		while $calls < 4 and !$finished {
-			batch = CalendarEvidence.Query.collect($cursor, { max_alternatives: 1 })
+			batch = CalendarQuery.collect($cursor, { max_alternatives: 1 })
 			if batch.examined > 1 {
 				crash "Evidence work budget exceeded"
 			}
@@ -360,7 +361,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 			}
 			$calls = $calls + 1
 		}
-		whole = CalendarEvidence.Query.collect(query, { max_alternatives: 4 })
+		whole = CalendarQuery.collect(query, { max_alternatives: 4 })
 		match whole.status {
 			Complete(truth) => if !$finished or truth != expected {
 				crash "Evidence resumption changed truth"

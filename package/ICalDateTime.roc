@@ -24,7 +24,7 @@ import PosixBoundary
 ## Source spelling and full ICS documents are outside this value profile.
 ##
 ## ```roc
-## import time.ICalDateTime
+## import time.ICalendar.DateTime as ICalDateTime
 ## import time.PosixBoundary
 ## expect {
 ##     value = ICalDateTime.parse("19691231T235959Z")?

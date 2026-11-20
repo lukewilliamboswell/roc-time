@@ -1,10 +1,10 @@
-import time.DateRecurrence
-import time.TimedRecurrence
-import time.ICalTimedRule
-import time.CalendarPattern
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.Timed as TimedRecurrence
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.GregorianDate
 import time.ClockTime
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 
 RecurrenceFixture := [].{
 	make = |count, finite| {

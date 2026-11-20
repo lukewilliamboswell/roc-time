@@ -1,6 +1,7 @@
-import time.DateRecurrence
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
 import time.GregorianDate
-import time.ICalDateRule
+import time.ICalendar.DateRule as ICalDateRule
 
 ## Exchange extracted RFC 5545 DATE property values, not an ICS document or a
 ## versioned native archive. This date-only schedule needs no clock or zone.
@@ -33,7 +34,7 @@ ScheduleExchange :: [].{
 		start = "2025-01-01"
 		end = "2025-08-01"
 		cursor = DateRecurrence.cursor(restored, { start, end })?
-		batch = DateRecurrence.Cursor.collect(
+		batch = DateCursor.collect(
 			cursor,
 			{
 				max_steps: 1000,

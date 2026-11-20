@@ -1,10 +1,9 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.ScheduleDefinition
-import time.TimedRecurrence
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.CalendarPattern
+import time.Recurrence.Timed as TimedRecurrence
+
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.Calendar
 import time.GregorianDate
 import time.ClockTime
@@ -54,36 +53,36 @@ main! = |args| {
 		ICal(_) => crash "native origin changed"
 	}
 	before_cursor = Host.allocated_bytes!({})
-	cursor = ScheduleDefinition.cursor({ series: 42.U64, definition, window: { start: anchor, end } }) ?? crash "valid window"
+	cursor = definition.cursor({ series: 42.U64, window: { start: anchor, end } }) ?? crash "valid window"
 	after_cursor = Host.allocated_bytes!({})
-	first = TimedSchedule.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "first bounded occurrence"
+	first = ScheduleDefinition.Cursor.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "first bounded occurrence"
 	after_first = Host.allocated_bytes!({})
 	Host.assert!(first.occurrences.len() == 1 and first.steps <= 8 and first.zone_segments <= 8)
 	for value in first.occurrences {
-		Host.assert!(TimedOccurrence.source(value) == anchor)
+		Host.assert!(ScheduleDefinition.Occurrence.source(value) == anchor)
 		width = if count == 0 {
 			3600000000.I64
 		} else {
 			7200000000.I64
 		}
-		Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(width)))
+		Host.assert!(PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) == Ok(PosixDelta.from_microseconds(width)))
 	}
 	resume = match first.status {
 		Limited(progress) => progress.cursor
 		Complete => crash "Forever rule ended after one occurrence"
 	}
 	before_second = Host.allocated_bytes!({})
-	second = TimedSchedule.collect(resume, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "resumed bounded occurrence"
+	second = ScheduleDefinition.Cursor.collect(resume, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "resumed bounded occurrence"
 	after_second = Host.allocated_bytes!({})
 	Host.assert!(second.occurrences.len() == 1 and second.steps <= 8 and second.zone_segments <= 8)
 	for value in second.occurrences {
-		Host.assert!(TimedOccurrence.source(value) == DefinitionFixture.label(1))
+		Host.assert!(ScheduleDefinition.Occurrence.source(value) == DefinitionFixture.label(1))
 		width = if count <= 1 {
 			3600000000.I64
 		} else {
 			7200000000.I64
 		}
-		Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(PosixDelta.from_microseconds(width)))
+		Host.assert!(PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) == Ok(PosixDelta.from_microseconds(width)))
 	}
 	match retained {
 		Some(original) => Host.assert!(original == DefinitionFixture.inputs(count + 2))

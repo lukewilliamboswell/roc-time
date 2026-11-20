@@ -30,7 +30,7 @@ import ZoneRules
 ## for native rule execution with parsed period additions.
 ##
 ## ```roc
-## import time.ICalPeriod
+## import time.ICalendar.Period as ICalPeriod
 ## expect {
 ##     value = ICalPeriod.parse("19970101T180000Z/PT5H30M")?
 ##     ICalPeriod.to_text(value) == "19970101T180000Z/PT19800S"
@@ -279,7 +279,7 @@ utc_rules = |lower, upper| {
 		Ok(value) => value
 		Err(_) => crash "ordered fixed UTC bounds"
 	}
-	match ZoneRules.new_bounded({ name: "UTC", version: "posix-fixed-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
+	match ZoneRules.Provider.new_bounded({ name: "UTC", version: "posix-fixed-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "valid fixed UTC definition"
 	}
@@ -358,7 +358,7 @@ test_new_york = |spring| {
 	}
 	validity = PosixSpan.new({ start: ICalDateTime.utc_boundary(test_timestamp(lower))?, end: ICalDateTime.utc_boundary(test_timestamp(upper))? })?
 	at = ICalDateTime.utc_boundary(test_timestamp(transition))?
-	ZoneRules.new_bounded({
+	ZoneRules.Provider.new_bounded({
 		name: "RFC5545/New_York",
 		version: "2007-examples",
 		validity,

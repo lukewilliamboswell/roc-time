@@ -35,7 +35,7 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
 		midnight = midnight_clock(0)
-		pending = match ZoneRules.selection_cursor(rules, { start: LocalDateTime.new({ date: date_value, clock: midnight }), end: LocalDateTime.new({ date: end, clock: midnight }) }) {
+		pending = match ZoneRules.SelectionCursor.from_bounds(rules, { start: LocalDateTime.new({ date: date_value, clock: midnight }), end: LocalDateTime.new({ date: end, clock: midnight }) }) {
 			Ok(value) => value
 			Err(EmptySelection) => crash "positive civil duration is nonempty"
 			Err(ReversedSelection) => crash "positive civil duration is ordered"
@@ -101,7 +101,7 @@ expect {
 	var $valid = Bool.True
 	for (at, offset, hours) in [(7200000000.I64, 3600.I32, 23.I64), (7200000000, -3600, 25), (7200000000, 0, 24), (0, 86400, 0)] {
 		validity = PosixSpan.new({ start: test_alldayoccurrence_point(-259200000000), end: test_alldayoccurrence_point(259200000000) })?
-		rules = ZoneRules.new_bounded({ name: "Synthetic/Day", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: test_alldayoccurrence_point(at), offset: FixedOffset.from_seconds(offset) }], bounds: { minimum: I32.min(0, offset), maximum: I32.max(0, offset) } })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Day", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: test_alldayoccurrence_point(at), offset: FixedOffset.from_seconds(offset) }], bounds: { minimum: I32.min(0, offset), maximum: I32.max(0, offset) } })?
 		date = test_alldayoccurrence_day(1)?
 		initial = AllDayOccurrence.cursor({ id: { series: "visits", date }, date, days: 1, rules })?
 		first = AllDayOccurrenceCursor.collect(initial, { max_segments: 1, max_members: 1 })?
@@ -130,7 +130,7 @@ expect {
 
 expect {
 	validity = PosixSpan.new({ start: test_alldayoccurrence_point(-259200000000), end: test_alldayoccurrence_point(259200000000) })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	date = test_alldayoccurrence_day(1)?
 	zero = match AllDayOccurrence.cursor({ id: 0.U64, date, days: 0, rules }) {
 		Err(InvalidDuration) => True

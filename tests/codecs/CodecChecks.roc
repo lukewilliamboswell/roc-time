@@ -1,14 +1,14 @@
-import time.EdtfInterval
-import time.EdtfDate
+import time.Interchange.EdtfInterval as EdtfInterval
+import time.Interchange.EdtfDate as EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
-import time.Ixdtf
-import time.ICalDateTime
-import time.ICalDuration
-import time.ICalPeriod
+import time.Interchange.Ixdtf as Ixdtf
+import time.ICalendar.DateTime as ICalDateTime
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.Period as ICalPeriod
 import time.GregorianDate
 import time.ClockTime
-import time.NanoClockTime
+import time.Nanosecond.ClockTime as NanoClockTime
 import time.LocalDateTime
 import time.Calendar
 # Real builtin JSON exercises derived record/list composition and format-level

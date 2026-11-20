@@ -7,6 +7,12 @@ examples, saved inputs, allocation baseline and report identity.
 
 == Upgrade
 
+The public API keeps everyday imports such as `GregorianDate`, `Coverage`, and
+`ZoneRules` and groups specialist types under task-specific owners. See the
+https://github.com/lukewilliamboswell/roc-time/blob/main/docs/releases/api-organization.adoc[API migration map]
+for changed imports and methods.
+
+
 Nested nominal types remain available through public aliases, with their
 methods and temporal behavior preserved. Some metadata type aliases move one
 level up because this compiler cannot resolve types nested beneath aliases:

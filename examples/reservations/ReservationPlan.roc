@@ -1,8 +1,8 @@
-import time.ICalDateTime
-import time.ICalTimedRule
-import time.TimedRecurrence
-import time.TimedSchedule
-import time.TimedOccurrence
+import time.ICalendar.DateTime as ICalDateTime
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.Recurrence.TimedStart as TimedStart
+import time.ScheduleDefinition
+
 import time.PosixSpan
 import time.PosixDelta
 import time.LocalDateTime
@@ -24,7 +24,7 @@ ReservationPlan :: [].{
 			Err(error) => return Err(Recurrence(error))
 		}
 		cursor = ICalTimedRule.schedule({ series: "equipment", rule, window: { start: ICalDateTime.local_label(start), end: ICalDateTime.local_label(end) }, context: Utc })?
-		batch = match TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 }) {
+		batch = match ScheduleDefinition.Cursor.collect(cursor, { work: { max_steps: 100, max_buffered: 2, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 }) {
 			Ok(value) => value
 			Err(error) => return Err(Interpretation(error))
 		}
@@ -34,9 +34,9 @@ ReservationPlan :: [].{
 		}
 	}
 	report = |reservation| {
-		source = TimedRecurrence.Occurrence.source(TimedOccurrence.start(reservation))
+		source = TimedStart.source(ScheduleDefinition.Occurrence.start(reservation))
 		date = Calendar.Date.to_fields(LocalDateTime.date(source))
-		width = PosixSpan.coordinate_width(TimedOccurrence.span(reservation))?
+		width = PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(reservation))?
 		micros = PosixDelta.to_microseconds(width)
 		if I64.rem_by(micros, 60000000) != 0 {
 			return Err(FractionalMinutes)

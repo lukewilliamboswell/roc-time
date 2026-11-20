@@ -34,7 +34,7 @@ import PosixSpan
 ##
 ## expect {
 ##     validity = PosixSpan.from_seconds({ start: -86400, end: 86400, rounding: RejectSubmicrosecond })?
-##     rules = ZoneRules.new_bounded({
+##     rules = ZoneRules.Provider.new_bounded({
 ##         name: "UTC",
 ##         version: "fixed",
 ##         validity,
@@ -62,15 +62,6 @@ ZoneRules :: {
 	provenance : Provenance,
 	transitions : List(Transition),
 }.{
-
-	## Resolve a complete calendar selection through the shared bounded cursor.
-	## Construction does not scan transitions; collect applies explicit limits.
-	## Fold components remain disconnected and gaps may contribute no coverage.
-	calendar_selection_cursor : ZoneRules, Calendar.Value -> Try(SelectionCursor, [OutOfRange, EmptySelection, ReversedSelection, OutsideValidity])
-	calendar_selection_cursor = |rules, value| {
-		bounds = LocalDateTime.calendar_value_bounds(value)?
-		selection_cursor(rules, { start: bounds.start, end: bounds.end })
-	}
 
 	## Structural input from the optional zone-data package. Boundaries and
 	## transitions are POSIX seconds; offsets are signed seconds. from_database
@@ -116,89 +107,6 @@ ZoneRules :: {
 	## offset. These choices never silently adjust a gap.
 	OccurrencePolicy : [RequireUnique, First, Last, MatchingOffset(FixedOffset)]
 
-	## Validate named finite rules using the full I32 offset range as global bounds.
-	## Reject empty names/versions or transitions outside validity or out of order.
-	## Prefer new_bounded when the provider supplies tighter authoritative bounds:
-	## full-range bounds require wider validity for complete inverse queries.
-	new : { name : Str, version : Str, validity : PosixSpan, initial : FixedOffset, transitions : List(Transition) } -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
-	new = |{ name: name_value, version: version_value, validity: validity_value, initial, transitions }| new_bounded({ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds: { minimum: I32.lowest, maximum: I32.highest } })
-
-	## Bounds are a provider guarantee, including outside this finite table.
-	## Never infer global bounds merely from the offsets observed in the table.
-	new_bounded : { name : Str, version : Str, validity : PosixSpan, initial : FixedOffset, transitions : List(Transition), bounds : OffsetBounds } -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
-	new_bounded = |{ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds }| {
-		if bounds.minimum > bounds.maximum {
-			return Err(InvalidOffsetBounds)
-		}
-		if FixedOffset.to_seconds(initial) < bounds.minimum or FixedOffset.to_seconds(initial) > bounds.maximum {
-			return Err(OffsetOutsideBounds)
-		}
-		if name_value.is_empty() {
-			return Err(EmptyName)
-		}
-		if version_value.is_empty() {
-			return Err(EmptyVersion)
-		}
-		var $previous = PosixSpan.start(validity_value)
-		for transition in transitions {
-			if FixedOffset.to_seconds(transition.offset) < bounds.minimum or FixedOffset.to_seconds(transition.offset) > bounds.maximum {
-				return Err(OffsetOutsideBounds)
-			}
-			if transition.at <= PosixSpan.start(validity_value) or transition.at >= PosixSpan.end(validity_value) {
-				return Err(TransitionOutsideValidity)
-			}
-			if transition.at <= $previous {
-				return Err(UnorderedTransitions)
-			}
-			$previous = transition.at
-		}
-		Ok({ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds, provenance: Supplied })
-	}
-
-	## Constant-time projection. Transition/string storage may remain shared;
-	## names and version labels are not substitutes for the returned actual data.
-	definition : ZoneRules -> Definition
-	definition = |rules| {
-		name: rules.name,
-		version: rules.version,
-		validity: rules.validity,
-		initial: rules.initial,
-		bounds: rules.bounds,
-		provenance: rules.provenance,
-		transitions: rules.transitions,
-	}
-
-	## Construct rules from a complete definition, validating names, ordering,
-	## validity, offset bounds and provenance in O(n) transition work. The table
-	## may remain shared. DatabaseSource requires second-aligned boundaries;
-	## Supplied accepts exact microseconds. No provider lookup or authentication
-	## of the declared database source or digest occurs.
-	from_definition : Definition -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment])
-	from_definition = |data| {
-		rules = new_bounded({ name: data.name, version: data.version, validity: data.validity, initial: data.initial, transitions: data.transitions, bounds: data.bounds })?
-		match data.provenance {
-			Supplied => {}
-			DatabaseSource(source) => {
-				if source.requested_name.is_empty() or source.canonical_name.is_empty() or source.source_digest.is_empty() or source.profile.is_empty() {
-					return Err(MissingProvenance)
-				}
-				if source.canonical_name != data.name {
-					return Err(ProvenanceNameMismatch)
-				}
-				if I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.start(data.validity)), 1000000) != 0 or
-					I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.end(data.validity)), 1000000) != 0 {
-					return Err(InvalidDatabaseAlignment)
-				}
-				for transition in data.transitions {
-					if I64.rem_by(PosixBoundary.to_microseconds(transition.at), 1000000) != 0 {
-						return Err(InvalidDatabaseAlignment)
-					}
-				}
-			}
-		}
-		Ok({ ..rules, provenance: data.provenance })
-	}
-
 	## Validate structural zone-data input and retain its database provenance.
 	## Reject unsupported schema, axis or future handling rather than guessing
 	## their meaning; no provider lookup occurs.
@@ -224,7 +132,7 @@ ZoneRules :: {
 			at = database_boundary(entry.second)?
 			$transitions = $transitions.append({ at, offset: FixedOffset.from_seconds(entry.offset) })
 		}
-		rules = new_bounded({ name: data.canonical_name, version: data.source_version, validity: validity_value, initial: FixedOffset.from_seconds(data.initial_offset), transitions: $transitions, bounds: { minimum: data.minimum_offset, maximum: data.maximum_offset } })?
+		rules = Provider.new_bounded({ name: data.canonical_name, version: data.source_version, validity: validity_value, initial: FixedOffset.from_seconds(data.initial_offset), transitions: $transitions, bounds: { minimum: data.minimum_offset, maximum: data.maximum_offset } })?
 		Ok({ ..rules, provenance: DatabaseSource({ requested_name: data.requested_name, canonical_name: data.canonical_name, source_digest: data.source_digest, profile: data.profile }) })
 	}
 
@@ -243,11 +151,6 @@ ZoneRules :: {
 	## Return the half-open POSIX span over which the transition table is authoritative.
 	validity : ZoneRules -> PosixSpan
 	validity = |rules| rules.validity
-
-	## Authoritative global offset bounds supplied at construction, not merely
-	## the extrema observed inside this finite transition table.
-	offset_bounds : ZoneRules -> OffsetBounds
-	offset_bounds = |rules| rules.bounds
 
 	## Render the validity and transition count for diagnostics in constant work.
 	## The package nightly reports duplicate definitions when this hook and the
@@ -294,7 +197,7 @@ ZoneRules :: {
 	## Complete classification only when every possible candidate is covered.
 	resolve : ZoneRules, LocalDateTime -> Try(Resolution, [OutsideValidity, OutOfRange])
 	resolve = |rules, local| {
-		cursor = classification_cursor(rules, local)?
+		cursor = ClassificationCursor.from_local(rules, local)?
 		batch = ClassificationCursor.collect(cursor, { max_segments: U64.highest, max_candidates: U64.highest })?
 		match batch.status {
 			Complete(value) => Ok(Classification.resolution(value))
@@ -420,19 +323,6 @@ ZoneRules :: {
 		status : [Complete(Classification), Limited({ cursor : ClassificationCursor, reason : [WorkLimit, BufferLimit] })],
 	}
 
-	## Bind a civil label to rules after proving the full inverse range fits
-	## validity. Construction does not scan transitions; collect performs bounded work.
-	## Return OutsideValidity or OutOfRange instead of an incomplete classification.
-	classification_cursor : ZoneRules, LocalDateTime -> Try(ClassificationCursor, [OutsideValidity, OutOfRange])
-	classification_cursor = |rules, local| {
-		earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), local)?
-		latest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), local)?
-		if earliest < PosixSpan.start(rules.validity) or latest >= PosixSpan.end(rules.validity) {
-			return Err(OutsideValidity)
-		}
-		Ok({ rules, local, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, matches: [], gaps: [], done: Bool.False })
-	}
-
 	## Immutable progress toward complete classification, retaining candidates and
 	## gap evidence. Resume a Limited batch by collecting its returned cursor.
 	ClassificationCursor :: {
@@ -445,6 +335,19 @@ ZoneRules :: {
 		gaps : List(GapTransition),
 		done : Bool,
 	}.{
+
+		## Bind a civil label to rules after proving the full inverse range fits
+		## validity. Construction does not scan transitions; collect performs bounded work.
+		## Return OutsideValidity or OutOfRange instead of an incomplete classification.
+		from_local : ZoneRules, LocalDateTime -> Try(ClassificationCursor, [OutsideValidity, OutOfRange])
+		from_local = |rules, local| {
+			earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), local)?
+			latest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), local)?
+			if earliest < PosixSpan.start(rules.validity) or latest >= PosixSpan.end(rules.validity) {
+				return Err(OutsideValidity)
+			}
+			Ok({ rules, local, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, matches: [], gaps: [], done: Bool.False })
+		}
 
 		## One work unit visits one constant-offset segment and its ending
 		## transition. Capacity includes matches and forward-gap evidence.
@@ -520,7 +423,7 @@ ZoneRules :: {
 	## Choose explicitly; gaps never silently move to another local label.
 	resolve_occurrence : ZoneRules, { local : LocalDateTime, occurrence : OccurrencePolicy } -> Try(PosixBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
 	resolve_occurrence = |rules, { local, occurrence: policy }| {
-		cursor = classification_cursor(rules, local)?
+		cursor = ClassificationCursor.from_local(rules, local)?
 		batch = ClassificationCursor.collect(cursor, { max_segments: U64.highest, max_candidates: U64.highest })?
 		value = match batch.status {
 			Complete(result) => result
@@ -547,7 +450,7 @@ ZoneRules :: {
 	## Preimage of the half-open local selection; never an endpoint hull.
 	select : ZoneRules, { start : LocalDateTime, end : LocalDateTime } -> Try(Coverage, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
 	select = |rules, { start, end }| {
-		cursor = selection_cursor(rules, { start, end })?
+		cursor = SelectionCursor.from_bounds(rules, { start, end })?
 		batch = SelectionCursor.collect(cursor, { max_segments: U64.highest, max_members: U64.highest })?
 		match batch.status {
 			Complete(coverage) => Ok(coverage)
@@ -567,24 +470,6 @@ ZoneRules :: {
 		status : [Complete(Coverage), Limited({ cursor : SelectionCursor, reason : [WorkLimit, BufferLimit] })],
 	}
 
-	## Prove the full inverse range is covered before any segment is evaluated.
-	## The opaque cursor binds the immutable rules and original local selection.
-	selection_cursor : ZoneRules, { start : LocalDateTime, end : LocalDateTime } -> Try(SelectionCursor, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
-	selection_cursor = |rules, { start, end }| {
-		match LocalDateTime.compare_position({ left: start, right: end }) {
-			Same => return Err(EmptySelection)
-			After => return Err(ReversedSelection)
-			Before => {}
-		}
-		earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), start)?
-		latest_end = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), end)?
-		# End is excluded: equality with the upper validity boundary is safe.
-		if earliest < PosixSpan.start(rules.validity) or latest_end > PosixSpan.end(rules.validity) {
-			return Err(OutsideValidity)
-		}
-		Ok({ rules, start, end, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, builder: Coverage.SortedBuilder.empty, done: Bool.False })
-	}
-
 	## Immutable progress through the complete preimage of a half-open civil range.
 	## Fold components remain separate and gaps can contribute no coverage.
 	SelectionCursor :: {
@@ -597,6 +482,33 @@ ZoneRules :: {
 		builder : Coverage.SortedBuilder,
 		done : Bool,
 	}.{
+
+		## Prove the full inverse range is covered before any segment is evaluated.
+		## The opaque cursor binds the immutable rules and original local selection.
+		from_bounds : ZoneRules, { start : LocalDateTime, end : LocalDateTime } -> Try(SelectionCursor, [EmptySelection, ReversedSelection, OutsideValidity, OutOfRange])
+		from_bounds = |rules, { start, end }| {
+			match LocalDateTime.compare_position({ left: start, right: end }) {
+				Same => return Err(EmptySelection)
+				After => return Err(ReversedSelection)
+				Before => {}
+			}
+			earliest = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.maximum), start)?
+			latest_end = FixedOffset.resolve(FixedOffset.from_seconds(rules.bounds.minimum), end)?
+			# End is excluded: equality with the upper validity boundary is safe.
+			if earliest < PosixSpan.start(rules.validity) or latest_end > PosixSpan.end(rules.validity) {
+				return Err(OutsideValidity)
+			}
+			Ok({ rules, start, end, index: 0, lower: PosixSpan.start(rules.validity), offset: rules.initial, builder: Coverage.SortedBuilder.empty, done: Bool.False })
+		}
+
+		## Resolve a complete calendar selection through the shared bounded cursor.
+		## Construction does not scan transitions; collect applies explicit limits.
+		## Fold components remain disconnected and gaps may contribute no coverage.
+		from_calendar_value : ZoneRules, Calendar.Value -> Try(SelectionCursor, [OutOfRange, EmptySelection, ReversedSelection, OutsideValidity])
+		from_calendar_value = |rules, value| {
+			bounds = LocalDateTime.calendar_value_bounds(value)?
+			SelectionCursor.from_bounds(rules, { start: bounds.start, end: bounds.end })
+		}
 
 		## Return the exact retained rules and original civil bounds without evaluating them.
 		context : SelectionCursor -> { rules : ZoneRules, start : LocalDateTime, end : LocalDateTime }
@@ -640,7 +552,7 @@ ZoneRules :: {
 					Some(selected) => {
 						# The full result returns the unchanged builder, avoiding an
 						# alias retained solely for reconstructing a limited cursor.
-						appended = match Coverage.SortedBuilder.append_retaining($builder, { span: selected, max_members: limits.max_members }) {
+						appended = match Coverage.SortedBuilder.append_bounded($builder, { span: selected, max_members: limits.max_members }) {
 							Ok(result) => result
 							Err(_) => crash "Zone segments preserve output start order"
 						}
@@ -676,7 +588,7 @@ ZoneRules :: {
 		span = PosixSpan.new({ start: PosixBoundary.from_microseconds(-3), end: PosixBoundary.from_microseconds(4) })?
 		initial = FixedOffset.from_seconds(0)
 		changed = FixedOffset.from_seconds(1800)
-		rules = new({
+		rules = Provider.new({
 			name: "Synthetic/HalfHour",
 			version: "fixture-v1",
 			validity: span,
@@ -699,11 +611,11 @@ ZoneRules :: {
 		offset = FixedOffset.from_seconds(0)
 		transition = { at: PosixBoundary.from_microseconds(5), offset }
 		# Check errors by matching so ZoneRules need not define semantic equality.
-		duplicate = match new({ name: "Synthetic", version: "v1", validity: span, initial: offset, transitions: [transition, transition] }) {
+		duplicate = match Provider.new({ name: "Synthetic", version: "v1", validity: span, initial: offset, transitions: [transition, transition] }) {
 			Err(UnorderedTransitions) => Bool.True
 			_ => Bool.False
 		}
-		outside = match new({ name: "Synthetic", version: "v1", validity: span, initial: offset, transitions: [{ at: PosixBoundary.from_microseconds(10), offset }] }) {
+		outside = match Provider.new({ name: "Synthetic", version: "v1", validity: span, initial: offset, transitions: [{ at: PosixBoundary.from_microseconds(10), offset }] }) {
 			Err(TransitionOutsideValidity) => Bool.True
 			_ => Bool.False
 		}
@@ -714,10 +626,101 @@ ZoneRules :: {
 	expect {
 		valid = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(2) })?
 		offset = FixedOffset.from_seconds(0)
-		rules = new({ name: "Synthetic", version: "1", validity: valid, initial: offset, transitions: [{ at: PosixBoundary.from_microseconds(0), offset }] })?
+		rules = Provider.new({ name: "Synthetic", version: "1", validity: valid, initial: offset, transitions: [{ at: PosixBoundary.from_microseconds(0), offset }] })?
 		inspect_snapshot(rules) == "ZoneRules(validity=${Str.inspect(valid)}, transitions=1)"
 	}
 
+	## Construct and round-trip caller-supplied zone rules.
+	Provider :: [].{
+
+		## Validate named finite rules using the full I32 offset range as global bounds.
+		## Reject empty names/versions or transitions outside validity or out of order.
+		## Prefer new_bounded when the provider supplies tighter authoritative bounds:
+		## full-range bounds require wider validity for complete inverse queries.
+		new : { name : Str, version : Str, validity : PosixSpan, initial : FixedOffset, transitions : List(Transition) } -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
+		new = |{ name: name_value, version: version_value, validity: validity_value, initial, transitions }| Provider.new_bounded({ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds: { minimum: I32.lowest, maximum: I32.highest } })
+
+		## Bounds are a provider guarantee, including outside this finite table.
+		## Never infer global bounds merely from the offsets observed in the table.
+		new_bounded : { name : Str, version : Str, validity : PosixSpan, initial : FixedOffset, transitions : List(Transition), bounds : OffsetBounds } -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds])
+		new_bounded = |{ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds }| {
+			if bounds.minimum > bounds.maximum {
+				return Err(InvalidOffsetBounds)
+			}
+			if FixedOffset.to_seconds(initial) < bounds.minimum or FixedOffset.to_seconds(initial) > bounds.maximum {
+				return Err(OffsetOutsideBounds)
+			}
+			if name_value.is_empty() {
+				return Err(EmptyName)
+			}
+			if version_value.is_empty() {
+				return Err(EmptyVersion)
+			}
+			var $previous = PosixSpan.start(validity_value)
+			for transition in transitions {
+				if FixedOffset.to_seconds(transition.offset) < bounds.minimum or FixedOffset.to_seconds(transition.offset) > bounds.maximum {
+					return Err(OffsetOutsideBounds)
+				}
+				if transition.at <= PosixSpan.start(validity_value) or transition.at >= PosixSpan.end(validity_value) {
+					return Err(TransitionOutsideValidity)
+				}
+				if transition.at <= $previous {
+					return Err(UnorderedTransitions)
+				}
+				$previous = transition.at
+			}
+			Ok({ name: name_value, version: version_value, validity: validity_value, initial, transitions, bounds, provenance: Supplied })
+		}
+
+		## Construct rules from a complete definition, validating names, ordering,
+		## validity, offset bounds and provenance in O(n) transition work. The table
+		## may remain shared. DatabaseSource requires second-aligned boundaries;
+		## Supplied accepts exact microseconds. No provider lookup or authentication
+		## of the declared database source or digest occurs.
+		from_definition : Definition -> Try(ZoneRules, [EmptyName, EmptyVersion, TransitionOutsideValidity, UnorderedTransitions, InvalidOffsetBounds, OffsetOutsideBounds, MissingProvenance, ProvenanceNameMismatch, InvalidDatabaseAlignment])
+		from_definition = |data| {
+			rules = Provider.new_bounded({ name: data.name, version: data.version, validity: data.validity, initial: data.initial, transitions: data.transitions, bounds: data.bounds })?
+			match data.provenance {
+				Supplied => {}
+				DatabaseSource(source) => {
+					if source.requested_name.is_empty() or source.canonical_name.is_empty() or source.source_digest.is_empty() or source.profile.is_empty() {
+						return Err(MissingProvenance)
+					}
+					if source.canonical_name != data.name {
+						return Err(ProvenanceNameMismatch)
+					}
+					if I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.start(data.validity)), 1000000) != 0 or
+						I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.end(data.validity)), 1000000) != 0 {
+						return Err(InvalidDatabaseAlignment)
+					}
+					for transition in data.transitions {
+						if I64.rem_by(PosixBoundary.to_microseconds(transition.at), 1000000) != 0 {
+							return Err(InvalidDatabaseAlignment)
+						}
+					}
+				}
+			}
+			Ok({ ..rules, provenance: data.provenance })
+		}
+
+		## Constant-time projection. Transition/string storage may remain shared;
+		## names and version labels are not substitutes for the returned actual data.
+		definition : ZoneRules -> Definition
+		definition = |rules| {
+			name: rules.name,
+			version: rules.version,
+			validity: rules.validity,
+			initial: rules.initial,
+			bounds: rules.bounds,
+			provenance: rules.provenance,
+			transitions: rules.transitions,
+		}
+
+		## Authoritative global offset bounds supplied at construction, not merely
+		## the extrema observed inside this finite transition table.
+		offset_bounds : ZoneRules -> OffsetBounds
+		offset_bounds = |rules| rules.bounds
+	}
 }
 
 selected_span = |lower, upper, offset, start, end| {
@@ -802,7 +805,7 @@ test_zonedatabase_status = |data| match ZoneRules.from_database(data) {
 expect {
 	point = PosixBoundary.from_microseconds
 	validity = PosixSpan.new({ start: point(-10000000), end: point(10000000) })?
-	rules = ZoneRules.new_bounded({
+	rules = ZoneRules.Provider.new_bounded({
 		name: "Synthetic/RepeatedGap",
 		version: "v1",
 		validity,
@@ -815,7 +818,7 @@ expect {
 		bounds: { minimum: -2, maximum: 2 },
 	})?
 	local = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: point(1000000), calendar: Gregorian })?
-	initial = ZoneRules.classification_cursor(rules, local)?
+	initial = ZoneRules.ClassificationCursor.from_local(rules, local)?
 	zero = ZoneRules.ClassificationCursor.collect(initial, { max_segments: 0, max_candidates: 2 })?
 	zero_valid = match zero.status {
 		Limited(progress) => zero.segments == 0 and progress.reason == WorkLimit
@@ -858,8 +861,8 @@ expect {
 	local = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: point(1000000), calendar: Gregorian })?
 	var $valid = Bool.True
 	for (before, after) in [(0.I32, 2.I32), (2, 0)] {
-		rules = ZoneRules.new_bounded({ name: "Synthetic/Choice", version: "v1", validity, initial: FixedOffset.from_seconds(before), transitions: [{ at: point(0), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } })?
-		cursor = ZoneRules.classification_cursor(rules, local)?
+		rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Choice", version: "v1", validity, initial: FixedOffset.from_seconds(before), transitions: [{ at: point(0), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } })?
+		cursor = ZoneRules.ClassificationCursor.from_local(rules, local)?
 		batch = ZoneRules.ClassificationCursor.collect(cursor, { max_segments: 2, max_candidates: 2 })?
 		value = match batch.status {
 			Complete(found) => found
@@ -884,33 +887,33 @@ expect {
 	# The transport must not round a synthetic subsecond transition or infer
 	# authoritative bounds merely from the offsets present in this table.
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-2), end: PosixBoundary.from_microseconds(2) })?
-	original = ZoneRules.new_bounded({ name: "Synthetic/Microseconds", version: "reused-v1", validity, initial: FixedOffset.from_seconds(-1), transitions: [{ at: PosixBoundary.from_microseconds(1), offset: FixedOffset.from_seconds(1) }], bounds: { minimum: -10, maximum: 10 } })?
-	transport = ZoneRules.definition(original)
-	restored = ZoneRules.from_definition(transport)?
-	ZoneRules.definition(restored) == transport and
+	original = ZoneRules.Provider.new_bounded({ name: "Synthetic/Microseconds", version: "reused-v1", validity, initial: FixedOffset.from_seconds(-1), transitions: [{ at: PosixBoundary.from_microseconds(1), offset: FixedOffset.from_seconds(1) }], bounds: { minimum: -10, maximum: 10 } })?
+	transport = ZoneRules.Provider.definition(original)
+	restored = ZoneRules.Provider.from_definition(transport)?
+	ZoneRules.Provider.definition(restored) == transport and
 		ZoneRules.offset_at(restored, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(-1)) and
 			ZoneRules.offset_at(restored, PosixBoundary.from_microseconds(1)) == Ok(FixedOffset.from_seconds(1))
 }
 expect {
 	# Reused labels do not identify actual data. Both immutable tables survive.
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-10), end: PosixBoundary.from_microseconds(10) })?
-	first = ZoneRules.new_bounded({ name: "Synthetic/Reused", version: "same-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
-	first_data = ZoneRules.definition(first)
-	second = ZoneRules.from_definition({ ..first_data, transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(3600) }] })?
+	first = ZoneRules.Provider.new_bounded({ name: "Synthetic/Reused", version: "same-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 3600 } })?
+	first_data = ZoneRules.Provider.definition(first)
+	second = ZoneRules.Provider.from_definition({ ..first_data, transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(3600) }] })?
 	ZoneRules.name(first) == ZoneRules.name(second) and ZoneRules.version(first) == ZoneRules.version(second) and
-		ZoneRules.definition(first) != ZoneRules.definition(second) and
+		ZoneRules.Provider.definition(first) != ZoneRules.Provider.definition(second) and
 			ZoneRules.offset_at(first, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(0)) and
 				ZoneRules.offset_at(second, PosixBoundary.from_microseconds(0)) == Ok(FixedOffset.from_seconds(3600))
 }
 expect {
 	original = ZoneRules.from_database(test_zonedatabase_fixture({}))?
-	definition = ZoneRules.definition(original)
-	restored = ZoneRules.from_definition(definition)?
-	ZoneRules.definition(restored) == definition and ZoneRules.provenance(restored) == ZoneRules.provenance(original)
+	definition = ZoneRules.Provider.definition(original)
+	restored = ZoneRules.Provider.from_definition(definition)?
+	ZoneRules.Provider.definition(restored) == definition and ZoneRules.provenance(restored) == ZoneRules.provenance(original)
 }
 expect {
 	rules = ZoneRules.from_database(test_zonedatabase_fixture({}))?
-	data = ZoneRules.definition(rules)
+	data = ZoneRules.Provider.definition(rules)
 	provenance = { requested_name: "Synthetic/Alias", canonical_name: "Synthetic/Canonical", source_digest: "fixture-digest", profile: "fixture-profile" }
 	definition_status({ ..data, provenance: DatabaseSource({ ..provenance, requested_name: "" }) }) == Err(MissingProvenance) and
 		definition_status({ ..data, provenance: DatabaseSource({ ..provenance, canonical_name: "" }) }) == Err(MissingProvenance) and
@@ -922,7 +925,7 @@ expect {
 }
 expect {
 	rules = ZoneRules.from_database(test_zonedatabase_fixture({}))?
-	data = ZoneRules.definition(rules)
+	data = ZoneRules.Provider.definition(rules)
 	transition = { at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }
 	definition_status({ ..data, name: "" }) == Err(EmptyName) and
 		definition_status({ ..data, version: "" }) == Err(EmptyVersion) and
@@ -932,7 +935,7 @@ expect {
 						definition_status({ ..data, transitions: [{ ..transition, at: PosixSpan.start(data.validity) }] }) == Err(TransitionOutsideValidity)
 }
 
-definition_status = |data| match ZoneRules.from_definition(data) {
+definition_status = |data| match ZoneRules.Provider.from_definition(data) {
 	Ok(_) => Ok({})
 	Err(error) => Err(error)
 }
@@ -940,7 +943,7 @@ definition_status = |data| match ZoneRules.from_definition(data) {
 # Independent synthetic half-hour fold at POSIX zero: -900s with +1800s
 # and +900s with zero offset both label 1970-01-01 00:15. Validity is half-open.
 expect {
-	rules = ZoneRules.new_bounded({ name: "Synthetic/Projection", version: "fixture", validity: PosixSpan.from_seconds({ start: -3600, end: 3600, rounding: RejectSubmicrosecond })?, initial: FixedOffset.from_seconds(1800), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 1800 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Projection", version: "fixture", validity: PosixSpan.from_seconds({ start: -3600, end: 3600, rounding: RejectSubmicrosecond })?, initial: FixedOffset.from_seconds(1800), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 1800 } })?
 	first = ZoneRules.project(rules, { boundary: PosixBoundary.from_microseconds(-900000000), calendar: Gregorian })?
 	last = ZoneRules.project(rules, { boundary: PosixBoundary.from_microseconds(900000000), calendar: Gregorian })?
 	julian = ZoneRules.project(rules, { boundary: PosixBoundary.from_microseconds(900000000), calendar: Julian })?
@@ -990,8 +993,8 @@ calendar_value_test_days = |bounds| CivilDay.to_day_number(Calendar.Date.to_civi
 expect {
 	date = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
 	value = Calendar.Value.fractional_second(date, { clock: { hour: 0, minute: 0, second: 0 }, fraction: { value: 12, digits: 2 } })?
-	rules = ZoneRules.new_bounded({ name: "Synthetic/FractionFold", version: "v1", validity: calendar_value_test_span(-4000000, 4000000)?, initial: FixedOffset.from_seconds(2), transitions: [{ at: PosixBoundary.from_microseconds(-1000000), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 2 } })?
-	cursor = ZoneRules.calendar_selection_cursor(rules, value)?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/FractionFold", version: "v1", validity: calendar_value_test_span(-4000000, 4000000)?, initial: FixedOffset.from_seconds(2), transitions: [{ at: PosixBoundary.from_microseconds(-1000000), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 2 } })?
+	cursor = ZoneRules.SelectionCursor.from_calendar_value(rules, value)?
 	batch = ZoneRules.SelectionCursor.collect(cursor, { max_segments: 2, max_members: 2 })?
 	match batch.status {
 		Complete(coverage) => coverage == Coverage.from_spans([calendar_value_test_span(-1880000, -1870000)?, calendar_value_test_span(120000, 130000)?])
@@ -1003,10 +1006,10 @@ expect {
 	last = FixedOffset.project(zero, { boundary: PosixBoundary.from_microseconds(I64.highest), calendar: Gregorian })?
 	fields = ClockTime.to_fields(LocalDateTime.clock(last))
 	value = Calendar.Value.fractional_second(LocalDateTime.date(last), { clock: { hour: fields.hour, minute: fields.minute, second: fields.second }, fraction: { value: fields.microsecond, digits: 6 } })?
-	rules = ZoneRules.new_bounded({ name: "UTC", version: "v1", validity: calendar_value_test_span(I64.lowest, I64.highest)?, initial: zero, transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "UTC", version: "v1", validity: calendar_value_test_span(I64.lowest, I64.highest)?, initial: zero, transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	# The civil successor fits, but its POSIX upper boundary does not.
 	_ = LocalDateTime.calendar_value_bounds(value)?
-	match ZoneRules.calendar_selection_cursor(rules, value) {
+	match ZoneRules.SelectionCursor.from_calendar_value(rules, value) {
 		Err(OutOfRange) => True
 		_ => False
 	}

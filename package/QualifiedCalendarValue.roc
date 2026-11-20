@@ -94,7 +94,7 @@ QualifiedCalendarValue :: { value : Calendar.Value, qualifications : List(Qualif
 		if !description.qualifications.is_empty() {
 			return Err(NeedsModel)
 		}
-		ZoneRules.calendar_selection_cursor(rules, description.value)
+		ZoneRules.SelectionCursor.from_calendar_value(rules, description.value)
 	}
 
 	## Compare the described value and scoped qualifications, independently of input order.
@@ -208,7 +208,7 @@ expect {
 	month_only = QualifiedCalendarValue.new(value, [{ scope: Month, qualifier: Approximate }])?
 	whole = QualifiedCalendarValue.new(value, [{ scope: Whole, qualifier: Approximate }])?
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
-	rules = ZoneRules.new_bounded({ name: "UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	denied = match QualifiedCalendarValue.selection_cursor(month_only, rules) {
 		Err(NeedsModel) => True
 		_ => False

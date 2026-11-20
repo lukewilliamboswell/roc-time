@@ -1,14 +1,14 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
-import time.CalendarPattern
-import time.TimedRecurrence
-import time.TimedSchedule
-import time.TimedOccurrence
+import time.Recurrence.CalendarPattern as CalendarPattern
+import time.Recurrence.Timed as TimedRecurrence
+import time.ScheduleDefinition
+
 import time.PosixSpan
 import time.PosixDelta
 import time.LocalDateTime
-import time.ICalDuration
-import time.ICalTimedRule
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.TimedRule as ICalTimedRule
 import ExportFixture
 
 # R11/R12/R14/R15. Input, native construction, definition access, wrapper construction, export and
@@ -110,28 +110,28 @@ main! = |args| {
 		Err(_) => crash "valid resource window"
 	}
 	after_cursor = Host.allocated_bytes!({})
-	first = match TimedSchedule.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+	first = match ScheduleDefinition.Cursor.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "bounded first date"
 	}
 	after_first = Host.allocated_bytes!({})
-	Host.assert!(first.occurrences.len() == 1 and first.occurrences.map(|value| TimedOccurrence.source(value)).get(0) == Ok(anchor) and first.steps <= 8 and first.zone_segments <= 8)
+	Host.assert!(first.occurrences.len() == 1 and first.occurrences.map(|value| ScheduleDefinition.Occurrence.source(value)).get(0) == Ok(anchor) and first.steps <= 8 and first.zone_segments <= 8)
 	for occurrence in first.occurrences {
-		Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(3600000000)))
+		Host.assert!(PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(3600000000)))
 	}
 	resume = match first.status {
 		Limited(progress) => progress.cursor
 		Complete => crash "unbounded date series stopped at first output"
 	}
 	before_second = Host.allocated_bytes!({})
-	second = match TimedSchedule.collect(resume, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+	second = match ScheduleDefinition.Cursor.collect(resume, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 8, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "bounded resumed date"
 	}
 	after_second = Host.allocated_bytes!({})
-	Host.assert!(second.occurrences.len() == 1 and second.occurrences.map(|value| TimedOccurrence.source(value)).get(0) == Ok(ExportFixture.local(2000, 2)) and second.steps <= 8 and second.zone_segments <= 8)
+	Host.assert!(second.occurrences.len() == 1 and second.occurrences.map(|value| ScheduleDefinition.Occurrence.source(value)).get(0) == Ok(ExportFixture.local(2000, 2)) and second.steps <= 8 and second.zone_segments <= 8)
 	for occurrence in second.occurrences {
-		Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(3600000000)))
+		Host.assert!(PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(occurrence)) == Ok(PosixDelta.from_microseconds(3600000000)))
 	}
 	{ bytes: parts.rule.to_utf8(), work: [before_construct - before_input, before_access - before_construct, before_wrapper - before_access, before_export - before_wrapper, after_export - before_export, after_cursor - before_cursor, after_first - after_cursor, after_second - before_second] }
 }

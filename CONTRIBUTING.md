@@ -273,7 +273,7 @@ exclusions and query windows. Replay drives the public parser and native cursor
 with 17 work steps and one output slot per batch. Select `--oracle rfc_date`.
 The manifest records its semantic intersection;
 it excludes timed rules, week-number selectors and disputed omitted yearly
-fields. Replay also lifts every case to UTC midnight through `ICalTimedRule`,
+fields. Replay also lifts every case to UTC midnight through `ICalendar.TimedRule`,
 checking the same independently generated dates and one-day occurrence widths.
 That extension tests the shared date/timed semantic intersection, not subdaily
 selectors, zone transitions or general timed conformance. Fixed parser tests
@@ -289,7 +289,7 @@ identity and seed are pinned. This corpus
 excludes local-zone transitions, leap seconds and PERIOD overrides. Those require
 separate sourced fixtures and models; UTC agreement does not establish them.
 
-Valid forward Gregorian cases in years 0001–9999 also exercise `ICalDateTime`
+Valid forward Gregorian cases in years 0001–9999 also exercise `ICalendar.DateTime`
 parsing and explicit UTC midnight conversion against the same expected day.
 This covers calendar-date interpretation, not named zones or leap seconds.
 
@@ -505,7 +505,7 @@ forward progress.
 [structural_duration_hash](tests/compiler_repro/structural_duration_hash/README.md)
 isolates a compiler crash when deriving a structural hash key containing a
 nominal duration tail. Its scalar control checks and executes in interpreter,
-dev and speed modes. `TimedSchedule.Endings` hashes the complete declaration fields
+dev and speed modes. `ScheduleDefinition.Endings` hashes the complete declaration fields
 explicitly; the schedule definition checks exercise dictionary lookup for
 checked native definitions. Recheck
 the failing root and its control when upgrading the compiler.

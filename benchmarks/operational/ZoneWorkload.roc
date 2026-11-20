@@ -48,7 +48,7 @@ ZoneWorkload := [].{
 		Load | RejectSchema => {
 			input = if (mode == RejectSchema) { ..fixture.data, schema: 0 } else fixture.data
 			match ZoneRules.from_database(input) {
-				Ok(loaded) => Count(ZoneRules.definition(loaded).transitions.len())
+				Ok(loaded) => Count(ZoneRules.Provider.definition(loaded).transitions.len())
 				Err(UnsupportedSchema(0)) => UnsupportedSchema
 				Err(_) => crash "unexpected provider admission error"
 			}

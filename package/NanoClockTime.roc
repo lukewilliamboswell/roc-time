@@ -12,7 +12,7 @@ import Quantize
 ## rounding policy.
 ##
 ## ```roc
-## import time.NanoClockTime
+## import time.Nanosecond.ClockTime as NanoClockTime
 ##
 ## expect {
 ##     # 12:00:00.000000001 as a Time64(ns) value
@@ -26,7 +26,7 @@ import Quantize
 ## up to nine fractional digits.
 ##
 ## ```roc
-## import time.NanoClockTime
+## import time.Nanosecond.ClockTime as NanoClockTime
 ##
 ## expect {
 ##     opening : NanoClockTime

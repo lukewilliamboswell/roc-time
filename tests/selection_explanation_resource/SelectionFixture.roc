@@ -35,7 +35,7 @@ SelectionFixture := [].{
 			$transitions = $transitions.append({ at: PosixBoundary.from_microseconds(-count.to_i64() + $i.to_i64()), offset: FixedOffset.from_seconds(0) })
 			$i = $i + 1
 		}
-		match ZoneRules.new({ name: "Fixture/Selection", version: "é".repeat(text_size.to_u64()), validity: span(I64.lowest, I64.highest), initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
+		match ZoneRules.Provider.new({ name: "Fixture/Selection", version: "é".repeat(text_size.to_u64()), validity: span(I64.lowest, I64.highest), initial: FixedOffset.from_seconds(0), transitions: $transitions }) {
 			Ok(v) => v
 			Err(_) => crash "fixture rules"
 		}

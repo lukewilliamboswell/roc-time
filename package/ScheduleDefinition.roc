@@ -24,9 +24,21 @@ import FixedOffset
 ## alongside prepared execution selectors. This is not a persistence format.
 ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }.{
 
+	## Endings for bounded evaluation or retained state.
+	Endings : TimedSchedule.Endings
+
+	## OccurrenceCursor for bounded evaluation or retained state.
+	OccurrenceCursor(id) : TimedOccurrence.Cursor(id)
+
+	## TimedOccurrence operations and types.
+	Occurrence(id) : TimedOccurrence(id)
+
+	## TimedSchedule operations and types.
+	Cursor(id) : TimedSchedule(id)
+
 	## Native recurrence, default duration, source-specific endings and explicit immutable start
 	## context. End policies remain part of each calendar/local ending.
-	NativeSpec : { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndingEntry), context : TimedRecurrence.Context }
+	NativeSpec := { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndingEntry) ?? [], context : TimedRecurrence.Context }
 
 	## Checked extracted iCalendar rule plus a compatible context: UTC for UTC declarations or
 	## explicit rules for local/floating declarations.
@@ -67,8 +79,8 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## Fresh execution state for each window; COUNT remains anchored at DTSTART.
 	## Definition validation is not repeated. Interpretation errors remain lazy
 	## checked results of TimedSchedule consumption under its normal budgets.
-	cursor : { series : id, definition : ScheduleDefinition, window : TimedRecurrence.Window } -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
-	cursor = |{ series, definition: value, window }| TimedSchedule.from_prepared({ series, rule: value.rule, window, endings: value.endings, context: value.context })
+	cursor : ScheduleDefinition, { series : id, window : TimedRecurrence.Window } -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
+	cursor = |value, { series, window }| TimedSchedule.from_prepared({ series, rule: value.rule, window, endings: value.endings, context: value.context })
 
 	## Declaration equality includes origin, retained selectors/exception labels,
 	## ending intent and complete immutable context. It does not establish that
@@ -76,7 +88,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## Cost follows finite definition fields and transitions, never query extent.
 	is_eq : ScheduleDefinition, ScheduleDefinition -> Bool
 	is_eq = |a, b| {
-		if a.context.occurrence != b.context.occurrence or a.context.gap != b.context.gap or ZoneRules.definition(a.context.rules) != ZoneRules.definition(b.context.rules) {
+		if a.context.occurrence != b.context.occurrence or a.context.gap != b.context.gap or ZoneRules.Provider.definition(a.context.rules) != ZoneRules.Provider.definition(b.context.rules) {
 			return Bool.False
 		}
 		match (a.origin, b.origin) {
@@ -99,7 +111,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## It does not hash an enumerated occurrence set.
 	to_hash : ScheduleDefinition, Hasher -> Hasher
 	to_hash = |value, hasher| {
-		context = { rules: ZoneRules.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
+		context = { rules: ZoneRules.Provider.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
 		hash = context.to_hash(hasher)
 		# nightly-2026-09-27 crashes when deriving the hash of a recurrence
 		# definition's subdaily frequency here, so its fields are hashed explicitly.
@@ -159,7 +171,7 @@ test_native = || {
 	excluded = TimedRecurrence.with_exclusions(rule, [test_local(2)?])?
 	included = TimedRecurrence.with_inclusions(excluded, [{ date: GregorianDate.from_fields({ year: 1970, month: 1, day: 5 })?, clock }])?
 	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(864000000000) })?
-	rules = ZoneRules.new_bounded({ name: "Fixture/UTC", version: "epoch-grid-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Fixture/UTC", version: "epoch-grid-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	Ok({ rule: included, duration: Coordinate(PosixDelta.from_microseconds(3600000000)), overrides: [{ source: test_local(5)?, ending: After(Coordinate(PosixDelta.from_microseconds(7200000000))) }], context: { rules, occurrence: RequireUnique, gap: RejectGap } })
 }
 
@@ -193,7 +205,7 @@ expect {
 		}
 		_ => Bool.False
 	}
-	cursor = ScheduleDefinition.cursor({ series: "fractional", definition, window: { start: test_local(1)?, end: test_local(4)? } })?
+	cursor = definition.cursor({ series: "fractional", window: { start: test_local(1)?, end: test_local(4)? } })?
 	batch = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 4 })?
 	var $valid = declaration_valid and match batch.status {
 		Complete => Bool.True
@@ -219,7 +231,7 @@ expect {
 	definition = ScheduleDefinition.from_native(test_native()?)?
 	var $valid = Bool.True
 	for case in [{ first: 1.U8, end: 4.U8, expected: [0.I64, 172800000000] }, { first: 3, end: 6, expected: [172800000000, 345600000000] }] {
-		cursor = ScheduleDefinition.cursor({ series: "series", definition, window: { start: test_local(case.first)?, end: test_local(case.end)? } })?
+		cursor = definition.cursor({ series: "series", window: { start: test_local(case.first)?, end: test_local(case.end)? } })?
 		batch = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 4 })?
 		$valid = $valid and match batch.status {
 			Complete => Bool.True

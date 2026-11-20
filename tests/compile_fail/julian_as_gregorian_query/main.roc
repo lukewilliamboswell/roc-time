@@ -1,5 +1,5 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.JulianDate
+import time.Calendar.JulianDate as JulianDate
 import time.GregorianDate
 
 main! = |_args| {

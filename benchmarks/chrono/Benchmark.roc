@@ -1,7 +1,7 @@
 import time.GregorianDate
 import time.ClockTime
 import time.FixedOffset
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 import time.OffsetTimestamp
 import time.PosixBoundary
 

@@ -3,13 +3,14 @@ import time.Coverage
 
 ## Exchange exact booking windows as text, computing availability on coverage.
 BookingExchange :: [].{
-	available = |opening_text, booking_texts| {
+	available_ordered! = |opening_text, booking_texts| {
 		opening = parse(opening_text)?
-		var $bookings = []
-		for text in booking_texts {
-			$bookings = $bookings.append(ExactInterval.span(parse(text)?))
+		var $bookings = Coverage.SortedBuilder.empty
+		for! source in booking_texts {
+			booking = parse(source?)?
+			$bookings = $bookings.append(booking.span())?
 		}
-		computed = Coverage.complement_within(Coverage.from_spans($bookings), ExactInterval.span(opening))
+		computed = Coverage.complement_within($bookings.to_coverage(), opening.span())
 		var $output = []
 		for span in computed {
 			# The application requests exact microsecond output in UTC. This

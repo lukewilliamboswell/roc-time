@@ -25,7 +25,7 @@ import LocalDateTime
 ##
 ## Generic codecs use canonical strings and typed literals validate at compile time:
 ## ```roc
-## import time.EdtfDate
+## import time.Interchange.EdtfDate as EdtfDate
 ## expect {
 ##     date : EdtfDate
 ##     date = "1984?"

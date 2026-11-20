@@ -1,7 +1,7 @@
 import time.PosixBoundary
 import time.PosixDelta
-import time.PosixNanoBoundary
-import time.PosixNanoDelta
+import time.Nanosecond.PosixBoundary as PosixNanoBoundary
+import time.Nanosecond.PosixDelta as PosixNanoDelta
 import fuzz.Fuzz
 
 NanoPosixCase := { number : I64 }.{

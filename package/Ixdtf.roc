@@ -592,7 +592,7 @@ expect {
 test_rules = |name, point, offset| {
 	# One microsecond validity: these fixtures assert only the queried instant.
 	validity = PosixSpan.microsecond_at(point)?
-	ZoneRules.new_bounded({ name, version: "rfc9557-fixture-v1", validity, initial: FixedOffset.from_seconds(offset), transitions: [], bounds: { minimum: offset, maximum: offset } })
+	ZoneRules.Provider.new_bounded({ name, version: "rfc9557-fixture-v1", validity, initial: FixedOffset.from_seconds(offset), transitions: [], bounds: { minimum: offset, maximum: offset } })
 }
 
 resolve_error = |result| match result {
@@ -841,7 +841,7 @@ IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary :
 	is_eq : IxdtfSnapshot, IxdtfSnapshot -> Bool
 	is_eq = |a, b| a.source == b.source and a.boundary == b.boundary and a.offset == b.offset and a.local == b.local and match (a.context, b.context) {
 		(None, None) => True
-		(Some(left), Some(right)) => ZoneRules.definition(left) == ZoneRules.definition(right)
+		(Some(left), Some(right)) => ZoneRules.Provider.definition(left) == ZoneRules.Provider.definition(right)
 		_ => False
 	}
 
@@ -851,7 +851,7 @@ IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary :
 		base = value.local.to_hash(value.offset.to_hash(value.boundary.to_hash(value.source.to_hash(hasher))))
 		match value.context {
 			None => (0.U8).to_hash(base)
-			Some(rules) => ZoneRules.definition(rules).to_hash((1.U8).to_hash(base))
+			Some(rules) => ZoneRules.Provider.definition(rules).to_hash((1.U8).to_hash(base))
 		}
 	}
 
