@@ -61,7 +61,7 @@ ChronoBenchmark := [].{
 				timeout_ms: 180000,
 			})?
 		}
-		{ binary: roc_binary, target, version: roc_version } = build_roc!({ options, root, work, source: "benchmarks/chrono/main.roc" })?
+		{ binary: roc_binary, target, version: roc_version } = build_roc!({ options, root, work, allocator: Timing, source: "benchmarks/chrono/main.roc" })?
 		rust_target = if (target == "x64musl") "x86_64-unknown-linux-musl" else "aarch64-apple-darwin"
 		_ = BenchmarkProcess.run!({
 			args: [
@@ -132,39 +132,41 @@ ChronoBenchmark := [].{
 		}
 		Ok(context)
 	}
-	build_roc! : { options : BenchmarkOptions.Options, root : Path, work : Path, source : Str } => Try({ binary : Path, target : Str, version : Str }, _)
-	build_roc! = |{ options, root, work, source }| {
+	build_roc! : { options : BenchmarkOptions.Options, root : Path, work : Path, source : Str, allocator : [Timing, Fixture] } => Try({ binary : Path, target : Str, version : Str }, _)
+	build_roc! = |{ options, root, work, source, allocator }| {
 		compiler = Script.roc_nightly!()?
 		version = compiler.output!(["version"])?
 		target = FixtureHost.build!()?
-		zig = Script.env_str!("ZIG") ?? "zig"
-		host_args = [
-			zig,
-			"build",
-			"--build-file",
-			"${Path.display(root)}/tests/platform/build.zig",
-			"--prefix",
-			"${Path.display(work)}/host",
-			"--cache-dir",
-			"${Path.display(work)}/host-cache",
-			"-Doptimize=ReleaseFast",
-			"-Dbenchmark-allocator=true",
-		]
-		_ = BenchmarkProcess.run!({
-			args: if (target == "x64musl") host_args.append("-Dtarget=x86_64-linux-musl") else host_args,
-			cwd: root,
-			logs: work,
-			label: "benchmark-host",
-			environment: [("ZIG_GLOBAL_CACHE_DIR", "${Path.display(work)}/global-cache")],
-			timeout_ms: 180000,
-		})?
 		destination = Path.utf8("benchmarks/chrono/platform/targets/${target}")
 		Path.create_all!(destination)?
 		for artifact in Path.list!(Path.utf8(".roc-time-tmp/fixture-platform/targets/${target}"))? {
 			name = Path.filename(artifact)?.to_str()?
 			Path.copy!(artifact, Path.join(destination, name))?
 		}
-		Path.copy!(Path.join(work, "host/lib/libhost.a"), Path.join(destination, "libhost.a"))?
+		if allocator == Timing {
+			zig = Script.env_str!("ZIG") ?? "zig"
+			host_args = [
+				zig,
+				"build",
+				"--build-file",
+				"${Path.display(root)}/tests/platform/build.zig",
+				"--prefix",
+				"${Path.display(work)}/host",
+				"--cache-dir",
+				"${Path.display(work)}/host-cache",
+				"-Doptimize=ReleaseFast",
+				"-Dbenchmark-allocator=true",
+			]
+			_ = BenchmarkProcess.run!({
+				args: if (target == "x64musl") host_args.append("-Dtarget=x86_64-linux-musl") else host_args,
+				cwd: root,
+				logs: work,
+				label: "benchmark-host",
+				environment: [("ZIG_GLOBAL_CACHE_DIR", "${Path.display(work)}/global-cache")],
+				timeout_ms: 180000,
+			})?
+			Path.copy!(Path.join(work, "host/lib/libhost.a"), Path.join(destination, "libhost.a"))?
+		}
 		program = OsStr.display(compiler.program())
 		_ = BenchmarkProcess.run!({
 			args: [program, "check", source],

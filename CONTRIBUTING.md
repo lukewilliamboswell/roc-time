@@ -689,7 +689,8 @@ check the date and timestamp profiles against their reviewed inputs and
 checksums. It also checks the coverage, zone and recurrence fixtures against
 independent expected results. The harness gate runs the same replay and
 exercises missing, corrupted and wrong-profile expectations and invalid
-measurement records.
+measurement records. Replay uses the instrumented fixture allocator. Timed
+comparisons use the separate benchmarking allocator.
 `blueprint run benchmark-expectations` uses the pinned oracle to produce
 candidates under `.roc-time-tmp/benchmark-expectations-candidate/`. Compare
 their contents and manifest with `benchmarks/comparison/expectations/` and

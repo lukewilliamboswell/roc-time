@@ -17,7 +17,7 @@ OperationalBenchmark := [].{
 		work = Path.absolute!(".roc-time-tmp/benchmark-operational")?
 		Path.create_all!(work)?
 		options = BenchmarkOptions.parse(["--smoke"])?
-		{ binary, target, version } = ChronoBenchmark.build_roc!({ options, root, work, source: "benchmarks/operational/main.roc" })?
+		{ binary, target, version } = ChronoBenchmark.build_roc!({ options, root, work, allocator: if (operation == Replay) Fixture else Timing, source: "benchmarks/operational/main.roc" })?
 		if operation == Replay {
 			for request in operational_requests {
 				_ = run_operational!({ binary, root, work, request, iterations: 64, samples: 1, warmups: 0, label: "replay" })?

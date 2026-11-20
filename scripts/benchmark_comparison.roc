@@ -29,7 +29,7 @@ main! = |args| {
 	tokens = args.map(OsStr.display)
 	peer_args = match tokens {
 		["--replay-only"] => {
-			replay_dates!(available_profiles)?
+			replay_dates!(available_profiles, Fixture)?
 			return OperationalBenchmark.run!(Replay)
 		}
 		["--operational"] => return OperationalBenchmark.run!(Measure)
@@ -325,7 +325,7 @@ measure_cached! = |profiles| {
 	native_mac = Script.command("uname").output!(["-s"])? == "Darwin"
 	required = required_peers(profiles, native_mac)
 	BenchmarkTimingCache.admit(cache, identity, required)?
-	replay_dates!(profiles)?
+	replay_dates!(profiles, Timing)?
 	root = Path.absolute!(".")?
 	work = Path.absolute!(".roc-time-tmp/benchmark-replay")?
 	binary = Path.join(work, "roc-speed")
@@ -457,8 +457,8 @@ timing_control! = |{ binary, cwd, logs, label }| {
 	BenchmarkOptions.median(elapsed).map_ok(|ns| ns / 200000)
 }
 
-replay_dates! : List((Str, Str)) => Try({}, _)
-replay_dates! = |profiles| {
+replay_dates! : List((Str, Str)), [Timing, Fixture] => Try({}, _)
+replay_dates! = |profiles, allocator| {
 	BenchmarkOptions.controls(Path.read_utf8!("tests/benchmark_controls/timing-positive.txt")?)?
 	root = Path.absolute!(".")?
 	work = Path.absolute!(".roc-time-tmp/benchmark-replay")?
@@ -472,7 +472,7 @@ replay_dates! = |profiles| {
 			Ok({ profile, reference })
 		},
 	)?
-	{ binary, version, target } = ChronoBenchmark.build_roc!({ options, root, work, source: "benchmarks/chrono/main.roc" })?
+	{ binary, version, target } = ChronoBenchmark.build_roc!({ options, root, work, allocator, source: "benchmarks/chrono/main.roc" })?
 	for { profile, reference } in references {
 		inputs = reference.cases.map(|case| case.text)
 		expected = Str.join_with(
