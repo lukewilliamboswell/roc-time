@@ -173,6 +173,32 @@ check_runs = |coverage, input| {
 	if observed != $runs {
 		crash "Coverage differs from independent maximal unit-cell runs"
 	}
+	# Fold returns every whole overlapping run in order. A run ending at the
+	# query's start and one starting at its end are excluded.
+	lower = input.window.lo
+	upper = lower + input.window.width.to_i64()
+	first = $runs.fold(0.U64, |n, run| if (run.end <= lower) n + 1 else n)
+	after = $runs.fold(0.U64, |n, run| if (run.start < upper) n + 1 else n)
+	runs = $runs
+	window = make_span(input.window) ?? crash "valid model window"
+	end_index = Coverage.fold_overlaps(
+		coverage,
+		{
+			query: window,
+			initial: first,
+			step: |index, span| {
+				expected = runs.get(index) ?? crash "Overlap fold returned extra member"
+				actual = { start: PosixBoundary.to_microseconds(PosixSpan.start(span)), end: PosixBoundary.to_microseconds(PosixSpan.end(span)) }
+				if actual != expected {
+					crash "Overlap fold differs from independent ordered runs"
+				}
+				index + 1
+			},
+		},
+	)
+	if end_index != after {
+		crash "Overlap fold returned incorrect member count"
+	}
 }
 
 ## Model-domain admission keeps boundary cases and rejects unsupported mutations.

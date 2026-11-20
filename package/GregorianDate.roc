@@ -340,7 +340,10 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		} else {
 			0.I64
 		}
-		CivilDay.from_day_number(year_start(date.year) + before + leap_day + U8.to_i64(date.day) - 1)
+		# The in-year ordinal is at most 365, and the provider range keeps
+		# the resulting coordinate below 10^12 in magnitude.
+		ordinal = before + leap_day + U8.to_i64(date.day) - 1
+		CivilDay.from_day_number(I64.plus_wrap(year_start(date.year), ordinal))
 	}
 
 	## Describe a shared civil-day coordinate in the Gregorian calendar.
@@ -356,14 +359,11 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		# https://howardhinnant.github.io/date_algorithms.html#civil_from_days
 		# Validate before shifting: arbitrary CivilDay inputs may be I64 extremes.
 		# The provider range keeps every intermediate within I64.
-		shifted = number + 719468
+		shifted = I64.plus_wrap(number, 719468)
 		era = I64.div_floor_by(shifted, 146097)
 		# Floor division leaves a nonnegative era remainder, even for negative
 		# years. Only this bounded remainder is narrowed: era/year stay I64.
-		era_day = match I64.to_u32_try(shifted - era * 146097) {
-			Ok(value) => value # 0..146096
-			Err(_) => crash "Gregorian era remainder invariant"
-		}
+		era_day = I64.minus_wrap(shifted, I64.times_wrap(era, 146097)).to_u32_wrap()
 		# era_year is 0..399; year_day is 0..365; march_month is 0..11.
 		# All unsigned subtractions are nonnegative in this decomposition.
 		# Its largest intermediate is below 2^18, safely inside U32.
@@ -376,21 +376,47 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 			march_month - 9
 		}
 		day_number = year_day - (153 * march_month + 2) // 5 + 1
-		year = era * 400 + era_year.to_i64() + if month_number <= 2 {
+		year_offset = era_year.to_i64() + if month_number <= 2 {
 			1
 		} else {
 			0
 		}
+		year = I64.plus_wrap(I64.times_wrap(era, 400), year_offset)
 		# The decomposition guarantees month 1..12 and day 1..31.
-		month = match U32.to_u8_try(month_number) {
-			Ok(value) => value
-			Err(_) => crash "Gregorian month decomposition invariant"
+		Ok(Date({ year, month: month_number.to_u8_wrap(), day: day_number.to_u8_wrap() }))
+	}
+
+	## Shift by signed civil days. A destination outside the Gregorian
+	## provider range returns OutOfRange, including signed-addition overflow.
+	add_days : GregorianDate, I64 -> Try(GregorianDate, [OutOfRange])
+	add_days = |value, days| {
+		if days == 0 {
+			return Ok(value)
 		}
-		day_of_month = match U32.to_u8_try(day_number) {
-			Ok(value) => value
-			Err(_) => crash "Gregorian day decomposition invariant"
+		# Every Gregorian month has at least 28 days, so a positive shift
+		# this small either stays in the current month or crosses one boundary.
+		if days > 0 and days <= 28 {
+			Date(date) = value
+			step = days.to_u8_wrap()
+			remaining = month_length(date.year, date.month) - date.day
+			if step <= remaining {
+				return Ok(Date({ ..date, day: date.day + step }))
+			}
+			day = step - remaining
+			if date.month < 12 {
+				return Ok(Date({ ..date, month: date.month + 1, day }))
+			}
+			if date.year == 2147483647 {
+				return Err(OutOfRange)
+			}
+			return Ok(Date({ year: date.year + 1, month: 1, day }))
 		}
-		Ok(Date({ year, month, day: day_of_month }))
+		start = CivilDay.to_day_number(to_civil_day(value))
+		destination = match I64.plus_try(start, days) {
+			Ok(number) => number
+			Err(Overflow) => return Err(OutOfRange)
+		}
+		from_civil_day(CivilDay.from_day_number(destination))
 	}
 
 	## Hash Gregorian dates consistently with equality for dictionary and set keys.
@@ -559,11 +585,19 @@ after_last_supported_day = year_start(2147483648)
 
 # Counts complete years before January 1 relative to Gregorian 1970-01-01.
 # All callers constrain year to [-2147483648, 2147483648]; intermediates fit I64.
-# Floor division, including before year zero, counts Gregorian leap years.
+# Shifting by a whole number of Gregorian cycles preserves every leap-year
+# divisor and makes all three quotient inputs nonnegative, including BCE.
 year_start : I64 -> I64
 year_start = |year| {
-	previous = year - 1
-	365 * previous + I64.div_floor_by(previous, 4) - I64.div_floor_by(previous, 100) + I64.div_floor_by(previous, 400) - 719162
+	# The least whole-cycle shift that covers the year before I32.lowest.
+	cycles = 5368710.I64
+	previous = I64.plus_wrap(year, cycles * 400 - 1).to_u64_wrap()
+	# previous is below 2^33 and the accumulated days below 2^42.
+	# The common-year total alone covers the century correction.
+	common_days = U64.times_wrap(365, previous)
+	leap_days = previous // 4 - previous // 100 + previous // 400
+	days = U64.plus_wrap(common_days, leap_days)
+	I64.minus_wrap(days.to_i64_wrap(), cycles * 146097 + 719162)
 }
 
 # Internal callers establish a valid year and month in 1..12.

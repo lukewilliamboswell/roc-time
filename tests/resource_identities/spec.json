@@ -10,6 +10,9 @@
       ["1970-01-01T00:00:01.0Z", "direct", "normal", "1970-01-01t00:00:01.0Z"],
       ["1970-01-01T00:00:01.0Z", "aliases", "normal", "1970-01-01t00:00:01.0Z"],
       ["1970-01-01T00:00:01.0Z", "suffix", "normal", "1970-01-01t00:00:01.0Z"],
+      ["1970-01-01T05:30:01+05:30", "direct", "normal", "1970-01-01t00:00:01-00:00"],
+      ["1970-01-01T05:30:01+05:30", "aliases", "normal", "1970-01-01t00:00:01-00:00"],
+      ["1970-01-01T05:30:01+05:30", "suffix", "normal", "1970-01-01t00:00:01-00:00"],
       ["1970-01-01T00:00:01.000000+00:00", "direct", "normal", "1970-01-01t00:00:01.000000+00:00"],
       ["1970-01-01T00:00:01.000000+00:00", "aliases", "normal", "1970-01-01t00:00:01.000000+00:00"],
       ["1970-01-01T00:00:01.000000+00:00", "suffix", "normal", "1970-01-01t00:00:01.000000+00:00"]
@@ -26,5 +29,19 @@
       ["4096", "union_right", "normal"], ["4096", "union_left", "normal"], ["4096", "difference_right", "normal"]
     ],
     "failure_args": ["1", "union_right", "allocate"]
+  },
+  {
+    "name": "coverage-queries",
+    "source": "tests/coverage_query_resource/main.roc",
+    "stdout": "coverage-queries=checked\n",
+    "cases": [
+      ["0", "0", "normal"],
+      ["8", "0", "normal"],
+      ["8", "1", "normal"],
+      ["4096", "0", "normal"],
+      ["4096", "1", "normal"],
+      ["4096", "64", "normal"]
+    ],
+    "failure_args": ["4096", "64", "allocate"]
   }
 ]

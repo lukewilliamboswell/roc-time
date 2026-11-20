@@ -252,7 +252,8 @@ check_timestamp = |input, day, date_text| {
 		crash "Retained timestamp input mutated"
 	}
 	# Every proper fixed-field prefix of a valid complete timestamp is
-	# incomplete. An ASCII non-grammar byte anywhere in those fields is malformed.
+	# incomplete. A non-grammar byte anywhere in the complete record is malformed,
+	# including punctuation and digits in the numeric-offset suffix.
 	bytes = source.to_utf8()
 	var $prefix = 0.U64
 	while $prefix <= 19 {
@@ -266,7 +267,7 @@ check_timestamp = |input, day, date_text| {
 	var $at = 0.U64
 	for byte in bytes {
 		$invalid = $invalid.append(
-			if $at == input.seconds.to_u64() % 19 {
+			if $at == input.seconds.to_u64() % bytes.len() {
 				63.U8
 			} else {
 				byte
@@ -275,7 +276,7 @@ check_timestamp = |input, day, date_text| {
 		$at = $at + 1
 	}
 	if OffsetTimestamp.parse(Str.from_utf8($invalid) ?? crash "ASCII mutation") != Err(Malformed) {
-		crash "Malformed fixed timestamp byte classification"
+		crash "Malformed timestamp byte classification"
 	}
 	parts = OffsetTimestamp.parts(parsed)
 	expected_offset = if unasserted {

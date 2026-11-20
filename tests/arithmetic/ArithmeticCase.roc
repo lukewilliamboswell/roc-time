@@ -67,6 +67,16 @@ ArithmeticCase := { year : I64, month : U8, day : U8, years : I64, months : I64,
 				crash "R05 calendar arithmetic differs from field-walking oracle"
 			}
 		}
+		# A days-only shift never repairs a destination month. The dedicated
+		# entry point must agree with the field walk even at provider endpoints.
+		expected_days = model(fields, 0, 0, input.days, Reject)
+		actual_days = match GregorianDate.add_days(date, input.days) {
+			Ok(value) => Ok(GregorianDate.to_fields(value))
+			Err(OutOfRange) => Err(OutOfRange)
+		}
+		if actual_days != expected_days {
+			crash "R05 checked day addition differs from field-walking oracle"
+		}
 		# Deliberate full-width components must fail, never wrap into a valid year.
 		if Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.months(I64.lowest), policy: Carry }) != Err(OutOfRange) or
 			Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.years(I64.highest), policy: Clamp }) != Err(OutOfRange) or

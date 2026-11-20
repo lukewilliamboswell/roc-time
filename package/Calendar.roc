@@ -138,20 +138,10 @@ arithmetic_destination = |year, month, day, policy| {
 		Err(_) => crash "Gregorian arithmetic arithmetic_destination invariant"
 	}
 	if day > length and policy == Carry {
-		arithmetic_shift_days(valid, U8.to_i64(day - length))
+		GregorianDate.add_days(valid, U8.to_i64(day - length))
 	} else {
 		Ok(valid)
 	}
-}
-
-arithmetic_shift_days : GregorianDate, I64 -> Try(GregorianDate, [OutOfRange])
-arithmetic_shift_days = |date, days| {
-	start = CivilDay.to_day_number(GregorianDate.to_civil_day(date))
-	number = match I64.plus_try(start, days) {
-		Ok(value) => value
-		Err(Overflow) => return Err(OutOfRange)
-	}
-	GregorianDate.from_civil_day(CivilDay.from_day_number(number))
 }
 
 CalendarArithmetic :: [].{
@@ -166,6 +156,12 @@ CalendarArithmetic :: [].{
 	shift_day : GregorianDate, { delta : CalendarDelta, policy : Calendar.ArithmeticPolicy } -> Try(GregorianDate, [OutOfRange, InvalidDestination(GregorianDate.Fields)])
 	shift_day = |date, { delta, policy }| {
 		parts = CalendarDelta.to_components(delta)
+		if parts.years == 0 and parts.months == 0 {
+			return match GregorianDate.add_days(date, parts.days) {
+				Ok(value) => Ok(value)
+				Err(OutOfRange) => Err(OutOfRange)
+			}
+		}
 		fields = GregorianDate.to_fields(date)
 		# Explicit mapping preserves the structured error contract on the pinned
 		# interpreter; see tests/compiler_repro/result_widening/README.md.
@@ -187,7 +183,7 @@ CalendarArithmetic :: [].{
 			Err(_) => crash "Gregorian month remainder invariant"
 		}
 		after_months = arithmetic_destination(month_year, month, after_year_fields.day, policy)?
-		arithmetic_shift_days(after_months, parts.days)
+		GregorianDate.add_days(after_months, parts.days)
 	}
 
 	expect {

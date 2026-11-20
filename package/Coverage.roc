@@ -47,6 +47,9 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Construction sorts the input and takes O(n log n) work.
 	from_spans : List(PosixSpan) -> Coverage
 	from_spans = |input| {
+		if input.len() <= 1 {
+			return Spans(input)
+		}
 		sorted = List.sort_with(
 			input,
 			|a, b| {
@@ -63,6 +66,9 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Validate start ordering in O(n); merge overlap and touch.
 	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput])
 	from_sorted_spans = |input| {
+		if input.len() <= 1 {
+			return Ok(Spans(input))
+		}
 		var $builder = CoverageSortedBuilder.empty
 		for span in input {
 			$builder = CoverageSortedBuilder.append($builder, span)?
@@ -177,6 +183,9 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## and exclusive ends apply to every member.
 	contains : Coverage, PosixBoundary -> Bool
 	contains = |Spans(items), point| {
+		if items.is_empty() {
+			return False
+		}
 		index = first_end_after(items, point)
 		if index == List.len(items) {
 			Bool.False
@@ -189,6 +198,9 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Fold whole overlapping members, not clipped intersections. O(log n + k).
 	fold_overlaps : Coverage, { query : PosixSpan, initial : state, step : (state, PosixSpan -> state) } -> state
 	fold_overlaps = |Spans(items), { query, initial, step }| {
+		if items.is_empty() {
+			return initial
+		}
 		var $index = first_end_after(items, PosixSpan.start(query))
 		var $state = initial
 		while $index < List.len(items) {
@@ -249,10 +261,12 @@ Coverage :: [Spans(List(PosixSpan))].{
 
 	## Subtracting empty coverage reuses the input in constant work, without allocation.
 	difference : { base : Coverage, subtract : Coverage } -> Coverage
-	difference = |{ base: Spans(a), subtract: Spans(b) }| {
-		if List.is_empty(b) {
-			return Spans(a)
+	difference = |{ base, subtract }| {
+		if member_count(base) == 0 or member_count(subtract) == 0 {
+			return base
 		}
+		Spans(a) = base
+		Spans(b) = subtract
 		var $j = 0.U64
 		var $output = []
 		for left in a {
@@ -387,8 +401,22 @@ finish = |builder| {
 
 first_end_after : List(PosixSpan), PosixBoundary -> U64
 first_end_after = |items, point| {
+	size = items.len()
+	if size == 0 {
+		return 0
+	}
+	last_index = size - 1
+	last = at(items, last_index)
+	# A point within or beyond the last member can skip the search. Canonical
+	# coverage has no earlier member ending after the last member starts.
+	if point >= PosixSpan.end(last) {
+		return size
+	}
+	if point >= PosixSpan.start(last) {
+		return last_index
+	}
 	var $lo = 0.U64
-	var $hi = List.len(items)
+	var $hi = last_index
 	while $lo < $hi {
 		mid = $lo + U64.div_trunc_by($hi - $lo, 2)
 		if PosixBoundary.order_relative_to(PosixSpan.end(at(items, mid)), point) == After {

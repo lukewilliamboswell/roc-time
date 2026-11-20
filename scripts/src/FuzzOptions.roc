@@ -7,6 +7,7 @@ FuzzOptions := [].{
 		"precision",
 		"spans",
 		"coverage",
+		"retention",
 		"gregorian",
 		"arithmetic",
 		"calendars",
@@ -26,7 +27,7 @@ FuzzOptions := [].{
 	## Properties keep independent corpus/baseline identities inside three builds.
 	suite : Str -> Str
 	suite = |name| match name {
-		"precision" | "spans" | "coverage" | "events" | "nano_posix" => "core_suite"
+		"precision" | "spans" | "coverage" | "retention" | "events" | "nano_posix" => "core_suite"
 		"gregorian" | "arithmetic" | "calendars" | "clock" | "nano_clock" | "offsets" | "nano_local" => "civil_suite"
 		"zones" | "patterns" | "recurrence" | "descriptions" | "interchange" => "interpretation_suite"
 		_ => name
