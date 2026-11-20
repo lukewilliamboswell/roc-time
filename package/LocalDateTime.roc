@@ -1,3 +1,4 @@
+import LocalLabel
 import Calendar
 import CivilDay
 import ClockTime
@@ -24,7 +25,7 @@ import GregorianDate
 ##         second: 0,
 ##         microsecond: 0,
 ##     })?
-##     local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+##     local = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 ##     ClockTime.to_fields(LocalDateTime.clock(local)).hour == 9
 ## }
 ## ```
@@ -49,14 +50,14 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	## Canonical start of a civil selection, without changing its supplied precision.
 	## This label alone does not describe the selection's extent or choose a zone.
 	from_calendar_value : Calendar.Value -> LocalDateTime
-	from_calendar_value = |value| new(Calendar.Value.date(value), Calendar.Value.clock(value))
+	from_calendar_value = |value| new({ date: Calendar.Value.date(value), clock: Calendar.Value.clock(value) })
 
 	## Compose checked half-open civil bounds from selection components in O(1).
 	## An exclusive upper bound beyond the provider range returns OutOfRange.
 	calendar_value_bounds : Calendar.Value -> Try({ start : LocalDateTime, end : LocalDateTime }, [OutOfRange])
 	calendar_value_bounds = |value| {
 		bounds = Calendar.Value.bounds(value)?
-		Ok({ start: new(bounds.start.date, bounds.start.clock), end: new(bounds.end.date, bounds.end.clock) })
+		Ok({ start: new({ date: bounds.start.date, clock: bounds.start.clock }), end: new({ date: bounds.end.date, clock: bounds.end.clock }) })
 	}
 
 	## Errors from the native Gregorian local-label parser, including invalid date
@@ -71,32 +72,8 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	## construction; their fields are never silently treated as Gregorian.
 	parse_gregorian : Str -> Try(LocalDateTime, TextError)
 	parse_gregorian = |text| {
-		if text.count_utf8_bytes() > 64 {
-			return Err(TooLarge)
-		}
-		(date_text, clock_text) = match text.split_on("T") {
-			[a, b] => (a, b)
-			[a] => {
-				return match GregorianDate.parse(a) {
-					Ok(_) => Err(Incomplete)
-					Err(Incomplete) => Err(Incomplete)
-					Err(error) => Err(InvalidDate(error))
-				}
-			}
-			_ => return Err(Malformed)
-		}
-		day = match GregorianDate.parse(date_text) {
-			Ok(value) => value
-			# A separator after a partial date cannot become valid by appending.
-			Err(Incomplete) => return Err(InvalidDate(Malformed))
-			Err(error) => return Err(InvalidDate(error))
-		}
-		time = match ClockTime.parse(clock_text) {
-			Ok(value) => value
-			Err(Incomplete) => return Err(Incomplete)
-			Err(error) => return Err(InvalidTime(error))
-		}
-		Ok(new(Calendar.Date.from_gregorian(day), time))
+		fields = LocalLabel.parse(text, ClockTime.parse)?
+		Ok(new({ date: fields.date, clock: fields.clock }))
 	}
 
 	## Canonical Gregorian date/clock text preserves the local position. It is
@@ -110,8 +87,24 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 
 	## Combine a validated calendar date and clock label without choosing an offset
 	## or timezone. Resolve the result explicitly before timeline computation.
-	new : Calendar.Date, ClockTime -> LocalDateTime
-	new = |date_value, clock_value| { date: date_value, clock: clock_value }
+	new : { date : Calendar.Date, clock : ClockTime } -> LocalDateTime
+	new = |{ date: date_value, clock: clock_value }| { date: date_value, clock: clock_value }
+
+	## Combine validated Gregorian components without interpreting the local label.
+	from_gregorian : { date : GregorianDate, clock : ClockTime } -> LocalDateTime
+	from_gregorian = |input| new({ date: Calendar.Date.from_gregorian(input.date), clock: input.clock })
+
+	## Shift by signed civil days, preserving the calendar and exact clock label.
+	add_days : LocalDateTime, I64 -> Try(LocalDateTime, [OutOfRange])
+	add_days = |local, days| {
+		start = local.date.to_civil_day().to_day_number()
+		destination = match I128.to_i64_try(start.to_i128() + days.to_i128()) {
+			Ok(value) => value
+			Err(_) => return Err(OutOfRange)
+		}
+		shifted = Calendar.Date.from_civil_day(local.date.calendar(), CivilDay.from_day_number(destination))?
+		Ok(new({ date: shifted, clock: local.clock }))
+	}
 
 	## Read the calendar date as described, retaining its calendar identity.
 	date : LocalDateTime -> Calendar.Date
@@ -126,20 +119,20 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	in_calendar : LocalDateTime, Calendar -> Try(LocalDateTime, [OutOfRange])
 	in_calendar = |value, target| {
 		converted = Calendar.Date.in_calendar(value.date, target)?
-		Ok(new(converted, value.clock))
+		Ok(new({ date: converted, clock: value.clock }))
 	}
 
 	## Compare local positions, not timeline occurrences or descriptions.
-	compare_position : LocalDateTime, LocalDateTime -> [LT, EQ, GT]
-	compare_position = |a, b| {
-		days = CivilDay.compare(Calendar.Date.to_civil_day(a.date), Calendar.Date.to_civil_day(b.date))
+	compare_position : { left : LocalDateTime, right : LocalDateTime } -> [Before, Same, After]
+	compare_position = |{ left: a, right: b }| {
+		days = CivilDay.order_relative_to(Calendar.Date.to_civil_day(a.date), Calendar.Date.to_civil_day(b.date))
 		match days {
-			EQ => if a.clock < b.clock {
-				LT
+			Same => if a.clock < b.clock {
+				Before
 			} else if a.clock > b.clock {
-				GT
+				After
 			} else {
-				EQ
+				Same
 			}
 			other => other
 		}
@@ -148,7 +141,7 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	## Whether both labels have the same civil-day coordinate and clock position.
 	## Different calendar descriptions can match; no timezone is involved.
 	same_position : LocalDateTime, LocalDateTime -> Bool
-	same_position = |a, b| compare_position(a, b) == EQ
+	same_position = |a, b| compare_position({ left: a, right: b }) == Same
 
 	## Description equality preserves the calendar as well as the clock label.
 	is_eq : LocalDateTime, LocalDateTime -> Bool
@@ -176,7 +169,7 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	expect {
 		# Explicit profiles cannot silently relabel the Julian leap date.
 		julian = Calendar.Date.from_fields(Julian, { year: 1900, month: 2, day: 29 })?
-		local = new(julian, ClockTime.from_microseconds_since_midnight(0)?)
+		local = new({ date: julian, clock: ClockTime.from_microseconds_since_midnight(0)? })
 		to_gregorian_text(local) == Err(UnsupportedCalendar(Julian)) and
 			parse_gregorian("1900-02-29T00:00") == Err(InvalidDate(InvalidDay))
 	}
@@ -209,8 +202,8 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 		julian = Calendar.Date.from_fields(Julian, { year: 1582, month: 10, day: 5 })?
 		gregorian = Calendar.Date.from_fields(Gregorian, { year: 1582, month: 10, day: 15 })?
 		time = ClockTime.from_fields({ hour: 12, minute: 30, second: 0, microsecond: 1 })?
-		a = new(julian, time)
-		b = new(gregorian, time)
+		a = new({ date: julian, clock: time })
+		b = new({ date: gregorian, clock: time })
 		same_position(a, b) and a != b and in_calendar(a, Gregorian) == Ok(b)
 	}
 
@@ -219,7 +212,16 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 		after = Calendar.Date.from_fields(Gregorian, { year: 1970, month: 1, day: 1 })?
 		last = ClockTime.from_microseconds_since_midnight(86399999999)?
 		first = ClockTime.from_microseconds_since_midnight(0)?
-		compare_position(new(before, last), new(after, first)) == LT and
-			compare_position(new(after, first), new(before, last)) == GT
+		compare_position({ left: new({ date: before, clock: last }), right: new({ date: after, clock: first }) }) == Before and
+			compare_position({ left: new({ date: after, clock: first }), right: new({ date: before, clock: last }) }) == After
 	}
+}
+
+## Julian leap days keep the source calendar and microsecond clock.
+expect {
+	day = Calendar.Date.from_fields(Julian, { year: 1900, month: 2, day: 28 })?
+	time = ClockTime.from_microseconds_since_midnight(123)?
+	local = LocalDateTime.new({ date: day, clock: time })
+	shifted = local.add_days(1)?
+	shifted.date().calendar() == Julian and shifted.date().to_fields() == { year: 1900, month: 2, day: 29 } and shifted.clock() == time and local.add_days(I64.highest) == Err(OutOfRange)
 }

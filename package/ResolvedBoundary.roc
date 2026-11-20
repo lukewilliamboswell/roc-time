@@ -16,9 +16,9 @@ ResolvedBoundary :: {
 	## Choose an occurrence under explicit rules and policy, retaining the inputs
 	## and actual offset. Reject gaps, unresolved ambiguity, offset conflicts,
 	## and labels whose interpretation exceeds the rules or numeric range.
-	resolve : ZoneRules, LocalDateTime, ZoneRules.OccurrencePolicy -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
-	resolve = |rules_value, source_value, policy_value| {
-		boundary_value = ZoneRules.resolve_occurrence(rules_value, source_value, policy_value)?
+	resolve : ZoneRules, { local : LocalDateTime, occurrence : ZoneRules.OccurrencePolicy } -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
+	resolve = |rules_value, { local: source_value, occurrence: policy_value }| {
+		boundary_value = ZoneRules.resolve_occurrence(rules_value, { local: source_value, occurrence: policy_value })?
 		offset_value = ZoneRules.offset_at(rules_value, boundary_value)?
 		Ok({ source: source_value, policy: policy_value, rules: rules_value, boundary: boundary_value, offset: offset_value })
 	}
@@ -45,7 +45,7 @@ ResolvedBoundary :: {
 
 	## Explicitly interpret the original label/policy under another ruleset.
 	reresolve : ResolvedBoundary, ZoneRules -> Try(ResolvedBoundary, [Gap, Ambiguous, OffsetConflict, OutsideValidity, OutOfRange])
-	reresolve = |snapshot, new_rules| resolve(new_rules, snapshot.source, snapshot.policy)
+	reresolve = |snapshot, new_rules| resolve(new_rules, { local: snapshot.source, occurrence: snapshot.policy })
 
 	## Compare the stored POSIX position, independently of provenance.
 	same_position : ResolvedBoundary, ResolvedBoundary -> Bool
@@ -54,12 +54,12 @@ ResolvedBoundary :: {
 	## Description/evidence identity includes policy and complete retained rules.
 	## Use same_position to compare only the resulting POSIX coordinate.
 	is_eq : ResolvedBoundary, ResolvedBoundary -> Bool
-	is_eq = |a, b| a.source == b.source and a.policy == b.policy and a.boundary == b.boundary and a.offset == b.offset and ZoneRules.definition(a.rules) == ZoneRules.definition(b.rules)
+	is_eq = |a, b| a.source == b.source and a.policy == b.policy and a.boundary == b.boundary and a.offset == b.offset and ZoneRules.Provider.definition(a.rules) == ZoneRules.Provider.definition(b.rules)
 
 	## Hash the source, policy, result and complete rules consistently with is_eq.
 	## Work includes the retained transition table; this is not a position-only hash.
 	to_hash : ResolvedBoundary, Hasher -> Hasher
-	to_hash = |value, hasher| ZoneRules.definition(value.rules).to_hash(value.offset.to_hash(value.boundary.to_hash(value.policy.to_hash(value.source.to_hash(hasher)))))
+	to_hash = |value, hasher| ZoneRules.Provider.definition(value.rules).to_hash(value.offset.to_hash(value.boundary.to_hash(value.policy.to_hash(value.source.to_hash(hasher)))))
 
 	## Facts read only stored source, policy, result and context metadata.
 	fact_count : ResolvedBoundary -> U64

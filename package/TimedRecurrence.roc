@@ -90,16 +90,40 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		with_boundary_exclusions(with_exclusions(with_inclusions(base, $starts)?, value.exclusions)?, value.boundary_exclusions)
 	}
 
+	## Calendar recurrence configuration. Omitted clock selectors inherit the anchor clock.
+	CalendarProps := {
+		calendar : CalendarPattern.Spec,
+		termination : Termination,
+		clocks : ClockPattern.Spec ?? { hours: [], minutes: [], seconds: [] },
+		by_set_pos : List(I16) ?? [],
+		inclusions : List(LocalDateTime) ?? [],
+		exclusions : List(LocalDateTime) ?? [],
+		boundary_exclusions : List(PosixBoundary) ?? [],
+	}
+
+	## Construct a timed calendar rule with its selectors and exceptions.
+	from_calendar : { date : GregorianDate, clock : ClockTime }, CalendarProps -> Try(TimedRecurrence, [UnsupportedCalendar(Calendar), InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])
+	from_calendar = |start, props| from_definition({
+		anchor: LocalDateTime.new({ date: Calendar.Date.from_gregorian(start.date), clock: start.clock }),
+		pattern: Calendar(props.calendar),
+		clocks: props.clocks,
+		termination: props.termination,
+		by_set_pos: props.by_set_pos,
+		inclusions: props.inclusions,
+		exclusions: props.exclusions,
+		boundary_exclusions: props.boundary_exclusions,
+	})
+
 	## Construct a timed calendar recurrence from a Gregorian date and clock anchor. Validate
 	## calendar/clock selectors, termination and positions before any zone lookup or occurrence
 	## expansion.
 	new : { date : GregorianDate, clock : ClockTime }, Spec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])
 	new = |start, spec| {
-		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
+		anchor = LocalDateTime.new({ date: Calendar.Date.from_gregorian(start.date), clock: start.clock })
 		validate_options(anchor, spec.termination, spec.by_set_pos)?
 		calendar = CalendarPattern.new(start.date, spec.calendar)?
 		clocks = ClockPattern.new(start.clock, spec.clocks)?
-		if !CalendarPattern.matches(calendar, 0, start.date)? or !clock_matches(clocks, start.clock) {
+		if !CalendarPattern.matches(calendar, { period_index: 0, date: start.date })? or !clock_matches(clocks, start.clock) {
 			return Err(UnsynchronizedStart)
 		}
 		Ok({ anchor, schedule: Calendar(calendar), clocks, termination: spec.termination, positions: spec.by_set_pos, exclusions: [], boundary_exclusions: [], inclusions: [] })
@@ -114,7 +138,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	## requires explicit rules.
 	new_subdaily : { date : GregorianDate, clock : ClockTime }, SubdailySpec -> Try(TimedRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), OutOfRange, InvalidHour, InvalidMinute, InvalidSecond, UnsupportedLeapSecond, InvalidCount, InvalidUntil, InvalidSetPosition, UnsynchronizedStart])
 	new_subdaily = |start, spec| {
-		anchor = LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock)
+		anchor = LocalDateTime.new({ date: Calendar.Date.from_gregorian(start.date), clock: start.clock })
 		validate_options(anchor, spec.termination, spec.by_set_pos)?
 		pattern = SubdailyPattern.new(start, spec.pattern)?
 		_ = SubdailyPattern.period(pattern, 0)?
@@ -162,7 +186,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if starts.len() > 4096 {
 			return Err(TooManySelectors)
 		}
-		labels = starts.map(|start| LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock))
+		labels = starts.map(|start| LocalDateTime.new({ date: Calendar.Date.from_gregorian(start.date), clock: start.clock }))
 		Ok({ ..rule, inclusions: sorted_positions(labels) })
 	}
 
@@ -174,7 +198,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		if starts.len() > 4096 - rule.inclusions.len() {
 			return Err(TooManySelectors)
 		}
-		labels = starts.map(|start| LocalDateTime.new(Calendar.Date.from_gregorian(start.date), start.clock))
+		labels = starts.map(|start| LocalDateTime.new({ date: Calendar.Date.from_gregorian(start.date), clock: start.clock }))
 		Ok({ ..rule, inclusions: sorted_positions(rule.inclusions.concat(labels)) })
 	}
 
@@ -273,12 +297,12 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 
 	## Start a bounded source-window query using explicit immutable rules and fold/gap policies.
 	## Reject invalid windows; defer interpretation errors to cursor consumption.
-	cursor : TimedRecurrence, Window, Context -> Try(TimedRecurrenceCursor, [EmptyWindow, ReversedWindow, OutOfRange])
-	cursor = |rule, window, context| {
-		match LocalDateTime.compare_position(window.start, window.end) {
-			EQ => return Err(EmptyWindow)
-			GT => return Err(ReversedWindow)
-			LT => {}
+	cursor : TimedRecurrence, { window : Window, context : Context } -> Try(TimedRecurrenceCursor, [EmptyWindow, ReversedWindow, OutOfRange])
+	cursor = |rule, { window, context }| {
+		match LocalDateTime.compare_position({ left: window.start, right: window.end }) {
+			Same => return Err(EmptyWindow)
+			After => return Err(ReversedWindow)
+			Before => {}
 		}
 		# L resolves using an offset no greater than maximum. Consequently,
 		# L > cutoff + maximum cannot produce an in-limit boundary, including
@@ -286,14 +310,14 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 		# the local envelope alone must not replace its meaning.
 		(effective_rule, boundary_cutoff) = match rule.termination {
 			UntilBoundary(boundary) => {
-				maximum = ZoneRules.offset_bounds(context.rules).maximum
-				last_source = FixedOffset.project(FixedOffset.from_seconds(maximum), boundary, Gregorian)?
+				maximum = ZoneRules.Provider.offset_bounds(context.rules).maximum
+				last_source = FixedOffset.project(FixedOffset.from_seconds(maximum), { boundary, calendar: Gregorian })?
 				({ ..rule, termination: Until(last_source) }, Some(boundary))
 			}
 			_ => (rule, None)
 		}
 		frame = timed_frame(effective_rule, 0)?
-		Ok({ rule: effective_rule, boundary_cutoff, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0, inclusion_index: 0, held: None, rule_ended: Bool.False, inclusion_pending: None })
+		Ok({ rule: effective_rule, boundary_cutoff, window, context, period: 0, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, buffer: [], phase: Build, pending: None, anchor_index: None, count: 0, zone_buffered: 0, inclusion_index: first_source_at_or_after(effective_rule.inclusions, window.start), held: None, rule_ended: Bool.False, inclusion_pending: None })
 	}
 
 	## Resumable recurrence execution state for one source window and immutable context. Keep it
@@ -301,7 +325,7 @@ TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPatter
 	Cursor : TimedRecurrenceCursor
 }
 
-before = |a, b| LocalDateTime.compare_position(a, b) == LT
+before = |a, b| LocalDateTime.compare_position({ left: a, right: b }) == Before
 
 midnight = |_| clock_from_number(0)
 
@@ -314,7 +338,7 @@ day_number = |date| CivilDay.to_day_number(GregorianDate.to_civil_day(date))
 
 local_at = |day, clock| {
 	date = GregorianDate.from_civil_day(CivilDay.from_day_number(day))?
-	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
+	Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock }))
 }
 
 clock_at = |pattern, index| match ClockPattern.at(pattern, index) {
@@ -389,8 +413,8 @@ next_day = |state| { ..state, day: state.day + 1, day_selected: Unknown, clock_i
 test_stopping_boundary = |termination, end_microseconds| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(date), ClockTime.from_microseconds_since_midnight(end_microseconds)?)
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock: ClockTime.from_microseconds_since_midnight(end_microseconds)? })
 	rule = TimedRecurrence.new(
 		{ date, clock },
 		{
@@ -400,9 +424,9 @@ test_stopping_boundary = |termination, end_microseconds| {
 			by_set_pos: [],
 		},
 	)?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(3600000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	initial = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(3600000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	initial = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 	var $cursor = initial
 	var $values = []
 	var $complete = Bool.False
@@ -433,7 +457,7 @@ expect test_stopping_boundary(Forever, 3600000000) == Ok(True)
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	test_stopping_boundary(Until(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)), 7200000000)?
+	test_stopping_boundary(Until(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })), 7200000000)?
 }
 
 # A one-hour forward jump maps 01:00 (using the pre-gap offset) and
@@ -447,8 +471,8 @@ test_series_with_pauses = |positions, budget, offset, policy, pauses, exclusions
 test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, boundaries| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock })
 	base_rule = TimedRecurrence.new(
 		{ date, clock },
 		{
@@ -459,14 +483,14 @@ test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, b
 		},
 	)?
 	rule = TimedRecurrence.with_boundary_exclusions(TimedRecurrence.with_exclusions(base_rule, exclusions)?, boundaries)?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
-	rules = ZoneRules.new_bounded(
-		"Synthetic/Forward",
-		"v1",
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(172800000000) })?
+	rules = ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Forward",
+		version: "v1",
 		validity,
-		FixedOffset.from_seconds(0),
-		[{ at: PosixBoundary.from_microseconds(3600000000), offset: FixedOffset.from_seconds(offset) }],
-		{
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: PosixBoundary.from_microseconds(3600000000), offset: FixedOffset.from_seconds(offset) }],
+		bounds: {
 			minimum: if offset < 0 {
 				offset
 			} else {
@@ -478,8 +502,8 @@ test_boundary_series = |positions, budget, offset, policy, pauses, exclusions, b
 				0
 			},
 		},
-	)?
-	var $cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: policy, gap: UseOffsetBeforeGap })?
+	})?
+	var $cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: policy, gap: UseOffsetBeforeGap } })?
 	var $boundaries = []
 	var $sources = []
 	var $adjusted = []
@@ -584,12 +608,12 @@ test_stream_cursor = |count| test_stream_cursor_with_validity(count, 17280000000
 test_stream_cursor_with_validity = |count, validity_end| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock })
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(count), by_set_pos: [] })?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(validity_end))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(validity_end) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })
 }
 
 expect {
@@ -720,7 +744,7 @@ timed_frame = |rule, index| match rule.schedule {
 
 matches_day : TimedRecurrence, U64, GregorianDate -> Try(Bool, [OutOfRange])
 matches_day = |rule, index, date| match rule.schedule {
-	Calendar(pattern) => CalendarPattern.matches(pattern, index, date)
+	Calendar(pattern) => CalendarPattern.matches(pattern, { period_index: index, date })
 	Subdaily(pattern) => SubdailyPattern.matches_date(pattern, date)
 }
 
@@ -729,12 +753,12 @@ matches_day = |rule, index, date| match rule.schedule {
 test_subdaily = |clock_fields, pattern, positions, count| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_fields(clock_fields)?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	end = local_at(3, midnight({}))?
 	rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern, termination: Count(count), by_set_pos: positions })?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(432000000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	var $current = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(432000000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	var $current = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 	var $boundaries = []
 	var $calls = 0.U64
 	while $calls < 2000 {
@@ -834,7 +858,7 @@ expect {
 	# SubdailyPattern without requiring a resolved axis of that larger range.
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	end = local_at(1, clock)?
 	rule = TimedRecurrence.new_subdaily(
 		{ date, clock },
@@ -849,9 +873,9 @@ expect {
 			by_set_pos: [],
 		},
 	)?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(86400000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: RequireUnique, gap: RejectGap })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(86400000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 	result = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 2 })?
 	result.occurrences.len() == 1 and match result.status {
 		Complete => Bool.True
@@ -880,6 +904,12 @@ test_subdaily_status = |start, pattern| match TimedRecurrence.new_subdaily(start
 
 excluded : List(LocalDateTime), LocalDateTime -> Bool
 excluded = |labels, source| {
+	index = first_source_at_or_after(labels, source)
+	index < labels.len() and LocalDateTime.same_position(label_at(labels, index), source)
+}
+
+first_source_at_or_after : List(LocalDateTime), LocalDateTime -> U64
+first_source_at_or_after = |labels, source| {
 	var $lower = 0.U64
 	var $upper = labels.len()
 	while $lower < $upper {
@@ -891,7 +921,7 @@ excluded = |labels, source| {
 			$upper = middle
 		}
 	}
-	$lower < labels.len() and LocalDateTime.same_position(label_at(labels, $lower), source)
+	$lower
 }
 
 label_at = |labels, index| match List.get(labels, index) {
@@ -911,19 +941,19 @@ expect {
 expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	end = local_at(1, clock)?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(86400000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(86400000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	context = { rules, occurrence: RequireUnique, gap: RejectGap }
-	original = TimedRecurrence.cursor(rule, { start, end }, context)?
+	original = TimedRecurrence.cursor(rule, { window: { start, end }, context })?
 	other_description = LocalDateTime.in_calendar(start, Julian)?
 	later = local_at(0, clock_from_number(7200000000))?
 	excluded_rule = TimedRecurrence.with_exclusions(rule, [later, other_description, start, later])?
-	excluded_cursor = TimedRecurrence.cursor(excluded_rule, { start, end }, context)?
+	excluded_cursor = TimedRecurrence.cursor(excluded_rule, { window: { start, end }, context })?
 	cleared_rule = TimedRecurrence.with_exclusions(excluded_rule, [])?
-	cleared_cursor = TimedRecurrence.cursor(cleared_rule, { start, end }, context)?
+	cleared_cursor = TimedRecurrence.cursor(cleared_rule, { window: { start, end }, context })?
 	limits = { work: { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 1.U64 }, max_occurrences: 4.U64 }
 	removed = TimedRecurrenceCursor.collect(excluded_cursor, limits)?
 	original_result = TimedRecurrenceCursor.collect(original, limits)?
@@ -953,18 +983,36 @@ expect {
 
 # Internal rule execution: only TimedRecurrence.Cursor.next performs inclusion merging.
 
-next_rule : TimedRecurrenceCursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
-next_rule = |initial, limits| {
+next_rule : TimedRecurrenceCursor, { limits : TimedRecurrence.Limits, inclusion : [None, Some(LocalDateTime)] } -> Try([Rule(TimedRecurrence.Next), Include({ cursor : TimedRecurrenceCursor, steps : U64, zone_segments : U64 })], [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
+next_rule = |initial, { limits, inclusion }| {
+	# No rule occurrence before DTSTART is visible, even when BYSETPOS must
+	# interpret those candidates to determine positions within the period.
+	match inclusion {
+		Some(explicit) if before(explicit, initial.rule.anchor) => {
+			if limits.max_steps == 0 {
+				return Ok(Rule(limited(initial, 0, 0, WorkLimit)))
+			}
+			if buffered_count(initial) >= limits.max_buffered {
+				return Ok(Rule(limited(initial, 0, 0, BufferLimit)))
+			}
+			cursor = ZoneRules.ClassificationCursor.from_local(initial.context.rules, explicit)?
+			return Ok(Include({ cursor: { ..initial, inclusion_pending: Some(Box.box({ source: explicit, cursor })) }, steps: 1, zone_segments: 0 }))
+		}
+		_ => {}
+	}
+	if !before(initial.rule.anchor, initial.window.end) {
+		return Ok(Rule(ended(initial, 0, 0)))
+	}
 	var $state = initial
 	var $steps = 0.U64
 	var $zone_segments = 0.U64
 	while True {
 		if buffered_count($state) > limits.max_buffered {
-			return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+			return Ok(Rule(limited($state, $steps, $zone_segments, BufferLimit)))
 		}
 		match $state.rule.termination {
 			Count(maximum) => if $state.count == maximum {
-				return Ok(ended($state, $steps, $zone_segments))
+				return Ok(Rule(ended($state, $steps, $zone_segments)))
 			}
 			_ => {}
 		}
@@ -979,7 +1027,7 @@ next_rule = |initial, limits| {
 							WorkLimit => ZoneWorkLimit
 							BufferLimit => ZoneBufferLimit
 						}
-						return Ok(limited({ ..$state, pending: Some({ ..pending, cursor: progress.cursor }) }, $steps, $zone_segments, reason))
+						return Ok(Rule(limited({ ..$state, pending: Some({ ..pending, cursor: progress.cursor }) }, $steps, $zone_segments, reason)))
 					}
 					Complete(classification) => {
 						choice = ZoneRules.Classification.choose(classification, { occurrence: $state.context.occurrence, gap: $state.context.gap })?
@@ -1002,7 +1050,7 @@ next_rule = |initial, limits| {
 			None => {}
 		}
 		if $steps == limits.max_steps {
-			return Ok(limited($state, $steps, $zone_segments, WorkLimit))
+			return Ok(Rule(limited($state, $steps, $zone_segments, WorkLimit)))
 		}
 		$steps = $steps + 1
 		match $state.phase {
@@ -1023,21 +1071,17 @@ next_rule = |initial, limits| {
 					if selected($state.rule.positions, emission.index, $state.buffer.len()) and !before(occurrence.source, $state.rule.anchor) {
 						match $state.rule.termination {
 							Until(end) => if before(end, occurrence.source) {
-								return Ok(ended($state, $steps, $zone_segments))
+								return Ok(Rule(ended($state, $steps, $zone_segments)))
 							}
 							_ => {}
 						}
 						if !before(occurrence.source, $state.window.end) {
-							return Ok(ended($state, $steps, $zone_segments))
+							return Ok(Rule(ended($state, $steps, $zone_segments)))
 						}
-						within_cutoff = match $state.boundary_cutoff {
-							None => Bool.True
-							Some(boundary) => occurrence.choice.boundary <= boundary
-						}
-						if within_cutoff {
+						if within_cutoff($state, occurrence) {
 							$state = { ..$state, count: $state.count + 1 }
-							if !before(occurrence.source, $state.window.start) and !excluded($state.rule.exclusions, occurrence.source) and !boundary_excluded($state.rule.boundary_exclusions, occurrence.choice.boundary) {
-								return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
+							if visible_in_window($state, occurrence) and !inclusion_consumed($state, occurrence.source) {
+								return Ok(Rule({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) }))
 							}
 						}
 					}
@@ -1046,19 +1090,49 @@ next_rule = |initial, limits| {
 			Advance => {
 				boundary = $state.period_end
 				if !before(boundary, $state.window.end) {
-					return Ok(ended($state, $steps, $zone_segments))
+					return Ok(Rule(ended($state, $steps, $zone_segments)))
 				}
 				match $state.rule.termination {
 					Until(end) => if before(end, boundary) {
-						return Ok(ended($state, $steps, $zone_segments))
+						return Ok(Rule(ended($state, $steps, $zone_segments)))
 					}
 					_ => {}
 				}
 				match $state.rule.schedule {
-					Subdaily(pattern) => if !SubdailyPattern.starts_before(pattern, $state.period + 1, $state.window.end) {
-						return Ok(ended($state, $steps, $zone_segments))
+					Subdaily(pattern) => {
+						period_index = $state.period + 1
+						if !pattern.starts_before({ period_index, boundary: $state.window.end }) {
+							return Ok(Rule(ended($state, $steps, $zone_segments)))
+						}
+						match $state.rule.termination {
+							Until(last) => if pattern.start_relative_to({ period_index, boundary: last }) == After {
+								return Ok(Rule(ended($state, $steps, $zone_segments)))
+							}
+							_ => {}
+						}
 					}
-					Calendar(_) => {}
+					Calendar(pattern) => {
+						window_end = $state.window.end
+						match GregorianDate.from_civil_day(window_end.date().to_civil_day()) {
+							Ok(day) => {
+								end_at_midnight = window_end.clock().to_microseconds_since_midnight() == 0
+								order = pattern.start_relative_to({ period_index: $state.period + 1, boundary: day })
+								if order == After or (order == Same and end_at_midnight) {
+									return Ok(Rule(ended($state, $steps, $zone_segments)))
+								}
+							}
+							Err(OutOfRange) => {}
+						}
+						match $state.rule.termination {
+							Until(last) => match GregorianDate.from_civil_day(last.date().to_civil_day()) {
+								Ok(day) => if pattern.start_relative_to({ period_index: $state.period + 1, boundary: day }) == After {
+									return Ok(Rule(ended($state, $steps, $zone_segments)))
+								}
+								Err(OutOfRange) => {}
+							}
+							_ => {}
+						}
+					}
 				}
 				frame = timed_frame($state.rule, $state.period + 1)?
 				$state = { ..$state, period: $state.period + 1, day: frame.start_day, end_day: frame.end_day, period_end: frame.end, day_selected: Unknown, clock_index: frame.clock_start, clock_start: frame.clock_start, clock_end: frame.clock_end, phase: Build, anchor_index: None }
@@ -1099,11 +1173,11 @@ next_rule = |initial, limits| {
 								source = local_at($state.day, clock_at($state.rule.clocks, $state.clock_index))?
 								if $state.rule.positions.is_empty() {
 									if !before(source, $state.window.end) {
-										return Ok(ended($state, $steps, $zone_segments))
+										return Ok(Rule(ended($state, $steps, $zone_segments)))
 									}
 									match $state.rule.termination {
 										Until(end) => if before(end, source) {
-											return Ok(ended($state, $steps, $zone_segments))
+											return Ok(Rule(ended($state, $steps, $zone_segments)))
 										}
 										_ => {}
 									}
@@ -1113,9 +1187,22 @@ next_rule = |initial, limits| {
 								}
 								else {
 									if $state.buffer.len() == limits.max_buffered {
-										return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+										return Ok(Rule(limited($state, $steps, $zone_segments, BufferLimit)))
 									}
-									pending = ZoneRules.classification_cursor($state.context.rules, source)?
+									match inclusion {
+										Some(explicit) => {
+											if before(explicit, source) and !buffer_can_precede($state, explicit) {
+												if buffered_count($state) == limits.max_buffered {
+													return Ok(Rule(limited($state, $steps, $zone_segments, BufferLimit)))
+												}
+												pending_inclusion = ZoneRules.ClassificationCursor.from_local($state.context.rules, explicit)?
+												resume = { ..$state, inclusion_pending: Some(Box.box({ source: explicit, cursor: pending_inclusion })) }
+												return Ok(Include({ cursor: resume, steps: $steps, zone_segments: $zone_segments }))
+											}
+										}
+										None => {}
+									}
+									pending = ZoneRules.ClassificationCursor.from_local($state.context.rules, source)?
 									$state = { ..$state, clock_index: $state.clock_index + 1, pending: Some({ source, cursor: pending }) }
 								}
 							}
@@ -1127,14 +1214,104 @@ next_rule = |initial, limits| {
 	}
 }
 
+# A future period length can only move a negative position forward. The
+# known current source adds one item, leaving at most 365 eligible slots.
+buffer_can_precede = |state, explicit| {
+	var $distance = 0.U64
+	var $first = state.buffer.len()
+	for position in state.rule.positions {
+		if position < 0 {
+			$distance = $distance.max((-position).to_u64_wrap())
+		} else {
+			index = position.to_u64_wrap() - 1
+			match state.buffer.get(index) {
+				Ok(candidate) => if can_emit_before(state, candidate, explicit) {
+					$first = $first.min(index)
+				}
+				Err(_) => {}
+			}
+		}
+	}
+	minimum_count = state.buffer.len() + 1
+	var $index = minimum_count - minimum_count.min($distance)
+	while $index < $first {
+		candidate = buffer_at(state.buffer, $index)
+		if !before(candidate.source, explicit) {
+			break
+		}
+		if can_emit_before(state, candidate, explicit) {
+			$first = $index
+		}
+		$index = $index + 1
+	}
+	$first < state.buffer.len() and !count_exhausted_before(state, $first)
+}
+
+# Positive slots are fixed for every possible completion of the period.
+# Each selected source consumes at most one COUNT slot, even if excluded.
+count_exhausted_before = |state, first| match state.rule.termination {
+	Count(maximum) => {
+		remaining = maximum - state.count
+		if remaining > first {
+			return False
+		}
+		var $counted = Set.empty()
+		for position in state.rule.positions {
+			if position > 0 {
+				index = position.to_u64_wrap() - 1
+				if index < first {
+					candidate = buffer_at(state.buffer, index)
+					if !before(candidate.source, state.rule.anchor) and within_cutoff(state, candidate) {
+						$counted = Set.insert($counted, index)
+						if Set.len($counted) == remaining {
+							return True
+						}
+					}
+				}
+			}
+		}
+		False
+	}
+	_ => False
+}
+
+can_emit_before = |state, candidate, explicit| {
+	if !before(candidate.source, explicit) or before(candidate.source, state.rule.anchor) {
+		return False
+	}
+	match state.rule.termination {
+		Until(end) => if before(end, candidate.source) {
+			return False
+		}
+		_ => {}
+	}
+	within_cutoff(state, candidate) and visible_in_window(state, candidate) and !inclusion_consumed(state, candidate.source)
+}
+
+# A matching inclusion already traversed in this window represents the
+# same source and interpretation. Rule COUNT still advances for that slot.
+inclusion_consumed = |state, source| {
+	if state.inclusion_index == 0 {
+		return False
+	}
+	index = first_source_at_or_after(state.rule.inclusions, source)
+	index < state.inclusion_index and LocalDateTime.same_position(label_at(state.rule.inclusions, index), source)
+}
+
+within_cutoff = |state, occurrence| match state.boundary_cutoff {
+	None => Bool.True
+	Some(boundary) => occurrence.choice.boundary <= boundary
+}
+
+visible_in_window = |state, occurrence| {
+	!before(occurrence.source, state.window.start) and !excluded(state.rule.exclusions, occurrence.source) and
+		!boundary_excluded(state.rule.boundary_exclusions, occurrence.choice.boundary)
+}
+
 sorted_positions : List(LocalDateTime) -> List(LocalDateTime)
 sorted_positions = |labels| {
 	sorted = labels.sort_with(
-		|a, b| match LocalDateTime.compare_position(a, b) {
-			LT => Before
-			EQ => Same
-			GT => After
-		},
+		|a, b| LocalDateTime.compare_position({ left: a, right: b }),
 	)
 	var $exclusions = []
 	var $previous = None
@@ -1162,9 +1339,9 @@ test_inclusion_boundary_cursor = |boundaries| {
 	raw = TimedRecurrence.new(anchor, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(2), by_set_pos: [] })?
 	included = TimedRecurrence.with_inclusions(raw, [start(4)?, start(2)?, start(1)?, start(4)?, start(5)?])?
 	rule = TimedRecurrence.with_boundary_exclusions(TimedRecurrence.with_exclusions(included, [local_at(1, clock)?])?, boundaries)?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(518400000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	TimedRecurrence.cursor(rule, { start: local_at(0, clock)?, end: local_at(4, clock)? }, { rules, occurrence: RequireUnique, gap: RejectGap })
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(518400000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	TimedRecurrence.cursor(rule, { window: { start: local_at(0, clock)?, end: local_at(4, clock)? }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })
 }
 
 test_inclusions = |budget| {
@@ -1200,12 +1377,13 @@ expect {
 	var $valid = Bool.True
 	for work in [{ ..full, max_steps: 0 }, { ..full, max_buffered: 0 }, { ..full, max_buffered: 1 }, { ..full, max_zone_segments: 0 }, { ..full, max_zone_candidates: 0 }] {
 		paused = TimedRecurrenceCursor.next(initial, work)?
-		rest = match paused.status {
-			Limited(progress) => progress.cursor
-			_ => crash "merge needs more budget"
+		{ rest, prefix } = match paused.status {
+			Limited(progress) => { rest: progress.cursor, prefix: [] }
+			Item(item) => { rest: item.cursor, prefix: [item.occurrence] }
+			End => crash "merge must preserve visible occurrences"
 		}
 		completed = TimedRecurrenceCursor.collect(rest, { work: full, max_occurrences: 10 })?
-		observed = completed.occurrences.map(|value| PosixBoundary.to_microseconds(TimedRecurrenceOccurrence.boundary(value)))
+		observed = prefix.concat(completed.occurrences).map(|value| PosixBoundary.to_microseconds(TimedRecurrenceOccurrence.boundary(value)))
 		$valid = $valid and observed == [0.I64, 172800000000, 259200000000] and match completed.status {
 			Complete => Bool.True
 			_ => Bool.False
@@ -1224,11 +1402,11 @@ expect {
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [2, 3], minutes: [0, 30], seconds: [] }, termination: UntilBoundary(cutoff), by_set_pos: [] })?
 	four = ClockTime.from_fields({ hour: 4, minute: 0, second: 0, microsecond: 0 })?
 	with_extra = TimedRecurrence.with_inclusions(rule, [{ date, clock: four }])?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(172800000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC-cutoff", "v1", validity, FixedOffset.from_seconds(0), [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], { minimum: 0, maximum: 3600 })?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
-	var $cursor = TimedRecurrence.cursor(with_extra, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(172800000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC-cutoff", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock })
+	var $cursor = TimedRecurrence.cursor(with_extra, { window: { start, end }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })?
 	var $boundaries = []
 	var $hours = []
 	var $calls = 0.U64
@@ -1259,11 +1437,11 @@ expect {
 	clock = ClockTime.from_fields({ hour: 2, minute: 0, second: 0, microsecond: 0 })?
 	cutoff = PosixBoundary.from_microseconds(91800000000)
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: UntilBoundary(cutoff), by_set_pos: [-1] })?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-1), PosixBoundary.from_microseconds(259200000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
-	cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(259200000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock })
+	cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })?
 	batch = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 3, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 10 })?
 	match batch.status {
 		Complete => batch.occurrences.len() == 1 and TimedRecurrenceOccurrence.boundary(batch.occurrences.get(0)?) == PosixBoundary.from_microseconds(7200000000)
@@ -1278,16 +1456,16 @@ expect {
 expect {
 	date = GregorianDate.from_fields({ year: 1997, month: 9, day: 2 })?
 	clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond: 0 })?
-	start = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1997, month: 9, day: 3 })?), clock)
-	midnight_label = LocalDateTime.new(Calendar.Date.from_gregorian(date), midnight({}))
+	start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1997, month: 9, day: 3 })?), clock })
+	midnight_label = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock: midnight({}) })
 	base = PosixBoundary.to_microseconds(FixedOffset.resolve(FixedOffset.from_seconds(0), midnight_label)?)
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(base - 86400000000), PosixBoundary.from_microseconds(base + 172800000000))?
-	rules = ZoneRules.new_bounded("RFC5545/New_York", "1997-example", validity, FixedOffset.from_seconds(-14400), [], { minimum: -14400, maximum: -14400 })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(base - 86400000000), end: PosixBoundary.from_microseconds(base + 172800000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "RFC5545/New_York", version: "1997-example", validity, initial: FixedOffset.from_seconds(-14400), transitions: [], bounds: { minimum: -14400, maximum: -14400 } })?
 	var $valid = Bool.True
 	for case in [{ cutoff_hour: 21.I64, expected: [9.U8, 12, 15] }, { cutoff_hour: 17, expected: [9, 12] }, { cutoff_hour: 19, expected: [9, 12, 15] }] {
 		rule = TimedRecurrence.new_subdaily({ date, clock }, { pattern: { frequency: Hourly, interval: 3, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } }, termination: UntilBoundary(PosixBoundary.from_microseconds(base + case.cutoff_hour * 3600000000)), by_set_pos: [] })?
-		cursor = TimedRecurrence.cursor(rule, { start, end }, { rules, occurrence: First, gap: UseOffsetBeforeGap })?
+		cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: First, gap: UseOffsetBeforeGap } })?
 		batch = TimedRecurrenceCursor.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 10, max_zone_candidates: 1 }, max_occurrences: 10 })?
 		$valid = $valid and batch.occurrences.map(|value| ClockTime.to_fields(LocalDateTime.clock(TimedRecurrenceOccurrence.source(value))).hour) == case.expected and match batch.status {
 			Complete => Bool.True
@@ -1322,7 +1500,7 @@ fact_local = |labels, index| match labels.get(index) {
 expect {
 	date = GregorianDate.from_fields({ year: 2025, month: 1, day: 1 })?
 	clock = ClockTime.from_fields({ hour: 9, minute: 30, second: 0, microsecond: 120000 })?
-	local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	local = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	base = { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Until(local), by_set_pos: [] }
 	rule = TimedRecurrence.new({ date, clock }, base)?
 	boundary = PosixBoundary.from_microseconds(I64.highest)
@@ -1400,7 +1578,7 @@ expect {
 	edited = TimedRecurrence.with_boundary_exclusions(rule, [high, low, high])?
 	data = TimedRecurrence.definition(edited)
 	rebuilt = TimedRecurrence.from_definition(data)?
-	local = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	local = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	too_many = match TimedRecurrence.with_exclusions(edited, List.repeat(local, 4095)) {
 		Err(TooManySelectors) => True
 		_ => False
@@ -1484,7 +1662,10 @@ TimedRecurrenceCursor :: {
 	next : TimedRecurrenceCursor, TimedRecurrence.Limits -> Try(TimedRecurrence.Next, [OutOfRange, OutsideValidity, Gap, Ambiguous, AmbiguousGap, OffsetConflict, UnsynchronizedStart])
 	next = |initial, limits| {
 		if initial.rule.inclusions.is_empty() {
-			return next_rule(initial, limits)
+			match next_rule(initial, { limits, inclusion: None })? {
+				Rule(batch) => return Ok(batch)
+				Include(_) => crash "TimedRecurrence.next: no inclusions in rule-only execution"
+			}
 		}
 		var $state = initial
 		var $steps = 0.U64
@@ -1524,9 +1705,24 @@ TimedRecurrenceCursor :: {
 				}
 				None => {}
 			}
-			match $state.held {
-				None => if !$state.rule_ended {
-					batch = next_rule($state, { ..limits, max_steps: limits.max_steps - $steps, max_zone_segments: limits.max_zone_segments - $zone_segments })?
+			lookahead = match $state.held {
+				None if !$state.rule_ended => {
+					inclusion = match $state.rule.inclusions.get($state.inclusion_index) {
+						Ok(source) if !before(source, $state.window.start) and before(source, $state.window.end) => Some(source)
+						_ => None
+					}
+					remaining = { ..limits, max_steps: limits.max_steps - $steps, max_zone_segments: limits.max_zone_segments - $zone_segments }
+					next_rule($state, { limits: remaining, inclusion })?
+				}
+				_ => Ready
+			}
+			match lookahead {
+				Include(progress) => {
+					$steps = $steps + progress.steps
+					$zone_segments = $zone_segments + progress.zone_segments
+					$state = progress.cursor
+				}
+				Rule(batch) => {
 					$steps = $steps + batch.steps
 					$zone_segments = $zone_segments + batch.zone_segments
 					match batch.status {
@@ -1539,54 +1735,59 @@ TimedRecurrenceCursor :: {
 						}
 					}
 				}
-				Some(_) => {}
+				Ready => {}
 			}
-			explicit = $state.rule.inclusions.get($state.inclusion_index)
-			match ($state.held, explicit) {
-				(None, Err(_)) => return Ok(ended($state, $steps, $zone_segments))
-				(None, Ok(source)) => if !before(source, $state.window.end) {
-					return Ok(ended($state, $steps, $zone_segments))
-				}
-				_ => {}
-			}
-			if $steps == limits.max_steps {
-				return Ok(limited($state, $steps, $zone_segments, WorkLimit))
-			}
-			$steps = $steps + 1
-			match $state.held {
-				Some(boxed) => {
-					occurrence = Box.unbox(boxed)
-					use_rule = match explicit {
-						Err(_) => Bool.True
-						Ok(source) => !before(source, occurrence.source)
+			if match $state.inclusion_pending {
+				None => True
+				Some(_) => False
+			} {
+				explicit = $state.rule.inclusions.get($state.inclusion_index)
+				match ($state.held, explicit) {
+					(None, Err(_)) => return Ok(ended($state, $steps, $zone_segments))
+					(None, Ok(source)) => if !before(source, $state.window.end) {
+						return Ok(ended($state, $steps, $zone_segments))
 					}
-					if use_rule {
-						index = match explicit {
-							Ok(source) => if LocalDateTime.same_position(source, occurrence.source) {
-								$state.inclusion_index + 1
-							} else {
-								$state.inclusion_index
-							}
-							Err(_) => $state.inclusion_index
+					_ => {}
+				}
+				if $steps == limits.max_steps {
+					return Ok(limited($state, $steps, $zone_segments, WorkLimit))
+				}
+				$steps = $steps + 1
+				match $state.held {
+					Some(boxed) => {
+						occurrence = Box.unbox(boxed)
+						use_rule = match explicit {
+							Err(_) => Bool.True
+							Ok(source) => !before(source, occurrence.source)
 						}
-						$state = { ..$state, held: None, inclusion_index: index }
-						return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
+						if use_rule {
+							index = match explicit {
+								Ok(source) => if LocalDateTime.same_position(source, occurrence.source) {
+									$state.inclusion_index + 1
+								} else {
+									$state.inclusion_index
+								}
+								Err(_) => $state.inclusion_index
+							}
+							$state = { ..$state, held: None, inclusion_index: index }
+							return Ok({ steps: $steps, zone_segments: $zone_segments, buffered: buffered_count($state), zone_buffered: $state.zone_buffered, status: Item({ occurrence, cursor: $state }) })
+						}
 					}
+					None => {}
 				}
-				None => {}
-			}
-			source = match explicit {
-				Ok(value) => value
-				Err(_) => crash "merge has an inclusion"
-			}
-			if before(source, $state.window.start) {
-				$state = { ..$state, inclusion_index: $state.inclusion_index + 1 }
-			} else {
-				if buffered_count($state) == limits.max_buffered {
-					return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+				source = match explicit {
+					Ok(value) => value
+					Err(_) => crash "merge has an inclusion"
 				}
-				pending = ZoneRules.classification_cursor($state.context.rules, source)?
-				$state = { ..$state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
+				if before(source, $state.window.start) {
+					$state = { ..$state, inclusion_index: $state.inclusion_index + 1 }
+				} else {
+					if buffered_count($state) == limits.max_buffered {
+						return Ok(limited($state, $steps, $zone_segments, BufferLimit))
+					}
+					pending = ZoneRules.ClassificationCursor.from_local($state.context.rules, source)?
+					$state = { ..$state, inclusion_pending: Some(Box.box({ source, cursor: pending })) }
+				}
 			}
 		}
 	}
@@ -1644,4 +1845,117 @@ TimedRecurrenceCursor :: {
 	## Use typed accessors for application logic; this text is not a storage format.
 	to_inspect : TimedRecurrenceCursor -> Str
 	to_inspect = |state| "TimedRecurrence.Cursor(period=${state.period.to_str()}, count=${state.count.to_str()}, buffered=${buffered_count(state).to_str()})"
+}
+
+## An earlier explicit start is visible even when the next rule start is in a gap.
+expect {
+	anchor = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	prior = GregorianDate.from_fields({ year: 1969, month: 12, day: 31 })?
+	skipped = GregorianDate.from_fields({ year: 1969, month: 12, day: 30 })?
+	clock = clock_from_number(0)
+	rules = ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Prefix",
+		version: "1",
+		validity: PosixSpan.new({ start: PosixBoundary.from_microseconds(-172800000000), end: PosixBoundary.from_microseconds(172800000000) })?,
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(3600) }],
+		bounds: { minimum: 0, maximum: 3600 },
+	})?
+	base = TimedRecurrence.new({ date: anchor, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [] })?
+	rule = TimedRecurrence.with_inclusions(base, [{ date: skipped, clock }, { date: prior, clock }])?
+	start = local_at(-1, clock)?
+	end = local_at(1, clock)?
+	cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
+	work = { max_steps: 100, max_buffered: 1, max_zone_segments: 100, max_zone_candidates: 2 }
+	result = TimedRecurrence.Cursor.next(cursor, work)?
+	match result.status {
+		Item(item) => TimedRecurrence.Occurrence.source(item.occurrence) == start and match TimedRecurrence.Cursor.next(item.cursor, work) {
+			Err(Gap) => True
+			_ => False
+		}
+		_ => False
+	}
+}
+
+## A query ending before DTSTART completes without interpreting BYSETPOS candidates.
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.parse("02:00")?
+	half = ClockTime.parse("00:30")?
+	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2], minutes: [], seconds: [] }, termination: Count(1), by_set_pos: [-1] })?
+	point = PosixBoundary.from_microseconds
+	rules = ZoneRules.Provider.new_bounded({
+		name: "Synthetic/BeforeStart",
+		version: "1",
+		validity: PosixSpan.new({ start: point(-86400000000), end: point(172800000000) })?,
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: point(3600000000), offset: FixedOffset.from_seconds(3600) }],
+		bounds: { minimum: 0, maximum: 3600 },
+	})?
+	start = local_at(0, clock_from_number(0))?
+	end = local_at(0, half)?
+	context = { rules, occurrence: RequireUnique, gap: RejectGap }
+	work = { max_steps: 100, max_buffered: 4, max_zone_segments: 100, max_zone_candidates: 4 }
+	empty_cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context })?
+	empty = TimedRecurrence.Cursor.next(empty_cursor, work)?
+	with_inclusion = TimedRecurrence.with_inclusions(rule, [{ date, clock: half }])?
+	later = local_at(1, clock_from_number(0))?
+	inclusion_cursor = TimedRecurrence.cursor(with_inclusion, { window: { start, end: later }, context })?
+	first = TimedRecurrence.Cursor.next(inclusion_cursor, work)?
+	match (empty.status, first.status) {
+		(End, Item(item)) => empty.zone_segments == 0 and TimedRecurrence.Occurrence.source(item.occurrence) == end
+		_ => False
+	}
+}
+
+## UNTIL bounds the next calendar start before an unrepresentable period end is needed.
+expect {
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = clock_from_number(0)
+	start = local_at(0, clock)?
+	cutoff = local_at(730, clock)?
+	last_date = GregorianDate.from_fields({ year: 2147483647, month: 2, day: 1 })?
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(last_date), clock })
+	rule = TimedRecurrence.new({ date, clock }, { calendar: { ..CalendarPattern.defaults(Yearly), interval: 2147481677 }, clocks: { hours: [], minutes: [], seconds: [] }, termination: Until(cutoff), by_set_pos: [] })?
+	point = PosixBoundary.from_microseconds
+	rules = ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Until",
+		version: "1",
+		validity: PosixSpan.new({ start: point(-86400000000), end: point(1000000000000000) })?,
+		initial: FixedOffset.from_seconds(0),
+		transitions: [],
+		bounds: { minimum: 0, maximum: 0 },
+	})?
+	cursor = TimedRecurrence.cursor(rule, { window: { start, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
+	batch = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 1000, max_buffered: 10, max_zone_segments: 10, max_zone_candidates: 10 }, max_occurrences: 10 })?
+	match batch.status {
+		Complete => batch.occurrences.map(TimedRecurrence.Occurrence.source) == [start]
+		Limited(_) => False
+	}
+}
+
+## Calendar props inherit the anchor clock and preserve an explicit termination.
+expect {
+	start = { date: GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?, clock: ClockTime.from_fields({ hour: 9, minute: 23, second: 4, microsecond: 5 })? }
+	rule = TimedRecurrence.from_calendar(start, { calendar: CalendarPattern.defaults(Monthly), termination: Count(2) })?
+	data = rule.definition()
+	data.termination == Count(2) and LocalDateTime.clock(data.anchor) == start.clock and data.inclusions.is_empty() and data.exclusions.is_empty() and data.boundary_exclusions.is_empty()
+}
+
+## Calendar props enforce the raw combined exclusion cap before deduplication.
+expect {
+	start = { date: GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?, clock: ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond: 0 })? }
+	label = LocalDateTime.new({ date: Calendar.Date.from_gregorian(start.date), clock: start.clock })
+	match TimedRecurrence.from_calendar(
+		start,
+		{
+			calendar: CalendarPattern.defaults(Monthly),
+			termination: Count(2),
+			exclusions: List.repeat(label, 4096),
+			boundary_exclusions: [PosixBoundary.from_microseconds(0)],
+		},
+	) {
+		Err(TooManySelectors) => True
+		_ => False
+	}
 }

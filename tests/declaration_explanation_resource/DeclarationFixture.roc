@@ -1,9 +1,9 @@
 import time.Explanation
 import time.ExactInterval
-import time.ICalDateTime
-import time.ICalDuration
-import time.ICalPeriod
-import time.SemanticFact
+import time.ICalendar.DateTime as ICalDateTime
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.Period as ICalPeriod
+import time.Explanation.Fact as SemanticFact
 import time.PosixSpan
 import time.PosixBoundary
 import time.ClockTime
@@ -21,13 +21,15 @@ DeclarationFixture := [].{
 		duration = "P${days.to_str()}DT1S"
 		match kind {
 			0 => ExactInterval(
-				match ExactInterval.parse("1970-01-01T00:00:00.000001${
-					if local {
-						"+00:00"
-					} else {
-						"Z"
-					}
-				}/1970-01-01T00:00:00.000002Z") {
+				match ExactInterval.parse(
+					"1970-01-01T00:00:00.000001${
+						if local {
+							"+00:00"
+						} else {
+							"Z"
+						}
+					}/1970-01-01T00:00:00.000002Z",
+				) {
 					Ok(v) => v
 					Err(_) => crash "fixture exact"
 				},

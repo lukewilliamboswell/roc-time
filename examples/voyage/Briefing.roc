@@ -1,4 +1,4 @@
-import time.ResolvedBoundary
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
 import time.ZoneRules
 import time.FixedOffset
 import time.LocalDateTime
@@ -7,7 +7,7 @@ import time.ClockTime
 
 ## Compare a saved booking with an explicit interpretation of a revised itinerary.
 Briefing :: { saved : ResolvedBoundary, revised : ResolvedBoundary }.{
-	book = |rules, local| ResolvedBoundary.resolve(rules, local, RequireUnique)
+	book = |rules, local| ResolvedBoundary.resolve(rules, { local, occurrence: RequireUnique })
 
 	review = |saved, new_rules| {
 		revised = ResolvedBoundary.reresolve(saved, new_rules)?
@@ -24,7 +24,7 @@ Briefing :: { saved : ResolvedBoundary, revised : ResolvedBoundary }.{
 }
 
 utc_label = |snapshot| {
-	local = FixedOffset.project(FixedOffset.from_seconds(0), ResolvedBoundary.boundary(snapshot), Gregorian)?
+	local = FixedOffset.project(FixedOffset.from_seconds(0), { boundary: ResolvedBoundary.boundary(snapshot), calendar: Gregorian })?
 	date = Calendar.Date.to_fields(LocalDateTime.date(local))
 	clock = ClockTime.to_fields(LocalDateTime.clock(local))
 	Ok("${date.year.to_str()}-${pad(date.month)}-${pad(date.day)} ${pad(clock.hour)}:${pad(clock.minute)}")

@@ -10,6 +10,10 @@ PosixDelta :: [Micros(I64)].{
 	to_microseconds : PosixDelta -> I64
 	to_microseconds = |Micros(n)| n
 
+	## Order by the native scalar coordinate.
+	order_relative_to : PosixDelta, PosixDelta -> [Before, Same, After]
+	order_relative_to = |left, right| if (left < right) Before else if (left > right) After else Same
+
 	## Whether the first of two signed POSIX displacements precedes the second in their numeric order.
 	is_lt : PosixDelta, PosixDelta -> Bool
 	is_lt = |Micros(a), Micros(b)| a < b

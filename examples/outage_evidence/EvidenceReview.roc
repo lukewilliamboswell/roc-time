@@ -1,13 +1,13 @@
-import time.ICalDateTime
+import time.ICalendar.DateTime as ICalDateTime
 import time.PosixSpan
-import time.IntervalEvidence
+import time.Evidence.Interval as IntervalEvidence
 
 ## Keep report correlation while reviewing uncertain outage membership.
 EvidenceReview :: [].{
 	compare = |reports, notes, probes| {
 		var $spans = []
 		for report in reports {
-			$spans = $spans.append(PosixSpan.new(boundary(report.start)?, boundary(report.end)?)?)
+			$spans = $spans.append(PosixSpan.new({ start: boundary(report.start)?, end: boundary(report.end)? })?)
 		}
 		paired = IntervalEvidence.paired($spans)?
 		var $starts = []

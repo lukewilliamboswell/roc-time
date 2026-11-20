@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   test:
+    outputs:
+      nightly-tag: ${{ steps.nightly.outputs.tag }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -22,14 +24,45 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup-roc-nightly
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@6c796f299012707d2e9bad23fd6449ed93f1f475
+      - id: nightly
+        uses: lukewilliamboswell/roc-automation/actions/setup-roc-nightly@dd30a5dd576973b6e224db70d96e3e12c96bcc95
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dd30a5dd576973b6e224db70d96e3e12c96bcc95
         with:
           install-nix: 'true'
           cache: 'true'
           cache-workload: ci
       - run: blueprint run native-versions
       - run: blueprint run check
+      - name: Preserve fuzz smoke evidence and reproducers
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: fuzz-smoke-${{ runner.os }}-${{ runner.arch }}
+          path: .roc-time-tmp/fuzz/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
+  fuzz-macos:
+    needs: test
+    if: ${{ always() && needs.test.outputs.nightly-tag != '' }}
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: lukewilliamboswell/roc-automation/actions/setup-roc-nightly@dd30a5dd576973b6e224db70d96e3e12c96bcc95
+        with:
+          nightly-tag: ${{ needs.test.outputs.nightly-tag }}
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dd30a5dd576973b6e224db70d96e3e12c96bcc95
+        with:
+          cache: 'true'
+          cache-workload: fuzz
+      - run: roc version
+      - run: blueprint run fuzz -- --operation all --runs 100 --seconds 1 --seed 1
       - name: Preserve fuzz smoke evidence and reproducers
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

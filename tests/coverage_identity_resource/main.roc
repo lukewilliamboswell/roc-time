@@ -26,7 +26,7 @@ main! = |args| {
 			Coverage.union(Coverage.empty, source)
 		} else {
 			Host.assert!(operation == "difference_right")
-			Coverage.difference(source, Coverage.empty)
+			Coverage.difference({ base: source, subtract: Coverage.empty })
 		}
 		if control == "allocate" {
 			allocated = List.with_capacity(Host.opaque_u64!(64)).append(index)

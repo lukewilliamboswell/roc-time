@@ -1,12 +1,11 @@
 import zones.Database
-import time.ICalTimedRule
-import time.ICalPeriod
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.Period as ICalPeriod
 import time.LocalDateTime
 import time.OffsetTimestamp
 import time.PosixSpan
-import time.TimedRecurrence
-import time.TimedOccurrence
-import time.TimedSchedule
+import time.Recurrence.Timed as TimedRecurrence
+
 import time.ScheduleDefinition
 import time.ZoneRules
 
@@ -42,8 +41,8 @@ MeetingExchange :: [].{
 			Ok(value) => value
 			Err(error) => return Err(Definition(error))
 		}
-		schedule = ScheduleDefinition.cursor("team-meeting", meeting, window)?
-		batch = match TimedSchedule.collect(
+		schedule = meeting.cursor({ series: "team-meeting", window })?
+		batch = match ScheduleDefinition.Cursor.collect(
 			schedule,
 			{
 				work: { max_steps: 1000, max_buffered: 32, max_zone_segments: 100000, max_zone_candidates: 8 },
@@ -68,9 +67,9 @@ MeetingExchange :: [].{
 		}
 		$lines = $lines.append("Reimported meetings in [2026-03-20, 2026-04-15), using Europe/Paris:")
 		for occurrence in batch.occurrences {
-			source = TimedOccurrence.source(occurrence)
+			source = ScheduleDefinition.Occurrence.source(occurrence)
 			local = LocalDateTime.to_gregorian_text(source)?
-			span = TimedOccurrence.span(occurrence)
+			span = ScheduleDefinition.Occurrence.span(occurrence)
 			start = utc(PosixSpan.start(span))?
 			end = utc(PosixSpan.end(span))?
 			$lines = $lines.append("${local} Paris: ${start} -> ${end}")
@@ -88,7 +87,7 @@ MeetingExchange :: [].{
 }
 
 utc = |boundary| {
-	timestamp = match OffsetTimestamp.from_boundary(boundary, UnassertedUtc, 0) {
+	timestamp = match OffsetTimestamp.from_boundary(boundary, { offset: UnassertedUtc, fraction_digits: 0 }) {
 		Ok(value) => value
 		Err(error) => return Err(TimestampOutput(error))
 	}

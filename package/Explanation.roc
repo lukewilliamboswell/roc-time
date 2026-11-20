@@ -48,6 +48,9 @@ import ICalPeriod
 ## TextLimit takes precedence over FactLimit when both affected the report.
 Explanation :: { source : Source }.{
 
+	## SemanticFact operations and types.
+	Fact : SemanticFact
+
 	## A supported description, rule, coverage value, or stored interpretation result.
 	## SelectionBatch also permits explaining why evaluation remains incomplete.
 	Source : [CalendarInterval(CalendarInterval), EdtfInterval(EdtfInterval), DateRecurrence(DateRecurrence), TimedRecurrence(TimedRecurrence), ICalTimedRule(ICalTimedRule), Coverage(Coverage), ResolvedBoundary(ResolvedBoundary), ResolvedSelection(ResolvedSelection), SelectionBatch(ResolvedSelection.Batch), CalendarValue(Calendar.Value), QualifiedCalendarValue(QualifiedCalendarValue), EdtfDate(EdtfDate), OffsetTimestamp(OffsetTimestamp), Ixdtf(Ixdtf), Snapshot(Ixdtf.Snapshot), ExactInterval(ExactInterval), ICalDateTime(ICalDateTime), ICalDuration(ICalDuration), ICalPeriod(ICalPeriod)]
@@ -73,17 +76,17 @@ Explanation :: { source : Source }.{
 		DateRecurrence(v) => DateRecurrence.fact_count(v)
 		TimedRecurrence(v) => TimedRecurrence.fact_count(v)
 		ICalTimedRule(v) => ICalTimedRule.fact_count(v)
-		Coverage(v) => Coverage.fact_count(v)
+		Coverage(v) => Coverage.Facts.count(v)
 		ResolvedBoundary(v) => ResolvedBoundary.fact_count(v)
 		ResolvedSelection(v) => ResolvedSelection.fact_count(v)
 		SelectionBatch(v) => ResolvedSelection.batch_fact_count(v)
 		CalendarValue(v) => SemanticFact.calendar_value_fact_count(v)
 		QualifiedCalendarValue(v) => QualifiedCalendarValue.fact_count(v)
 		EdtfDate(v) => EdtfDate.fact_count(v)
-		OffsetTimestamp(v) => OffsetTimestamp.fact_count(v)
+		OffsetTimestamp(v) => OffsetTimestamp.Facts.count(v)
 		Ixdtf(v) => Ixdtf.fact_count(v)
 		Snapshot(v) => Ixdtf.Snapshot.fact_count(v)
-		ExactInterval(v) => ExactInterval.fact_count(v)
+		ExactInterval(v) => ExactInterval.Facts.count(v)
 		ICalDateTime(v) => ICalDateTime.fact_count(v)
 		ICalDuration(v) => ICalDuration.fact_count(v)
 		ICalPeriod(v) => ICalPeriod.fact_count(v)
@@ -98,17 +101,17 @@ Explanation :: { source : Source }.{
 		DateRecurrence(v) => DateRecurrence.fact_at(v, index)
 		TimedRecurrence(v) => TimedRecurrence.fact_at(v, index)
 		ICalTimedRule(v) => ICalTimedRule.fact_at(v, index)
-		Coverage(v) => Coverage.fact_at(v, index)
+		Coverage(v) => Coverage.Facts.at(v, index)
 		ResolvedBoundary(v) => ResolvedBoundary.fact_at(v, index)
 		ResolvedSelection(v) => ResolvedSelection.fact_at(v, index)
 		SelectionBatch(v) => ResolvedSelection.batch_fact_at(v, index)
 		CalendarValue(v) => SemanticFact.calendar_value_fact_at(v, index)
 		QualifiedCalendarValue(v) => QualifiedCalendarValue.fact_at(v, index)
 		EdtfDate(v) => EdtfDate.fact_at(v, index)
-		OffsetTimestamp(v) => OffsetTimestamp.fact_at(v, index)
+		OffsetTimestamp(v) => OffsetTimestamp.Facts.at(v, index)
 		Ixdtf(v) => Ixdtf.fact_at(v, index)
 		Snapshot(v) => Ixdtf.Snapshot.fact_at(v, index)
-		ExactInterval(v) => ExactInterval.fact_at(v, index)
+		ExactInterval(v) => ExactInterval.Facts.at(v, index)
 		ICalDateTime(v) => ICalDateTime.fact_at(v, index)
 		ICalDuration(v) => ICalDuration.fact_at(v, index)
 		ICalPeriod(v) => ICalPeriod.fact_at(v, index)
@@ -497,7 +500,7 @@ expect {
 }
 expect {
 	date = Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
-	value = Calendar.Value.fractional_second(date, { hour: 12, minute: 30, second: 0 }, { value: 120, digits: 3 })?
+	value = Calendar.Value.fractional_second(date, { clock: { hour: 12, minute: 30, second: 0 }, fraction: { value: 120, digits: 3 } })?
 	report = Explanation.plain(Explanation.new(CalendarValue(value)), { max_facts: 10, max_utf8_bytes: 4096 })
 	report.status == Complete and report.text.contains("fraction .120 (3 supplied digits)")
 }

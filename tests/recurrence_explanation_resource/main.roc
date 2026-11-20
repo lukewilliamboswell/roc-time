@@ -1,14 +1,14 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Explanation
-import time.SemanticFact
-import time.DateRecurrence
-import time.TimedRecurrence
-import time.ICalTimedRule
+import time.Explanation.Fact as SemanticFact
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.Timed as TimedRecurrence
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.GregorianDate
 import time.Calendar
 import time.LocalDateTime
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 import time.ClockTime
 import RecurrenceFixture
 
@@ -53,10 +53,12 @@ main! = |args| {
 		match Explanation.fact_at(explanation, total - 1) {
 			Item(fact) => Host.assert!(
 				match SemanticFact.kind(fact) {
-					RecurrenceException(data) => data.kind == Inclusion and (match data.source {
-						Date(date) => CivilDay.to_day_number(GregorianDate.to_civil_day(date)) == count.to_i64() - 1
-						Local(local) => CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(local))) == count.to_i64() - 1
-					})
+					RecurrenceException(data) => data.kind == Inclusion and (
+						match data.source {
+							Date(date) => CivilDay.to_day_number(GregorianDate.to_civil_day(date)) == count.to_i64() - 1
+							Local(local) => CivilDay.to_day_number(Calendar.Date.to_civil_day(LocalDateTime.date(local))) == count.to_i64() - 1
+						}
+					)
 					_ => False
 				},
 			)

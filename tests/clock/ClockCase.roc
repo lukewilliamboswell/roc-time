@@ -1,6 +1,6 @@
 import fuzz.Fuzz
 import time.ClockTime
-import time.ClockPattern
+import time.Recurrence.ClockPattern as ClockPattern
 import time.EnglishGregorian
 
 # R01/R07/R08: local microsecond positions and malformed numeric positions.

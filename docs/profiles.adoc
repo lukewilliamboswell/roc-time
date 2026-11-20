@@ -14,6 +14,7 @@ Each module documents a *profile*: the syntax and meaning it accepts. The API pa
 | Calendars | Convert Gregorian/Julian dates and calculate Gregorian deadlines. Their rules apply in all supported years; historical national reforms aren't inferred.
 | Named zones | Interpret local labels with the optional IANA data package. Supply rules that cover the requested time range.
 | Timestamp/interval text | Parse supported explicit-offset timestamps and exact intervals. These profiles reject leap seconds and sub-microsecond input.
+| Nanosecond scalar companions | `Nanosecond.ClockTime` and `Nanosecond.LocalDateTime` keep civil labels with up to nine fractional digits. `Nanosecond.PosixBoundary` and `Nanosecond.PosixDelta` preserve signed I64 POSIX nanosecond counts. Convert explicitly to use microsecond spans and zone operations.
 | EDTF | Retain supported date precision and qualifications. The date adapter supports a subset of EDTF; check its grammar before importing a wider form.
 | IXDTF | Retain annotations and check supplied offset/zone assertions. An annotation can be retained without supporting its presentation; unknown critical extensions fail.
 | Recurrence | Import supported extracted RFC 5545 DATE/DATE-TIME values. There is no general ICS reader, and recurrence rules differ from repeated clamped arithmetic.
@@ -37,7 +38,7 @@ Your application supplies clock readings, timezone data and any choice of a repe
 [#archive-interval-descriptions-in-development]
 == Archive interval descriptions
 
-The current source also provides `EdtfInterval` and `CalendarInterval` for date intervals with independently described endpoints. For example, `2004-02-01/2005-02` retains a day on one side and a month on the other. `1985/` has an unknown end; `1985/..` has an explicitly open end. Those are different descriptions.
+The current source also provides `Interchange.EdtfInterval` and `CalendarDescription.Interval` for date intervals with independently described endpoints. For example, `2004-02-01/2005-02` retains a day on one side and a month on the other. `1985/` has an unknown end; `1985/..` has an explicitly open end. Those are different descriptions.
 
 These modules and the https://github.com/lukewilliamboswell/roc-time/tree/0.3.0/examples/archive_intervals[archive intervals example] are available from 0.3.0. Parsing and saving the interval doesn't resolve it into timeline coverage. The module reports interpretation as unsupported rather than inventing exact endpoint dates. See the 0.3.0 API for its declared EDTF subset.
 

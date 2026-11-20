@@ -1,8 +1,9 @@
-import time.ICalDateRule
-import time.DateRecurrence
-import time.CalendarPattern
+import time.ICalendar.DateRule as ICalDateRule
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.GregorianDate
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 
 # R11/R12/R14: source inputs only; independently authored expectations live
 # outside this executable so neither canonical text nor occurrences are blessed.
@@ -62,7 +63,7 @@ date = |year, month, day| GregorianDate.from_fields({ year, month, day }) ?? cra
 
 collect = |rule, start, end| {
 	cursor = DateRecurrence.cursor(rule, { start, end }) ?? crash "Invalid test window"
-	batch = DateRecurrence.Cursor.collect(cursor, { max_steps: 10000, max_buffered: 366, max_occurrences: 100 }) ?? crash "Fixture evaluation failed"
+	batch = DateCursor.collect(cursor, { max_steps: 10000, max_buffered: 366, max_occurrences: 100 }) ?? crash "Fixture evaluation failed"
 	match batch.status {
 		Complete => {}
 		Limited(_) => crash "Fixture evaluation incomplete"

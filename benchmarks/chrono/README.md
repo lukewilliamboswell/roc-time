@@ -32,7 +32,7 @@ the two executables need not have equal performance.
 
 The scoped `.cargo/config.toml` also directs editor/Cargo builds started in this crate to ignored temporary output.
 
-Requires a current Roc nightly, Zig 0.17.0, Python 3, Cargo/Rust with the native target installed, and the dependencies fetched once. Linux x86-64 uses musl for both executables; macOS arm64 uses the native Apple target. Other hosts fail explicitly. Build/download products and raw results stay under `.roc-time-tmp/`; no network is needed after dependencies and toolchains are installed. The Rust compiler must match [rust-version](rust-version); a matching compiler selected through `RUSTC` or PATH is accepted without requiring a named rustup alias. Its full revision is recorded.
+Requires a current Roc nightly, Zig 0.17.0, Cargo/Rust with the native target installed, and an initial locked dependency fetch. Linux x86-64 uses musl for both executables. macOS arm64 uses the native Apple target. Build products and raw results stay under `.roc-time-tmp/`. The Rust compiler must match [rust-version](rust-version). Select it via `RUSTC` or PATH. The runner replays the reviewed corpus and checksum vectors without the oracle generator.
 
 ## Workloads
 
@@ -49,7 +49,7 @@ The checked-in 32-row corpus spans Gregorian 1900–2100, century/leap boundarie
 | `parse` | `OffsetTimestamp.parse` + `boundary` | `DateTime::parse_from_rfc3339` + `timestamp_micros` | bounded microsecond checksum |
 | `resolve` | stored `OffsetTimestamp.boundary` | stored `DateTime::timestamp_micros` | bounded microsecond checksum |
 | `format` | stored `OffsetTimestamp.to_text` | stored `to_rfc3339_opts(Micros,false)` | all output bytes summed |
-| `end_to_end` | parse + canonical text | parse + canonical text | all output bytes summed |
+| `end_to_end` | parse, resolve and format canonical text | parse, obtain signed microseconds and format canonical text | signed microsecond coordinate reduced modulo 1,000,000,007 plus the sum of all output bytes |
 
 The `resolve` workload compares public representation operations on narrow arrays of stored timestamps. Chrono stores a resolved UTC date/time and converts its packed year/ordinal and clock to microseconds; roc-time preserves the declared local year/month/day and offset, so this operation also performs Gregorian field conversion and offset subtraction. Neither side is merely reading a cached integer timestamp. The checksum matches `parse`. Do not subtract `resolve` measurements from `parse` to infer parser-only latency: the representations, optimization opportunities and combined operation paths differ.
 

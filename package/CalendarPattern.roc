@@ -81,6 +81,32 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 		}
 	}
 
+	## Test the start against an exclusive date limit before constructing the period.
+	## This also works when the calculated period is beyond the calendar provider.
+	start_relative_to : CalendarPattern, { period_index : U64, boundary : GregorianDate } -> [Before, Same, After]
+	start_relative_to = |pattern, { period_index, boundary }| {
+		step = period_index.to_i128() * pattern.spec.interval.to_i128()
+		anchor = GregorianDate.to_fields(pattern.anchor)
+		limit = GregorianDate.to_fields(boundary)
+		match pattern.spec.frequency {
+			Daily => (number(pattern.anchor).to_i128() + step).order_relative_to(number(boundary).to_i128())
+			Weekly => {
+				day = number(pattern.anchor)
+				back = I64.mod_by(weekday_number(day) - weekday_index(pattern.spec.week_start), 7)
+				((day - back).to_i128() + step * 7).order_relative_to(number(boundary).to_i128())
+			}
+			Monthly => {
+				start = anchor.year.to_i128() * 12 + anchor.month.to_i128() + step
+				end_month = limit.year.to_i128() * 12 + limit.month.to_i128()
+				if (start == end_month and limit.day > 1) Before else start.order_relative_to(end_month)
+			}
+			Yearly => {
+				year = anchor.year.to_i128() + step
+				if (year == limit.year.to_i128() and (limit.month > 1 or limit.day > 1)) Before else year.order_relative_to(limit.year.to_i128())
+			}
+		}
+	}
+
 	## Test one date against one period. Cost is O(s) supplied selector values,
 	## with bounded calendar arithmetic; no series scan or candidate lists.
 	## BYSETPOS must operate on completed full candidates, after this layer.
@@ -89,8 +115,8 @@ CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	## defaults retain month/day only in the absence of expanding date selectors
 	## (an explicit BYMONTH can select multiple copies of the anchor month-day).
 	## Standards adapters supply any additional format-specific defaults first.
-	matches : CalendarPattern, U64, GregorianDate -> Try(Bool, [OutOfRange])
-	matches = |pattern, index, date| {
+	matches : CalendarPattern, { period_index : U64, date : GregorianDate } -> Try(Bool, [OutOfRange])
+	matches = |pattern, { period_index: index, date }| {
 		frame = period(pattern, index)?
 		if date < frame.start or date >= frame.end {
 			return Ok(False)
@@ -215,7 +241,7 @@ test_calendarpattern_days = |pattern, index| {
 	var $result = []
 	while $current < end {
 		value = GregorianDate.from_civil_day(CivilDay.from_day_number($current))?
-		if CalendarPattern.matches(pattern, index, value)? {
+		if CalendarPattern.matches(pattern, { period_index: index, date: value })? {
 			$result = $result.append(GregorianDate.to_fields(value))
 		}
 		$current = $current + 1

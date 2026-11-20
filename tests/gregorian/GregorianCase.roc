@@ -1,5 +1,5 @@
 import fuzz.Fuzz
-import time.CivilDay
+import time.Calendar.CivilDay as CivilDay
 import time.GregorianDate
 import time.EnglishGregorian
 

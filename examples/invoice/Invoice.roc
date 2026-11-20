@@ -8,7 +8,7 @@ Invoice :: { issued : GregorianDate, due : GregorianDate }.{
 		if months < 0 {
 			return Err(NegativeTerm)
 		}
-		due = Calendar.Arithmetic.shift_day(issued, Calendar.Delta.months(months), Clamp)?
+		due = Calendar.Arithmetic.shift_day(issued, { delta: Calendar.Delta.months(months), policy: Clamp })?
 		Ok({ issued, due })
 	}
 

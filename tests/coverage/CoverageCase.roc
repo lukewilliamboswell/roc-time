@@ -61,13 +61,13 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 		for retained in [a, from_slice] {
 			if Coverage.union(Coverage.empty, retained) != retained or
 				Coverage.union(retained, Coverage.empty) != retained or
-					Coverage.difference(retained, Coverage.empty) != retained {
+					Coverage.difference({ base: retained, subtract: Coverage.empty }) != retained {
 				return Ok(Bool.False)
 			}
 		}
 		union = Coverage.union(a, b)
 		intersection = Coverage.intersection(a, b)
-		difference = Coverage.difference(a, b)
+		difference = Coverage.difference({ base: a, subtract: b })
 		complement = Coverage.complement_within(a, window)
 		if Coverage.union(b, a) != union or Coverage.intersection(b, a) != intersection {
 			return Ok(Bool.False)
@@ -133,7 +133,7 @@ CoverageCase := { left : List(Spec), right : List(Spec), window : Spec }.{
 	}
 }
 
-make_span = |s| PosixSpan.new(PosixBoundary.from_microseconds(s.lo), PosixBoundary.from_microseconds(s.lo + U8.to_i64(s.width)))
+make_span = |s| PosixSpan.new({ start: PosixBoundary.from_microseconds(s.lo), end: PosixBoundary.from_microseconds(s.lo + U8.to_i64(s.width)) })
 
 make_spans = |specs| {
 	var $spans = []
@@ -172,6 +172,32 @@ check_runs = |coverage, input| {
 	observed = Coverage.to_spans(coverage).map(|span| { start: PosixBoundary.to_microseconds(PosixSpan.start(span)), end: PosixBoundary.to_microseconds(PosixSpan.end(span)) })
 	if observed != $runs {
 		crash "Coverage differs from independent maximal unit-cell runs"
+	}
+	# Fold returns every whole overlapping run in order. A run ending at the
+	# query's start and one starting at its end are excluded.
+	lower = input.window.lo
+	upper = lower + input.window.width.to_i64()
+	first = $runs.fold(0.U64, |n, run| if (run.end <= lower) n + 1 else n)
+	after = $runs.fold(0.U64, |n, run| if (run.start < upper) n + 1 else n)
+	runs = $runs
+	window = make_span(input.window) ?? crash "valid model window"
+	end_index = Coverage.fold_overlaps(
+		coverage,
+		{
+			query: window,
+			initial: first,
+			step: |index, span| {
+				expected = runs.get(index) ?? crash "Overlap fold returned extra member"
+				actual = { start: PosixBoundary.to_microseconds(PosixSpan.start(span)), end: PosixBoundary.to_microseconds(PosixSpan.end(span)) }
+				if actual != expected {
+					crash "Overlap fold differs from independent ordered runs"
+				}
+				index + 1
+			},
+		},
+	)
+	if end_index != after {
+		crash "Overlap fold returned incorrect member count"
 	}
 }
 

@@ -14,7 +14,7 @@ ComparisonBenchmark := [].{
 		rust : Str,
 		go : Str,
 		python : Str,
-		ciso8601 : { version : Str, wheel_url : Str, wheel_sha256 : Str, wheel_filename : Str },
+		ciso8601 : { version : Str, sdist_url : Str, sha256 : Str, wheel_url : Str, wheel_sha256 : Str, wheel_filename : Str },
 		tempo : { revision : Str, version : Str, mix_lock_sha256 : Str, image : Str },
 	}
 	Context : {
@@ -28,19 +28,26 @@ ComparisonBenchmark := [].{
 		versions : Dict(Str, Str),
 		affinity : List(U64),
 		options : ComparisonOptions.Options,
+		native_mac : Bool,
 	}
 	small = ["date_control", "construct", "add_days", "parse", "resolve"]
 	libraries = ["roc-time", "chrono", "jiff", "go-time", "datetime", "ciso8601", "tempo"]
 	prepare! : ComparisonOptions.Options => Try(Context, _)
 	prepare! = |options| {
-		if (Script.command("uname").output!(["-s"])?, Script.command("uname").output!(["-m"])?) != ("Linux", "x86_64") {
-			return Err(ComparisonRequiresLinuxX64)
+		host = (Script.command("uname").output!(["-s"])?, Script.command("uname").output!(["-m"])?)
+		native_mac = match host {
+			("Darwin", "arm64") => True
+			("Linux", "x86_64") => False
+			_ => return Err(UnsupportedComparisonHost(host))
+		}
+		if native_mac and !options.cpu.is_empty() {
+			return Err(AffinityUnavailableOnMacOS)
 		}
 		BenchmarkOptions.controls(Path.read_utf8!("tests/benchmark_controls/timing-positive.txt")?)?
 		pins : Pins
 		pins = Json.parse(Path.read_utf8!("benchmarks/comparison/dependencies.json")?)?
 		root = Path.absolute!(".")?
-		work = Path.absolute!(".roc-time-tmp/announcement")?
+		work = Path.absolute!(".roc-time-tmp/announcement/${if (native_mac) "arm64mac" else "x64musl"}")?
 		Path.create_all!(work)?
 		tempo = Path.join(work, "tempo")
 		# The measured CPython subject deliberately retains the existing 3.12.3
@@ -49,121 +56,132 @@ ComparisonBenchmark := [].{
 		python_version = Script.command(OsStr.from_str(python)).output!(["--version"])?
 		go = Script.command("go").output!(["version"])?
 		if python_version != "Python ${pins.python}" or go.split_on(" ").get(2)? != pins.go {
-			return Err(ComparisonToolchain)
+			return Err(
+				ComparisonToolchain({
+					expected_python: pins.python,
+					actual_python: python_version,
+					expected_go: pins.go,
+					actual_go: go,
+				}),
+			)
 		}
-		docker = Script.command("docker").output!(["info", "--format", "{{.ServerVersion}}"])?
+		docker = if (native_mac) "unavailable on native macOS" else Script.command("docker").output!(["info", "--format", "{{.ServerVersion}}"])?
 		environment = [("PYTHONPATH", "${Path.display(work)}/python")]
 		cargo_env = [
 			("CARGO_HOME", "${Path.display(root)}/.roc-time-tmp/chrono-cargo"),
 			("CARGO_TARGET_DIR", "${Path.display(work)}/jiff-target"),
 		]
-		available = ComparisonOptions.affinity(Path.read_utf8!("/proc/self/status")?)?
+		available = if (native_mac) [] else ComparisonOptions.affinity(Path.read_utf8!("/proc/self/status")?)?
 		affinity = match options.cpu {
 			[] => available
 			[cpu] if available.contains(cpu) => [cpu]
 			_ => return Err(CpuOutsideAffinity)
 		}
 		if options.fetch {
-			wheel = Path.join(work, pins.ciso8601.wheel_filename)
-			_ = BenchmarkProcess.run!({
-				args: [
-					"curl",
-					"--fail",
-					"--location",
-					"--max-time",
-					"60",
-					"--max-filesize",
-					"16777216",
-					pins.ciso8601.wheel_url,
-					"--output",
-					Path.display(wheel),
-				],
-				cwd: root,
-				logs: work,
-				label: "ciso-download",
-				environment: [],
-				timeout_ms: 90000,
-			})?
-			if hash!(wheel)? != pins.ciso8601.wheel_sha256 {
-				return Err(CisoIntegrity)
-			}
-			_ = BenchmarkProcess.run!({
-				args: ["unzip", "-o", Path.display(wheel), "-d", "${Path.display(work)}/python"],
-				cwd: root,
-				logs: work,
-				label: "ciso-install",
-				environment: [("TMPDIR", Path.display(work))],
-				timeout_ms: 300000,
-			})?
-			if !Path.exists!(tempo)? {
-				_ = BenchmarkProcess.run!({
-					args: ["git", "init", Path.display(tempo)],
-					cwd: root,
-					logs: work,
-					label: "tempo-init",
-					environment: [],
-					timeout_ms: 300000,
-				})?
+			if native_mac {
+				install_native_ciso!(root, work, python, pins)?
+			} else {
+				wheel = Path.join(work, pins.ciso8601.wheel_filename)
 				_ = BenchmarkProcess.run!({
 					args: [
-						"git",
-						"-C",
-						Path.display(tempo),
-						"remote",
-						"add",
-						"origin",
-						"https://github.com/elixir-tempo/tempo.git",
+						"curl",
+						"--fail",
+						"--location",
+						"--max-time",
+						"60",
+						"--max-filesize",
+						"16777216",
+						pins.ciso8601.wheel_url,
+						"--output",
+						Path.display(wheel),
 					],
 					cwd: root,
 					logs: work,
-					label: "tempo-remote",
+					label: "ciso-download",
 					environment: [],
-					timeout_ms: 300000,
+					timeout_ms: 90000,
 				})?
+				if hash!(wheel)? != pins.ciso8601.wheel_sha256 {
+					return Err(CisoIntegrity)
+				}
 				_ = BenchmarkProcess.run!({
-					args: ["git", "-C", Path.display(tempo), "fetch", "--depth=1", "origin", pins.tempo.revision],
+					args: ["unzip", "-o", Path.display(wheel), "-d", "${Path.display(work)}/python"],
 					cwd: root,
 					logs: work,
-					label: "tempo-fetch",
-					environment: [],
+					label: "ciso-install",
+					environment: [("TMPDIR", Path.display(work))],
 					timeout_ms: 300000,
 				})?
+				if !Path.exists!(tempo)? {
+					_ = BenchmarkProcess.run!({
+						args: ["git", "init", Path.display(tempo)],
+						cwd: root,
+						logs: work,
+						label: "tempo-init",
+						environment: [],
+						timeout_ms: 300000,
+					})?
+					_ = BenchmarkProcess.run!({
+						args: [
+							"git",
+							"-C",
+							Path.display(tempo),
+							"remote",
+							"add",
+							"origin",
+							"https://github.com/elixir-tempo/tempo.git",
+						],
+						cwd: root,
+						logs: work,
+						label: "tempo-remote",
+						environment: [],
+						timeout_ms: 300000,
+					})?
+					_ = BenchmarkProcess.run!({
+						args: ["git", "-C", Path.display(tempo), "fetch", "--depth=1", "origin", pins.tempo.revision],
+						cwd: root,
+						logs: work,
+						label: "tempo-fetch",
+						environment: [],
+						timeout_ms: 300000,
+					})?
+					_ = BenchmarkProcess.run!({
+						args: ["git", "-C", Path.display(tempo), "checkout", "--detach", "FETCH_HEAD"],
+						cwd: root,
+						logs: work,
+						label: "tempo-checkout",
+						environment: [],
+						timeout_ms: 300000,
+					})?
+				}
 				_ = BenchmarkProcess.run!({
-					args: ["git", "-C", Path.display(tempo), "checkout", "--detach", "FETCH_HEAD"],
+					args: ["docker", "pull", pins.tempo.image],
 					cwd: root,
 					logs: work,
-					label: "tempo-checkout",
+					label: "tempo-image",
 					environment: [],
 					timeout_ms: 300000,
 				})?
-			}
-			_ = BenchmarkProcess.run!({
-				args: ["docker", "pull", pins.tempo.image],
-				cwd: root,
-				logs: work,
-				label: "tempo-image",
-				environment: [],
-				timeout_ms: 300000,
-			})?
-			for (label, args) in [
-				("hex", ["mix", "local.hex", "--force"]),
-				("rebar", ["mix", "local.rebar", "--force"]),
-				("dependencies", ["mix", "deps.get"]),
-				("compile", ["mix", "compile"]),
-			] {
-				_ = BenchmarkProcess.run!({
-					args: make_docker_prefix({
-						tempo,
-						pins,
-						cpu: [],
-						network: AllowNetwork,
-					}).concat(args),
-					cwd: root,
-					logs: work,
-					label: "tempo-${label}",
-					environment: [],
-					timeout_ms: 300000,
-				})?
+				for (label, args) in [
+					("hex", ["mix", "local.hex", "--force"]),
+					("rebar", ["mix", "local.rebar", "--force"]),
+					("dependencies", ["mix", "deps.get"]),
+					("compile", ["mix", "compile"]),
+				] {
+					_ = BenchmarkProcess.run!({
+						args: make_docker_prefix({
+							tempo,
+							pins,
+							cpu: [],
+							network: AllowNetwork,
+						}).concat(args),
+						cwd: root,
+						logs: work,
+						label: "tempo-${label}",
+						environment: [],
+						timeout_ms: 300000,
+					})?
+				}
 			}
 			_ = BenchmarkProcess.run!({
 				args: ["cargo", "fetch", "--locked", "--manifest-path", "benchmarks/comparison/rust/Cargo.toml"],
@@ -174,10 +192,12 @@ ComparisonBenchmark := [].{
 				timeout_ms: 300000,
 			})?
 		}
-		revision = Script.command("git").output!(["-C", Path.to_os_str(tempo), "rev-parse", "HEAD"])?
-		dirty = Script.command("git").output!(["-C", Path.to_os_str(tempo), "diff", "HEAD", "--", "lib", "mix.exs", "mix.lock"])?
-		if revision != pins.tempo.revision or !dirty.is_empty() or hash!(Path.join(tempo, "mix.lock"))? != pins.tempo.mix_lock_sha256 {
-			return Err(TempoSourceIntegrity)
+		if !native_mac {
+			revision = Script.command("git").output!(["-C", Path.to_os_str(tempo), "rev-parse", "HEAD"])?
+			dirty = Script.command("git").output!(["-C", Path.to_os_str(tempo), "diff", "HEAD", "--", "lib", "mix.exs", "mix.lock"])?
+			if revision != pins.tempo.revision or !dirty.is_empty() or hash!(Path.join(tempo, "mix.lock"))? != pins.tempo.mix_lock_sha256 {
+				return Err(TempoSourceIntegrity)
+			}
 		}
 		ciso = BenchmarkProcess.run!({
 			args: [python, "-c", "import ciso8601; print(ciso8601.__version__)"],
@@ -221,7 +241,7 @@ ComparisonBenchmark := [].{
 				"--locked",
 				"--release",
 				"--target",
-				"x86_64-unknown-linux-musl",
+				chrono.rust_target,
 				"--manifest-path",
 				"benchmarks/comparison/rust/Cargo.toml",
 			],
@@ -246,20 +266,24 @@ ComparisonBenchmark := [].{
 			environment: [("CGO_ENABLED", "0"), ("GOCACHE", "${Path.display(work)}/go-cache")],
 			timeout_ms: 300000,
 		})?
-		Path.copy!("benchmarks/comparison/tempo_bench.exs", Path.join(tempo, "comparison_bench.exs"))?
-		elixir = BenchmarkProcess.run!({
-			args: make_docker_prefix({
-				tempo,
-				pins,
-				cpu: [],
-				network: Isolated,
-			}).concat(["elixir", "--version"]),
-			cwd: root,
-			logs: work,
-			label: "elixir-version",
-			environment: [],
-			timeout_ms: 300000,
-		})?.stdout.trim()
+		elixir = if native_mac {
+			"unavailable: no reviewed native Tempo runtime pin"
+		} else {
+			Path.copy!("benchmarks/comparison/tempo_bench.exs", Path.join(tempo, "comparison_bench.exs"))?
+			BenchmarkProcess.run!({
+				args: make_docker_prefix({
+					tempo,
+					pins,
+					cpu: [],
+					network: Isolated,
+				}).concat(["elixir", "--version"]),
+				cwd: root,
+				logs: work,
+				label: "elixir-version",
+				environment: [],
+				timeout_ms: 300000,
+			})?.stdout.trim()
+		}
 		versions = Dict.from_list([
 			("python", python_version),
 			("go", go),
@@ -269,23 +293,23 @@ ComparisonBenchmark := [].{
 			("elixir", elixir),
 			("docker", docker),
 		])
-		Ok({ root, work, tempo, pins, python, environment, chrono, versions, affinity, options })
+		Ok({ root, work, tempo, pins, python, environment, chrono, versions, affinity, options, native_mac })
 	}
 	native_binaries : Context -> List({ library : Str, binary : Path })
 	native_binaries = |context| [
 		{ library: "roc-time", binary: context.chrono.roc_binary },
 		{ library: "chrono", binary: context.chrono.rust_binary },
-		{ library: "jiff", binary: Path.join(context.work, "jiff-target/x86_64-unknown-linux-musl/release/roc-time-jiff-benchmark") },
+		{ library: "jiff", binary: Path.join(context.work, "jiff-target/${context.chrono.rust_target}/release/roc-time-jiff-benchmark") },
 		{ library: "go-time", binary: Path.join(context.work, "go-bench") },
 	]
 	command : Context, { library : Str, args : List(Str) } -> Try(List(Str), [UnknownSubject])
 	command = |context, { library, args }| {
 		binary = native_binaries(context).keep_if(|subject| subject.library == library)
 		base = match binary {
-			[{ binary: path, .. }] => ["env", "--argv0=benchmark", Path.display(path)].concat(args)
+			[{ binary: path, .. }] => (if (context.native_mac) [Path.display(path)] else ["env", "--argv0=benchmark", Path.display(path)]).concat(args)
 			_ => match library {
 				subject if ["datetime", "ciso8601"].contains(subject) => [context.python, "benchmarks/comparison/python_bench.py", library].concat(args)
-				"tempo" => make_docker_prefix({
+				"tempo" if !context.native_mac => make_docker_prefix({
 					tempo: context.tempo,
 					pins: context.pins,
 					cpu: context.options.cpu,
@@ -337,3 +361,28 @@ make_docker_prefix = |{ tempo, pins, cpu, network }| {
 
 hash! : Path => Try(Str, _)
 hash! = |path| Script.command("sha256sum").output!([Path.to_os_str(path)])?.split_on(" ").first()
+
+install_native_ciso! : Path, Path, Str, ComparisonBenchmark.Pins => Try({}, _)
+install_native_ciso! = |root, work, python, pins| {
+	archive = Path.join(work, "ciso8601-${pins.ciso8601.version}.tar.gz")
+	_ = BenchmarkProcess.run!({
+		args: ["curl", "--fail", "--location", "--max-time", "60", "--max-filesize", "16777216", pins.ciso8601.sdist_url, "--output", Path.display(archive)],
+		cwd: root,
+		logs: work,
+		label: "ciso-download",
+		environment: [],
+		timeout_ms: 90000,
+	})?
+	if hash!(archive)? != pins.ciso8601.sha256 {
+		return Err(CisoIntegrity)
+	}
+	_ = BenchmarkProcess.run!({
+		args: [python, "-m", "pip", "install", "--no-deps", "--no-index", "--no-build-isolation", "--target", "${Path.display(work)}/python", Path.display(archive)],
+		cwd: root,
+		logs: work,
+		label: "ciso-install",
+		environment: [("TMPDIR", Path.display(work))],
+		timeout_ms: 300000,
+	})?
+	Ok({})
+}

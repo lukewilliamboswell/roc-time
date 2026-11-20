@@ -30,6 +30,42 @@ RecurrenceTarget := [].{
 				},
 			}),
 			Fuzz.example({
+				name: "excluded-position-before-inclusion",
+				revision: "1",
+				make: || RecurrenceCase.{
+					last_monday: Bool.True,
+					interval: 1,
+					count: 3,
+					query_month: 1,
+					exclude_anchor: Bool.False,
+					work: 16,
+				},
+			}),
+			Fuzz.example({
+				name: "excluded-position-exhausts-count",
+				revision: "1",
+				make: || RecurrenceCase.{
+					last_monday: Bool.True,
+					interval: 2,
+					count: 5,
+					query_month: 10,
+					exclude_anchor: Bool.False,
+					work: 16,
+				},
+			}),
+			Fuzz.example({
+				name: "negative-position-before-window",
+				revision: "1",
+				make: || RecurrenceCase.{
+					last_monday: Bool.True,
+					interval: 1,
+					count: 2,
+					query_month: 3,
+					exclude_anchor: Bool.False,
+					work: 16,
+				},
+			}),
+			Fuzz.example({
 				name: "last-monday-later-window",
 				revision: "1",
 				make: || RecurrenceCase.{

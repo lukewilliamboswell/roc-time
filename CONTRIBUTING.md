@@ -204,6 +204,14 @@ compile-failure tests, and executable examples. It exercises semantic laws and
 independent reference models, with discovered failures preserved as regressions.
 See the [contributor method](AGENTS.md#property-based-testing).
 
+When a defect reveals an invariant, identify the existing target, add a
+generator or fixture that can reach the failing interaction, and express the
+expected outcome using an independent model or law. For example, a merge must
+emit a valid earlier inclusion before a later gap error. Generate both in one
+query, vary the transition and work budget, and retain the smallest case for
+deterministic replay. Report the target, seed, budget, and failing control in
+the change review.
+
 External oracle comparisons are opt-in development tools, not routine PR CI.
 Use them when investigating temporal behavior or changing an algorithm; the PR
 gate runs invariant fuzz targets, retained regressions, public examples,
@@ -265,7 +273,7 @@ exclusions and query windows. Replay drives the public parser and native cursor
 with 17 work steps and one output slot per batch. Select `--oracle rfc_date`.
 The manifest records its semantic intersection;
 it excludes timed rules, week-number selectors and disputed omitted yearly
-fields. Replay also lifts every case to UTC midnight through `ICalTimedRule`,
+fields. Replay also lifts every case to UTC midnight through `ICalendar.TimedRule`,
 checking the same independently generated dates and one-day occurrence widths.
 That extension tests the shared date/timed semantic intersection, not subdaily
 selectors, zone transitions or general timed conformance. Fixed parser tests
@@ -281,7 +289,7 @@ identity and seed are pinned. This corpus
 excludes local-zone transitions, leap seconds and PERIOD overrides. Those require
 separate sourced fixtures and models; UTC agreement does not establish them.
 
-Valid forward Gregorian cases in years 0001–9999 also exercise `ICalDateTime`
+Valid forward Gregorian cases in years 0001–9999 also exercise `ICalendar.DateTime`
 parsing and explicit UTC midnight conversion against the same expected day.
 This covers calendar-date interpretation, not named zones or leap seconds.
 
@@ -497,7 +505,7 @@ forward progress.
 [structural_duration_hash](tests/compiler_repro/structural_duration_hash/README.md)
 isolates a compiler crash when deriving a structural hash key containing a
 nominal duration tail. Its scalar control checks and executes in interpreter,
-dev and speed modes. `TimedSchedule.Endings` hashes the complete declaration fields
+dev and speed modes. `ScheduleDefinition.Endings` hashes the complete declaration fields
 explicitly; the schedule definition checks exercise dictionary lookup for
 checked native definitions. Recheck
 the failing root and its control when upgrading the compiler.
@@ -656,11 +664,73 @@ are in [tests/platform/NOTICE](tests/platform/NOTICE).
 
 ## Comparative benchmarks
 
-The [cross-language benchmark guide](benchmarks/comparison/README.md) adds
-Go, Python, Jiff and Tempo adapters, dependency pins, upstream workload references
-and explicit compatibility profiles. Run its opt-in setup with
-`ROC_NIGHTLY=/path/to/roc blueprint run benchmark-comparison -- --fetch --smoke`.
-Docker and the additional language runtimes are not required by the normal gate.
+Review comparative performance for changes to designated hot paths, compiler
+upgrades, measurement protocol changes and final performance verification.
+Run on the reference host named in the benchmark guide without concurrent
+builds or tests. Review both the ratio to the fastest eligible peer and the
+change against the compatible reviewed roc-time baseline.
+
+Keep correctness expectations, external timings and reviewed roc-time results
+independently identifiable. Correctness refresh uses pinned generator, adapter
+and data inputs. Peer timing refresh uses the reviewed expectations without
+regenerating them. Review changed digests and metadata before accepting either
+refresh. A measurement never replaces a reviewed roc-time baseline by itself.
+Keep raw samples and generated bulk data under `.roc-time-tmp/`.
+
+Use independent sessions to establish reference-host timing tolerances.
+Treat an out-of-band control measurement as inconclusive. Check host load,
+power and toolchain before retrying. Investigate a compatible confirmed
+regression even when the workload still meets its competitive target. Report
+unavailable comparators, cache failures and incorrect outputs explicitly.
+Confirm all competitive rows with fresh peers before updating published figures.
+
+Run `blueprint run benchmark-replay` to build the native Roc benchmark and
+check the date and timestamp profiles against their reviewed inputs and
+checksums. It also checks the coverage, zone and recurrence fixtures against
+independent expected results. The harness gate runs the same replay and
+exercises missing, corrupted and wrong-profile expectations and invalid
+measurement records. Replay uses the instrumented fixture allocator. Timed
+comparisons use the separate benchmarking allocator.
+`blueprint run benchmark-expectations` uses the pinned oracle to produce
+candidates under `.roc-time-tmp/benchmark-expectations-candidate/`. Compare
+their contents and manifest with `benchmarks/comparison/expectations/` and
+review the semantic changes before accepting the candidates. A pin or input
+change also requires replay against the changed public API.
+
+Keep timing baselines, their digests, and raw reports under ignored
+`.roc-time-tmp/` storage. Correctness replay uses the versioned expectations
+without requiring any local timing baseline.
+
+Run `blueprint run benchmark-comparison` for a Roc-only measurement across the
+matrix against compatible reviewed peer baselines. The runner checks each
+peer baseline's digest and identity before its timing stage. Use
+`blueprint run benchmark-peers -- --fetch --smoke` for explicit dependency setup
+and smoke verification. Follow with `blueprint run benchmark-peers` for the
+reference protocol. Inspect its raw report, target results and peer baseline
+candidate before promoting the candidate and its reported SHA-256 to
+`.roc-time-tmp/benchmark-baselines/peer-baseline.json` and
+`.roc-time-tmp/benchmark-baselines/peer-baseline.sha256`.
+Use `blueprint run benchmark-operations-peers -- --fetch` to acquire the
+locked interval peer. Run `blueprint run benchmark-operations-peers` for
+fresh coverage timings and the absolute named-zone and recurrence rows.
+Review its candidate and digest for
+`.roc-time-tmp/benchmark-baselines/coverage-peer-baseline.json` and
+`.roc-time-tmp/benchmark-baselines/coverage-peer-baseline.sha256`.
+
+Run the Roc-only comparison in at least three independent reference sessions
+to review a new `.roc-time-tmp/benchmark-baselines/roc-baseline.json`. Run
+`blueprint run benchmark-comparison -- --review-roc REPORT1 REPORT2 REPORT3`
+to prepare the date and timestamp candidate. For the operational reports
+use `blueprint run benchmark-operations -- --review REPORT1 REPORT2 REPORT3`
+and review the candidate for `.roc-time-tmp/benchmark-baselines/operational-roc-baseline.json`.
+The candidates retain each workload's session medians and the timing-control
+measurements before and after each run.
+The runner uses the middle session median and extends the observed range by
+one measured spread at either end. It reports a possible regression above that
+range and rejects a timing claim when the control falls outside its range.
+Review the session reports before editing this baseline.
+The [comparison guide](benchmarks/comparison/README.md) lists the profiles and
+peer requirements. Additional runtimes are needed only for peer refresh.
 
 The [Chrono benchmark guide](benchmarks/chrono/README.md) defines the shared input
 profile, independent output checks, compiler/allocator choices and sampling method.
@@ -676,9 +746,11 @@ Missing toolchains, failed dependency acquisition and mismatches fail the benchm
 Cargo dependencies use the checked-in lockfile; builds run offline after the
 locked fetch. Smoke timings are correctness evidence, not performance claims.
 
-Run longer opt-in benchmarks without concurrent builds or tests. They compare
-selected date and timestamp operations, not overall library capability; their
-in-process timing excludes setup. Keep raw results under `.roc-time-tmp/`.
+Run longer opt-in benchmarks without concurrent builds or tests. Scope claims
+to the documented input profiles and timing boundaries. Keep raw results under
+`.roc-time-tmp/`. The gate also runs
+`blueprint run check-wasm-timestamp-resource` to check exact coordinates and
+allocation calls for the wasm32 numeric-offset parser.
 
 ## Compilers and releases
 

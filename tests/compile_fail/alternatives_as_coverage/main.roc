@@ -1,7 +1,7 @@
 app [main!] { time: "../../../package/main.roc" }
 import time.Calendar
-import time.QualifiedCalendarValue
-import time.CalendarEvidence
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
+import time.Evidence.Calendar as CalendarEvidence
 import time.Coverage
 import time.PosixBoundary
 main! = |_args| {

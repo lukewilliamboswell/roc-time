@@ -1,5 +1,6 @@
 import fuzz.Fuzz
-import time.AllDayOccurrence
+import time.Recurrence.AllDayOccurrence as AllDayOccurrence
+import time.Recurrence.AllDayOccurrenceCursor as AllDayOccurrenceCursor
 import time.Calendar
 import time.ClockTime
 import time.Coverage
@@ -7,8 +8,8 @@ import time.FixedOffset
 import time.LocalDateTime
 import time.PosixBoundary
 import time.ZoneRules
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 
 ZoneCase := { number : I64, first : I32, second : I32 }.{
 	parser_for : _
@@ -50,7 +51,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Err(_) => crash "fixture clock rejected"
 		}
 		rules = make_rules(input.first, input.second, -10, 10)
-		local = LocalDateTime.new(date, clock)
+		local = LocalDateTime.new({ date, clock })
 		# Enumerate the timeline in one-second cells. Offset is a direct
 		# piecewise fixture definition, not the production inverse algorithm.
 		second = I64.div_floor_by(input.number, 1000000)
@@ -78,7 +79,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		if ZoneRules.resolve(rules, local) != Ok(classification) {
 			crash "zone resolution differs from independent timeline enumeration"
 		}
-		var $classification_cursor = match ZoneRules.classification_cursor(rules, local) {
+		var $classification_cursor = match ZoneRules.ClassificationCursor.from_local(rules, local) {
 			Ok(value) => value
 			Err(_) => crash "classification cursor"
 		}
@@ -132,24 +133,24 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		}
 		match $expected {
 			[] => {
-				if ZoneRules.resolve_occurrence(rules, local, First) != Err(Gap) {
+				if ZoneRules.resolve_occurrence(rules, { local, occurrence: First }) != Err(Gap) {
 					crash "gap silently shifted"
 				}
 			}
 			[only] => {
-				if ZoneRules.resolve_occurrence(rules, local, RequireUnique) != Ok(only) {
+				if ZoneRules.resolve_occurrence(rules, { local, occurrence: RequireUnique }) != Ok(only) {
 					crash "unique occurrence policy"
 				}
 			}
 			_ => {
-				if ZoneRules.resolve_occurrence(rules, local, RequireUnique) != Err(Ambiguous) {
+				if ZoneRules.resolve_occurrence(rules, { local, occurrence: RequireUnique }) != Err(Ambiguous) {
 					crash "fold silently chosen"
 				}
 			}
 		}
 		for occurrence in $expected {
 			seconds = I64.div_trunc_by(input.number - PosixBoundary.to_microseconds(occurrence), 1000000).to_i32_wrap()
-			snapshot = match ResolvedBoundary.resolve(rules, local, MatchingOffset(FixedOffset.from_seconds(seconds))) {
+			snapshot = match ResolvedBoundary.resolve(rules, { local, occurrence: MatchingOffset(FixedOffset.from_seconds(seconds)) }) {
 				Ok(value) => value
 				Err(_) => crash "valid snapshot rejected"
 			}
@@ -170,7 +171,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					_ => crash "re-resolution discarded offset policy"
 				}
 			}
-			if ZoneRules.resolve_occurrence(rules, local, MatchingOffset(FixedOffset.from_seconds(seconds))) != Ok(occurrence) {
+			if ZoneRules.resolve_occurrence(rules, { local, occurrence: MatchingOffset(FixedOffset.from_seconds(seconds)) }) != Ok(occurrence) {
 				crash "asserted offset chose wrong occurrence"
 			}
 		}
@@ -194,11 +195,11 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			Ok(value) => value
 			Err(_) => crash "fixture end clock rejected"
 		}
-		selected = match ZoneRules.select(rules, local, LocalDateTime.new(end_date, end_clock)) {
+		selected = match ZoneRules.select(rules, { start: local, end: LocalDateTime.new({ date: end_date, clock: end_clock }) }) {
 			Ok(value) => value
 			Err(_) => crash "complete local selection rejected"
 		}
-		var $cursor = match ZoneRules.selection_cursor(rules, local, LocalDateTime.new(end_date, end_clock)) {
+		var $cursor = match ZoneRules.SelectionCursor.from_bounds(rules, { start: local, end: LocalDateTime.new({ date: end_date, clock: end_clock }) }) {
 			Ok(value) => value
 			Err(_) => crash "selection cursor rejected fixture"
 		}
@@ -213,7 +214,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 			}
 			match batch.status {
 				Complete(value) => {
-					if ResolvedSelection.coverage(value) != selected or ResolvedSelection.start(value) != local or ResolvedSelection.end(value) != LocalDateTime.new(end_date, end_clock) {
+					if ResolvedSelection.coverage(value) != selected or ResolvedSelection.start(value) != local or ResolvedSelection.end(value) != LocalDateTime.new({ date: end_date, clock: end_clock }) {
 						crash "chunk boundaries changed selection"
 					}
 					$completed = Bool.True
@@ -226,7 +227,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		if !$completed {
 			crash "three segments did not complete"
 		}
-		snapshot = match ResolvedSelection.resolve(rules, local, LocalDateTime.new(end_date, end_clock)) {
+		snapshot = match ResolvedSelection.resolve(rules, { start: local, end: LocalDateTime.new({ date: end_date, clock: end_clock }) }) {
 			Ok(value) => value
 			Err(_) => crash "complete selection snapshot rejected"
 		}
@@ -245,7 +246,7 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 					input.second
 				}
 				label = probe + offset.to_i64() * 1000000
-				projected = match ZoneRules.project(rules, point(probe), Gregorian) {
+				projected = match ZoneRules.project(rules, { boundary: point(probe), calendar: Gregorian }) {
 					Ok(value) => value
 					Err(_) => crash "valid generated projection rejected"
 				}
@@ -273,11 +274,11 @@ ZoneCase := { number : I64, first : I32, second : I32 }.{
 		day_rules = make_rules(input.first, input.second, -86400, 172800)
 		# Use epoch day for probes around both boundaries.
 		epoch = epoch_date(1970)
-		day_cursor = match AllDayOccurrence.cursor(input.number, epoch, 1, day_rules) {
+		day_cursor = match AllDayOccurrence.cursor({ id: input.number, date: epoch, days: 1, rules: day_rules }) {
 			Ok(value) => value
 			Err(_) => crash "day cursor"
 		}
-		day_batch = match AllDayOccurrence.Cursor.collect(day_cursor, { max_segments: 3, max_members: 3 }) {
+		day_batch = match AllDayOccurrenceCursor.collect(day_cursor, { max_segments: 3, max_members: 3 }) {
 			Ok(value) => value
 			Err(_) => crash "day resolution"
 		}

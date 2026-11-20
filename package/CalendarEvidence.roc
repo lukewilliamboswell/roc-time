@@ -83,11 +83,7 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 			$index = $index + 1
 		}
 		sorted = $validated.sort_with(
-			|a, b| match LocalDateTime.compare_position(LocalDateTime.from_calendar_value(a.value), LocalDateTime.from_calendar_value(b.value)) {
-				LT => Before
-				EQ => Same
-				GT => After
-			},
+			|a, b| LocalDateTime.compare_position({ left: LocalDateTime.from_calendar_value(a.value), right: LocalDateTime.from_calendar_value(b.value) }),
 		)
 		var $canonical = []
 		for candidate in sorted {
@@ -114,11 +110,11 @@ CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List(
 	## Rules, point and model are immutable across resumptions. No coverage list
 	## is built. Construction rejects an unrepresentable exclusive civil bound
 	## before any query can stop early on sufficient witnesses.
-	query : CalendarEvidence, ZoneRules, PosixBoundary -> Try(CalendarEvidenceQuery, [OutsideValidity, OutOfRange])
-	query = |evidence, rules, point| {
+	query : CalendarEvidence, { rules : ZoneRules, point : PosixBoundary } -> Try(CalendarEvidenceQuery, [OutsideValidity, OutOfRange])
+	query = |evidence, { rules, point }| {
 		offset = ZoneRules.offset_at(rules, point)?
 		calendar = Calendar.Date.calendar(LocalDateTime.date(LocalDateTime.from_calendar_value(QualifiedCalendarValue.described_value(evidence.description))))
-		local = FixedOffset.project(offset, point, calendar)?
+		local = FixedOffset.project(offset, { boundary: point, calendar })?
 		Ok({ evidence, rules, point, local, index: 0, yes: Bool.False, no: Bool.False })
 	}
 
@@ -169,16 +165,16 @@ expect {
 }
 
 expect {
-	base = Calendar.Value.month(Gregorian, 2004, 6)?
+	base = Calendar.Value.month(Gregorian, { year: 2004, month: 6 })?
 	description = QualifiedCalendarValue.new(base, [{ scope: Month, qualifier: Approximate }])?
-	july = Calendar.Value.month(Gregorian, 2004, 7)?
+	july = Calendar.Value.month(Gregorian, { year: 2004, month: 7 })?
 	a = CalendarEvidence.new(description, [base, july, base])?
 	b = CalendarEvidence.new(description, [july, base])?
 	a == b and CalendarEvidence.alternatives(a) == [base, july] and
 		CalendarEvidence.new(description, []) == Err(InconsistentEvidence) and
 			CalendarEvidence.new(description, List.repeat(base, 4097)) == Err(TooManyAlternatives) and
-				CalendarEvidence.new(description, [Calendar.Value.month(Gregorian, 2005, 6)?]) == Err(UnqualifiedComponent({ index: 0, scope: Year })) and
-					CalendarEvidence.new(description, [Calendar.Value.month(Julian, 2004, 6)?]) == Err(CalendarMismatch(0)) and
+				CalendarEvidence.new(description, [Calendar.Value.month(Gregorian, { year: 2005, month: 6 })?]) == Err(UnqualifiedComponent({ index: 0, scope: Year })) and
+					CalendarEvidence.new(description, [Calendar.Value.month(Julian, { year: 2004, month: 6 })?]) == Err(CalendarMismatch(0)) and
 						CalendarEvidence.new(description, [Calendar.Value.year(Gregorian, 2004)?]) == Err(ResolutionMismatch(0))
 }
 expect {
@@ -196,9 +192,9 @@ expect {
 	alternatives = CalendarEvidence.new(description, [first, second])?
 	singleton = CalendarEvidence.new(description, [first])?
 	rules = test_rules()?
-	a = CalendarEvidenceQuery.collect(CalendarEvidence.query(alternatives, rules, PosixBoundary.from_microseconds(0))?, { max_alternatives: 2 })
-	b = CalendarEvidenceQuery.collect(CalendarEvidence.query(alternatives, rules, PosixBoundary.from_microseconds(172800000000))?, { max_alternatives: 2 })
-	c = CalendarEvidenceQuery.collect(CalendarEvidence.query(singleton, rules, PosixBoundary.from_microseconds(0))?, { max_alternatives: 1 })
+	a = CalendarEvidenceQuery.collect(CalendarEvidence.query(alternatives, { rules, point: PosixBoundary.from_microseconds(0) })?, { max_alternatives: 2 })
+	b = CalendarEvidenceQuery.collect(CalendarEvidence.query(alternatives, { rules, point: PosixBoundary.from_microseconds(172800000000) })?, { max_alternatives: 2 })
+	c = CalendarEvidenceQuery.collect(CalendarEvidence.query(singleton, { rules, point: PosixBoundary.from_microseconds(0) })?, { max_alternatives: 1 })
 	match (a.status, b.status, c.status) {
 		(Complete(Possible), Complete(Impossible), Complete(Definite)) => True
 		_ => False
@@ -208,14 +204,14 @@ expect {
 	value = Calendar.Value.year(Gregorian, 1970)?
 	description = QualifiedCalendarValue.new(value, [])?
 	evidence = CalendarEvidence.new(description, [value])?
-	match CalendarEvidence.query(evidence, test_rules()?, PosixBoundary.from_microseconds(I64.highest)) {
+	match CalendarEvidence.query(evidence, { rules: test_rules()?, point: PosixBoundary.from_microseconds(I64.highest) }) {
 		Err(OutsideValidity) => True
 		_ => False
 	}
 }
 test_rules = || {
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
-	ZoneRules.new_bounded("UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
+	ZoneRules.Provider.new_bounded({ name: "UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })
 }
 
 CalendarEvidenceQuery :: { evidence : CalendarEvidence, rules : ZoneRules, point : PosixBoundary, local : LocalDateTime, index : U64, yes : Bool, no : Bool }.{
@@ -247,7 +243,7 @@ CalendarEvidenceQuery :: { evidence : CalendarEvidence, rules : ZoneRules, point
 				Err(_) => crash "Validated evidence cursor index"
 			}
 			bounds = { start: LocalDateTime.from_calendar_value(candidate.value), end: candidate.end }
-			inside = LocalDateTime.compare_position(bounds.start, $state.local) != GT and LocalDateTime.compare_position($state.local, bounds.end) == LT
+			inside = LocalDateTime.compare_position({ left: bounds.start, right: $state.local }) != After and LocalDateTime.compare_position({ left: $state.local, right: bounds.end }) == Before
 			$state = { ..$state, index: $state.index + 1, yes: $state.yes or inside, no: $state.no or !inside }
 			$examined = $examined + 1
 		}

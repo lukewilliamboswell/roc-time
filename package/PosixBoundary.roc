@@ -1,3 +1,5 @@
+import MicrosecondRounding
+import Quantize
 import PosixDelta
 
 ## Exact POSIX coordinates: microseconds since 1970-01-01T00:00:00Z.
@@ -21,12 +23,6 @@ import PosixDelta
 ## Examples assume a package dependency named `time`.
 PosixBoundary :: [Micros(I64)].{
 
-	## Precision reduction policy. RejectSubmicrosecond rejects inexact input;
-	## Floor rounds toward negative infinity, Ceiling toward positive infinity,
-	## and TowardZero discards the fractional part. NearestTiesEven chooses the
-	## closest microsecond, resolving exact ties to the even microsecond.
-	Rounding : [RejectSubmicrosecond, Floor, Ceiling, TowardZero, NearestTiesEven]
-
 	## Construct an exact position from signed microseconds since the POSIX epoch,
 	## 1970-01-01T00:00:00Z. Every I64 value is accepted; leap seconds are not distinct.
 	from_microseconds : I64 -> PosixBoundary
@@ -46,28 +42,28 @@ PosixBoundary :: [Micros(I64)].{
 
 	## Convert nanoseconds since the POSIX epoch using the supplied rounding policy.
 	## Range is checked after rounding; RejectSubmicrosecond rejects an inexact input.
-	from_nanoseconds_with_rounding : I128, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
+	from_nanoseconds_with_rounding : I128, MicrosecondRounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
 	from_nanoseconds_with_rounding = |value, policy| {
-		Ok(Micros(quantize(value, 1000, policy)?))
+		Ok(Micros(Quantize.to_microseconds({ value, divisor: 1000, rounding: policy })?.to_i64_try()?))
 	}
 
 	## Convert exact decimal seconds since the POSIX epoch with explicit rounding.
 	## RejectSubmicrosecond preserves exactness; a rounded result outside I64
 	## microseconds returns OutOfRange.
-	from_seconds : Dec, Rounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
+	from_seconds : Dec, MicrosecondRounding -> Try(PosixBoundary, [Submicrosecond, OutOfRange])
 	from_seconds = |value, policy| {
-		Ok(Micros(quantize(Dec.to_attos(value), 1000000000000, policy)?))
+		Ok(Micros(Quantize.to_microseconds({ value: Dec.to_attos(value), divisor: 1000000000000, rounding: policy })?.to_i64_try()?))
 	}
 
-	## Compare exact POSIX positions, returning LT, EQ or GT.
-	compare : PosixBoundary, PosixBoundary -> [LT, EQ, GT]
-	compare = |Micros(a), Micros(b)| {
+	## Compare exact POSIX positions, returning Before, Same or After.
+	order_relative_to : PosixBoundary, PosixBoundary -> [Before, Same, After]
+	order_relative_to = |Micros(a), Micros(b)| {
 		if a < b {
-			LT
+			Before
 		} else if a > b {
-			GT
+			After
 		} else {
-			EQ
+			Same
 		}
 	}
 
@@ -114,8 +110,8 @@ PosixBoundary :: [Micros(I64)].{
 	## Return the first position minus the second, as a signed POSIX displacement.
 	## OutOfRange is possible even when both positions individually fit.
 	## This is coordinate width, not leap-aware physical elapsed time.
-	difference : PosixBoundary, PosixBoundary -> Try(PosixDelta, [OutOfRange])
-	difference = |Micros(a), Micros(b)| {
+	difference : { left : PosixBoundary, right : PosixBoundary } -> Try(PosixDelta, [OutOfRange])
+	difference = |{ left: Micros(a), right: Micros(b) }| {
 		match I64.minus_try(a, b) {
 			Ok(result) => Ok(PosixDelta.from_microseconds(result))
 			Err(Overflow) => Err(OutOfRange)
@@ -124,8 +120,8 @@ PosixBoundary :: [Micros(I64)].{
 
 	expect shift(from_microseconds(9223372036854775807), PosixDelta.from_microseconds(1)) == Err(OutOfRange)
 	expect shift(from_microseconds(-9223372036854775808), PosixDelta.from_microseconds(-1)) == Err(OutOfRange)
-	expect difference(from_microseconds(9223372036854775807), from_microseconds(-1)) == Err(OutOfRange)
-	expect difference(from_microseconds(-1), from_microseconds(1)) == Ok(PosixDelta.from_microseconds(-2))
+	expect difference({ left: from_microseconds(9223372036854775807), right: from_microseconds(-1) }) == Err(OutOfRange)
+	expect difference({ left: from_microseconds(-1), right: from_microseconds(1) }) == Ok(PosixDelta.from_microseconds(-2))
 
 	expect from_seconds(0.000001.Dec, RejectSubmicrosecond) == Ok(from_microseconds(1))
 	expect from_seconds(-0.000001.Dec, RejectSubmicrosecond) == Ok(from_microseconds(-1))
@@ -169,46 +165,4 @@ PosixBoundary :: [Micros(I64)].{
 	expect from_nanoseconds_with_rounding(-9223372036854775808501, NearestTiesEven) == Err(OutOfRange)
 	expect from_nanoseconds_with_rounding(I128.lowest, Floor) == Err(OutOfRange)
 	expect from_nanoseconds_with_rounding(I128.highest, Ceiling) == Err(OutOfRange)
-}
-
-# Private: divisor is either 1000 or 10^12. Remainder magnitude is below divisor;
-# quotient +/- 1 and twice the remainder cannot overflow I128. Narrow only last.
-quantize : I128, I128, PosixBoundary.Rounding -> Try(I64, [Submicrosecond, OutOfRange])
-quantize = |value, divisor, policy| {
-	q = I128.div_trunc_by(value, divisor)
-	r = I128.rem_by(value, divisor)
-	if r == 0 {
-		return I128.to_i64_try(q)
-	}
-	rounded = match policy {
-		RejectSubmicrosecond => return Err(Submicrosecond)
-		TowardZero => q
-		Floor => if r < 0 {
-			q - 1
-		} else {
-			q
-		}
-		Ceiling => if r > 0 {
-			q + 1
-		} else {
-			q
-		}
-		NearestTiesEven => {
-			magnitude = if r < 0 {
-				-r
-			} else {
-				r
-			}
-			if magnitude * 2 > divisor or (magnitude * 2 == divisor and I128.rem_by(q, 2) != 0) {
-				q + if r < 0 {
-					-1
-				} else {
-					1
-				}
-			} else {
-				q
-			}
-		}
-	}
-	I128.to_i64_try(rounded)
 }

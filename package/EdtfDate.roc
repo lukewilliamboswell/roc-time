@@ -25,7 +25,7 @@ import LocalDateTime
 ##
 ## Generic codecs use canonical strings and typed literals validate at compile time:
 ## ```roc
-## import time.EdtfDate
+## import time.Interchange.EdtfDate as EdtfDate
 ## expect {
 ##     date : EdtfDate
 ##     date = "1984?"
@@ -308,7 +308,7 @@ parse_calendar_fields = |text| {
 	if size >= 7 {
 		prefix_year = digits(core, 0, 4).to_i64()
 		prefix_month = digits(core, 5, 2).to_u8_wrap()
-		match Calendar.Value.month(Gregorian, prefix_year, prefix_month) {
+		match Calendar.Value.month(Gregorian, { year: prefix_year, month: prefix_month }) {
 			Ok(_) => {}
 			Err(_) => return Err(Malformed)
 		}
@@ -346,7 +346,7 @@ parse_calendar_fields = |text| {
 	} else {
 		month = digits(core, 5, 2).to_u8_wrap()
 		if size == 7 {
-			match Calendar.Value.month(Gregorian, year, month) {
+			match Calendar.Value.month(Gregorian, { year, month }) {
 				Ok(v) => v
 				Err(_) => return Err(Malformed)
 			}
@@ -429,7 +429,7 @@ expect {
 }
 expect {
 	year = Calendar.Value.year(Gregorian, 1985)?
-	month = Calendar.Value.month(Gregorian, 1985, 4)?
+	month = Calendar.Value.month(Gregorian, { year: 1985, month: 4 })?
 	QualifiedCalendarValue.described_value(EdtfDate.description(EdtfDate.parse("1985")?)) == year and QualifiedCalendarValue.described_value(EdtfDate.description(EdtfDate.parse("1985-04")?)) == month
 }
 expect {
@@ -449,7 +449,7 @@ expect {
 	EdtfDate.parse("156X") == Err(UnsupportedForm) and EdtfDate.parse("Y170000002") == Err(UnsupportedForm) and EdtfDate.parse("-1985") == Err(UnsupportedForm) and EdtfDate.parse("Yhello") == Err(Malformed) and EdtfDate.parse("x".repeat(65)) == Err(TooLarge)
 }
 expect {
-	value = Calendar.Value.month(Gregorian, 2004, 6)?
+	value = Calendar.Value.month(Gregorian, { year: 2004, month: 6 })?
 	scoped = QualifiedCalendarValue.new(value, [{ scope: Month, qualifier: Approximate }])?
 	negative = QualifiedCalendarValue.new(Calendar.Value.year(Gregorian, -1)?, [])?
 	julian = QualifiedCalendarValue.new(Calendar.Value.year(Julian, 2004)?, [])?
@@ -486,7 +486,7 @@ expect {
 										parse_calendar_fields("2004-06~-11") == Err(Malformed)
 }
 expect {
-	value = Calendar.Value.month(Gregorian, 2004, 6)?
+	value = Calendar.Value.month(Gregorian, { year: 2004, month: 6 })?
 	group = QualifiedCalendarValue.new(value, [{ scope: YearMonth, qualifier: Approximate }])?
 	EdtfDate.from_description(group) == Err(UnsupportedQualification)
 }

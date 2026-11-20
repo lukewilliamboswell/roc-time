@@ -1,6 +1,6 @@
-import time.ICalDateRule
-import time.AllDayRecurrence
-import time.AllDayOccurrence
+import time.ICalendar.DateRule as ICalDateRule
+import time.Recurrence.AllDay as AllDayRecurrence
+import time.Recurrence.AllDayOccurrence as AllDayOccurrence
 import time.Coverage
 import time.PosixDelta
 import time.GregorianDate
@@ -12,7 +12,7 @@ MaintenanceDates :: [].{
 			Ok(value) => value
 			Err(error) => return Err(InvalidCalendar(error))
 		}
-		cursor = AllDayRecurrence.new("service-contract", rule, window, 1, rules)?
+		cursor = AllDayRecurrence.new({ series: "service-contract", rule, window, days: 1, rules })?
 		batch = match AllDayRecurrence.collect(cursor, { work: { max_date_steps: 10000, max_date_buffered: 366, max_zone_segments: 10000, max_zone_members: 8 }, max_occurrences: 100 }) {
 			Ok(value) => value
 			Err(error) => return Err(ResolutionFailed(error))

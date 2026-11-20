@@ -1,13 +1,14 @@
-import time.EdtfInterval
-import time.EdtfDate
+import time.Interchange.EdtfInterval as EdtfInterval
+import time.Interchange.EdtfDate as EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
-import time.Ixdtf
-import time.ICalDateTime
-import time.ICalDuration
-import time.ICalPeriod
+import time.Interchange.Ixdtf as Ixdtf
+import time.ICalendar.DateTime as ICalDateTime
+import time.ICalendar.Duration as ICalDuration
+import time.ICalendar.Period as ICalPeriod
 import time.GregorianDate
 import time.ClockTime
+import time.Nanosecond.ClockTime as NanoClockTime
 import time.LocalDateTime
 import time.Calendar
 # Real builtin JSON exercises derived record/list composition and format-level
@@ -20,6 +21,7 @@ CodecChecks := [].{
 		check_interval_codecs(input.interval_invalid)
 		check_civil(input.civil, input.civil_invalid_date, input.civil_invalid_clock)
 		check_civil_tokens(input.civil_tokens)
+		check_nano_clock(input.nano_clock, input.nano_clock_invalid)
 		result : Try(Document, Errors)
 		result = Json.parse(input.source)
 		document = match result {
@@ -147,7 +149,7 @@ check_civil = |source, invalid_date, invalid_clock| {
 		Json.to_str(value) != "{\"clock\":\"09:30:00\",\"date\":\"2026-09-07\",\"tail\":\"kept\"}" {
 		crash "Civil record text changed date/clock meaning or exposed backing fields"
 	}
-	local = LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
+	local = LocalDateTime.new({ date: Calendar.Date.from_gregorian(value.date), clock: value.clock })
 	if LocalDateTime.parse_gregorian("2026-09-07T09:30") != Ok(local) or
 		LocalDateTime.to_gregorian_text(local) != Ok("2026-09-07T09:30:00") {
 		crash "Civil record did not compose into an unzoned local appointment"
@@ -158,6 +160,41 @@ check_civil = |source, invalid_date, invalid_clock| {
 	bad_clock = Json.parse(invalid_clock)
 	if bad_date != Err(InvalidJson("Invalid JSON")) or bad_clock != Err(InvalidJson("Invalid JSON")) {
 		crash "Civil JSON codecs did not report validation failures"
+	}
+}
+
+NanoDocument : { clock : NanoClockTime, tail : Str }
+
+# JSON and the token encoding carry all nine fractional digits; a tenth digit
+# is a format-level validation failure, while parse keeps the detailed error.
+check_nano_clock = |source, invalid| {
+	parsed : Try(NanoDocument, CivilErrors)
+	parsed = Json.parse(source)
+	clock : NanoClockTime
+	clock = "12:00:00.000000001"
+	if parsed != Ok({ clock, tail: "kept" }) or
+		Json.to_str({ clock, tail: "kept" }) != "{\"clock\":\"12:00:00.000000001\",\"tail\":\"kept\"}" {
+		crash "Nanosecond clock record text changed meaning or exposed backing fields"
+	}
+	bad : Try(NanoClockTime, CivilErrors)
+	bad = Json.parse(invalid)
+	invalid_text : Str
+	invalid_text = Json.parse(invalid) ?? crash "Invalid nanosecond clock fixture is not a JSON string"
+	if bad != Err(InvalidJson("Invalid JSON")) or NanoClockTime.parse(invalid_text) != Err(UnsupportedPrecision) {
+		crash "Nanosecond clock codec did not report validation failure"
+	}
+	parse_clock = NanoClockTime.parser_for(TokenEncoding.Default)
+	encode_clock = NanoClockTime.encoder_for(TokenEncoding.Default)
+	match parse_clock(["12:00:00.000000001", "tail"]) {
+		Ok(found) => if found.value != clock or found.rest != ["tail"] {
+			crash "Nanosecond clock parser changed value or unconsumed state"
+		}
+		Err(_) => crash "Nanosecond clock token rejected"
+	}
+	if parse_clock([]) != Err(NoToken) or
+		encode_clock(clock, ["prefix"]) != Ok(["prefix", "12:00:00.000000001"]) or
+			encode_clock(clock, ["full", "buffer"]) != Err(WriteBlocked) {
+		crash "Nanosecond clock token codec lost state or encoding failure"
 	}
 }
 

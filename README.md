@@ -10,6 +10,13 @@ or schedule a weekly meeting across clock changes. Dates, spans
 and individual events have separate types, so you can keep the meaning your
 application needs.
 
+**41.8–42.8 million timestamps per second** in two native runs on an Apple M2
+MacBook Air. The benchmark parses six-digit, numeric-offset RFC 3339 records
+into exact signed POSIX microseconds. Median time per record was 1.01–1.02×
+Chrono 0.4.45, the fastest eligible peer. The measured source is in
+`0623c95` and uses Roc `nightly-2026-11-18-a520eed` on arm64 macOS.
+[Results, exact source digests, and reproduction commands](benchmarks/comparison/native-date-timestamp.md)
+
 ## What it looks like
 
 A shop opens from 09:00 to 17:00 UTC. A booking arrives as 12:00–14:00 at

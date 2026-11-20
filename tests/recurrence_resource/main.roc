@@ -1,23 +1,28 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Calendar
-import time.QualifiedCalendarValue
-import time.CalendarEvidence
-import time.CalendarPattern
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.TimedRecurrence
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.CalendarQuery as CalendarQuery
+import time.Recurrence.CalendarPattern as CalendarPattern
+import time.ScheduleDefinition
+
+import time.ScheduleDefinition.OccurrenceCursor as OccurrenceCursor
+import time.Recurrence.Timed as TimedRecurrence
+import time.Recurrence.TimedStart as TimedStart
+import time.Recurrence.TimedCursor as TimedCursor
 import time.LocalDateTime
-import time.DateRecurrence
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
 import time.GregorianDate
-import time.AllDayRecurrence
-import time.AllDayOccurrence
+import time.Recurrence.AllDay as AllDayRecurrence
+import time.Recurrence.AllDayOccurrence as AllDayOccurrence
 import time.PosixSpan
 import time.PosixBoundary
 import time.PosixDelta
 import time.FixedOffset
 import time.ZoneRules
-import time.ClockPattern
+import time.Recurrence.ClockPattern as ClockPattern
 import time.ClockTime
 
 # R12/R15: runtime horizon, shared cursor, bounded prefix. Hundreds of billions
@@ -41,7 +46,7 @@ main! = |args| {
 		Err(_) => crash "fixture cursor"
 	}
 	before = Host.allocated_bytes!({})
-	stream = DateRecurrence.Cursor.chunks(cursor, { max_steps: 8, max_buffered: 1, max_occurrences: 1 })
+	stream = DateCursor.chunks(cursor, { max_steps: 8, max_buffered: 1, max_occurrences: 1 })
 	constructed = Host.allocated_bytes!({})
 	Host.assert!(constructed - before <= ceiling)
 	count = stream.take_first(1).fold(
@@ -58,15 +63,17 @@ main! = |args| {
 	)
 	consumed = Host.allocated_bytes!({})
 	Host.assert!(count == 1 and consumed - constructed <= ceiling)
-	folded = match DateRecurrence.Cursor.fold(
+	folded = match DateCursor.fold(
 		cursor,
-		{ max_steps: 8, max_buffered: 1, max_occurrences: 1 },
-		0.U64,
-		|n, date| {
-			if date != anchor {
-				crash "incorrect stopped date"
-			}
-			Stop(n + 1)
+		{
+			limits: { max_steps: 8, max_buffered: 1, max_occurrences: 1 },
+			initial: 0.U64,
+			visit: |n, date| {
+				if date != anchor {
+					crash "incorrect stopped date"
+				}
+				Stop(n + 1)
+			},
 		},
 	) {
 		Ok(value) => value
@@ -76,7 +83,7 @@ main! = |args| {
 	Host.assert!(folded.value == 1 and folded.occurrences == 1 and after - consumed <= ceiling)
 	match folded.status {
 		Stopped(rest) => {
-			next = match DateRecurrence.Cursor.next(rest, { max_steps: 8, max_buffered: 1 }) {
+			next = match DateCursor.next(rest, { max_steps: 8, max_buffered: 1 }) {
 				Ok(value) => value
 				Err(_) => crash "resume failed"
 			}
@@ -98,7 +105,7 @@ main! = |args| {
 		Err(_) => crash "delayed cursor"
 	}
 	search_before = Host.allocated_bytes!({})
-	searched = match DateRecurrence.Cursor.next(delayed, { max_steps: 1, max_buffered: 1 }) {
+	searched = match DateCursor.next(delayed, { max_steps: 1, max_buffered: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "bounded search failed"
 	}
@@ -111,7 +118,7 @@ main! = |args| {
 	# Consume the entire zero-work stream. It must expose one incomplete
 	# outcome, then stop; endlessly retrying its cursor would hit the deadline.
 	zero_before = Host.allocated_bytes!({})
-	zero_count = DateRecurrence.Cursor.chunks(delayed, { max_steps: 0, max_buffered: 1, max_occurrences: 1 }).fold(
+	zero_count = DateCursor.chunks(delayed, { max_steps: 0, max_buffered: 1, max_occurrences: 1 }).fold(
 		0.U64,
 		|n, result| {
 			match result {
@@ -135,7 +142,7 @@ main! = |args| {
 	Host.assert!(zero_count == 1 and zero_after - zero_before <= ceiling)
 	rules = fixture_rules(2000000000000000)
 	composition_before = Host.allocated_bytes!({})
-	composed = match AllDayRecurrence.new("service", rule, { start: anchor, end }, 1, rules) {
+	composed = match AllDayRecurrence.new({ series: "service", rule, window: { start: anchor, end }, days: 1, rules }) {
 		Ok(value) => value
 		Err(_) => crash "composed cursor"
 	}
@@ -167,7 +174,7 @@ main! = |args| {
 	zone_rules = classification_rules($transitions, 10000000000)
 	local = classification_label(500000)
 	classification_before = Host.allocated_bytes!({})
-	classification_cursor = match ZoneRules.classification_cursor(zone_rules, local) {
+	classification_cursor = match ZoneRules.ClassificationCursor.from_local(zone_rules, local) {
 		Ok(value) => value
 		Err(_) => crash "classification cursor"
 	}
@@ -230,25 +237,25 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "timed resource rule"
 	}
-	timed_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_anchor)
-	timed_end = LocalDateTime.new(Calendar.Date.from_gregorian(end), clock_anchor)
+	timed_start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_anchor })
+	timed_end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end), clock: clock_anchor })
 	timed_before = Host.allocated_bytes!({})
-	timed_cursor = match TimedRecurrence.cursor(timed_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	timed_cursor = match TimedRecurrence.cursor(timed_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "timed resource cursor"
 	}
-	timed_first = match TimedRecurrence.Cursor.next(timed_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	timed_first = match TimedCursor.next(timed_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "timed resource prefix"
 	}
 	timed_after = Host.allocated_bytes!({})
 	Host.assert!(timed_first.steps <= 8 and timed_first.zone_segments == 1 and timed_after - timed_before <= ceiling)
 	match timed_first.status {
-		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		Item(item) => Host.assert!(TimedStart.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
 	timed_stream_before = Host.allocated_bytes!({})
-	timed_count = TimedRecurrence.Cursor.outcomes(timed_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }).take_first(1).fold(
+	timed_count = TimedCursor.outcomes(timed_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }).take_first(1).fold(
 		0.U64,
 		|_, result| {
 			batch = match result {
@@ -256,7 +263,7 @@ main! = |args| {
 				Err(_) => crash "timed stream"
 			}
 			match batch.status {
-				Item(item) => if TimedRecurrence.Occurrence.source(item.occurrence) != timed_start {
+				Item(item) => if TimedStart.source(item.occurrence) != timed_start {
 					crash "timed stream source"
 				}
 				_ => crash "timed stream prefix"
@@ -270,7 +277,7 @@ main! = |args| {
 	# the short/vast comparison still rejects horizon-dependent allocation.
 	Host.assert!(timed_count == 1 and timed_stream_after - timed_stream_before <= ceiling * 2)
 	timed_zero_before = Host.allocated_bytes!({})
-	timed_zero_count = TimedRecurrence.Cursor.outcomes(timed_cursor, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
+	timed_zero_count = TimedCursor.outcomes(timed_cursor, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
 		0.U64,
 		|count_so_far, result| {
 			batch = match result {
@@ -303,18 +310,18 @@ main! = |args| {
 		Err(_) => crash "subdaily resource rule"
 	}
 	subdaily_before = Host.allocated_bytes!({})
-	subdaily_cursor = match TimedRecurrence.cursor(subdaily_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	subdaily_cursor = match TimedRecurrence.cursor(subdaily_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily resource cursor"
 	}
-	subdaily_first = match TimedRecurrence.Cursor.next(subdaily_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	subdaily_first = match TimedCursor.next(subdaily_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "subdaily resource prefix"
 	}
 	subdaily_after = Host.allocated_bytes!({})
 	Host.assert!(subdaily_first.steps <= 8 and subdaily_first.zone_segments == 1 and subdaily_after - subdaily_before <= ceiling)
 	match subdaily_first.status {
-		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		Item(item) => Host.assert!(TimedStart.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
 	cutoff_rule = match TimedRecurrence.new_subdaily({ date: anchor, clock: clock_anchor }, { pattern: { frequency: Secondly, interval: 1, calendar: { by_month: [], by_month_day: [], by_year_day: [], by_day: [] }, clocks: { hours: [], minutes: [], seconds: [] } }, termination: UntilBoundary(PosixBoundary.from_microseconds(I64.highest)), by_set_pos: [] }) {
@@ -322,19 +329,19 @@ main! = |args| {
 		Err(_) => crash "cutoff resource rule"
 	}
 	cutoff_before = Host.allocated_bytes!({})
-	cutoff_cursor = match TimedRecurrence.cursor(cutoff_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	cutoff_cursor = match TimedRecurrence.cursor(cutoff_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "cutoff resource cursor"
 	}
 	cutoff_constructed = Host.allocated_bytes!({})
-	cutoff_first = match TimedRecurrence.Cursor.next(cutoff_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	cutoff_first = match TimedCursor.next(cutoff_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "cutoff resource prefix"
 	}
 	cutoff_after = Host.allocated_bytes!({})
 	Host.assert!(cutoff_constructed - cutoff_before <= ceiling and cutoff_after - cutoff_constructed <= ceiling and cutoff_first.steps <= 8 and cutoff_first.zone_segments == 1)
 	match cutoff_first.status {
-		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		Item(item) => Host.assert!(TimedStart.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
 	var $exclusions = []
@@ -345,7 +352,7 @@ main! = |args| {
 		16.I64
 	}
 	while $exclusion_index <= exclusion_count {
-		$exclusions = $exclusions.append(LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture($exclusion_index * 1000000)))
+		$exclusions = $exclusions.append(LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_fixture($exclusion_index * 1000000) }))
 		$exclusion_index = $exclusion_index + 1
 	}
 	exclusion_rule = match TimedRecurrence.with_exclusions(timed_rule, $exclusions) {
@@ -353,18 +360,18 @@ main! = |args| {
 		Err(_) => crash "resource exclusion set"
 	}
 	exclusion_before = Host.allocated_bytes!({})
-	exclusion_cursor = match TimedRecurrence.cursor(exclusion_rule, { start: timed_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	exclusion_cursor = match TimedRecurrence.cursor(exclusion_rule, { window: { start: timed_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "resource exclusion cursor"
 	}
-	exclusion_first = match TimedRecurrence.Cursor.next(exclusion_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	exclusion_first = match TimedCursor.next(exclusion_cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "resource exclusion prefix"
 	}
 	exclusion_after = Host.allocated_bytes!({})
 	Host.assert!(exclusion_first.steps <= 8 and exclusion_first.zone_segments == 1 and exclusion_after - exclusion_before <= ceiling)
 	match exclusion_first.status {
-		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == timed_start)
+		Item(item) => Host.assert!(TimedStart.source(item.occurrence) == timed_start)
 		_ => Host.assert!(False)
 	}
 	saved_start = match timed_first.status {
@@ -372,17 +379,17 @@ main! = |args| {
 		_ => crash "duration start"
 	}
 	fixed_before = Host.allocated_bytes!({})
-	fixed_cursor = match TimedOccurrence.cursor(1.U64, saved_start, Coordinate(time_delta(3600000000))) {
+	fixed_cursor = match ScheduleDefinition.Occurrence.cursor({ id: 1.U64, start: saved_start, duration: Coordinate(time_delta(3600000000)) }) {
 		Ok(value) => value
 		Err(_) => crash "fixed duration"
 	}
-	fixed_result = match TimedOccurrence.Cursor.collect(fixed_cursor, { max_segments: 0, max_candidates: 0 }) {
+	fixed_result = match OccurrenceCursor.collect(fixed_cursor, { max_segments: 0, max_candidates: 0 }) {
 		Ok(value) => value
 		Err(_) => crash "fixed duration result"
 	}
 	fixed_after = Host.allocated_bytes!({})
 	match fixed_result.status {
-		Complete(value) => Host.assert!(PosixSpan.coordinate_width(TimedOccurrence.span(value)) == Ok(time_delta(3600000000)))
+		Complete(value) => Host.assert!(PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) == Ok(time_delta(3600000000)))
 		Limited(_) => Host.assert!(False)
 	}
 	Host.assert!(fixed_result.segments == 0 and fixed_after - fixed_before <= ceiling)
@@ -393,11 +400,11 @@ main! = |args| {
 	duration_rules = classification_rules(duration_transitions, 200000000000)
 	duration_source = duration_start(duration_rules, local)
 	duration_before = Host.allocated_bytes!({})
-	duration_cursor = match TimedOccurrence.cursor(2.U64, duration_source, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap })) {
+	duration_cursor = match ScheduleDefinition.Occurrence.cursor({ id: 2.U64, start: duration_source, duration: Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }) }) {
 		Ok(value) => value
 		Err(_) => crash "calendar duration cursor"
 	}
-	duration_result = match TimedOccurrence.Cursor.collect(duration_cursor, { max_segments: 1, max_candidates: 1 }) {
+	duration_result = match OccurrenceCursor.collect(duration_cursor, { max_segments: 1, max_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "calendar duration step"
 	}
@@ -411,11 +418,11 @@ main! = |args| {
 	# outside the measurement. The resolved form needs no classification.
 	explicit_label = classification_label(86400500000)
 	explicit_before = Host.allocated_bytes!({})
-	explicit_cursor = match TimedOccurrence.cursor_with_ending(3.U64, duration_source, AtLocal({ source: explicit_label, occurrence: First, gap: RejectGap })) {
+	explicit_cursor = match ScheduleDefinition.Occurrence.cursor_with_ending({ id: 3.U64, start: duration_source, ending: AtLocal({ source: explicit_label, occurrence: First, gap: RejectGap }) }) {
 		Ok(value) => value
 		Err(_) => crash "explicit end cursor"
 	}
-	explicit_result = match TimedOccurrence.Cursor.collect(explicit_cursor, { max_segments: 1, max_candidates: 1 }) {
+	explicit_result = match OccurrenceCursor.collect(explicit_cursor, { max_segments: 1, max_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "explicit end step"
 	}
@@ -426,28 +433,28 @@ main! = |args| {
 		Complete(_) => Host.assert!(False)
 	}
 	resolved_before = Host.allocated_bytes!({})
-	resolved_cursor = match TimedOccurrence.cursor_with_ending(4.U64, saved_start, AtBoundary(PosixBoundary.from_microseconds(I64.highest))) {
+	resolved_cursor = match ScheduleDefinition.Occurrence.cursor_with_ending({ id: 4.U64, start: saved_start, ending: AtBoundary(PosixBoundary.from_microseconds(I64.highest)) }) {
 		Ok(value) => value
 		Err(_) => crash "resolved end cursor"
 	}
-	resolved_result = match TimedOccurrence.Cursor.collect(resolved_cursor, { max_segments: 0, max_candidates: 0 }) {
+	resolved_result = match OccurrenceCursor.collect(resolved_cursor, { max_segments: 0, max_candidates: 0 }) {
 		Ok(value) => value
 		Err(_) => crash "resolved end step"
 	}
 	resolved_after = Host.allocated_bytes!({})
 	Host.assert!(resolved_result.segments == 0 and resolved_after - resolved_before <= ceiling)
 	match resolved_result.status {
-		Complete(value) => Host.assert!(PosixSpan.end(TimedOccurrence.span(value)) == PosixBoundary.from_microseconds(I64.highest))
+		Complete(value) => Host.assert!(PosixSpan.end(ScheduleDefinition.Occurrence.span(value)) == PosixBoundary.from_microseconds(I64.highest))
 		Limited(_) => Host.assert!(False)
 	}
 	# Consume only one composed appointment from the full clock/day product.
 	# One zone segment resolves its start; a second resolves the calendar end.
 	schedule_before = Host.allocated_bytes!({})
-	schedule = match TimedSchedule.new(42.U64, timed_rule, { start: timed_start, end: timed_end }, Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	schedule = match ScheduleDefinition.Cursor.new({ series: 42.U64, rule: timed_rule, window: { start: timed_start, end: timed_end }, duration: Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: time_delta(0), occurrence: RequireUnique, gap: RejectGap }), context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "resource schedule"
 	}
-	schedule_first = match TimedSchedule.next(schedule, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	schedule_first = match ScheduleDefinition.Cursor.next(schedule, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "resource schedule start"
 	}
@@ -458,19 +465,19 @@ main! = |args| {
 		}
 		_ => crash "calendar end needs a second segment"
 	}
-	schedule_end = match TimedSchedule.next(pending_schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	schedule_end = match ScheduleDefinition.Cursor.next(pending_schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "resource schedule end"
 	}
 	schedule_after = Host.allocated_bytes!({})
 	match schedule_end.status {
-		Item(item) => Host.assert!(TimedOccurrence.id(item.occurrence) == { series: 42.U64, source: timed_start } and PosixSpan.coordinate_width(TimedOccurrence.span(item.occurrence)) == Ok(time_delta(86400000000)))
+		Item(item) => Host.assert!(ScheduleDefinition.Occurrence.id(item.occurrence) == { series: 42.U64, source: timed_start } and PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(item.occurrence)) == Ok(time_delta(86400000000)))
 		_ => Host.assert!(False)
 	}
 	Host.assert!(schedule_first.steps <= 8 and schedule_first.zone_segments == 1 and schedule_end.steps == 0 and schedule_end.zone_segments == 1 and schedule_after - schedule_before <= ceiling)
 
 	schedule_stream_before = Host.allocated_bytes!({})
-	schedule_count = TimedSchedule.outcomes(schedule, { max_steps: 8, max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }).take_first(1).fold(
+	schedule_count = ScheduleDefinition.Cursor.outcomes(schedule, { max_steps: 8, max_buffered: 1, max_zone_segments: 2, max_zone_candidates: 1 }).take_first(1).fold(
 		0.U64,
 		|_, result| {
 			batch = match result {
@@ -478,7 +485,7 @@ main! = |args| {
 				Err(_) => crash "schedule stream"
 			}
 			match batch.status {
-				Item(item) => if TimedOccurrence.id(item.occurrence).source != timed_start {
+				Item(item) => if ScheduleDefinition.Occurrence.id(item.occurrence).source != timed_start {
 					crash "schedule stream identity"
 				}
 				_ => crash "schedule stream item"
@@ -490,7 +497,7 @@ main! = |args| {
 	# Keep the composed iterator within its measured traffic budget.
 	Host.assert!(schedule_count == 1 and schedule_stream_after - schedule_stream_before <= ceiling * 3)
 	schedule_zero_before = Host.allocated_bytes!({})
-	schedule_zero_count = TimedSchedule.outcomes(schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
+	schedule_zero_count = ScheduleDefinition.Cursor.outcomes(schedule, { max_steps: 0, max_buffered: 1, max_zone_segments: 0, max_zone_candidates: 1 }).fold(
 		0.U64,
 		|count_so_far, result| {
 			batch = match result {
@@ -511,7 +518,7 @@ main! = |args| {
 	Host.assert!(schedule_zero_count == 1 and schedule_zero_after - schedule_zero_before <= ceiling * 2)
 
 	# Normalize the explicit input outside the measured merge. The earliest
-	# inclusion precedes DTSTART and needs interpretation beside a held start.
+	# inclusion precedes DTSTART and only its own interpretation is needed.
 	var $included_starts = []
 	var $included_index = 0.I64
 	while $included_index < exclusion_count {
@@ -526,43 +533,43 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "inclusion normalization"
 	}
-	inclusion_start = LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture(0))
+	inclusion_start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_fixture(0) })
 	inclusion_before = Host.allocated_bytes!({})
-	inclusion_cursor = match TimedRecurrence.cursor(inclusion_rule, { start: inclusion_start, end: timed_end }, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	inclusion_cursor = match TimedRecurrence.cursor(inclusion_rule, { window: { start: inclusion_start, end: timed_end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "inclusion cursor"
 	}
-	inclusion_first = match TimedRecurrence.Cursor.next(inclusion_cursor, { max_steps: 8, max_buffered: 2, max_zone_segments: 2, max_zone_candidates: 1 }) {
+	inclusion_first = match TimedCursor.next(inclusion_cursor, { max_steps: 8, max_buffered: 2, max_zone_segments: 2, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "inclusion prefix"
 	}
 	inclusion_after = Host.allocated_bytes!({})
 	match inclusion_first.status {
-		Item(item) => Host.assert!(TimedRecurrence.Occurrence.source(item.occurrence) == inclusion_start)
+		Item(item) => Host.assert!(TimedStart.source(item.occurrence) == inclusion_start)
 		_ => Host.assert!(False)
 	}
-	Host.assert!(inclusion_first.steps <= 8 and inclusion_first.zone_segments == 2 and inclusion_after - inclusion_before <= ceiling)
+	Host.assert!(inclusion_first.steps <= 8 and inclusion_first.zone_segments == 1 and inclusion_after - inclusion_before <= ceiling)
 
 	# Duration definitions are normalized outside consumption. Lookup must
 	# not scan or copy the whole 16/4096-entry table for each emitted start.
-	var $overrides = [{ source: timed_start, duration: Coordinate(time_delta(7200000000)) }]
+	var $overrides = [{ source: timed_start, ending: After(Coordinate(time_delta(7200000000))) }]
 	var $override_index = 1.I64
 	while $override_index < exclusion_count {
-		$overrides = $overrides.append({ source: LocalDateTime.new(Calendar.Date.from_gregorian(anchor), clock_fixture($override_index * 1000000)), duration: Coordinate(time_delta(7200000000)) })
+		$overrides = $overrides.append({ source: LocalDateTime.new({ date: Calendar.Date.from_gregorian(anchor), clock: clock_fixture($override_index * 1000000) }), ending: After(Coordinate(time_delta(7200000000))) })
 		$override_index = $override_index + 1
 	}
-	overridden = match TimedSchedule.new_with_overrides(42.U64, timed_rule, { start: timed_start, end: timed_end }, Coordinate(time_delta(3600000000)), $overrides, { rules, occurrence: RequireUnique, gap: RejectGap }) {
+	overridden = match ScheduleDefinition.Cursor.new({ series: 42.U64, rule: timed_rule, window: { start: timed_start, end: timed_end }, duration: Coordinate(time_delta(3600000000)), overrides: $overrides, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "override normalization"
 	}
 	override_before = Host.allocated_bytes!({})
-	override_first = match TimedSchedule.next(overridden, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
+	override_first = match ScheduleDefinition.Cursor.next(overridden, { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "override prefix"
 	}
 	override_after = Host.allocated_bytes!({})
 	match override_first.status {
-		Item(item) => Host.assert!(TimedOccurrence.id(item.occurrence).source == timed_start and PosixSpan.coordinate_width(TimedOccurrence.span(item.occurrence)) == Ok(time_delta(7200000000)))
+		Item(item) => Host.assert!(ScheduleDefinition.Occurrence.id(item.occurrence).source == timed_start and PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(item.occurrence)) == Ok(time_delta(7200000000)))
 		_ => Host.assert!(False)
 	}
 	Host.assert!(override_first.steps <= 8 and override_first.zone_segments == 1 and override_after - override_before <= ceiling)
@@ -596,12 +603,12 @@ main! = |args| {
 		$description_transitions = $description_transitions.append({ at: PosixBoundary.from_microseconds(description_start + $description_index * 1000000), offset: FixedOffset.from_seconds(0) })
 		$description_index = $description_index + 1
 	}
-	description_rules = match ZoneRules.new_bounded("Synthetic/YearSelection", "v1", description_span(description_start - 86400000000, description_end + 86400000000), FixedOffset.from_seconds(0), $description_transitions, { minimum: 0, maximum: 0 }) {
+	description_rules = match ZoneRules.Provider.new_bounded({ name: "Synthetic/YearSelection", version: "v1", validity: description_span(description_start - 86400000000, description_end + 86400000000), initial: FixedOffset.from_seconds(0), transitions: $description_transitions, bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "Description fixture rules"
 	}
 	description_before = Host.allocated_bytes!({})
-	description_cursor = match ZoneRules.calendar_selection_cursor(description_rules, description) {
+	description_cursor = match ZoneRules.SelectionCursor.from_calendar_value(description_rules, description) {
 		Ok(value) => value
 		Err(_) => crash "Description cursor"
 	}
@@ -640,12 +647,12 @@ main! = |args| {
 		Err(_) => crash "Evidence model"
 	}
 	evidence_before = Host.allocated_bytes!({})
-	evidence_query = match CalendarEvidence.query(evidence, description_rules, PosixBoundary.from_microseconds(description_start)) {
+	evidence_query = match CalendarEvidence.query(evidence, { rules: description_rules, point: PosixBoundary.from_microseconds(description_start) }) {
 		Ok(value) => value
 		Err(_) => crash "Evidence point query"
 	}
 	evidence_constructed = Host.allocated_bytes!({})
-	evidence_first = CalendarEvidence.Query.collect(evidence_query, { max_alternatives: 1 })
+	evidence_first = CalendarQuery.collect(evidence_query, { max_alternatives: 1 })
 	evidence_after = Host.allocated_bytes!({})
 	Host.assert!(evidence_constructed - evidence_before <= ceiling and evidence_after - evidence_constructed <= ceiling and evidence_first.examined == 1)
 	evidence_resume = match evidence_first.status {
@@ -653,7 +660,7 @@ main! = |args| {
 		Complete(_) => crash "One alternative cannot establish universal truth"
 	}
 	evidence_resuming = Host.allocated_bytes!({})
-	evidence_second = CalendarEvidence.Query.collect(evidence_resume, { max_alternatives: 1 })
+	evidence_second = CalendarQuery.collect(evidence_resume, { max_alternatives: 1 })
 	evidence_resumed = Host.allocated_bytes!({})
 	Host.assert!(evidence_resumed - evidence_resuming <= ceiling and evidence_second.examined == 1)
 	match evidence_second.status {
@@ -661,7 +668,7 @@ main! = |args| {
 		_ => Host.assert!(False)
 	}
 	# Reuse the original snapshot to exercise sharing as well as early stop.
-	repeated = CalendarEvidence.Query.collect(evidence_query, { max_alternatives: 2 })
+	repeated = CalendarQuery.collect(evidence_query, { max_alternatives: 2 })
 	match repeated.status {
 		Complete(Possible) => Host.assert!(repeated.examined == 2)
 		_ => Host.assert!(False)
@@ -676,28 +683,28 @@ fixture_date = |year, day| match GregorianDate.from_fields({ year, month: 1, day
 }
 
 fixture_rules = |upper| {
-	validity = match PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(upper)) {
+	validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(upper) }) {
 		Ok(value) => value
 		Err(_) => crash "validity"
 	}
-	match ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) {
+	match ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "rules"
 	}
 }
 
 classification_rules = |transitions, upper| {
-	validity = match PosixSpan.new(PosixBoundary.from_microseconds(-2000000), PosixBoundary.from_microseconds(upper)) {
+	validity = match PosixSpan.new({ start: PosixBoundary.from_microseconds(-2000000), end: PosixBoundary.from_microseconds(upper) }) {
 		Ok(value) => value
 		Err(_) => crash "classification validity"
 	}
-	match ZoneRules.new_bounded("Synthetic/Long", "v1", validity, FixedOffset.from_seconds(0), transitions, { minimum: -8192, maximum: 0 }) {
+	match ZoneRules.Provider.new_bounded({ name: "Synthetic/Long", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions, bounds: { minimum: -8192, maximum: 0 } }) {
 		Ok(value) => value
 		Err(_) => crash "classification rules"
 	}
 }
 
-classification_label = |micros| match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(micros), Gregorian) {
+classification_label = |micros| match FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(micros), calendar: Gregorian }) {
 	Ok(value) => value
 	Err(_) => crash "classification label"
 }
@@ -721,11 +728,11 @@ duration_start = |rules, source| {
 		Ok(value) => value
 		Err(_) => crash "duration fixture rule"
 	}
-	cursor = match TimedRecurrence.cursor(rule, { start: source, end: classification_label(1500000) }, { rules, occurrence: First, gap: RejectGap }) {
+	cursor = match TimedRecurrence.cursor(rule, { window: { start: source, end: classification_label(1500000) }, context: { rules, occurrence: First, gap: RejectGap } }) {
 		Ok(value) => value
 		Err(_) => crash "duration fixture cursor"
 	}
-	first = match TimedRecurrence.Cursor.next(cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 10000, max_zone_candidates: 10000 }) {
+	first = match TimedCursor.next(cursor, { max_steps: 8, max_buffered: 1, max_zone_segments: 10000, max_zone_candidates: 10000 }) {
 		Ok(value) => value
 		Err(_) => crash "duration fixture start"
 	}
@@ -735,7 +742,7 @@ duration_start = |rules, source| {
 	}
 }
 
-description_span = |start, end| match PosixSpan.new(PosixBoundary.from_microseconds(start), PosixBoundary.from_microseconds(end)) {
+description_span = |start, end| match PosixSpan.new({ start: PosixBoundary.from_microseconds(start), end: PosixBoundary.from_microseconds(end) }) {
 	Ok(value) => value
 	Err(_) => crash "Description validity span"
 }

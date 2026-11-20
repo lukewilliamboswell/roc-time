@@ -1,8 +1,7 @@
-import time.ICalTimedRule
-import time.ICalDateTime
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.TimedRecurrence
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.DateTime as ICalDateTime
+
+import time.Recurrence.Timed as TimedRecurrence
 import time.PosixBoundary
 import time.PosixSpan
 import time.ZoneRules
@@ -11,7 +10,7 @@ import time.LocalDateTime
 import time.GregorianDate
 import time.Calendar
 import time.ClockTime
-import time.ICalDuration
+import time.ICalendar.Duration as ICalDuration
 import time.ScheduleDefinition
 import time.PosixDelta
 
@@ -56,14 +55,14 @@ TimedExportChecks :: [].{
 			Err(IncompatibleContext) => return "IncompatibleContext"
 			Err(_) => crash "Window-free ICal definition rejected"
 		}
-		match ICalTimedRule.schedule(42.U64, restored, window, context) {
+		match ICalTimedRule.schedule({ series: 42.U64, rule: restored, window, context }) {
 			Ok(_) => {}
 			Err(IncompatibleContext) => return "IncompatibleContext"
 			Err(_) => crash "Schedule rejected"
 		}
 		first = collect(original, window, context, Bool.True)
 		second = collect(restored, window, context, Bool.False)
-		third = collect_cursor(ScheduleDefinition.cursor(42.U64, saved, window) ?? crash "Definition cursor rejected", Bool.True)
+		third = collect_cursor(saved.cursor({ series: 42.U64, window }) ?? crash "Definition cursor rejected", Bool.True)
 		if first != second or first != third {
 			crash "Export changed bounded execution"
 		}
@@ -73,7 +72,7 @@ TimedExportChecks :: [].{
 			native_context = { rules: context_rules(context), occurrence: First, gap: UseOffsetBeforeGap }
 			spec = { rule: definition.rule, duration: ICalDuration.to_duration(definition.duration), overrides: [], context: native_context }
 			native_saved = ScheduleDefinition.from_native(spec) ?? crash "Native definition rejected"
-			fourth = collect_cursor(ScheduleDefinition.cursor(42.U64, native_saved, window) ?? crash "Native cursor rejected", Bool.False)
+			fourth = collect_cursor(native_saved.cursor({ series: 42.U64, window }) ?? crash "Native cursor rejected", Bool.False)
 			if first != fourth {
 				crash "Native definition changed independent expected execution"
 			}
@@ -122,21 +121,21 @@ native = |name| {
 			32400000000
 		},
 	) ?? crash "Native clock"
-	anchor = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+	anchor = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 	var $exceptions = []
 	if name == "native-size" {
 		var $second = 0.I64
 		while $second < 4096 {
 			item_clock = ClockTime.from_microseconds_since_midnight($second * 1000000) ?? crash "Exception clock"
-			$exceptions = $exceptions.append(LocalDateTime.new(Calendar.Date.from_gregorian(date), item_clock))
+			$exceptions = $exceptions.append(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock: item_clock }))
 			$second = $second + 1
 		}
 	} else if name == "native-rdate-fraction" or name == "native-exdate-fraction" {
 		item_clock = ClockTime.from_microseconds_since_midnight(1) ?? crash "Fractional exception clock"
-		$exceptions = [LocalDateTime.new(Calendar.Date.from_gregorian(date), item_clock)]
+		$exceptions = [LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock: item_clock })]
 	} else if name == "native-julian-exdate" {
 		julian = Calendar.Date.from_fields(Julian, { year: 1969, month: 12, day: 19 }) ?? crash "Julian fixture"
-		julian_label = LocalDateTime.new(julian, clock)
+		julian_label = LocalDateTime.new({ date: julian, clock })
 		if !LocalDateTime.same_position(julian_label, anchor) or julian_label == anchor {
 			crash "Julian fixture distinction"
 		}
@@ -206,7 +205,7 @@ exact_cap = |name| {
 	var $second = 0.I64
 	while $second < 4091 {
 		clock = ClockTime.from_microseconds_since_midnight($second * 1000000) ?? crash "Cap clock"
-		$exceptions = $exceptions.append(LocalDateTime.new(LocalDateTime.date(definition.anchor), clock))
+		$exceptions = $exceptions.append(LocalDateTime.new({ date: LocalDateTime.date(definition.anchor), clock }))
 		$second = $second + 1
 	}
 	rule = TimedRecurrence.from_definition({ ..definition, exclusions: $exceptions }) ?? crash "Cap native rule"
@@ -238,8 +237,8 @@ at = |items, index| items.get(index) ?? crash "Fixture arity"
 context_rules = |context| match context {
 	Local(value) => value
 	Utc => {
-		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest)) ?? crash "UTC fixture validity"
-		ZoneRules.new_bounded("UTC", "fixed-test", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 }) ?? crash "UTC fixture rules"
+		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) }) ?? crash "UTC fixture validity"
+		ZoneRules.Provider.new_bounded({ name: "UTC", version: "fixed-test", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } }) ?? crash "UTC fixture rules"
 	}
 }
 
@@ -274,12 +273,12 @@ rules = |name| {
 	} else {
 		[{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(final) }]
 	}
-	validity = PosixSpan.from_seconds(-1000000, 1000000, RejectSubmicrosecond) ?? crash "Fixture validity"
-	ZoneRules.new_bounded("Synthetic/Export", name, validity, FixedOffset.from_seconds(initial), transitions, { minimum: 0, maximum: 7200 }) ?? crash "Fixture zone rejected"
+	validity = PosixSpan.from_seconds({ start: -1000000, end: 1000000, rounding: RejectSubmicrosecond }) ?? crash "Fixture validity"
+	ZoneRules.Provider.new_bounded({ name: "Synthetic/Export", version: name, validity, initial: FixedOffset.from_seconds(initial), transitions, bounds: { minimum: 0, maximum: 7200 } }) ?? crash "Fixture zone rejected"
 }
 
 collect = |rule, window, context, tiny| {
-	cursor = match ICalTimedRule.schedule(42.U64, rule, window, context) {
+	cursor = match ICalTimedRule.schedule({ series: 42.U64, rule, window, context }) {
 		Ok(value) => value
 		Err(_) => crash "Schedule rejected"
 	}
@@ -291,7 +290,7 @@ collect_cursor = |cursor, tiny| {
 	var $output = []
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = TimedSchedule.collect(
+		batch = ScheduleDefinition.Cursor.collect(
 			$cursor,
 			{
 				work: {
@@ -316,13 +315,13 @@ collect_cursor = |cursor, tiny| {
 			},
 		) ?? crash "Execution rejected"
 		for value in batch.occurrences {
-			span = TimedOccurrence.span(value)
-			identity = TimedOccurrence.id(value)
-			if identity.series != 42 or identity.source != TimedOccurrence.source(value) {
+			span = ScheduleDefinition.Occurrence.span(value)
+			identity = ScheduleDefinition.Occurrence.id(value)
+			if identity.series != 42 or identity.source != ScheduleDefinition.Occurrence.source(value) {
 				crash "Schedule changed series or source identity"
 			}
 			$output = $output.append({
-				source: LocalDateTime.to_gregorian_text(TimedOccurrence.source(value)) ?? crash "Source calendar",
+				source: LocalDateTime.to_gregorian_text(ScheduleDefinition.Occurrence.source(value)) ?? crash "Source calendar",
 				start: PosixBoundary.to_microseconds(PosixSpan.start(span)),
 				end: PosixBoundary.to_microseconds(PosixSpan.end(span)),
 			})

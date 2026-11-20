@@ -21,4 +21,4 @@ IdentityFixture := [].{
 	}
 }
 
-span = |lo, hi| PosixSpan.new(PosixBoundary.from_microseconds(lo), PosixBoundary.from_microseconds(hi)) ?? crash "nonempty fixture"
+span = |lo, hi| PosixSpan.new({ start: PosixBoundary.from_microseconds(lo), end: PosixBoundary.from_microseconds(hi) }) ?? crash "nonempty fixture"

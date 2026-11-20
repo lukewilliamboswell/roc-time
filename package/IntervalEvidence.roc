@@ -39,9 +39,9 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 		}
 		sorted = choices.sort_with(
 			|a, b| {
-				comparison = PosixBoundary.compare(PosixSpan.start(a), PosixSpan.start(b))
-				final = if comparison == EQ {
-					PosixBoundary.compare(PosixSpan.end(a), PosixSpan.end(b))
+				comparison = PosixBoundary.order_relative_to(PosixSpan.start(a), PosixSpan.start(b))
+				final = if comparison == Same {
+					PosixBoundary.order_relative_to(PosixSpan.end(a), PosixSpan.end(b))
 				} else {
 					comparison
 				}
@@ -170,13 +170,13 @@ IntervalEvidence :: { declaration : Declaration, possible : Coverage, definite :
 }
 
 ordering = |value| match value {
-	LT => Before
-	EQ => Same
-	GT => After
+	Before => Before
+	Same => Same
+	After => After
 }
 
 normalize = |points| {
-	sorted = points.sort_with(|a, b| ordering(PosixBoundary.compare(a, b)))
+	sorted = points.sort_with(|a, b| ordering(PosixBoundary.order_relative_to(a, b)))
 	var $canonical = []
 	for point in sorted {
 		if $canonical.last() != Ok(point) {
@@ -192,7 +192,7 @@ at = |items, index| match items.get(index) {
 }
 
 between = |start, end| if start < end {
-	span = match PosixSpan.new(start, end) {
+	span = match PosixSpan.new({ start, end }) {
 		Ok(value) => value
 		Err(_) => crash "Ordered evidence summary bounds"
 	}
@@ -226,7 +226,7 @@ expect {
 }
 point = PosixBoundary.from_microseconds
 
-test_span = |start, end| PosixSpan.new(point(start), point(end))
+test_span = |start, end| PosixSpan.new({ start: point(start), end: point(end) })
 
 expect {
 	# Identical pointwise projections do not erase the declared interpretations.

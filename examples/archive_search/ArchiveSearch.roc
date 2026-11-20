@@ -1,8 +1,9 @@
 import time.Calendar
-import time.CalendarEvidence
-import time.QualifiedCalendarValue
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.CalendarQuery as CalendarQuery
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
 import time.OffsetTimestamp
-import time.EdtfDate
+import time.Interchange.EdtfDate as EdtfDate
 import time.FixedOffset
 import time.PosixSpan
 import time.PosixBoundary
@@ -14,8 +15,8 @@ ArchiveSearch :: [].{
 
 	## Preserve imported archive dates before asking for an exact selection.
 	import_dates = |texts, recording_times| {
-		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
-		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Archive/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 		var $recordings = []
 		for text in recording_times {
 			timestamp = match OffsetTimestamp.parse(text) {
@@ -38,10 +39,10 @@ ArchiveSearch :: [].{
 
 	find = |date_fields, recording_times, admissible_minutes| {
 		date = Calendar.Date.from_fields(Gregorian, date_fields)?
-		minute = Calendar.Value.minute(date, 9, 30)?
-		second = Calendar.Value.second(date, 9, 30, 0)?
-		validity = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
-		rules = ZoneRules.new_bounded("Archive/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+		minute = Calendar.Value.minute(date, { hour: 9, minute: 30 })?
+		second = Calendar.Value.second(date, { hour: 9, minute: 30, second: 0 })?
+		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Archive/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 		var $recordings = []
 		for text in recording_times {
 			timestamp = match OffsetTimestamp.parse(text) {
@@ -62,14 +63,14 @@ ArchiveSearch :: [].{
 		# three minutes of certain coverage and not an inferred approximation.
 		var $choices = []
 		for m in admissible_minutes {
-			$choices = $choices.append(Calendar.Value.minute(date, 9, m)?)
+			$choices = $choices.append(Calendar.Value.minute(date, { hour: 9, minute: m })?)
 		}
 		model = CalendarEvidence.new(approximate, $choices)?
 		var $possible = 0.U64
 		var $definite = 0.U64
 		for point in $recordings {
-			cursor = CalendarEvidence.query(model, rules, point)?
-			batch = CalendarEvidence.Query.collect(cursor, { max_alternatives: 3 })
+			cursor = CalendarEvidence.query(model, { rules, point })?
+			batch = CalendarQuery.collect(cursor, { max_alternatives: 3 })
 			match batch.status {
 				Complete(Definite) => {
 					$definite = $definite + 1
@@ -88,7 +89,6 @@ ArchiveSearch :: [].{
 }
 
 count_matches = |query, rules, recordings| {
-
 	cursor = match QualifiedCalendarValue.selection_cursor(query, rules) {
 		Ok(value) => value
 		Err(NeedsModel) => return Ok(NeedsModel)

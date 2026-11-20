@@ -116,7 +116,7 @@ Adding a civil day preserves the intended calendar operation across offset trans
 I64 microseconds, including both integer endpoints. This numerical profile does
 not claim a calendar/provider range. Leap seconds have no distinct representation.
 `PosixDelta` is a signed coordinate displacement, not a physical SI elapsed
-quantity. `difference(a, b)` computes a minus b with checked subtraction.
+quantity. `difference({ left, right })` computes left minus right with checked subtraction.
 `PosixSpan.coordinate_width` returns that same coordinate quantity and may fail
 even when a span's two boundaries fit. No time-scale conversion data is used or
 implied. Numeric nanosecond and Dec conversion supports `RejectSubmicrosecond`,
@@ -138,7 +138,24 @@ Assume 64-bit machines as the default deployment target. I64 microseconds provid
 
 **Nanosecond support was deliberately rejected for the core.** Retaining a broad date range at nanosecond precision would require a larger representation; I64 nanoseconds instead restrict the range to roughly ±292 years. I64 microseconds halve boundary and span payloads compared with Dec or I128, and follow [Tempo's microsecond precision](https://github.com/elixir-tempo/tempo/blob/e8a074ed1efed6a0f78b87d900fc4cb0c4156278/lib/tempo/microsecond.ex) more closely. This aligns the resolution with the reference implementation without copying its storage layout or claiming complete API compatibility.
 
-The tradeoff is explicit: distinct sub-microsecond timestamps cannot always be represented distinctly. Such input is rejected by default; rounding requires an explicit policy. No parallel nanosecond core is planned. A specialized type can be considered later for a demonstrated use case without complicating the common representation now.
+The tradeoff is explicit: distinct sub-microsecond timestamps cannot always be represented distinctly. Such input is rejected by default; rounding requires an explicit policy. Nanosecond companions serve exact scalar interchange and convert to the microsecond core through explicit operations.
+
+The nanosecond companions preserve decoded data-engine scalars. `NanoClockTime`
+covers one full nominal day. `PosixNanoBoundary` and `PosixNanoDelta` use the
+full signed I64 range in nanoseconds on the POSIX axis, with checked arithmetic
+and checked scaling from microseconds. These types cover the numerical carrier
+of [timezone-bearing Arrow nanosecond timestamps](https://github.com/apache/arrow/blob/ac7d3fabaa089001627b32cb6f33789e0919d4df/format/Schema.fbs) and POSIX coordinate
+differences. Column timezone metadata stays with the caller.
+
+`NanoLocalDateTime` preserves a civil date and its nanosecond clock label.
+The Gregorian local integer encoding counts nominal nanoseconds from local
+1970-01-01 using 86,400-second days and carries no offset or timeline meaning.
+Every signed I64 count decodes; export checks the Gregorian description and
+integer range. Exact conversion to the microsecond domain rejects submicrosecond
+values. Explicit rounding uses the shared `MicrosecondRounding` policy. A clock
+label rejects a result at 24:00, while a dated label can carry to the next civil
+date within its provider range. Spans, coverage, recurrence, and zone operations
+continue to consume microsecond values.
 
 | Core payload | Representation | Bytes |
 |---|---|---:|
@@ -468,7 +485,7 @@ booking_availability = |_| {
     paris = Iso8601.posix_span("2026-06-15T12:00:00+02:00/2026-06-15T13:00:00+02:00")?
     utc = Iso8601.posix_span("2026-06-15T10:30:00Z/2026-06-15T12:00:00Z")?
     busy = Coverage.from_spans([paris, utc])?
-    available = Coverage.difference(Coverage.from_spans([work])?, busy)?
+    available = Coverage.difference({ base: Coverage.from_spans([work])?, subtract: busy })?
     Ok(available)
 }
 ```
@@ -484,10 +501,10 @@ adjacent_samples = |_| {
     a = PosixBoundary.from_seconds(0.000001.Dec, RejectSubmicrosecond)?
     b = PosixBoundary.from_seconds(0.000002.Dec, RejectSubmicrosecond)?
     c = PosixBoundary.from_seconds(0.000003.Dec, RejectSubmicrosecond)?
-    first = PosixSpan.new(a, b)?
-    second = PosixSpan.new(b, c)?
+    first = PosixSpan.new({ start: a, end: b })?
+    second = PosixSpan.new({ start: b, end: c })?
     Ok({
-        relation: PosixSpan.relation(first, second),
+        relation: PosixSpan.relation({ left: first, right: second }),
         overlaps: PosixSpan.overlaps(first, second),
     })
 }
@@ -662,6 +679,24 @@ Semantic examples (R01–R02, R07–R09, R12–R16):
 
 ## Performance objectives
 
+Each designated competitive workload and profile has a median time per
+completed public operation of at most 1.50 times the fastest eligible pinned
+comparator on the designated native reference environment. Designate rows and
+comparator eligibility before timing. Eligible operations have equivalent
+validation, precision, interpretation, supported input and observable output
+within the measured profile.
+
+Maintain a reviewed roc-time baseline for each workload and environment.
+Investigate confirmed regressions even when the competitive target still holds.
+Establish timing tolerances from independent sessions on the reference host.
+Enforce exactness, explicit interpretation, structured errors, bounded work,
+allocation, retained memory and complexity independently.
+
+Cached independent expectations and pinned comparator measurements support
+measuring changed Roc code without repeating external generation or timing.
+Published claims reproduce workload-level results from reviewed evidence
+scoped to the workload, compiler, target and reference environment.
+
 These are engineering targets and review criteria, not measured implementation claims. Let `n` and `m` be input span counts and `k` the number of output spans or matches. Complexity assumes compatible resolved domains and constant-cost endpoint comparison.
 
 | Operation | Target |
@@ -686,7 +721,7 @@ These stable identifiers define observable acceptance contracts. Semantic claims
 
 | ID | Required observable behavior |
 |---|---|
-| R01 — precision and range | Preserve microsecond distinctions at zero, negative coordinates, and supported extremes. Reject sub-microsecond input by default. Reject overflow in conversion, exclusive-upper-bound construction, subtraction, and total-width accumulation; never wrap or saturate silently. |
+| R01 — precision and range | Preserve microsecond distinctions at zero, negative coordinates, and supported extremes. Reject sub-microsecond input by default. Reject overflow in conversion, exclusive-upper-bound construction, subtraction, and total-width accumulation; never wrap or saturate silently. Nanosecond companions convert exactly where representable. Precision reduction requires an explicit rounding policy, and results outside the destination domain return a range error. |
 | R02 — domain separation | Civil, POSIX, leap-aware, and monotonic values cannot mix through raw numerical equality. Invalid static combinations fail typechecking; dynamic incompatible-axis combinations return structured errors. Neither event identity nor provider version substitutes for extent equality. |
 | R03 — span boundaries | Constructors reject empty/reversed spans. Touching spans meet without overlap. All 13 concrete Allen relations and their inverses agree with direct endpoint order, including one-microsecond spans. |
 | R04 — coverage algebra | Construction is order-independent and idempotent, merging overlap and touch. Union/intersection are commutative and idempotent. Difference is disjoint from its subtrahend. Complement is relative to an explicit finite universe; its union with clipped input equals that universe. Membership agrees with an independent small discrete-domain oracle. |
@@ -700,8 +735,8 @@ These stable identifiers define observable acceptance contracts. Semantic claims
 | R12 — bounded evaluation | Limits account for candidates, buffered work, and output. `Limited` cannot masquerade as `Complete`; resumption equals uninterrupted output without skipped or duplicated occurrences. Invalid/stale cursor contexts fail explicitly. |
 | R13 — uncertainty and reasoning | Alternatives differ from all-of coverage. Definite/possible/impossible results agree with enumeration of small admissible models. Inconsistent evidence and unsupported reasoning error. No inferred tolerance for approximate qualifiers. |
 | R14 — parsing and persistence | Distinguish malformed, unsupported, incomplete, and out-of-range input. Preserve resolution and meaningful qualifiers in semantic round trips. Unknown critical extensions fail. Source-text fidelity is separately advertised. Persistence uses declared external standard profiles without a roc-time archive schema. Preserve axis, units and meaningful interpretation; reject unrepresentable values rather than silently narrow them. |
-| R15 — resource behavior | Verify core operations against the stated complexity/allocation targets using varying sizes and ownership patterns. Measure retained slices, not just allocation throughput. No per-microsecond loops, repeated parsing, or hidden provider lookups in set operations. |
-| R16 — API evidence | Each advertised usage compiles and runs against the real package on the compiler the evidence names. Wrong-domain examples fail for the intended reason. Native and supported Wasm paths agree on semantic fixtures. Proposed sketches remain labeled until this evidence exists. |
+| R15 — resource and competitive performance | Maintain reviewed workload baselines and enforce the performance objectives above. Verify core operations against the stated complexity/allocation targets using varying sizes and ownership patterns. Measure retained slices, not just allocation throughput. No per-microsecond loops, repeated parsing, or hidden provider lookups in set operations. |
+| R16 — API and publication evidence | Each advertised usage compiles and runs against the real package on the compiler the evidence names. Wrong-domain examples fail for the intended reason. Native and supported Wasm paths agree on semantic fixtures. Proposed sketches remain labeled until this evidence exists. Published performance claims reproduce workload-level results from reviewed evidence. |
 
 Cross-cutting failure behavior: public data errors are returned through `Try` with actionable structured information. A result that requires more interpretation, unsupported functionality, exhausted work, and an empty answer remain distinguishable. Private invariant violations may be programmer errors; malformed user input must not reach them.
 

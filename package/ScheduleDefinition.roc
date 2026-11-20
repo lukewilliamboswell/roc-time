@@ -24,9 +24,21 @@ import FixedOffset
 ## alongside prepared execution selectors. This is not a persistence format.
 ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : TimedSchedule.Endings, context : TimedRecurrence.Context }.{
 
+	## Endings for bounded evaluation or retained state.
+	Endings : TimedSchedule.Endings
+
+	## OccurrenceCursor for bounded evaluation or retained state.
+	OccurrenceCursor(id) : TimedOccurrence.Cursor(id)
+
+	## TimedOccurrence operations and types.
+	Occurrence(id) : TimedOccurrence(id)
+
+	## TimedSchedule operations and types.
+	Cursor(id) : TimedSchedule(id)
+
 	## Native recurrence, default duration, source-specific endings and explicit immutable start
 	## context. End policies remain part of each calendar/local ending.
-	NativeSpec : { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndOverride), context : TimedRecurrence.Context }
+	NativeSpec := { rule : TimedRecurrence, duration : TimedOccurrence.Duration, overrides : List(TimedSchedule.EndingEntry) ?? [], context : TimedRecurrence.Context }
 
 	## Checked extracted iCalendar rule plus a compatible context: UTC for UTC declarations or
 	## explicit rules for local/floating declarations.
@@ -67,8 +79,25 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## Fresh execution state for each window; COUNT remains anchored at DTSTART.
 	## Definition validation is not repeated. Interpretation errors remain lazy
 	## checked results of TimedSchedule consumption under its normal budgets.
-	cursor : id, ScheduleDefinition, TimedRecurrence.Window -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
-	cursor = |series, value, window| TimedSchedule.from_prepared(series, value.rule, window, value.endings, value.context)
+	cursor : ScheduleDefinition, { series : id, window : TimedRecurrence.Window } -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
+	cursor = |value, { series, window }| TimedSchedule.from_prepared({ series, rule: value.rule, window, endings: value.endings, context: value.context })
+
+	## Prototype per-page work policy, initialized with the Paris example's finite caps.
+	QueryOptions(id) := {
+		series : id,
+		window : TimedRecurrence.Window,
+		work : TimedSchedule.Limits ?? { max_steps: 1000, max_buffered: 32, max_zone_segments: 100000, max_zone_candidates: 8 },
+	}
+
+	## An open query with a reusable finite per-page budget.
+	PageQuery(id) : SchedulePageQuery(id)
+
+	## Open a query without evaluating occurrences.
+	open_query : ScheduleDefinition, QueryOptions(id) -> Try(PageQuery(id), [EmptyWindow, ReversedWindow, OutOfRange])
+	open_query = |definition_value, options| {
+		current = cursor(definition_value, { series: options.series, window: options.window })?
+		Ok(SchedulePageQuery.({ current, work: options.work }))
+	}
 
 	## Declaration equality includes origin, retained selectors/exception labels,
 	## ending intent and complete immutable context. It does not establish that
@@ -76,7 +105,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## Cost follows finite definition fields and transitions, never query extent.
 	is_eq : ScheduleDefinition, ScheduleDefinition -> Bool
 	is_eq = |a, b| {
-		if a.context.occurrence != b.context.occurrence or a.context.gap != b.context.gap or ZoneRules.definition(a.context.rules) != ZoneRules.definition(b.context.rules) {
+		if a.context.occurrence != b.context.occurrence or a.context.gap != b.context.gap or ZoneRules.Provider.definition(a.context.rules) != ZoneRules.Provider.definition(b.context.rules) {
 			return Bool.False
 		}
 		match (a.origin, b.origin) {
@@ -99,7 +128,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	## It does not hash an enumerated occurrence set.
 	to_hash : ScheduleDefinition, Hasher -> Hasher
 	to_hash = |value, hasher| {
-		context = { rules: ZoneRules.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
+		context = { rules: ZoneRules.Provider.definition(value.context.rules), occurrence: value.context.occurrence, gap: value.context.gap }
 		hash = context.to_hash(hasher)
 		# nightly-2026-09-27 crashes when deriving the hash of a recurrence
 		# definition's subdaily frequency here, so its fields are hashed explicitly.
@@ -148,7 +177,7 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 test_local = |day| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
 	clock = ClockTime.from_microseconds_since_midnight(0)?
-	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
+	Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock }))
 }
 
 test_native = || {
@@ -158,8 +187,8 @@ test_native = || {
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(3), by_set_pos: [] })?
 	excluded = TimedRecurrence.with_exclusions(rule, [test_local(2)?])?
 	included = TimedRecurrence.with_inclusions(excluded, [{ date: GregorianDate.from_fields({ year: 1970, month: 1, day: 5 })?, clock }])?
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(864000000000))?
-	rules = ZoneRules.new_bounded("Fixture/UTC", "epoch-grid-v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(864000000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Fixture/UTC", version: "epoch-grid-v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	Ok({ rule: included, duration: Coordinate(PosixDelta.from_microseconds(3600000000)), overrides: [{ source: test_local(5)?, ending: After(Coordinate(PosixDelta.from_microseconds(7200000000))) }], context: { rules, occurrence: RequireUnique, gap: RejectGap } })
 }
 
@@ -171,9 +200,9 @@ expect {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
 	clock = ClockTime.from_microseconds_since_midnight(123)?
 	rule = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Count(3), by_set_pos: [] })?
-	second = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock)
-	third = LocalDateTime.new(Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock)
-	local_end = LocalDateTime.new(LocalDateTime.date(third), ClockTime.from_microseconds_since_midnight(456)?)
+	second = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 2 })?), clock })
+	third = LocalDateTime.new({ date: Calendar.Date.from_gregorian(GregorianDate.from_fields({ year: 1970, month: 1, day: 3 })?), clock })
+	local_end = LocalDateTime.new({ date: LocalDateTime.date(third), clock: ClockTime.from_microseconds_since_midnight(456)? })
 	duration = Calendar({ delta: Calendar.Delta.days(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(500), occurrence: Last, gap: UseOffsetBeforeGap })
 	overrides = [{ source: second, ending: AtLocal({ source: local_end, occurrence: First, gap: RejectGap }) }, { source: third, ending: AtBoundary(PosixBoundary.from_microseconds(176400000789)) }]
 	definition = ScheduleDefinition.from_native({ ..spec, rule, duration, overrides })?
@@ -193,7 +222,7 @@ expect {
 		}
 		_ => Bool.False
 	}
-	cursor = ScheduleDefinition.cursor("fractional", definition, { start: test_local(1)?, end: test_local(4)? })?
+	cursor = definition.cursor({ series: "fractional", window: { start: test_local(1)?, end: test_local(4)? } })?
 	batch = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 4 })?
 	var $valid = declaration_valid and match batch.status {
 		Complete => Bool.True
@@ -219,7 +248,7 @@ expect {
 	definition = ScheduleDefinition.from_native(test_native()?)?
 	var $valid = Bool.True
 	for case in [{ first: 1.U8, end: 4.U8, expected: [0.I64, 172800000000] }, { first: 3, end: 6, expected: [172800000000, 345600000000] }] {
-		cursor = ScheduleDefinition.cursor("series", definition, { start: test_local(case.first)?, end: test_local(case.end)? })?
+		cursor = definition.cursor({ series: "series", window: { start: test_local(case.first)?, end: test_local(case.end)? } })?
 		batch = TimedSchedule.collect(cursor, { work: { max_steps: 100, max_buffered: 1, max_zone_segments: 20, max_zone_candidates: 1 }, max_occurrences: 4 })?
 		$valid = $valid and match batch.status {
 			Complete => Bool.True
@@ -267,4 +296,57 @@ expect {
 		_ => Bool.False
 	}
 	conflict and wrong_context
+}
+
+SchedulePageQuery(id) :: { current : TimedSchedule(id), work : TimedSchedule.Limits }.{
+
+	## Replace the per-page caps while retaining the exact continuation.
+	with_work : SchedulePageQuery(id), TimedSchedule.Limits -> SchedulePageQuery(id)
+	with_work = |query, limits| { ..query, work: limits }
+
+	## Collect one bounded page. Reaching capacity does not look ahead for completion.
+	page : SchedulePageQuery(id), U64 -> Try({ occurrences : List(TimedOccurrence({ series : id, source : LocalDateTime })), steps : U64, zone_segments : U64, status : [Complete, Limited({ query : SchedulePageQuery(id), reason : TimedSchedule.Limit })] }, TimedSchedule.Error)
+	page = |query, size| {
+		batch = query.current.collect({ work: query.work, max_occurrences: size })?
+		status = match batch.status {
+			Complete => Complete
+			Limited(progress) => Limited({ query: { ..query, current: progress.cursor }, reason: progress.reason })
+		}
+		Ok({ occurrences: batch.occurrences, steps: batch.steps, zone_segments: batch.zone_segments, status })
+	}
+}
+
+## A zero-work page can resume with a larger budget; pagination equals uninterrupted collection.
+expect {
+	declared = ScheduleDefinition.from_native(test_native()?)?
+	window = { start: test_local(1)?, end: test_local(9)? }
+	work = { max_steps: 1000, max_buffered: 32, max_zone_segments: 100000, max_zone_candidates: 8 }
+	query = declared.open_query({ series: 1.U64, window, work: { ..work, max_steps: 0 } })?
+	blocked = query.page(1)?
+	resumable = match blocked.status {
+		Limited(progress) if progress.reason == StartWorkLimit => progress.query.with_work(work)
+		_ => crash "Expected start work limit"
+	}
+	whole = resumable.page(10)?
+	var $current = resumable
+	var $output = []
+	var $pages = 0
+	var $done = False
+	while !$done and $pages < 12 {
+		batch = $current.page(1)?
+		$output = $output.concat(batch.occurrences)
+		$pages = $pages + 1
+		match batch.status {
+			Complete => {
+				$done = True
+			}
+			Limited(progress) => {
+				if progress.reason != OutputLimit {
+					crash "Expected only page capacity limits"
+				}
+				$current = progress.query
+			}
+		}
+	}
+	blocked.occurrences.is_empty() and $done and $pages == whole.occurrences.len() + 1 and $output.map(|item| { id: item.id(), span: item.span() }) == whole.occurrences.map(|item| { id: item.id(), span: item.span() })
 }

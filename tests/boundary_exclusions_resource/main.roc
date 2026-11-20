@@ -1,7 +1,9 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
-import time.TimedRecurrence
-import time.CalendarPattern
+import time.Recurrence.Timed as TimedRecurrence
+import time.Recurrence.TimedStart as TimedStart
+import time.Recurrence.TimedCursor as TimedCursor
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.Calendar
 import time.GregorianDate
 import time.LocalDateTime
@@ -19,7 +21,7 @@ main! = |args| {
 	anchor = BoundaryFixture.label(0)
 	date = Calendar.Date.as_gregorian(LocalDateTime.date(anchor)) ?? crash "anchor date"
 	end_date = GregorianDate.from_fields({ year: horizon, month: 1, day: 1 }) ?? crash "horizon date"
-	end = LocalDateTime.new(Calendar.Date.from_gregorian(end_date), LocalDateTime.clock(anchor))
+	end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock: LocalDateTime.clock(anchor) })
 	rules = BoundaryFixture.rules({})
 	base = TimedRecurrence.new({ date, clock: LocalDateTime.clock(anchor) }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [], minutes: [], seconds: [] }, termination: Forever, by_set_pos: [] }) ?? crash "base recurrence"
 	before_input = Host.allocated_bytes!({})
@@ -43,19 +45,19 @@ main! = |args| {
 	after_access = Host.allocated_bytes!({})
 	Host.assert!(after_access == after_construct and definition.boundary_exclusions.len() == count)
 	before_cursor = Host.allocated_bytes!({})
-	cursor = TimedRecurrence.cursor(rule, { start: anchor, end }, { rules, occurrence: RequireUnique, gap: RejectGap }) ?? crash "boundary cursor"
+	cursor = TimedRecurrence.cursor(rule, { window: { start: anchor, end }, context: { rules, occurrence: RequireUnique, gap: RejectGap } }) ?? crash "boundary cursor"
 	after_cursor = Host.allocated_bytes!({})
-	first = TimedRecurrence.Cursor.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "boundary prefix"
+	first = TimedCursor.collect(cursor, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "boundary prefix"
 	after_first = Host.allocated_bytes!({})
-	Host.assert!(first.occurrences.map(TimedRecurrence.Occurrence.source) == [anchor] and first.steps <= 8 and first.zone_segments <= 1)
+	Host.assert!(first.occurrences.map(TimedStart.source) == [anchor] and first.steps <= 8 and first.zone_segments <= 1)
 	resume = match first.status {
 		Limited(progress) => progress.cursor
 		Complete => crash "Forever prefix falsely complete"
 	}
 	before_second = Host.allocated_bytes!({})
-	second = TimedRecurrence.Cursor.collect(resume, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "boundary resumption"
+	second = TimedCursor.collect(resume, { work: { max_steps: 8, max_buffered: 1, max_zone_segments: 1, max_zone_candidates: 1 }, max_occurrences: 1 }) ?? crash "boundary resumption"
 	after_second = Host.allocated_bytes!({})
-	Host.assert!(second.occurrences.map(TimedRecurrence.Occurrence.source) == [BoundaryFixture.label(1)] and second.steps <= 8 and second.zone_segments <= 1)
+	Host.assert!(second.occurrences.map(TimedStart.source) == [BoundaryFixture.label(1)] and second.steps <= 8 and second.zone_segments <= 1)
 	Host.assert!(after_cursor - before_cursor <= ceiling and after_first - after_cursor <= ceiling and after_second - before_second <= ceiling)
 	match retained {
 		Some(original) => Host.assert!(original == BoundaryFixture.inputs(count + 2))

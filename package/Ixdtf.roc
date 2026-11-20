@@ -193,6 +193,7 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 		}
 		timestamp = match OffsetTimestamp.parse(piece(bytes, 0, $index)) {
 			Ok(value) => value
+			Err(Incomplete) if $index < bytes.len() => return Err(Base(Malformed))
 			Err(error) => return Err(Base(error))
 		}
 		var $zone = None
@@ -214,6 +215,43 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 				$index = $index + 1
 			}
 			if $index == bytes.len() {
+				_ = new({ timestamp, zone: $zone, tags: $tags })?
+				body = piece(bytes, start, $index - start)
+				zone_allowed = $zone == None and $tags.is_empty()
+				tag_allowed = $tags.len() < 32
+				if !zone_allowed and !tag_allowed {
+					return Err(TooManyAnnotations)
+				}
+				var $missing = suffix_missing_bytes(body, { critical, zone_allowed, tag_allowed })?
+				if tag_allowed {
+					match body.split_on("=") {
+						[key, value] => {
+							# A committed key can only match a conflicting earlier
+							# critical value by completing that exact value.
+							var $required = None
+							for previous in $tags {
+								if previous.key == key and (previous.critical or critical) {
+									if !previous.value.starts_with(value) or match $required {
+										Some(required) => required != previous.value
+										None => False
+									} {
+										return Err(ConflictingCritical)
+									}
+									$required = Some(previous.value)
+									$missing = $missing.max(previous.value.count_utf8_bytes() - value.count_utf8_bytes())
+								}
+							}
+						}
+						_ => {}
+					}
+					if critical and "u-ca=gregory".starts_with(body) and (!$tags.is_empty() or $zone != None) and
+						$tags.any(|previous| previous.key == "u-ca" and previous.value != "gregory") {
+						return Err(ConflictingCritical)
+					}
+				}
+				if bytes.len() + $missing + 1 > 4096 {
+					return Err(TooLarge)
+				}
 				return Err(Incomplete)
 			}
 			body = piece(bytes, start, $index - start)
@@ -330,6 +368,47 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 base_offset = |timestamp| match OffsetTimestamp.parts(timestamp).offset {
 	UnassertedUtc => FixedOffset.from_seconds(0)
 	Asserted(offset) => offset
+}
+
+# Reuse the closed-form validators with the shortest completion for the
+# final component. An earlier invalid component cannot be repaired by appending.
+suffix_missing_bytes : Str, { critical : Bool, zone_allowed : Bool, tag_allowed : Bool } -> Try(U64, [Malformed])
+suffix_missing_bytes = |body, { critical, zone_allowed, tag_allowed }| {
+	if zone_allowed {
+		if body.starts_with("+") or body.starts_with("-") {
+			return match OffsetTimestamp.parse("1970-01-01T00:00:00${body}") {
+				Ok(_) => Ok(0)
+				Err(Incomplete) => Ok(6 - body.count_utf8_bytes())
+				Err(_) => Err(Malformed)
+			}
+		}
+		if body.count_utf8_bytes() <= 255 and valid_zone_name(body) {
+			return Ok(0)
+		}
+		if body.count_utf8_bytes() < 255 and valid_zone_name("${body}A") {
+			return Ok(1)
+		}
+	}
+	if !tag_allowed {
+		return Err(Malformed)
+	}
+	if critical {
+		return if "u-ca=gregory".starts_with(body) {
+			Ok("u-ca=gregory".count_utf8_bytes() - body.count_utf8_bytes())
+		} else Err(Malformed)
+	}
+	match body.split_on("=") {
+		[key] if key.is_empty() => Ok(3)
+		[key] if key.count_utf8_bytes() <= 64 and !key.starts_with("_") and valid_key(key) => Ok(2)
+		[key, value] if key.count_utf8_bytes() <= 64 and !key.starts_with("_") and valid_key(key) => {
+			if value.count_utf8_bytes() <= 256 and valid_value(value) {
+				Ok(0)
+			} else if value.count_utf8_bytes() < 256 and valid_value("${value}A") {
+				Ok(1)
+			} else Err(Malformed)
+		}
+		_ => Err(Malformed)
+	}
 }
 
 valid_offset = |offset| {
@@ -513,7 +592,7 @@ expect {
 test_rules = |name, point, offset| {
 	# One microsecond validity: these fixtures assert only the queried instant.
 	validity = PosixSpan.microsecond_at(point)?
-	ZoneRules.new_bounded(name, "rfc9557-fixture-v1", validity, FixedOffset.from_seconds(offset), [], { minimum: offset, maximum: offset })
+	ZoneRules.Provider.new_bounded({ name, version: "rfc9557-fixture-v1", validity, initial: FixedOffset.from_seconds(offset), transitions: [], bounds: { minimum: offset, maximum: offset } })
 }
 
 resolve_error = |result| match result {
@@ -712,7 +791,7 @@ IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary :
 				return Err(OffsetConflict)
 			}
 		}
-		local = match FixedOffset.project(offset_value, boundary_value, Gregorian) {
+		local = match FixedOffset.project(offset_value, { boundary: boundary_value, calendar: Gregorian }) {
 			Ok(value) => value
 			Err(_) => return Err(OutOfRange)
 		}
@@ -762,7 +841,7 @@ IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary :
 	is_eq : IxdtfSnapshot, IxdtfSnapshot -> Bool
 	is_eq = |a, b| a.source == b.source and a.boundary == b.boundary and a.offset == b.offset and a.local == b.local and match (a.context, b.context) {
 		(None, None) => True
-		(Some(left), Some(right)) => ZoneRules.definition(left) == ZoneRules.definition(right)
+		(Some(left), Some(right)) => ZoneRules.Provider.definition(left) == ZoneRules.Provider.definition(right)
 		_ => False
 	}
 
@@ -772,7 +851,7 @@ IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary :
 		base = value.local.to_hash(value.offset.to_hash(value.boundary.to_hash(value.source.to_hash(hasher))))
 		match value.context {
 			None => (0.U8).to_hash(base)
-			Some(rules) => ZoneRules.definition(rules).to_hash((1.U8).to_hash(base))
+			Some(rules) => ZoneRules.Provider.definition(rules).to_hash((1.U8).to_hash(base))
 		}
 	}
 
@@ -827,4 +906,27 @@ IxdtfSnapshot :: { source : Ixdtf, context : [None, Some(ZoneRules)], boundary :
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "IXDTF snapshot has a first semantic fact"
 	}
+}
+
+## An illegal suffix byte stays malformed even before the closing bracket arrives.
+expect Ixdtf.parse("2024-01-01T00:00:00Z[Europe/Par is") == Err(Malformed)
+
+## The annotation delimiter commits the timestamp prefix.
+expect Ixdtf.parse("2024-01-01T00:00:00[Europe/Paris]") == Err(Base(Malformed))
+
+## Incomplete suffixes must be extendable and cannot hide errors in committed annotations.
+expect {
+	Ixdtf.parse("2024-01-01T00:00:00Z[foo==") == Err(Malformed) and
+		Ixdtf.parse("2024-01-01T00:00:00Z[foo=+") == Err(Malformed) and
+			Ixdtf.parse("2024-01-01T00:00:00Z[+3") == Err(Malformed) and
+				Ixdtf.parse("2024-01-01T00:00:00Z[bad?=x][") == Err(InvalidTag) and
+					Ixdtf.parse("2024-01-01T00:00:00Z[Europe/") == Err(Incomplete) and
+						Ixdtf.parse("2024-01-01T00:00:00Z[foo=bar-") == Err(Incomplete)
+}
+
+## A possible suffix must also be compatible with previously closed annotations.
+expect {
+	Ixdtf.parse("2024-01-01T00:00:00Z[u-ca=hebrew][!u-ca=g") == Err(ConflictingCritical) and
+		Ixdtf.parse("2024-01-01T00:00:00Z[!u-ca=gregory][u-ca=hebr") == Err(ConflictingCritical) and
+			Ixdtf.parse("2024-01-01T00:00:00Z[!u-ca=gregory][u-ca=gre") == Err(Incomplete)
 }

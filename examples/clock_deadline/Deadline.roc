@@ -31,11 +31,11 @@ Deadline :: [].{
 			Err(error) => return Err(Expiry(error))
 		}
 		end = OffsetTimestamp.boundary(expiry)?
-		checked_at = match OffsetTimestamp.from_boundary(now, UnassertedUtc, 6) {
+		checked_at = match OffsetTimestamp.from_boundary(now, { offset: UnassertedUtc, fraction_digits: 6 }) {
 			Ok(value) => value
 			Err(error) => return Err(Output(error))
 		}
-		expires_at = match OffsetTimestamp.from_boundary(end, UnassertedUtc, 6) {
+		expires_at = match OffsetTimestamp.from_boundary(end, { offset: UnassertedUtc, fraction_digits: 6 }) {
 			Ok(value) => value
 			Err(error) => return Err(Output(error))
 		}

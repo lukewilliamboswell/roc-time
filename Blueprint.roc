@@ -44,10 +44,11 @@ config = [
 		"native",
 		[
 			Extend("docs"),
-			Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.10.1/release-package-{system}"))]),
+			Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.11.1/release-package-{system}"))]),
 			Tools([
 				"nix#coreutils",
 				"nix#zig_0_17",
+				"nix#nodejs_22",
 				"nix#pkg-config",
 				"nix#gnumake",
 				"nix#gcc",
@@ -65,8 +66,8 @@ config = [
 	),
 	# The shared release workflow runs this utility against the `roc` on PATH; a
 	# maintainer runs the same task locally, such as `-- test-examples --update`.
-	Environment("renderer", [Extend("dev"), Programs([Fetch("roc-docs", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.10.1/roc-docs-{system}"))]), Expect(["realpath", "sh"])]),
-	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.10.1/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
+	Environment("renderer", [Extend("dev"), Programs([Fetch("roc-docs", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.11.1/roc-docs-{system}"))]), Expect(["realpath", "sh"])]),
+	Environment("release", [Programs([Fetch("release-package", Recipes.file("https://github.com/lukewilliamboswell/roc-automation/releases/download/tools-0.11.1/release-package-{system}"))]), Expect(["roc", "git", "gh", "tar", "unzip", "zip", "chmod", "touch", "env"])]),
 	Shell("default", [Use("native")]),
 	Task("check", [Use("native"), Run(["scripts/check_all.roc"])]),
 	Task("check-source", [Use("dev"), Run(["scripts/check_all.roc", "--source"])]),
@@ -74,7 +75,13 @@ config = [
 	Task("harness", [Use("native"), Run(["scripts/check_all.roc", "--harness"])]),
 	Task("fuzz", [Use("dev"), Run(["scripts/fuzz.roc"])]),
 	Task("native-versions", [Use("native"), Run(["scripts/check_native_tools.roc"])]),
-	Task("benchmark-comparison", [Use("benchmarks"), Run(["scripts/benchmark_comparison.roc"])]),
+	Task("benchmark-comparison", [Use("native"), Run(["scripts/benchmark_comparison.roc"])]),
+	Task("benchmark-peers", [Use("benchmarks"), Run(["scripts/benchmark_comparison.roc", "--refresh-peers"])]),
+	Task("benchmark-replay", [Use("native"), Run(["scripts/benchmark_comparison.roc", "--replay-only"])]),
+	Task("benchmark-operations", [Use("native"), Run(["scripts/benchmark_comparison.roc", "--operational"])]),
+	Task("benchmark-operations-peers", [Use("benchmarks"), Run(["scripts/benchmark_comparison.roc", "--operational-peers"])]),
+	Task("benchmark-expectations", [Use("references"), Run(["scripts/benchmark_comparison.roc", "--refresh-expectations"])]),
+	Task("check-wasm-timestamp-resource", [Use("native"), Run(["scripts/check_wasm_timestamp_resource.roc"])]),
 	Task("benchmark-chrono", [Use("benchmarks"), Run(["scripts/benchmark_chrono.roc"])]),
 	Task("check-zone-database", [Use("native"), Run(["scripts/check_zone_database.roc"])]),
 	Task("generate-zone-database", [Use("references"), Run(["scripts/generate_zone_database.roc"])]),

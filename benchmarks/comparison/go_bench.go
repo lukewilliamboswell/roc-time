@@ -111,7 +111,10 @@ func main() {
 	case "format":
 		op = func(i int) int64 { return ts(values[i].Format(layout)) }
 	case "end_to_end":
-		op = func(i int) int64 { return ts(parse(texts[i]).Format(layout)) }
+		op = func(i int) int64 {
+			v := parse(texts[i])
+			return mod(v.UnixMicro()) + ts(v.Format(layout))
+		}
 	default:
 		panic("unknown workload")
 	}

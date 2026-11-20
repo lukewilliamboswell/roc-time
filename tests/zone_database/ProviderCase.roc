@@ -102,7 +102,7 @@ ProviderCase :: [].{
 			}
 			rules = ZoneRules.from_database(data)?
 			local = parse_local("2026-11-02T09:00")?
-			actual = ZoneRules.resolve_occurrence(rules, local, RequireUnique)?
+			actual = ZoneRules.resolve_occurrence(rules, { local, occurrence: RequireUnique })?
 			expected = parse_boundary("2026-11-02T14:00:00Z")?
 			if actual != expected {
 				return Err(WrongWinnipegAppointment)

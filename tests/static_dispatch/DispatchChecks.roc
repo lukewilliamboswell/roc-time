@@ -1,21 +1,21 @@
 import time.Calendar
-import time.CalendarEvidence
-import time.IntervalEvidence
-import time.QualifiedCalendarValue
-import time.ICalPeriod
-import time.ICalDateTime
-import time.EdtfDate
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.Interval as IntervalEvidence
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
+import time.ICalendar.Period as ICalPeriod
+import time.ICalendar.DateTime as ICalDateTime
+import time.Interchange.EdtfDate as EdtfDate
 import time.OffsetTimestamp
 import time.ExactInterval
-import time.Ixdtf
-import time.ICalDuration
-import time.CivilDay
+import time.Interchange.Ixdtf as Ixdtf
+import time.ICalendar.Duration as ICalDuration
+import time.Calendar.CivilDay as CivilDay
 import time.GregorianDate
 import time.PosixBoundary
 import time.PosixDelta
 import time.PosixSpan
-import time.TimedSchedule
-import time.ICalTimedRule
+import time.ScheduleDefinition.Endings as ScheduleEndings
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.Coverage
 
 DispatchChecks :: [].{
@@ -82,8 +82,8 @@ DispatchChecks :: [].{
 			}
 		}
 		description_date = Calendar.Date.from_fields(Gregorian, { year: 2024, month: 1, day: 1 })?
-		minute_value = Calendar.Value.minute(description_date, 12, 30)?
-		second_value = Calendar.Value.second(description_date, 12, 30, 0)?
+		minute_value = Calendar.Value.minute(description_date, { hour: 12, minute: 30 })?
+		second_value = Calendar.Value.second(description_date, { hour: 12, minute: 30, second: 0 })?
 		descriptions = Dict.insert(Dict.insert(Dict.empty(), minute_value, 1.U64), second_value, 2.U64)
 		if minute_value == second_value or Dict.get(descriptions, minute_value) != Ok(1) or Dict.get(descriptions, second_value) != Ok(2) or !Str.inspect(minute_value).contains("resolution=Minute") {
 			return Err(Failed)
@@ -131,9 +131,9 @@ DispatchChecks :: [].{
 		if Dict.get(Dict.insert(Dict.empty(), first, 9.U64), GregorianDate.from_fields({ year: -1, month: 12, day: 31 })?) != Ok(9) {
 			return Err(Failed)
 		}
-		a = PosixSpan.from_seconds(0.Dec, 1.Dec, RejectSubmicrosecond)?
-		b = PosixSpan.from_seconds(1.Dec, 2.Dec, RejectSubmicrosecond)?
-		whole = PosixSpan.from_seconds(0.Dec, 2.Dec, RejectSubmicrosecond)?
+		a = PosixSpan.from_seconds({ start: 0.Dec, end: 1.Dec, rounding: RejectSubmicrosecond })?
+		b = PosixSpan.from_seconds({ start: 1.Dec, end: 2.Dec, rounding: RejectSubmicrosecond })?
+		whole = PosixSpan.from_seconds({ start: 0.Dec, end: 2.Dec, rounding: RejectSubmicrosecond })?
 		coverage = Coverage.from_spans([a, b])
 		same = Coverage.from_spans([whole])
 		if Dict.get(Dict.insert(Dict.empty(), coverage, 11.U64), same) != Ok(11) or
@@ -161,7 +161,7 @@ DispatchChecks :: [].{
 		var $many = []
 		var $index = 0.I64
 		while $index < 10000 {
-			$many = $many.append(PosixSpan.new(PosixBoundary.from_microseconds($index * 2), PosixBoundary.from_microseconds($index * 2 + 1))?)
+			$many = $many.append(PosixSpan.new({ start: PosixBoundary.from_microseconds($index * 2), end: PosixBoundary.from_microseconds($index * 2 + 1) })?)
 			$index = $index + 1
 		}
 		large = Coverage.from_spans($many)
@@ -171,7 +171,7 @@ DispatchChecks :: [].{
 			return Err(Failed)
 		}
 		# Debugging must not require a representable accumulated width.
-		wide = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+		wide = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
 		if !Str.inspect(Coverage.from_spans([wide])).contains("9223372036854775807") {
 			return Err(Failed)
 		}
@@ -234,18 +234,18 @@ interval_model = |starts, ends| match IntervalEvidence.independent({ starts, end
 
 check_endings = |_| {
 	duration = Coordinate(PosixDelta.from_microseconds(3600000000))
-	endings : TimedSchedule.Endings
-	endings = TimedSchedule.Endings.new(duration, []) ?? crash "valid ending fixture"
-	same : TimedSchedule.Endings
-	same = TimedSchedule.Endings.new(endings.definition().duration, []) ?? crash "valid ending fixture"
+	endings : ScheduleEndings
+	endings = ScheduleEndings.new(duration, []) ?? crash "valid ending fixture"
+	same : ScheduleEndings
+	same = ScheduleEndings.new(endings.definition().duration, []) ?? crash "valid ending fixture"
 	if endings != same or Dict.get(Dict.insert(Dict.empty(), endings, 7.U8), same) != Ok(7) {
 		return Err(Failed)
 	}
 	input = ICalTimedRule.parse({ start: "19700101T090000Z", rule: "FREQ=DAILY;COUNT=2", duration: "PT1H", mode: Utc, inclusions: [], exclusions: [], periods: [] }) ?? crash "valid rule fixture"
 	prepared = ICalTimedRule.prepare(input, Utc) ?? crash "valid preparation fixture"
-	checked : TimedSchedule.Endings
+	checked : ScheduleEndings
 	checked = prepared.endings
-	if checked != endings or TimedSchedule.Endings.new(Coordinate(PosixDelta.from_microseconds(0)), []) != Err(InvalidDuration) {
+	if checked != endings or ScheduleEndings.new(Coordinate(PosixDelta.from_microseconds(0)), []) != Err(InvalidDuration) {
 		return Err(Failed)
 	}
 	local = ICalTimedRule.parse({ start: "19700101T090000", rule: "FREQ=DAILY;COUNT=2", duration: "PT1H", mode: Floating, inclusions: [], exclusions: [], periods: [] }) ?? crash "valid local fixture"

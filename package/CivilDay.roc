@@ -43,16 +43,16 @@ CivilDay :: [Day(I64)].{
 	is_eq : CivilDay, CivilDay -> Bool
 	is_eq = |Day(a), Day(b)| a == b
 
-	## Compare two civil-day coordinates, returning LT, EQ or GT.
+	## Compare two civil-day coordinates, returning Before, Same or After.
 	## Calendar descriptions of the same civil day compare equal after conversion.
-	compare : CivilDay, CivilDay -> [LT, EQ, GT]
-	compare = |Day(a), Day(b)| {
+	order_relative_to : CivilDay, CivilDay -> [Before, Same, After]
+	order_relative_to = |Day(a), Day(b)| {
 		if a < b {
-			LT
+			Before
 		} else if a > b {
-			GT
+			After
 		} else {
-			EQ
+			Same
 		}
 	}
 }

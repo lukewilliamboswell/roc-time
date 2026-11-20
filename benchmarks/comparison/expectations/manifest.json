@@ -1,0 +1,15 @@
+{
+  "generator_sha256": "c77e61a5032f0246f56ba1d24648f2f13b661f9eb301ffdc9bb661552c4d9cb7",
+  "oracle": "CPython 3.14.3 datetime",
+  "profiles": {
+    "microseconds": {
+      "checksums_sha256": "2a2bd0c3bbad4319d145dca03b1e17f440375dc96ef0d4a2575fc60b4676c8cb",
+      "corpus_sha256": "771be4a5cdcc3d1f08c2f52056d40b7a965a02ea245fab8d9eacd84853f9a011"
+    },
+    "seconds": {
+      "checksums_sha256": "13a64521c35007e7e38c8e3dcecf961bf9125c7a19e9df7983de272e115d9769",
+      "corpus_sha256": "06516e9a5377bc4388326f75dfd574b7af87461a6980e795e578bdade17fa435"
+    }
+  },
+  "schema": "per-case-checksums-v1"
+}

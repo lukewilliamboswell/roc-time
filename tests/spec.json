@@ -73,6 +73,29 @@
           "name": "default",
           "stderr": "",
           "stdin": "",
+          "stdout": "Paused at one member\nImported 2 occupied windows\n"
+        },
+        {
+          "args": [
+            "--fail-source"
+          ],
+          "exit_code": 1,
+          "name": "source_error",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Paused at one member\nProgram exited with error: SourceUnavailable\n"
+        }
+      ],
+      "path": "examples/booking_stream/main.roc"
+    },
+    {
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
           "stdout": "Source record: 1582-10-5 (julian)\nCatalogue date: 1582-10-15 (gregorian)\n"
         }
       ],
@@ -274,6 +297,19 @@
         }
       ],
       "path": "examples/meeting_exchange/main.roc"
+    },
+    {
+      "path": "examples/nanosecond_columns/main.roc",
+      "cases": [
+        {
+          "args": [],
+          "exit_code": 0,
+          "name": "default",
+          "stderr": "",
+          "stdin": "",
+          "stdout": "Opening: 12:00:00.000000001 (43200000000001 ns)\nClosing: null\nTimestamp: -1 ns, zone metadata Europe/Paris\nNaive: 1969-12-31T23:59:59.999999999 (-1 ns)\nPOSIX displacement: -1500 ns\n"
+        }
+      ]
     },
     {
       "cases": [

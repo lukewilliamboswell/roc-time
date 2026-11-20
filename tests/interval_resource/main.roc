@@ -1,6 +1,6 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
-import time.IntervalEvidence
+import time.Evidence.Interval as IntervalEvidence
 import time.PosixBoundary
 import time.PosixSpan
 import IntervalFixture

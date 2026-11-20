@@ -1,8 +1,8 @@
-import time.ICalTimedRule
-import time.ICalDateTime
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.TimedRecurrence
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.DateTime as ICalDateTime
+import time.ScheduleDefinition
+
+import time.Recurrence.TimedStart as TimedStart
 import time.PosixBoundary
 import time.PosixSpan
 import time.PosixDelta
@@ -34,23 +34,23 @@ observe = |input| {
 		Err(error) => crash "Timed oracle rule rejected: ${Str.inspect(error)}"
 	}
 	window = { start: label(at(input, 4)), end: label(at(input, 5)) }
-	var $cursor = match ICalTimedRule.schedule({}, parsed, window, Utc) {
+	var $cursor = match ICalTimedRule.schedule({ series: {}, rule: parsed, window, context: Utc }) {
 		Ok(value) => value
 		Err(_) => crash "Timed oracle window rejected"
 	}
 	var $output = ["ok"]
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = match TimedSchedule.collect($cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+		batch = match ScheduleDefinition.Cursor.collect($cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "Timed oracle execution failed"
 		}
 		for value in batch.occurrences {
-			start = TimedOccurrence.start(value)
-			if PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(1000000)) {
+			start = ScheduleDefinition.Occurrence.start(value)
+			if PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) != Ok(PosixDelta.from_microseconds(1000000)) {
 				crash "Timed oracle changed one-second duration"
 			}
-			$output = $output.append(PosixBoundary.to_microseconds(TimedRecurrence.Occurrence.boundary(start)).to_str())
+			$output = $output.append(PosixBoundary.to_microseconds(TimedStart.boundary(start)).to_str())
 		}
 		match batch.status {
 			Complete => return Str.join_with($output, "\t")

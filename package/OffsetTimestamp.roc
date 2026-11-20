@@ -1,5 +1,6 @@
 import SemanticFact
 import GregorianDate
+import CivilDay
 import Calendar
 import ClockTime
 import LocalDateTime
@@ -22,9 +23,11 @@ import PosixBoundary
 ## excluded annotations without validating their grammar.
 ## Leap seconds, fractions beyond six digits and IXDTF annotations are explicitly
 ## unsupported. No rounding, zone lookup, implicit clock or full ISO claim.
-## Parsing checks a 256-byte limit before streaming into scalar fields, without
-## materializing a byte list. Construction, conversion and
-## formatting have constant bounded work. Canonical standard text can be stored directly.
+## Parsing checks a 256-byte limit. Complete whole-second and six-digit records
+## with numeric offsets use checked vector loads from the existing input bytes.
+## Other shapes use a byte stream for precise error reporting. Both paths share
+## field validation. Construction, conversion and formatting have bounded work.
+## Canonical standard text can be stored directly.
 OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : U8, offset : Offset }.{
 
 	## UnassertedUtc represents Z or -00:00 without an asserted local offset. Asserted retains a numeric offset, including explicit +00:00.
@@ -112,16 +115,25 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 
 	## Returns the supplied Gregorian clock label without applying its offset. Use boundary for a resolved POSIX coordinate.
 	local_label : OffsetTimestamp -> LocalDateTime
-	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
+	local_label = |value| LocalDateTime.new({ date: Calendar.Date.from_gregorian(value.date), clock: value.clock })
 
 	## This source label is UTC for UnassertedUtc and offset-local otherwise.
 	boundary : OffsetTimestamp -> Try(PosixBoundary, [OutOfRange])
-	boundary = |value| FixedOffset.resolve(effective_offset(value.offset), local_label(value))
+	boundary = |value| {
+		# Years 0000..9999 keep the absolute civil-day count below 3 million.
+		# Clock and offset each contribute less than one day. The coordinate
+		# and its intermediate terms therefore fit signed I64 microseconds.
+		day = CivilDay.to_day_number(GregorianDate.to_civil_day(value.date))
+		clock = ClockTime.to_microseconds_since_midnight(value.clock)
+		seconds = FixedOffset.to_seconds(effective_offset(value.offset)).to_i64()
+		microseconds = I64.plus_wrap(I64.times_wrap(day, 86400000000), clock)
+		Ok(PosixBoundary.from_microseconds(I64.minus_wrap(microseconds, I64.times_wrap(seconds, 1000000))))
+	}
 
 	## Explicit projection for canonical timestamp output. The requested width
 	## must represent the position exactly; this operation never rounds.
-	from_boundary : PosixBoundary, Offset, U8 -> Try(OffsetTimestamp, Error)
-	from_boundary = |point, offset, fraction_digits| {
+	from_boundary : PosixBoundary, { offset : Offset, fraction_digits : U8 } -> Try(OffsetTimestamp, Error)
+	from_boundary = |point, { offset, fraction_digits }| {
 		if fraction_digits > 6 {
 			return Err(UnsupportedPrecision)
 		}
@@ -134,7 +146,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 				}
 			}
 		}
-		local = match FixedOffset.project(effective_offset(offset), point, Gregorian) {
+		local = match FixedOffset.project(effective_offset(offset), { boundary: point, calendar: Gregorian }) {
 			Ok(value) => value
 			Err(_) => return Err(OutOfRange)
 		}
@@ -149,120 +161,29 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 	## Parses the supported RFC timestamp profile, retaining fractional width and offset assertion. Valid incomplete prefixes remain errors; unsupported precision is never rounded.
 	parse : Str -> Try(OffsetTimestamp, Error)
 	parse = |text| {
-		if text.count_utf8_bytes() > 256 {
+		length = text.count_utf8_bytes()
+		if length > 256 {
 			return Err(TooLarge)
 		}
-		length = text.count_utf8_bytes()
-		# Accumulate eight date digits and six clock digits separately in U32;
-		# the existing date/time separator resets the accumulator.
-		# Suffix syntax facts are deferred until fixed field and clock checks,
-		# retaining the established error precedence even for incomplete input.
-		# Defer malformed errors until after scanning so loop state stays scalar.
-		var $bad = Bool.False
-		var $index = 0.U64
-		var $packed = 0.U32
-		var $date_digits = 0.U32
-		var $fraction_seen = Bool.False
-		var $fractional = 0.U32
-		var $count = 0.U8
-		var $marker = None
-		var $offset_count = 0.U8
-		var $hours = 0.U32
-		var $minutes = 0.U32
-		var $offset_malformed = Bool.False
-		var $trailing = None
-		for byte in text.iter_utf8() {
-			if $index < 19 {
-				if $index == 4 or $index == 7 {
-					if byte != 45 {
-						$bad = Bool.True
-						break
-					}
-				} else if $index == 10 {
-					if byte != 84 and byte != 116 {
-						$bad = Bool.True
-						break
-					}
-					$date_digits = $packed
-					$packed = 0
-				} else if $index == 13 or $index == 16 {
-					if byte != 58 {
-						$bad = Bool.True
-						break
-					}
-				} else {
-					if !digit(byte) {
-						$bad = Bool.True
-						break
-					}
-					$packed = $packed * 10 + (byte - 48).to_u32()
-				}
-			} else {
-				match $marker {
-					None => {
-						if $index == 19 and byte == 46 {
-							$fraction_seen = Bool.True
-						} else if $fraction_seen and digit(byte) {
-							if $count < 6 {
-								$fractional = $fractional * 10 + (byte - 48).to_u32()
-							}
-							if $count < 7 {
-								$count = $count + 1
-							}
-						} else {
-							$marker = Some(byte)
-							$offset_count = 1
-						}
-					}
-					Some(marker) => {
-						if (marker == 43 or marker == 45) and $offset_count < 6 {
-							if $offset_count == 3 {
-								$offset_malformed = $offset_malformed or byte != 58
-							}
-							else if digit(byte) {
-								if $offset_count < 3 {
-									$hours = $hours * 10 + (byte - 48).to_u32()
-								}
-								else {
-									$minutes = $minutes * 10 + (byte - 48).to_u32()
-								}
-							} else {
-								$offset_malformed = Bool.True
-							}
-							$offset_count = $offset_count + 1
-						} else {
-							$trailing = Some(byte)
-							break
-						}
-					}
-				}
+		{ fields, tail } = if length == 25 or length == 32 {
+			match scan_offset_record(text, length) {
+				Ok(value) => value
+				Err(OtherShape) => scan_text(text)?
 			}
-			$index = $index + 1
+		} else {
+			scan_text(text)?
 		}
-		if $bad {
-			return Err(Malformed)
-		}
-		# Right-pad only incomplete prefixes, so complete earlier fields decode
-		# identically. Punctuation positions do not contribute decimal digits.
-		while $index < 19 {
-			if $index == 10 {
-				$date_digits = $packed
-				$packed = 0
-			} else if $index != 4 and $index != 7 and $index != 13 and $index != 16 {
-				$packed = $packed * 10
-			}
-			$index = $index + 1
-		}
-		fields = { year: $date_digits // 10000, month: ($date_digits // 100) % 100, day: $date_digits % 100, hour: ($packed // 10000) % 100, minute: ($packed // 100) % 100, second: $packed % 100 }
-		tail = { fraction_seen: $fraction_seen, fractional: $fractional, count: $count, marker: $marker, offset_count: $offset_count, hours: $hours, minutes: $minutes, offset_malformed: $offset_malformed, trailing: $trailing }
-		if length >= 7 and (fields.month < 1 or fields.month > 12) {
+		if (length == 6 and fields.month > 12) or (length >= 7 and (fields.month < 1 or fields.month > 12)) {
 			return Err(InvalidDate)
 		}
-		if length >= 13 and fields.hour > 23 {
+		if length >= 12 and fields.hour > 23 {
 			return Err(InvalidTime)
 		}
-		if length >= 16 and fields.minute > 59 {
+		if length >= 15 and fields.minute > 59 {
 			return Err(InvalidTime)
+		}
+		if length == 9 and (fields.day > 31 or (fields.day != 0 and GregorianDate.from_fields({ year: fields.year.to_i64(), month: fields.month.to_u8_wrap(), day: fields.day.to_u8_wrap() }).is_err())) {
+			return Err(InvalidDate)
 		}
 		if length < 10 {
 			return Err(Incomplete)
@@ -270,6 +191,9 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		date = match GregorianDate.from_fields({ year: fields.year.to_i64(), month: fields.month.to_u8_wrap(), day: fields.day.to_u8_wrap() }) {
 			Ok(value) => value
 			Err(_) => return Err(InvalidDate)
+		}
+		if length == 18 and fields.second > 59 {
+			return if (fields.second == 60) Err(UnsupportedLeapSecond) else Err(InvalidTime)
 		}
 		if length < 19 {
 			return Err(Incomplete)
@@ -293,7 +217,7 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			Err(_) => return Err(InvalidTime)
 		}
 		marker = match tail.marker {
-			None => return Err(Incomplete)
+			None => return if (tail.count > 6) Err(UnsupportedPrecision) else Err(Incomplete)
 			Some(value) => value
 		}
 		var $offset = UnassertedUtc
@@ -303,11 +227,11 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 			if tail.offset_malformed {
 				return Err(Malformed)
 			}
-			if tail.offset_count >= 3 and tail.hours > 23 {
+			if (tail.offset_count == 2 and tail.hours > 2) or (tail.offset_count >= 3 and tail.hours > 23) or (tail.offset_count == 5 and tail.minutes > 5) {
 				return Err(InvalidOffset)
 			}
 			if tail.offset_count < 6 {
-				return Err(Incomplete)
+				return if (tail.count > 6) Err(UnsupportedPrecision) else Err(Incomplete)
 			}
 			if tail.minutes > 59 {
 				return Err(InvalidOffset)
@@ -401,26 +325,245 @@ OffsetTimestamp :: { date : GregorianDate, clock : ClockTime, fraction_digits : 
 		}
 	}
 
-	## One bounded semantic fact, retaining supplied decimal width and offset
-	## assertion. Reading facts never resolves a zone or materializes coverage.
-	fact_count : OffsetTimestamp -> U64
-	fact_count = |_| 1
+	## Indexed semantic facts for bounded diagnostics and explanation.
+	Facts :: [].{
 
-	## Returns the zero-based semantic fact, or End when the index is outside fact_count. Facts describe meaning, not a serialized record.
-	fact_at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
-	fact_at = |value, index| if index == 0 {
-		Item(SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local: local_label(value), fraction_digits: value.fraction_digits, offset: value.offset, zone_present: Bool.False, annotation_count: 0 })))
-	} else {
-		End
+		## One bounded semantic fact, retaining supplied decimal width and offset
+		## assertion. Reading facts never resolves a zone or materializes coverage.
+		count : OffsetTimestamp -> U64
+		count = |_| 1
+
+		## Returns the zero-based semantic fact, or End when the index is outside count. Facts describe meaning, not a serialized record.
+		at : OffsetTimestamp, U64 -> [End, Item(SemanticFact)]
+		at = |value, index| if index == 0 {
+			Item(SemanticFact.new(TimestampDescription({ kind: OffsetTimestamp, local: local_label(value), fraction_digits: value.fraction_digits, offset: value.offset, zone_present: Bool.False, annotation_count: 0 })))
+		} else {
+			End
+		}
 	}
 
 	## A concise semantic summary for debugging. Use the standard text encoder for storage or interchange.
 	to_inspect : OffsetTimestamp -> Str
-	to_inspect = |value| match fact_at(value, 0) {
+	to_inspect = |value| match Facts.at(value, 0) {
 		Item(fact) => SemanticFact.summary(fact)
 		End => crash "Timestamp has one semantic fact"
 	}
 }
+
+Fields : { year : U32, month : U32, day : U32, hour : U32, minute : U32, second : U32 }
+
+Tail : {
+	fraction_seen : Bool,
+	fractional : U32,
+	count : U8,
+	marker : [None, Some(U8)],
+	offset_count : U8,
+	hours : U32,
+	minutes : U32,
+	offset_malformed : Bool,
+	trailing : [None, Some(U8)],
+}
+
+Scan : { fields : Fields, tail : Tail }
+
+scan_text : Str -> Try(Scan, [Malformed])
+scan_text = |text| {
+	# Accumulate eight date digits and six clock digits separately in U32;
+	# the existing date/time separator resets the accumulator.
+	# Suffix syntax facts are deferred until fixed field and clock checks,
+	# retaining the established error precedence even for incomplete input.
+	# Defer malformed errors until after scanning so loop state stays scalar.
+	var $bad = Bool.False
+	var $index = 0.U64
+	var $packed = 0.U32
+	var $date_digits = 0.U32
+	var $fraction_seen = Bool.False
+	var $fractional = 0.U32
+	var $count = 0.U8
+	var $marker = None
+	var $offset_count = 0.U8
+	var $hours = 0.U32
+	var $minutes = 0.U32
+	var $offset_malformed = Bool.False
+	var $trailing = None
+	for byte in text.iter_utf8() {
+		if $index < 19 {
+			if $index == 4 or $index == 7 {
+				if byte != 45 {
+					$bad = Bool.True
+					break
+				}
+			} else if $index == 10 {
+				if byte != 84 and byte != 116 {
+					$bad = Bool.True
+					break
+				}
+				$date_digits = $packed
+				$packed = 0
+			} else if $index == 13 or $index == 16 {
+				if byte != 58 {
+					$bad = Bool.True
+					break
+				}
+			} else {
+				if !digit(byte) {
+					$bad = Bool.True
+					break
+				}
+				$packed = append_digit($packed, byte)
+			}
+		} else {
+			match $marker {
+				None => {
+					if $index == 19 and byte == 46 {
+						$fraction_seen = Bool.True
+					} else if $fraction_seen and digit(byte) {
+						if $count < 6 {
+							$fractional = append_digit($fractional, byte)
+						}
+						if $count < 7 {
+							$count = $count + 1
+						}
+					} else {
+						$marker = Some(byte)
+						$offset_count = 1
+					}
+				}
+				Some(marker) => {
+					if (marker == 43 or marker == 45) and $offset_count < 6 {
+						if $offset_count == 3 {
+							$offset_malformed = $offset_malformed or byte != 58
+						}
+						else if digit(byte) {
+							if $offset_count < 3 {
+								$hours = append_digit($hours, byte)
+							}
+							else {
+								$minutes = append_digit($minutes, byte)
+							}
+						} else {
+							$offset_malformed = Bool.True
+						}
+						$offset_count = $offset_count + 1
+					} else {
+						$trailing = Some(byte)
+						break
+					}
+				}
+			}
+		}
+		# No index can exceed the admitted 256-byte input.
+		$index = U64.plus_wrap($index, 1)
+	}
+	if $bad {
+		return Err(Malformed)
+	}
+	# Right-pad only incomplete prefixes, so complete earlier fields decode
+	# identically. Punctuation positions do not contribute decimal digits.
+	while $index < 19 {
+		if $index == 10 {
+			$date_digits = $packed
+			$packed = 0
+		} else if $index != 4 and $index != 7 and $index != 13 and $index != 16 {
+			$packed = $packed * 10
+		}
+		$index = $index + 1
+	}
+	fields = { year: $date_digits // 10000, month: ($date_digits // 100) % 100, day: $date_digits % 100, hour: ($packed // 10000) % 100, minute: ($packed // 100) % 100, second: $packed % 100 }
+	tail = { fraction_seen: $fraction_seen, fractional: $fractional, count: $count, marker: $marker, offset_count: $offset_count, hours: $hours, minutes: $minutes, offset_malformed: $offset_malformed, trailing: $trailing }
+	Ok({ fields, tail })
+}
+
+# The complete, numeric-offset profiles are 25 or 32 bytes. Both exceed the
+# inline string capacity on supported targets, so to_utf8 shares the existing
+# storage. Bounds-checked loads work for unaligned retained slices as well.
+# Any other byte shape falls through to the scalar scan for precise diagnostics.
+# Calendar, clock, offset and precision validation is shared by both scans.
+scan_offset_record : Str, U64 -> Try(Scan, [OtherShape])
+scan_offset_record = |text, length| {
+	bytes = text.to_utf8()
+	prefix = U8x16.load(bytes, 0).map_err(|_| OtherShape)?
+	suffix = U8x16.load(bytes, length - 16).map_err(|_| OtherShape)?
+	sign = suffix.get_lane(10)
+	if sign != 43 and sign != 45 {
+		return Err(OtherShape)
+	}
+	# Packed constants are little-endian lane order. First block YYYY-MM-DDtHH:MM:
+	# accept digit deltas 0..9 and normalize T/t before validating punctuation.
+	# Gather year pairs, month, day, hour and minute in that order.
+	prefix_lower = prefix.with_lane(10, prefix.get_lane(10).bitwise_or(32))
+	prefix_pairs = decimal_pairs(
+		prefix_lower,
+		U8x16.from_u128_bits(0x30303a30307430302d30302d30303030.U128),
+		U8x16.from_u128_bits(0x09090009090009090009090009090909.U128),
+		U8x16.from_u128_bits(0xffffffff0f0e0c0b0908060503020100.U128),
+	)?
+	suffix_unsigned = suffix.with_lane(10, 48)
+	has_fraction = length == 32
+	suffix_pairs = if has_fraction {
+		# Six-digit suffix: :SS.ffffff+HH:MM. Gather seconds, offset, fraction.
+		decimal_pairs(
+			suffix_unsigned,
+			U8x16.from_u128_bits(0x30303a3030303030303030302e30303a.U128),
+			U8x16.from_u128_bits(0x09090009090009090909090900090900.U128),
+			U8x16.from_u128_bits(0xffffffff0908070605040f0e0c0b0201.U128),
+		)?
+	} else {
+		# Whole-second suffix overlaps the prefix: DtHH:MM:SS+HH:MM.
+		decimal_pairs(
+			suffix_unsigned.with_lane(1, suffix_unsigned.get_lane(1).bitwise_or(32)),
+			U8x16.from_u128_bits(0x30303a30303030303a30303a30307430.U128),
+			U8x16.from_u128_bits(0x09090009090009090009090009090009.U128),
+			U8x16.from_u128_bits(0xffffffffffffffffffff0f0e0c0b0908.U128),
+		)?
+	}
+	field = |pairs, lane| I16.to_u32_wrap(I16x8.get_lane(pairs, lane))
+	fields = {
+		year: field(prefix_pairs, 0) * 100 + field(prefix_pairs, 1),
+		month: field(prefix_pairs, 2),
+		day: field(prefix_pairs, 3),
+		hour: field(prefix_pairs, 4),
+		minute: field(prefix_pairs, 5),
+		second: field(suffix_pairs, 0),
+	}
+	fractional = if has_fraction {
+		field(suffix_pairs, 3) * 10000 + field(suffix_pairs, 4) * 100 + field(suffix_pairs, 5)
+	} else {
+		0
+	}
+	Ok({
+		fields,
+		tail: {
+			fraction_seen: has_fraction,
+			fractional,
+			count: if (has_fraction) 6 else 0,
+			marker: Some(sign),
+			offset_count: 6,
+			hours: field(suffix_pairs, 1),
+			minutes: field(suffix_pairs, 2),
+			offset_malformed: False,
+			trailing: None,
+		},
+	})
+}
+
+decimal_pairs : U8x16, U8x16, U8x16, U8x16 -> Try(I16x8, [OtherShape])
+decimal_pairs = |bytes, base, limit, indices| {
+	digits = bytes.minus_wrap(base)
+	# Digit lanes accept 0..9 after ASCII subtraction. Every punctuation
+	# lane must equal its base. Out-of-range table indices contribute zero.
+	if digits.gt_lanes(limit).any_lanes_set() {
+		return Err(OtherShape)
+	}
+	shuffled = digits.table_lookup(indices)
+	weights = I8x16.from_u128_bits(0x010a010a010a010a010a010a010a010a.U128)
+	Ok(shuffled.dot_pairs_saturated(weights))
+}
+
+# Callers have checked the ASCII digit and collect no more than eight
+# decimal digits in any accumulator. Each intermediate is below 10^8.
+append_digit : U32, U8 -> U32
+append_digit = |packed, byte| U32.plus_wrap(U32.times_wrap(packed, 10), U8.minus_wrap(byte, 48).to_u32())
 
 fraction_unit = |count| {
 	var $unit = 1.U32
@@ -512,11 +655,11 @@ expect {
 }
 
 expect {
-	value = OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), UnassertedUtc, 6)?
+	value = OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), { offset: UnassertedUtc, fraction_digits: 6 })?
 	OffsetTimestamp.to_text(value) == "1969-12-31T23:59:59.999999Z" and
-		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), UnassertedUtc, 5) == Err(UnsupportedPrecision) and
-			OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.highest), UnassertedUtc, 6) == Err(OutOfRange) and
-				OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.lowest), UnassertedUtc, 6) == Err(OutOfRange)
+		OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(-1), { offset: UnassertedUtc, fraction_digits: 5 }) == Err(UnsupportedPrecision) and
+			OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.highest), { offset: UnassertedUtc, fraction_digits: 6 }) == Err(OutOfRange) and
+				OffsetTimestamp.from_boundary(PosixBoundary.from_microseconds(I64.lowest), { offset: UnassertedUtc, fraction_digits: 6 }) == Err(OutOfRange)
 }
 expect {
 	OffsetTimestamp.parse(Str.join_with(List.repeat("x", 257), "")) == Err(TooLarge) and
@@ -526,7 +669,7 @@ expect {
 expect {
 	OffsetTimestamp.parse("2000-01-01T00:00:00.1234567garbage") == Err(Malformed) and
 		OffsetTimestamp.parse("2000-01-01T00:00:00.1234567+24:00") == Err(InvalidOffset) and
-			OffsetTimestamp.parse("2000-01-01T00:00:00.1234567") == Err(Incomplete) and
+			OffsetTimestamp.parse("2000-01-01T00:00:00.1234567") == Err(UnsupportedPrecision) and
 				OffsetTimestamp.parse("2000-99-01T") == Err(InvalidDate) and
 					OffsetTimestamp.parse("2001-02-29T") == Err(InvalidDate) and
 						OffsetTimestamp.parse("2000-01-01T24:") == Err(InvalidTime) and
@@ -537,11 +680,11 @@ expect {
 expect {
 	shorter = OffsetTimestamp.parse("1970-01-01T00:00:00.12Z")?
 	longer = OffsetTimestamp.parse("1970-01-01T00:00:00.120+00:00")?
-	left = match OffsetTimestamp.fact_at(shorter, 0) {
+	left = match OffsetTimestamp.Facts.at(shorter, 0) {
 		Item(fact) => Ok(SemanticFact.kind(fact))
 		End => Err(MissingFact)
 	}?
-	right = match OffsetTimestamp.fact_at(longer, 0) {
+	right = match OffsetTimestamp.Facts.at(longer, 0) {
 		Item(fact) => Ok(SemanticFact.kind(fact))
 		End => Err(MissingFact)
 	}?
@@ -552,8 +695,8 @@ expect {
 					!a.zone_present and a.annotation_count == 0
 		_ => Bool.False
 	}
-	facts_match and OffsetTimestamp.fact_count(shorter) == 1 and OffsetTimestamp.fact_at(shorter, 1) == End and
-		OffsetTimestamp.fact_at(longer, U64.highest) == End and OffsetTimestamp.to_inspect(longer).count_utf8_bytes() <= 256
+	facts_match and OffsetTimestamp.Facts.count(shorter) == 1 and OffsetTimestamp.Facts.at(shorter, 1) == End and
+		OffsetTimestamp.Facts.at(longer, U64.highest) == End and OffsetTimestamp.to_inspect(longer).count_utf8_bytes() <= 256
 }
 
 # R01/R14: precedence is part of the public parser contract. A malformed
@@ -577,3 +720,17 @@ expect {
 	}
 	$valid
 }
+
+## An incomplete result requires a possible completion of every supplied field.
+expect {
+	OffsetTimestamp.parse("2024-2") == Err(InvalidDate) and
+		OffsetTimestamp.parse("2024-02-3") == Err(InvalidDate) and
+			OffsetTimestamp.parse("2024-01-01T3") == Err(InvalidTime) and
+				OffsetTimestamp.parse("2024-01-01T00:00:7") == Err(InvalidTime) and
+					OffsetTimestamp.parse("2024-01-01T00:00:00+3") == Err(InvalidOffset) and
+						OffsetTimestamp.parse("2024-01-01T00:00:00+01:7") == Err(InvalidOffset) and
+							OffsetTimestamp.parse("2024-01-01T00:00:6") == Err(UnsupportedLeapSecond)
+}
+
+## An unfinished offset does not hide already unsupported precision.
+expect OffsetTimestamp.parse("2024-01-01T00:00:00.0000000+") == Err(UnsupportedPrecision)

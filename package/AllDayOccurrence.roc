@@ -20,8 +20,8 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 
 	## Constant calendar work; zone interpretation is deferred to the cursor.
 	## Both the source and exclusive end must fit the source calendar and rules.
-	cursor : id, Calendar.Date, U64, ZoneRules -> Try(AllDayOccurrenceCursor(id), [InvalidDuration, OutOfRange, OutsideValidity])
-	cursor = |id_value, date_value, days_value, rules| {
+	cursor : { id : id, date : Calendar.Date, days : U64, rules : ZoneRules } -> Try(AllDayOccurrenceCursor(id), [InvalidDuration, OutOfRange, OutsideValidity])
+	cursor = |{ id: id_value, date: date_value, days: days_value, rules }| {
 		if days_value == 0 {
 			return Err(InvalidDuration)
 		}
@@ -35,7 +35,7 @@ AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection :
 			Err(OutOfRange) => return Err(OutOfRange)
 		}
 		midnight = midnight_clock(0)
-		pending = match ZoneRules.selection_cursor(rules, LocalDateTime.new(date_value, midnight), LocalDateTime.new(end, midnight)) {
+		pending = match ZoneRules.SelectionCursor.from_bounds(rules, { start: LocalDateTime.new({ date: date_value, clock: midnight }), end: LocalDateTime.new({ date: end, clock: midnight }) }) {
 			Ok(value) => value
 			Err(EmptySelection) => crash "positive civil duration is nonempty"
 			Err(ReversedSelection) => crash "positive civil duration is ordered"
@@ -100,10 +100,10 @@ test_alldayoccurrence_day = |number| Calendar.Date.from_fields(Gregorian, { year
 expect {
 	var $valid = Bool.True
 	for (at, offset, hours) in [(7200000000.I64, 3600.I32, 23.I64), (7200000000, -3600, 25), (7200000000, 0, 24), (0, 86400, 0)] {
-		validity = PosixSpan.new(test_alldayoccurrence_point(-259200000000), test_alldayoccurrence_point(259200000000))?
-		rules = ZoneRules.new_bounded("Synthetic/Day", "v1", validity, FixedOffset.from_seconds(0), [{ at: test_alldayoccurrence_point(at), offset: FixedOffset.from_seconds(offset) }], { minimum: I32.min(0, offset), maximum: I32.max(0, offset) })?
+		validity = PosixSpan.new({ start: test_alldayoccurrence_point(-259200000000), end: test_alldayoccurrence_point(259200000000) })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Day", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: test_alldayoccurrence_point(at), offset: FixedOffset.from_seconds(offset) }], bounds: { minimum: I32.min(0, offset), maximum: I32.max(0, offset) } })?
 		date = test_alldayoccurrence_day(1)?
-		initial = AllDayOccurrence.cursor({ series: "visits", date }, date, 1, rules)?
+		initial = AllDayOccurrence.cursor({ id: { series: "visits", date }, date, days: 1, rules })?
 		first = AllDayOccurrenceCursor.collect(initial, { max_segments: 1, max_members: 1 })?
 		match first.status {
 			Complete(_) => {
@@ -129,23 +129,23 @@ expect {
 }
 
 expect {
-	validity = PosixSpan.new(test_alldayoccurrence_point(-259200000000), test_alldayoccurrence_point(259200000000))?
-	rules = ZoneRules.new_bounded("Synthetic/UTC", "v1", validity, FixedOffset.from_seconds(0), [], { minimum: 0, maximum: 0 })?
+	validity = PosixSpan.new({ start: test_alldayoccurrence_point(-259200000000), end: test_alldayoccurrence_point(259200000000) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/UTC", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [], bounds: { minimum: 0, maximum: 0 } })?
 	date = test_alldayoccurrence_day(1)?
-	zero = match AllDayOccurrence.cursor(0.U64, date, 0, rules) {
+	zero = match AllDayOccurrence.cursor({ id: 0.U64, date, days: 0, rules }) {
 		Err(InvalidDuration) => True
 		_ => False
 	}
-	huge = match AllDayOccurrence.cursor(0.U64, date, U64.highest, rules) {
+	huge = match AllDayOccurrence.cursor({ id: 0.U64, date, days: U64.highest, rules }) {
 		Err(OutOfRange) => True
 		_ => False
 	}
-	missing = match AllDayOccurrence.cursor(0.U64, date, 4, rules) {
+	missing = match AllDayOccurrence.cursor({ id: 0.U64, date, days: 4, rules }) {
 		Err(OutsideValidity) => True
 		_ => False
 	}
 	julian = Calendar.Date.in_calendar(date, Julian)?
-	initial = AllDayOccurrence.cursor("two-test_alldayoccurrence_day-visit", julian, 2, rules)?
+	initial = AllDayOccurrence.cursor({ id: "two-test_alldayoccurrence_day-visit", date: julian, days: 2, rules })?
 	limited = AllDayOccurrenceCursor.collect(initial, { max_segments: 0, max_members: 1 })?
 	resumed = match limited.status {
 		Complete(_) => False

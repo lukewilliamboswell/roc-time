@@ -18,12 +18,12 @@ import PosixSpan
 ## import time.PosixDelta
 ##
 ## expect {
-##     window = PosixSpan.from_seconds(0, 10, RejectSubmicrosecond)?
+##     window = PosixSpan.from_seconds({ start: 0, end: 10, rounding: RejectSubmicrosecond })?
 ##     busy = Coverage.from_spans([
-##         PosixSpan.from_seconds(2, 4, RejectSubmicrosecond)?,
-##         PosixSpan.from_seconds(4, 6, RejectSubmicrosecond)?,
+##         PosixSpan.from_seconds({ start: 2, end: 4, rounding: RejectSubmicrosecond })?,
+##         PosixSpan.from_seconds({ start: 4, end: 6, rounding: RejectSubmicrosecond })?,
 ##     ])
-##     free = Coverage.difference(Coverage.from_spans([window]), busy)
+##     free = Coverage.difference({ base: Coverage.from_spans([window]), subtract: busy })
 ##     expected_width = PosixDelta.from_microseconds(6000000)
 ##     Coverage.member_count(busy) == 1 and
 ##         Coverage.member_count(free) == 2 and
@@ -47,14 +47,13 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Construction sorts the input and takes O(n log n) work.
 	from_spans : List(PosixSpan) -> Coverage
 	from_spans = |input| {
+		if input.len() <= 1 {
+			return Spans(input)
+		}
 		sorted = List.sort_with(
 			input,
 			|a, b| {
-				match PosixBoundary.compare(PosixSpan.start(a), PosixSpan.start(b)) {
-					LT => Before
-					EQ => Same
-					GT => After
-				}
+				PosixBoundary.order_relative_to(PosixSpan.start(a), PosixSpan.start(b))
 			},
 		)
 		var $builder = { done: [], pending: None }
@@ -64,9 +63,17 @@ Coverage :: [Spans(List(PosixSpan))].{
 		Spans(finish($builder))
 	}
 
+	## Collect finite unordered spans, then sort and coalesce as in from_spans.
+	## This consumes the iterator and materializes its input before sorting.
+	from_iter : Iter(PosixSpan) -> Coverage
+	from_iter = |input| from_spans(List.from_iter(input))
+
 	## Validate start ordering in O(n); merge overlap and touch.
 	from_sorted_spans : List(PosixSpan) -> Try(Coverage, [UnsortedInput])
 	from_sorted_spans = |input| {
+		if input.len() <= 1 {
+			return Ok(Spans(input))
+		}
 		var $builder = CoverageSortedBuilder.empty
 		for span in input {
 			$builder = CoverageSortedBuilder.append($builder, span)?
@@ -98,23 +105,26 @@ Coverage :: [Spans(List(PosixSpan))].{
 	to_hash : Coverage, Hasher -> Hasher
 	to_hash = |Spans(items), hasher| items.to_hash(hasher)
 
-	# An allocated span list uses at least 16 bytes per member, leaving room
-	# for the fixed fact headers when its length is counted in U64.
-	## Count the summary fact and one fact per canonical span.
-	## Use fact_at to request individual facts without enumerating positions.
-	fact_count : Coverage -> U64
-	fact_count = |coverage| member_count(coverage) + 1
+	## Indexed semantic facts for bounded diagnostics and explanation.
+	Facts :: [].{
+		# An allocated span list uses at least 16 bytes per member, leaving room
+		# for the fixed fact headers when its length is counted in U64.
+		## Count the summary fact and one fact per canonical span.
+		## Use at to request individual facts without enumerating positions.
+		count : Coverage -> U64
+		count = |coverage| member_count(coverage) + 1
 
-	## Read one semantic fact by zero-based index: the summary is at zero, then
-	## canonical span facts follow in order. Return End beyond the final fact.
-	fact_at : Coverage, U64 -> [End, Item(SemanticFact)]
-	fact_at = |Spans(items), index| {
-		if index == 0 {
-			return Item(SemanticFact.new(CoverageDescription({ member_count: items.len() })))
-		}
-		match items.get(index - 1) {
-			Ok(span) => Item(SemanticFact.new(CoverageMember({ index: index - 1, span })))
-			Err(_) => End
+		## Read one semantic fact by zero-based index: the summary is at zero, then
+		## canonical span facts follow in order. Return End beyond the final fact.
+		at : Coverage, U64 -> [End, Item(SemanticFact)]
+		at = |Spans(items), index| {
+			if index == 0 {
+				return Item(SemanticFact.new(CoverageDescription({ member_count: items.len() })))
+			}
+			match items.get(index - 1) {
+				Ok(span) => Item(SemanticFact.new(CoverageMember({ index: index - 1, span })))
+				Err(_) => End
+			}
 		}
 	}
 
@@ -123,7 +133,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 	to_inspect : Coverage -> Str
 	to_inspect = |coverage| {
 		items = to_spans(coverage)
-		summary = match fact_at(coverage, 0) {
+		summary = match Facts.at(coverage, 0) {
 			Item(fact) => SemanticFact.summary(fact)
 			End => crash "Coverage always supplies its summary fact"
 		}
@@ -137,7 +147,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 			} else {
 				", "
 			}
-			member = match fact_at(coverage, $index + 1) {
+			member = match Facts.at(coverage, $index + 1) {
 				Item(fact) => match SemanticFact.kind(fact) {
 					CoverageMember(data) => data.span
 					_ => crash "Coverage member index supplies a member fact"
@@ -181,23 +191,29 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## and exclusive ends apply to every member.
 	contains : Coverage, PosixBoundary -> Bool
 	contains = |Spans(items), point| {
+		if items.is_empty() {
+			return False
+		}
 		index = first_end_after(items, point)
 		if index == List.len(items) {
 			Bool.False
 		}
 		else {
-			PosixSpan.contains(at(items, index), point)
+			PosixSpan.contains(span_at(items, index), point)
 		}
 	}
 
 	## Fold whole overlapping members, not clipped intersections. O(log n + k).
-	fold_overlaps : Coverage, PosixSpan, state, (state, PosixSpan -> state) -> state
-	fold_overlaps = |Spans(items), query, initial, step| {
+	fold_overlaps : Coverage, { query : PosixSpan, initial : state, step : (state, PosixSpan -> state) } -> state
+	fold_overlaps = |Spans(items), { query, initial, step }| {
+		if items.is_empty() {
+			return initial
+		}
 		var $index = first_end_after(items, PosixSpan.start(query))
 		var $state = initial
 		while $index < List.len(items) {
-			span = at(items, $index)
-			if PosixBoundary.compare(PosixSpan.start(span), PosixSpan.end(query)) != LT {
+			span = span_at(items, $index)
+			if PosixBoundary.order_relative_to(PosixSpan.start(span), PosixSpan.end(query)) != Before {
 				break
 			}
 			$state = step($state, span)
@@ -209,7 +225,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 	## Return whole canonical members that overlap the query span, in time order.
 	## Members are not clipped to the query; use intersection for clipped coverage.
 	overlapping_spans : Coverage, PosixSpan -> List(PosixSpan)
-	overlapping_spans = |coverage, query| fold_overlaps(coverage, query, [], List.append)
+	overlapping_spans = |coverage, query| fold_overlaps(coverage, { query, initial: [], step: List.append })
 
 	## An empty operand reuses the other coverage in constant work, without allocation.
 	union : Coverage, Coverage -> Coverage
@@ -231,19 +247,19 @@ Coverage :: [Spans(List(PosixSpan))].{
 		var $j = 0.U64
 		var $output = []
 		while $i < List.len(a) and $j < List.len(b) {
-			left = at(a, $i)
-			right = at(b, $j)
+			left = span_at(a, $i)
+			right = span_at(b, $j)
 			match PosixSpan.intersection(left, right) {
 				Empty => {}
 				Span(span) => {
 					$output = List.append($output, span)
 				}
 			}
-			order = PosixBoundary.compare(PosixSpan.end(left), PosixSpan.end(right))
-			if order != GT {
+			order = PosixBoundary.order_relative_to(PosixSpan.end(left), PosixSpan.end(right))
+			if order != After {
 				$i = $i + 1
 			}
-			if order != LT {
+			if order != Before {
 				$j = $j + 1
 			}
 		}
@@ -252,11 +268,13 @@ Coverage :: [Spans(List(PosixSpan))].{
 	}
 
 	## Subtracting empty coverage reuses the input in constant work, without allocation.
-	difference : Coverage, Coverage -> Coverage
-	difference = |Spans(a), Spans(b)| {
-		if List.is_empty(b) {
-			return Spans(a)
+	difference : { base : Coverage, subtract : Coverage } -> Coverage
+	difference = |{ base, subtract }| {
+		if member_count(base) == 0 or member_count(subtract) == 0 {
+			return base
 		}
+		Spans(a) = base
+		Spans(b) = subtract
 		var $j = 0.U64
 		var $output = []
 		for left in a {
@@ -265,16 +283,16 @@ Coverage :: [Spans(List(PosixSpan))].{
 			# Stop before a right span that cannot overlap this left member.
 			# A nested break here leaks the output accumulator on nightly-2026-10-18;
 			# tests/fuzz/corpus/coverage/subtraction-inner-loop-stop retains the case.
-			while $j < List.len(b) and PosixBoundary.compare($cursor, upper) == LT and
-				PosixBoundary.compare(PosixSpan.start(at(b, $j)), upper) == LT {
-				right = at(b, $j)
-				if PosixBoundary.compare(PosixSpan.end(right), $cursor) != GT {
+			while $j < List.len(b) and PosixBoundary.order_relative_to($cursor, upper) == Before and
+				PosixBoundary.order_relative_to(PosixSpan.start(span_at(b, $j)), upper) == Before {
+				right = span_at(b, $j)
+				if PosixBoundary.order_relative_to(PosixSpan.end(right), $cursor) != After {
 					$j = $j + 1
 				} else {
-					if PosixBoundary.compare($cursor, PosixSpan.start(right)) == LT {
+					if PosixBoundary.order_relative_to($cursor, PosixSpan.start(right)) == Before {
 						$output = List.append($output, fragment($cursor, PosixSpan.start(right)))
 					}
-					if PosixBoundary.compare(PosixSpan.end(right), upper) != LT {
+					if PosixBoundary.order_relative_to(PosixSpan.end(right), upper) != Before {
 						$cursor = upper
 						# Retain this subtrahend; it may cover the next left member.
 					} else {
@@ -283,7 +301,7 @@ Coverage :: [Spans(List(PosixSpan))].{
 					}
 				}
 			}
-			if PosixBoundary.compare($cursor, upper) == LT {
+			if PosixBoundary.order_relative_to($cursor, upper) == Before {
 				$output = List.append($output, fragment($cursor, upper))
 			}
 		}
@@ -297,22 +315,22 @@ Coverage :: [Spans(List(PosixSpan))].{
 		var $cursor = PosixSpan.start(window)
 		upper = PosixSpan.end(window)
 		var $output = []
-		while $index < List.len(items) and PosixBoundary.compare($cursor, upper) == LT {
-			span = at(items, $index)
-			if PosixBoundary.compare(PosixSpan.start(span), upper) != LT {
+		while $index < List.len(items) and PosixBoundary.order_relative_to($cursor, upper) == Before {
+			span = span_at(items, $index)
+			if PosixBoundary.order_relative_to(PosixSpan.start(span), upper) != Before {
 				break
 			}
-			if PosixBoundary.compare($cursor, PosixSpan.start(span)) == LT {
+			if PosixBoundary.order_relative_to($cursor, PosixSpan.start(span)) == Before {
 				$output = List.append($output, fragment($cursor, PosixSpan.start(span)))
 			}
-			$cursor = if PosixBoundary.compare(PosixSpan.end(span), upper) == LT {
+			$cursor = if PosixBoundary.order_relative_to(PosixSpan.end(span), upper) == Before {
 				PosixSpan.end(span)
 			} else {
 				upper
 			}
 			$index = $index + 1
 		}
-		if PosixBoundary.compare($cursor, upper) == LT {
+		if PosixBoundary.order_relative_to($cursor, upper) == Before {
 			$output = List.append($output, fragment($cursor, upper))
 		}
 		Spans($output)
@@ -333,13 +351,13 @@ union_nonempty = |a, b| {
 			Bool.True
 		}
 		else {
-			PosixBoundary.compare(PosixSpan.start(at(a, $i)), PosixSpan.start(at(b, $j))) != GT
+			PosixBoundary.order_relative_to(PosixSpan.start(span_at(a, $i)), PosixSpan.start(span_at(b, $j))) != After
 		}
 		if take_a {
-			$builder = push($builder, at(a, $i))
+			$builder = push($builder, span_at(a, $i))
 			$i = $i + 1
 		} else {
-			$builder = push($builder, at(b, $j))
+			$builder = push($builder, span_at(b, $j))
 			$j = $j + 1
 		}
 	}
@@ -348,8 +366,8 @@ union_nonempty = |a, b| {
 
 # Private, invariant-backed helpers. Every index is guarded by the relevant
 # list length; fragment callers establish lower < upper by endpoint comparisons.
-at : List(PosixSpan), U64 -> PosixSpan
-at = |items, index| {
+span_at : List(PosixSpan), U64 -> PosixSpan
+span_at = |items, index| {
 	match List.get(items, index) {
 		Ok(span) => span
 		Err(OutOfBounds) => crash "coverage index invariant"
@@ -358,7 +376,7 @@ at = |items, index| {
 
 fragment : PosixBoundary, PosixBoundary -> PosixSpan
 fragment = |lower, upper| {
-	match PosixSpan.new(lower, upper) {
+	match PosixSpan.new({ start: lower, end: upper }) {
 		Ok(span) => span
 		Err(_) => crash "coverage fragment invariant"
 	}
@@ -372,7 +390,7 @@ push = |builder, span| {
 	match builder.pending {
 		None => { done: builder.done, pending: Some(span) }
 		Some(previous) => {
-			if PosixBoundary.compare(PosixSpan.start(span), PosixSpan.end(previous)) != GT {
+			if PosixBoundary.order_relative_to(PosixSpan.start(span), PosixSpan.end(previous)) != After {
 				{ done: builder.done, pending: Some(PosixSpan.hull(previous, span)) }
 			} else {
 				{ done: List.append(builder.done, previous), pending: Some(span) }
@@ -391,11 +409,25 @@ finish = |builder| {
 
 first_end_after : List(PosixSpan), PosixBoundary -> U64
 first_end_after = |items, point| {
+	size = items.len()
+	if size == 0 {
+		return 0
+	}
+	last_index = size - 1
+	last = span_at(items, last_index)
+	# A point within or beyond the last member can skip the search. Canonical
+	# coverage has no earlier member ending after the last member starts.
+	if point >= PosixSpan.end(last) {
+		return size
+	}
+	if point >= PosixSpan.start(last) {
+		return last_index
+	}
 	var $lo = 0.U64
-	var $hi = List.len(items)
+	var $hi = last_index
 	while $lo < $hi {
 		mid = $lo + U64.div_trunc_by($hi - $lo, 2)
-		if PosixBoundary.compare(PosixSpan.end(at(items, mid)), point) == GT {
+		if PosixBoundary.order_relative_to(PosixSpan.end(span_at(items, mid)), point) == After {
 			$hi = mid
 		} else {
 			$lo = mid + 1
@@ -406,16 +438,16 @@ first_end_after = |items, point| {
 
 # Capacity counts canonical members, so touching chunks can merge at capacity.
 expect {
-	a = PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(10))?
-	b = PosixSpan.new(PosixBoundary.from_microseconds(10), PosixBoundary.from_microseconds(12))?
-	c = PosixSpan.new(PosixBoundary.from_microseconds(14), PosixBoundary.from_microseconds(15))?
+	a = PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(10) })?
+	b = PosixSpan.new({ start: PosixBoundary.from_microseconds(10), end: PosixBoundary.from_microseconds(12) })?
+	c = PosixSpan.new({ start: PosixBoundary.from_microseconds(14), end: PosixBoundary.from_microseconds(15) })?
 	first = CoverageSortedBuilder.append(CoverageSortedBuilder.empty, a)?
 	snapshot = CoverageSortedBuilder.to_coverage(first)
-	match CoverageSortedBuilder.append_bounded(first, b, 1)? {
-		Full => False
+	match CoverageSortedBuilder.append_bounded(first, { span: b, max_members: 1 })? {
+		Full(_) => False
 		Added(second) => {
-			blocked = match CoverageSortedBuilder.append_bounded(second, c, 1)? {
-				Full => True
+			blocked = match CoverageSortedBuilder.append_bounded(second, { span: c, max_members: 1 })? {
+				Full(_) => True
 				_ => False
 			}
 			# A merged hull must not hide decreasing original input starts.
@@ -433,13 +465,13 @@ expect {
 # A full builder can resume with a larger budget without losing an input span.
 # The retained snapshot deliberately exercises shared storage as well.
 expect {
-	a = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(-1))?
-	b = PosixSpan.new(PosixBoundary.from_microseconds(1), PosixBoundary.from_microseconds(2))?
+	a = PosixSpan.new({ start: PosixBoundary.from_microseconds(-2), end: PosixBoundary.from_microseconds(-1) })?
+	b = PosixSpan.new({ start: PosixBoundary.from_microseconds(1), end: PosixBoundary.from_microseconds(2) })?
 	first = CoverageSortedBuilder.append(CoverageSortedBuilder.empty, a)?
 	snapshot = CoverageSortedBuilder.to_coverage(first)
-	match CoverageSortedBuilder.append_retaining(first, b, 1)? {
+	match CoverageSortedBuilder.append_bounded(first, { span: b, max_members: 1 })? {
 		Added(_) => False
-		Full(resume) => match CoverageSortedBuilder.append_retaining(resume, b, 2)? {
+		Full(resume) => match CoverageSortedBuilder.append_bounded(resume, { span: b, max_members: 2 })? {
 			Full(_) => False
 			Added(done) => {
 				result = CoverageSortedBuilder.to_coverage(done)
@@ -463,7 +495,7 @@ test_coverage_from_mask = |mask| {
 }
 
 expect {
-	window = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(2))?
+	window = PosixSpan.new({ start: PosixBoundary.from_microseconds(-2), end: PosixBoundary.from_microseconds(2) })?
 	universe = Coverage.from_spans([window])
 	var $valid = Bool.True
 	var $x = 0.U64
@@ -494,7 +526,7 @@ expect {
 			b = test_coverage_from_mask($y)?
 			union = Coverage.union(a, b)
 			intersection = Coverage.intersection(a, b)
-			difference = Coverage.difference(a, b)
+			difference = Coverage.difference({ base: a, subtract: b })
 			$valid = $valid and union == Coverage.union(b, a)
 			$valid = $valid and intersection == Coverage.intersection(b, a)
 			$valid = $valid and Coverage.intersection(difference, b) == Coverage.empty
@@ -531,15 +563,15 @@ expect {
 			for c in [-2.I64, -1, 0, 1] {
 				for d in [-1.I64, 0, 1, 2] {
 					if a < b and c < d {
-						left = PosixSpan.new(PosixBoundary.from_microseconds(a), PosixBoundary.from_microseconds(b))?
-						right = PosixSpan.new(PosixBoundary.from_microseconds(c), PosixBoundary.from_microseconds(d))?
+						left = PosixSpan.new({ start: PosixBoundary.from_microseconds(a), end: PosixBoundary.from_microseconds(b) })?
+						right = PosixSpan.new({ start: PosixBoundary.from_microseconds(c), end: PosixBoundary.from_microseconds(d) })?
 						coverage = Coverage.from_spans([left, right, left])
 						$valid = $valid and coverage == Coverage.from_spans([right, left])
 						clipped = Coverage.intersection(coverage, Coverage.from_spans([left]))
 						complement = Coverage.complement_within(Coverage.from_spans([right]), left)
 						$valid = $valid and Coverage.union(complement, Coverage.intersection(Coverage.from_spans([right]), Coverage.from_spans([left]))) == Coverage.from_spans([left])
 						matches = Coverage.overlapping_spans(coverage, left)
-						count = Coverage.fold_overlaps(coverage, left, 0.U64, |n, _| n + 1)
+						count = Coverage.fold_overlaps(coverage, { query: left, initial: 0.U64, step: |n, _| n + 1 })
 						$valid = $valid and count == List.len(matches)
 						# Linear query oracle includes only whole overlapping members.
 						var $expected_matches = []
@@ -565,14 +597,14 @@ expect {
 }
 
 expect {
-	early = PosixSpan.new(PosixBoundary.from_microseconds(-2), PosixBoundary.from_microseconds(0))?
-	late = PosixSpan.new(PosixBoundary.from_microseconds(0), PosixBoundary.from_microseconds(2))?
+	early = PosixSpan.new({ start: PosixBoundary.from_microseconds(-2), end: PosixBoundary.from_microseconds(0) })?
+	late = PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(2) })?
 	Coverage.from_sorted_spans([early, late]) == Ok(Coverage.from_spans([late, early])) and
 		Coverage.from_sorted_spans([late, early]) == Err(UnsortedInput)
 }
 
 expect {
-	wide = PosixSpan.new(PosixBoundary.from_microseconds(-9223372036854775808), PosixBoundary.from_microseconds(-1))?
+	wide = PosixSpan.new({ start: PosixBoundary.from_microseconds(-9223372036854775808), end: PosixBoundary.from_microseconds(-1) })?
 	unit = PosixSpan.microsecond_at(PosixBoundary.from_microseconds(0))?
 	Coverage.coordinate_width(Coverage.from_spans([wide, unit])) == Err(OutOfRange)
 }
@@ -587,19 +619,19 @@ expect {
 expect {
 	# R04/R15 regression: retain both operands after subtracting a prefix, then
 	# stop before a later subtrahend. Expected spans follow the raw endpoints.
-	span = |lo, hi| PosixSpan.new(PosixBoundary.from_microseconds(lo), PosixBoundary.from_microseconds(hi))
+	span = |lo, hi| PosixSpan.new({ start: PosixBoundary.from_microseconds(lo), end: PosixBoundary.from_microseconds(hi) })
 	a = Coverage.from_spans([span(-8, -5)?, span(-1, 0)?, span(2, 3)?, span(8, 14)?])
 	b = Coverage.from_spans([span(-7, -6)?, span(-5, -2)?])
-	result = Coverage.difference(a, b)
+	result = Coverage.difference({ base: a, subtract: b })
 	result == Coverage.from_spans([span(-8, -7)?, span(-6, -5)?, span(-1, 0)?, span(2, 3)?, span(8, 14)?]) and
 		Coverage.member_count(a) == 4 and Coverage.member_count(b) == 2
 }
 
 expect {
 	# The full coordinate range is one member even though its width overflows.
-	span = PosixSpan.new(PosixBoundary.from_microseconds(I64.lowest), PosixBoundary.from_microseconds(I64.highest))?
+	span = PosixSpan.new({ start: PosixBoundary.from_microseconds(I64.lowest), end: PosixBoundary.from_microseconds(I64.highest) })?
 	coverage = Coverage.from_spans([span])
-	Coverage.fact_count(Coverage.empty) == 1 and Coverage.fact_at(Coverage.empty, 0) == Item(SemanticFact.new(CoverageDescription({ member_count: 0 }))) and Coverage.fact_at(Coverage.empty, 1) == End and Coverage.fact_count(coverage) == 2 and Coverage.fact_at(coverage, 1) == Item(SemanticFact.new(CoverageMember({ index: 0, span }))) and Coverage.fact_at(coverage, 2) == End and Coverage.fact_at(coverage, U64.highest) == End
+	Coverage.Facts.count(Coverage.empty) == 1 and Coverage.Facts.at(Coverage.empty, 0) == Item(SemanticFact.new(CoverageDescription({ member_count: 0 }))) and Coverage.Facts.at(Coverage.empty, 1) == End and Coverage.Facts.count(coverage) == 2 and Coverage.Facts.at(coverage, 1) == Item(SemanticFact.new(CoverageMember({ index: 0, span }))) and Coverage.Facts.at(coverage, 2) == End and Coverage.Facts.at(coverage, U64.highest) == End
 }
 
 CoverageSortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary)] }.{
@@ -619,28 +651,18 @@ CoverageSortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary
 	## Constant comparison work; owned append is amortized, shared append may
 	## copy retained output. Equal starts are valid; decreasing starts fail.
 	append : CoverageSortedBuilder, PosixSpan -> Try(CoverageSortedBuilder, [UnsortedInput])
-	append = |builder, span| match append_bounded(builder, span, U64.highest)? {
+	append = |builder, span| match append_bounded(builder, { span, max_members: U64.highest })? {
 		Added(updated) => Ok(updated)
-		Full => crash "Allocated span list cannot exhaust U64 member count"
-	}
-
-	## Full leaves the input builder unchanged and performs no output append.
-	## The limit counts canonical members, so touching/overlapping input can
-	## still merge at capacity. An already larger builder also returns Full.
-	append_bounded : CoverageSortedBuilder, PosixSpan, U64 -> Try([Added(CoverageSortedBuilder), Full], [UnsortedInput])
-	append_bounded = |builder, span, limit| match append_retaining(builder, span, limit)? {
-		Added(updated) => Ok(Added(updated))
-		Full(_) => Ok(Full)
+		Full(_) => crash "Allocated span list cannot exhaust U64 member count"
 	}
 
 	## Bounded append that returns the unchanged builder on Full. Use this
 	## when resuming construction without retaining an alias across a successful
 	## append. The limit counts canonical members; overlap and touch can merge
 	## at capacity. Decreasing starts fail with UnsortedInput.
-	## append_bounded uses the same validation and merge, but discards the
-	## returned builder on Full. Retained snapshots may make later appends copy.
-	append_retaining : CoverageSortedBuilder, PosixSpan, U64 -> Try([Added(CoverageSortedBuilder), Full(CoverageSortedBuilder)], [UnsortedInput])
-	append_retaining = |builder, span, limit| {
+	## Retained snapshots may make later appends copy.
+	append_bounded : CoverageSortedBuilder, { span : PosixSpan, max_members : U64 } -> Try([Added(CoverageSortedBuilder), Full(CoverageSortedBuilder)], [UnsortedInput])
+	append_bounded = |builder, { span, max_members: limit }| {
 		match builder.previous {
 			Some(previous) => if previous > PosixSpan.start(span) {
 				return Err(UnsortedInput)
@@ -668,4 +690,14 @@ CoverageSortedBuilder :: { state : Builder, previous : [None, Some(PosixBoundary
 	## It does not visit every position or consume the builder.
 	to_inspect : CoverageSortedBuilder -> Str
 	to_inspect = |builder| "Coverage.SortedBuilder(members=${member_count(builder).to_str()})"
+}
+
+## An unordered iterator coalesces adjacent spans into the same canonical extent as a list.
+expect {
+	first = PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(1) })?
+	second = PosixSpan.new({ start: PosixBoundary.from_microseconds(1), end: PosixBoundary.from_microseconds(2) })?
+	whole = PosixSpan.new({ start: PosixBoundary.from_microseconds(0), end: PosixBoundary.from_microseconds(2) })?
+	coverage : Coverage
+	coverage = [second, first, first].iter().collect()
+	coverage.to_spans() == [whole]
 }

@@ -26,8 +26,8 @@ CalendarInterval :: { start : Endpoint, end : Endpoint }.{
 
 	## Retain validated date descriptions without requiring exclusive upper bounds
 	## to fit a provider. Julian and Gregorian provider limits remain unchanged.
-	new : Endpoint, Endpoint -> Try(CalendarInterval, Error)
-	new = |start, end| {
+	new : { start : Endpoint, end : Endpoint } -> Try(CalendarInterval, Error)
+	new = |{ start, end }| {
 		if !date_endpoint(start) {
 			return Err(Start(UnsupportedResolution))
 		}
@@ -171,21 +171,21 @@ expect {
 	# A terminal provider year is a valid description even when the next year
 	# cannot be represented. Construction must not ask for exclusive bounds.
 	last = QualifiedCalendarValue.new(Calendar.Value.year(Gregorian, 2147483647)?, [])?
-	value = CalendarInterval.new(Known(last), Known(last))?
+	value = CalendarInterval.new({ start: Known(last), end: Known(last) })?
 	CalendarInterval.endpoints(value).start == Known(last) and CalendarInterval.interpretation_support(value) == UnsupportedCivilEndpointModel
 }
 
 expect {
 	date = Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?
 	clock = QualifiedCalendarValue.new(Calendar.Value.hour(date, 12)?, [])?
-	CalendarInterval.new(Known(clock), Unknown) == Err(Start(UnsupportedResolution)) and
-		CalendarInterval.new(Open, Known(clock)) == Err(End(UnsupportedResolution))
+	CalendarInterval.new({ start: Known(clock), end: Unknown }) == Err(Start(UnsupportedResolution)) and
+		CalendarInterval.new({ start: Open, end: Known(clock) }) == Err(End(UnsupportedResolution))
 }
 
 expect {
 	# Equal civil dates are meaningful endpoint descriptions, not EmptySpan.
 	date = QualifiedCalendarValue.new(Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 2004, month: 6, day: 11 })?), [])?
-	value = CalendarInterval.new(Known(date), Known(date))?
+	value = CalendarInterval.new({ start: Known(date), end: Known(date) })?
 	summary = Str.inspect(value)
 	summary.contains("2004-06-11") and summary.contains("Day") and summary.count_utf8_bytes() <= 600 and
 		CalendarInterval.fact_count(value) == 7 and
@@ -201,9 +201,9 @@ expect {
 	julian = QualifiedCalendarValue.new(Calendar.Value.day(Calendar.Date.from_fields(Julian, { year: 1582, month: 10, day: 5 })?), [])?
 	gregorian = QualifiedCalendarValue.new(Calendar.Value.day(Calendar.Date.from_fields(Gregorian, { year: 1582, month: 10, day: 15 })?), [])?
 	next_julian = QualifiedCalendarValue.new(Calendar.Value.day(Calendar.Date.from_fields(Julian, { year: 1582, month: 10, day: 6 })?), [])?
-	CalendarInterval.new(Known(julian), Known(gregorian)).is_ok() and
-		CalendarInterval.new(Known(gregorian), Known(julian)).is_ok() and
-			CalendarInterval.new(Known(next_julian), Known(gregorian)) == Err(ReversedBounds)
+	CalendarInterval.new({ start: Known(julian), end: Known(gregorian) }).is_ok() and
+		CalendarInterval.new({ start: Known(gregorian), end: Known(julian) }).is_ok() and
+			CalendarInterval.new({ start: Known(next_julian), end: Known(gregorian) }) == Err(ReversedBounds)
 }
 
 expect {
@@ -211,8 +211,8 @@ expect {
 	for calendar in [Gregorian, Julian] {
 		first = QualifiedCalendarValue.new(Calendar.Value.day(Calendar.Date.from_fields(calendar, { year: -2147483648, month: 1, day: 1 })?), [])?
 		second = QualifiedCalendarValue.new(Calendar.Value.day(Calendar.Date.from_fields(calendar, { year: -2147483648, month: 1, day: 2 })?), [])?
-		$valid = $valid and CalendarInterval.new(Known(first), Known(first)).is_ok() and
-			CalendarInterval.new(Known(second), Known(first)) == Err(ReversedBounds)
+		$valid = $valid and CalendarInterval.new({ start: Known(first), end: Known(first) }).is_ok() and
+			CalendarInterval.new({ start: Known(second), end: Known(first) }) == Err(ReversedBounds)
 	}
 	$valid
 }

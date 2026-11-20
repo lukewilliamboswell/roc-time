@@ -1,9 +1,10 @@
 import ScheduleFixture
 import time.ScheduleDefinition
-import time.ICalTimedRule
-import time.ICalDuration
-import time.TimedRecurrence
-import time.TimedOccurrence
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.Duration as ICalDuration
+import time.Recurrence.Timed as TimedRecurrence
+import time.Recurrence.TimedStart as TimedStart
+
 import time.LocalDateTime
 import time.Calendar
 import time.GregorianDate
@@ -13,7 +14,7 @@ import time.PosixSpan
 import time.PosixDelta
 import time.FixedOffset
 import time.ZoneRules
-import time.CalendarPattern
+import time.Recurrence.CalendarPattern as CalendarPattern
 
 ## Independent synthetic model: after epoch the supplied offset is exactly +3600
 ## seconds. A second table with the same labels has offset zero. Weekly starts
@@ -45,12 +46,12 @@ ScheduleDefinitionChecks :: [].{
 			for occurrence in batch.occurrences {
 				(seconds, width) = expected.get($index) ?? crash "Fixture index"
 				$index = $index + 1
-				span = TimedOccurrence.span(occurrence)
+				span = ScheduleDefinition.Occurrence.span(occurrence)
 				if PosixBoundary.to_microseconds(PosixSpan.start(span)) != seconds * 1000000 or PosixSpan.coordinate_width(span) != Ok(PosixDelta.from_microseconds(width * 1000000)) {
 					crash "Declaration changed independently expected span"
 				}
-				identity = TimedOccurrence.id(occurrence)
-				if identity.series != loaded.series_id or identity.source != TimedOccurrence.source(occurrence) {
+				identity = ScheduleDefinition.Occurrence.id(occurrence)
+				if identity.series != loaded.series_id or identity.source != ScheduleDefinition.Occurrence.source(occurrence) {
 					crash "Declaration changed occurrence identity"
 				}
 			}
@@ -61,7 +62,7 @@ ScheduleDefinitionChecks :: [].{
 		for (year, micros) in [(1970, 32400000001), (10000, 32400000000)] {
 			date = GregorianDate.from_fields({ year, month: 1, day: 1 })?
 			clock = ClockTime.from_microseconds_since_midnight(micros)?
-			anchor = LocalDateTime.new(Calendar.Date.from_gregorian(date), clock)
+			anchor = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
 			rule = TimedRecurrence.from_definition({ ..TimedRecurrence.definition(base_data.rule), anchor })?
 			native = native_definition({ rule, duration: ICalDuration.to_duration(base_data.duration), overrides: [], context: { rules: ScheduleFixture.rules(0)?, occurrence: RequireUnique, gap: RejectGap } })?
 			rebuilt = { definition: rebuild_native(native)? }
@@ -101,7 +102,7 @@ check_transitions = |suffix| {
 			by_set_pos: [],
 		},
 	)?
-	validity = PosixSpan.from_seconds(-86400, 86400, RejectSubmicrosecond)?
+	validity = PosixSpan.from_seconds({ start: -86400, end: 86400, rounding: RejectSubmicrosecond })?
 	for case in [
 		{ name: "fold-first", initial: 3600, offset: 0, occurrence: First, gap: RejectGap, expected: Start(-1800000000.I64) },
 		{ name: "fold-last", initial: 3600, offset: 0, occurrence: Last, gap: RejectGap, expected: Start(1800000000.I64) },
@@ -109,13 +110,13 @@ check_transitions = |suffix| {
 		{ name: "gap-before", initial: 0, offset: 3600, occurrence: RequireUnique, gap: UseOffsetBeforeGap, expected: Start(1800000000.I64) },
 		{ name: "gap-reject", initial: 0, offset: 3600, occurrence: RequireUnique, gap: RejectGap, expected: Gap },
 	] {
-		zone = ZoneRules.new_bounded("Synthetic/Declaration", "epoch-transition-v1", validity, FixedOffset.from_seconds(case.initial), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(case.offset) }], { minimum: 0, maximum: 3600 })?
+		zone = ZoneRules.Provider.new_bounded({ name: "Synthetic/Declaration", version: "epoch-transition-v1", validity, initial: FixedOffset.from_seconds(case.initial), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(case.offset) }], bounds: { minimum: 0, maximum: 3600 } })?
 		original = native_definition({ rule, duration: Coordinate(PosixDelta.from_microseconds(1)), overrides: [], context: { rules: zone, occurrence: case.occurrence, gap: case.gap } })?
 		series = "${case.name}${suffix}"
 		rebuilt = { series_id: series, definition: rebuild_native(original)? }
 		check_hashes(original, rebuilt.definition, suffix)?
 		match ScheduleDefinition.definition(rebuilt.definition) {
-			Native(spec) => if ZoneRules.definition(spec.context.rules) != ZoneRules.definition(zone) or spec.context.occurrence != case.occurrence or spec.context.gap != case.gap {
+			Native(spec) => if ZoneRules.Provider.definition(spec.context.rules) != ZoneRules.Provider.definition(zone) or spec.context.occurrence != case.occurrence or spec.context.gap != case.gap {
 				crash "Transition declaration lost context or policy"
 			}
 			ICal(_) => crash "Transition declaration changed origin"
@@ -141,12 +142,12 @@ check_transitions = |suffix| {
 					crash "Transition declaration occurrence count"
 				}
 				item = batch.occurrences.get(0) ?? crash "Transition occurrence"
-				identity = TimedOccurrence.id(item)
-				span = TimedOccurrence.span(item)
+				identity = ScheduleDefinition.Occurrence.id(item)
+				span = ScheduleDefinition.Occurrence.span(item)
 				if identity.series != series or identity.source != anchor or PosixBoundary.to_microseconds(PosixSpan.start(span)) != expected or PosixSpan.coordinate_width(span) != Ok(PosixDelta.from_microseconds(1)) {
 					crash "Transition declaration differs from independent offset model"
 				}
-				match TimedRecurrence.Occurrence.adjustment(TimedOccurrence.start(item)) {
+				match TimedStart.adjustment(ScheduleDefinition.Occurrence.start(item)) {
 					Exact => if case.gap == UseOffsetBeforeGap {
 						crash "Declarationd gap adjustment evidence lost"
 					}
@@ -211,7 +212,7 @@ check_native_ending_hashes = |rule, suffix| {
 ending_label = |day, microsecond| {
 	date = GregorianDate.from_fields({ year: 1970, month: 1, day })?
 	clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond })?
-	Ok(LocalDateTime.new(Calendar.Date.from_gregorian(date), clock))
+	Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock }))
 }
 
 parse_rule = |parts| match ICalTimedRule.parse(parts) {

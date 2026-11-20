@@ -7,25 +7,28 @@ import time.PosixDelta
 import time.PosixSpan
 import time.Coverage
 import time.EventCollection
-import time.CalendarPattern
+import time.Recurrence.CalendarPattern as CalendarPattern
 import time.GregorianDate
-import time.DateRecurrence
-import time.ICalDateRule
-import time.ICalTimedRule
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
+import time.ICalendar.DateRule as ICalDateRule
+import time.ICalendar.TimedRule as ICalTimedRule
 import time.ScheduleDefinition
 import time.LocalDateTime
+import time.ClockTime
+import time.Nanosecond.ClockTime as NanoClockTime
 
 # Positive control for compile-failure checks: the same imports and valid
 # domain combinations must succeed independently of application examples.
 main! = |_args| {
 	start = PosixBoundary.from_microseconds(0)
 	end = PosixBoundary.shift(start, PosixDelta.from_microseconds(1))?
-	span = PosixSpan.new(start, end)?
+	span = PosixSpan.new({ start, end })?
 	_events = EventCollection.from_entries([{ id: 0.U64, span }])?
 	_width = Coverage.coordinate_width(Coverage.from_spans([span]))?
 	date = GregorianDate.from_fields({ year: 2000, month: 1, day: 1 })?
 	pattern = CalendarPattern.new(date, CalendarPattern.defaults(Monthly))?
-	_matches = CalendarPattern.matches(pattern, 0, date)?
+	_matches = CalendarPattern.matches(pattern, { period_index: 0, date })?
 	rule = DateRecurrence.new(date, { pattern: CalendarPattern.defaults(Monthly), termination: Count(3), by_set_pos: [], inclusions: [], exclusions: [] })?
 	_exported = match ICalDateRule.to_parts(rule) {
 		Ok(value) => value
@@ -33,7 +36,7 @@ main! = |_args| {
 	}
 	window_end = GregorianDate.from_fields({ year: 2001, month: 1, day: 1 })?
 	cursor = DateRecurrence.cursor(rule, { start: date, end: window_end })?
-	_batch = DateRecurrence.Cursor.collect(cursor, { max_steps: 1000, max_buffered: 366, max_occurrences: 10 })?
+	_batch = DateCursor.collect(cursor, { max_steps: 1000, max_buffered: 366, max_occurrences: 10 })?
 	timed = timed_parse({ start: "20250101T090000Z", rule: "FREQ=DAILY", duration: "PT1H", inclusions: [], exclusions: [], periods: [], mode: Utc })?
 	_timed_parts = match ICalTimedRule.to_parts(timed) {
 		Ok(value) => value
@@ -42,7 +45,9 @@ main! = |_args| {
 	lower = local("2025-01-01T00:00")?
 	upper = local("2026-01-01T00:00")?
 	declaration = ScheduleDefinition.from_ical({ rule: timed, context: Utc }) ?? crash "valid declaration fixture"
-	_timed_cursor = ScheduleDefinition.cursor(1.U64, declaration, { start: lower, end: upper })?
+	_timed_cursor = declaration.cursor({ series: 1.U64, window: { start: lower, end: upper } })?
+	nano = NanoClockTime.from_nanoseconds_since_midnight(1)?
+	_clock = ClockTime.to_text(NanoClockTime.to_clock_with_rounding(nano, Floor)?)
 	Ok({})
 }
 

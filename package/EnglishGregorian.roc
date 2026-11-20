@@ -172,7 +172,7 @@ EnglishGregorian :: [].{
 
 	expect {
 		julian = Calendar.Date.from_fields(Julian, { year: 2026, month: 9, day: 7 })?
-		value = LocalDateTime.new(julian, ClockTime.parse("09:30:00.000001")?)
+		value = LocalDateTime.new({ date: julian, clock: ClockTime.parse("09:30:00.000001")? })
 		local_datetime(value, Exact) == Err(UnsupportedCalendar(Julian)) and
 			local_datetime(value, Minute) == Err(UnsupportedCalendar(Julian))
 	}

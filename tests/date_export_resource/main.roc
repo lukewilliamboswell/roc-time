@@ -1,9 +1,10 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
-import time.CalendarPattern
-import time.DateRecurrence
+import time.Recurrence.CalendarPattern as CalendarPattern
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
 import time.GregorianDate
-import time.ICalDateRule
+import time.ICalendar.DateRule as ICalDateRule
 import ExportFixture
 
 # R11/R12/R14/R15. Input, native construction, definition access, export and
@@ -79,7 +80,7 @@ main! = |args| {
 		Err(_) => crash "valid resource window"
 	}
 	after_cursor = Host.allocated_bytes!({})
-	first = match DateRecurrence.Cursor.collect(cursor, { max_steps: 8, max_buffered: 1, max_occurrences: 1 }) {
+	first = match DateCursor.collect(cursor, { max_steps: 8, max_buffered: 1, max_occurrences: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "bounded first date"
 	}
@@ -90,7 +91,7 @@ main! = |args| {
 		Complete => crash "unbounded date series stopped at first output"
 	}
 	before_second = Host.allocated_bytes!({})
-	second = match DateRecurrence.Cursor.collect(resume, { max_steps: 8, max_buffered: 1, max_occurrences: 1 }) {
+	second = match DateCursor.collect(resume, { max_steps: 8, max_buffered: 1, max_occurrences: 1 }) {
 		Ok(value) => value
 		Err(_) => crash "bounded resumed date"
 	}

@@ -24,7 +24,7 @@ import PosixBoundary
 ## Source spelling and full ICS documents are outside this value profile.
 ##
 ## ```roc
-## import time.ICalDateTime
+## import time.ICalendar.DateTime as ICalDateTime
 ## import time.PosixBoundary
 ## expect {
 ##     value = ICalDateTime.parse("19691231T235959Z")?
@@ -105,12 +105,28 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 			}
 			$index = $index + 1
 		}
-		if length < 15 {
+		if length < 4 {
 			return Err(Incomplete)
 		}
 		year = digits(bytes, 0, 4).to_i64()
 		if year == 0 {
 			return Err(OutOfRange)
+		}
+		if length < 8 {
+			# Complete the supplied month/day prefixes with their smallest
+			# legal positive digits before asking GregorianDate for validity.
+			month = if length == 5 {
+				(digits(bytes, 4, 1) * 10).max(1)
+			} else if length >= 6 {
+				digits(bytes, 4, 2)
+			} else {
+				1
+			}
+			day = if (length == 7) (digits(bytes, 6, 1) * 10).max(1) else 1
+			return match GregorianDate.from_fields({ year, month: month.to_u8_wrap(), day: day.to_u8_wrap() }) {
+				Ok(_) => Err(Incomplete)
+				Err(_) => Err(InvalidDate)
+			}
 		}
 		# Fixed two-digit fields are 0..99, so narrowing is exact.
 		month = digits(bytes, 4, 2).to_u8_wrap()
@@ -118,6 +134,29 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 		date = match GregorianDate.from_fields({ year, month, day }) {
 			Ok(value) => value
 			Err(_) => return Err(InvalidDate)
+		}
+		if length < 15 {
+			# Missing suffix digits are zero in the least possible clock value.
+			hour = if length == 10 {
+				digits(bytes, 9, 1) * 10
+			} else if length >= 11 {
+				digits(bytes, 9, 2)
+			} else {
+				0
+			}
+			minute = if length == 12 {
+				digits(bytes, 11, 1) * 10
+			} else if length >= 13 {
+				digits(bytes, 11, 2)
+			} else {
+				0
+			}
+			second = if (length == 14) digits(bytes, 13, 1) * 10 else 0
+			return match ClockTime.from_fields({ hour: hour.to_u8_wrap(), minute: minute.to_u8_wrap(), second: second.to_u8_wrap(), microsecond: 0 }) {
+				Ok(_) => Err(Incomplete)
+				Err(UnsupportedLeapSecond) => Err(UnsupportedLeapSecond)
+				Err(_) => Err(InvalidTime)
+			}
 		}
 		clock = match ClockTime.from_fields({ hour: digits(bytes, 9, 2).to_u8_wrap(), minute: digits(bytes, 11, 2).to_u8_wrap(), second: digits(bytes, 13, 2).to_u8_wrap(), microsecond: 0 }) {
 			Ok(value) => value
@@ -142,7 +181,7 @@ ICalDateTime :: { date : GregorianDate, clock : ClockTime, form : Form }.{
 
 	## A field label only; callers must preserve form when interpreting it.
 	local_label : ICalDateTime -> LocalDateTime
-	local_label = |value| LocalDateTime.new(Calendar.Date.from_gregorian(value.date), value.clock)
+	local_label = |value| LocalDateTime.new({ date: Calendar.Date.from_gregorian(value.date), clock: value.clock })
 
 	## Only explicit Z permits context-free POSIX conversion. A local value
 	## requires the caller's interpretation context, even if the fields are zero.
@@ -252,4 +291,19 @@ expect {
 				ICalDateTime.fact_at(local, 1) == Item(SemanticFact.new(Requirement(ZoneContext))) and
 					ICalDateTime.fact_at(utc, 1) == End and ICalDateTime.fact_at(local, 2) == End and
 						ICalDateTime.fact_at(local, U64.highest) == End and ICalDateTime.to_inspect(local).count_utf8_bytes() <= 256
+}
+
+## A finished invalid date cannot be repaired by appending clock fields.
+expect ICalDateTime.parse("20240230T") == Err(InvalidDate)
+
+## A finished unsupported year stays out of range while the other fields are incomplete.
+expect ICalDateTime.parse("0000") == Err(OutOfRange)
+
+## Date and clock prefixes must admit a valid completion.
+expect {
+	ICalDateTime.parse("20242") == Err(InvalidDate) and
+		ICalDateTime.parse("2024023") == Err(InvalidDate) and
+			ICalDateTime.parse("20240101T99") == Err(InvalidTime) and
+				ICalDateTime.parse("20240101T007") == Err(InvalidTime) and
+					ICalDateTime.parse("2024022") == Err(Incomplete)
 }

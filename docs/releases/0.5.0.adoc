@@ -1,11 +1,17 @@
 = roc-time 0.5.0
 
 This release supports Roc `nightly-2026-11-18-a520eed`. It updates the examples
-and repository automation to basic-cli 0.28.1 and groups the fourteen temporal
+and repository automation to basic-cli 0.28.1 and groups the fifteen temporal
 fuzz properties into three roc-fuzz 0.7.0 suites. Each property keeps its own
 examples, saved inputs, allocation baseline and report identity.
 
 == Upgrade
+
+The public API keeps everyday imports such as `GregorianDate`, `Coverage`, and
+`ZoneRules` and groups specialist types under task-specific owners. See the
+https://github.com/lukewilliamboswell/roc-time/blob/main/docs/releases/api-organization.adoc[API migration map]
+for changed imports and methods.
+
 
 Nested nominal types remain available through public aliases, with their
 methods and temporal behavior preserved. Some metadata type aliases move one
@@ -30,6 +36,38 @@ compose inside derived record and list parsers. JSON decoding returns
 `parse` operation for detailed errors such as `InvalidDate`, `OutOfRange` or
 `UnsupportedLeapSecond`. Both paths validate through the same temporal parser;
 serialization continues to emit canonical semantic text.
+
+== Nanosecond clock labels
+
+`NanoClockTime` is a new time of day with nanosecond precision, for data
+sources that store a time as nanoseconds since midnight, such as an Apache
+Arrow `Time64(ns)` column. It has the same operations as `ClockTime`, with
+`nanosecond` in place of `microsecond` and up to nine fractional digits in text.
+`from_clock` widens a `ClockTime` exactly. `to_clock` requires exact narrowing.
+`to_clock_with_rounding` takes a `MicrosecondRounding` policy and returns
+`OutOfRange` when rounding reaches 24:00.
+
+== Precision and named arguments
+
+The nanosecond companions also cover POSIX positions, POSIX coordinate
+displacements and unresolved local date-times. Exact narrowing is the default.
+Choose an explicit rounding policy when discarding precision is intended.
+Span and interval bounds, zone options and schedule inputs now use named records.
+
+== Recurrence and paging
+
+Native date rules can use a period seed with explicit `FromSeed`, which keeps
+cadence when the first period has no match. Strict start validation is the
+default. Existing iCalendar start validation still applies.
+
+Open a reusable schedule query and call `page(size)` to collect within finite
+per-call work limits. The default caps are 1,000 candidate steps, 32 buffered
+start candidates, 100,000 zone segments and 8 candidates per zone buffer. Supply custom caps when
+opening the query or replace them when resuming. A full page does not look ahead
+to establish completion.
+
+`LocalDateTime.add_days` preserves the civil calendar and clock label. Resolving
+the shifted label still requires explicit zone rules and policy.
 
 == Use this release
 

@@ -112,11 +112,9 @@ fn main() {
             text_sum(&v.to_rfc3339_opts(SecondsFormat::Micros, false))
         }),
         "end_to_end" => sample(&texts, iterations, warmups, samples, |v| {
-            text_sum(
-                &DateTime::parse_from_rfc3339(v)
-                    .unwrap()
-                    .to_rfc3339_opts(SecondsFormat::Micros, false),
-            )
+            let parsed = DateTime::parse_from_rfc3339(v).unwrap();
+            parsed.timestamp_micros().rem_euclid(1_000_000_007) as u64
+                + text_sum(&parsed.to_rfc3339_opts(SecondsFormat::Micros, false))
         }),
         _ => panic!("unknown workload"),
     }

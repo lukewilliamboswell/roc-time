@@ -1,5 +1,5 @@
 app [main!] { time: "../../../package/main.roc" }
-import time.IntervalEvidence
+import time.Evidence.Interval as IntervalEvidence
 import time.Coverage
 import time.PosixBoundary
 main! = |_args| {

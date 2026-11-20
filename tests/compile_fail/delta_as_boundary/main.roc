@@ -6,6 +6,6 @@ import time.PosixDelta
 import time.PosixSpan
 
 main! = |_args| {
-	_invalid = PosixSpan.new(PosixDelta.from_microseconds(0), PosixBoundary.from_microseconds(1))
+	_invalid = PosixSpan.new({ start: PosixDelta.from_microseconds(0), end: PosixBoundary.from_microseconds(1) })
 	Ok({})
 }

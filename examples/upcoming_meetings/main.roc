@@ -8,13 +8,13 @@ import time.ZoneRules
 
 main! = |_args| {
 	rules = ZoneRules.from_database(Database.get("Europe/Paris")?)?
-	meeting = MeetingSchedule.prepare(rules, { start: "20260322T090000", rule: "FREQ=WEEKLY;COUNT=4", duration: "PT1H", mode: Zoned, inclusions: [], exclusions: ["20260405T070000Z"], periods: [] })?
+	meeting = MeetingSchedule.prepare(rules, { start: "20260322T090000", rule: "FREQ=WEEKLY;COUNT=4", duration: "PT1H", mode: Zoned, exclusions: ["20260405T070000Z"] })?
 	window = { start: MeetingSchedule.local("2026-03-20T00:00")?, end: MeetingSchedule.local("2026-04-15T00:00")? }
-	limits = { work: { max_steps: 1000, max_buffered: 32, max_zone_segments: 100000, max_zone_candidates: 8 }, max_occurrences: 1 }
-	var $batch = MeetingSchedule.query(meeting, "team-meeting", window, limits)?
+	query = meeting.open_query({ series: "team-meeting", window })?
+	var $batch = query.page(1)?
 	echo!("Upcoming Paris meetings; one result per page\n")
 	while Bool.True {
-		for item in $batch.occurrences {
+		for! item in $batch.occurrences.iter().stream() {
 			echo!("${MeetingSchedule.describe(item)?} Paris\n")
 		}
 		match $batch.status {
@@ -23,7 +23,7 @@ main! = |_args| {
 				match progress.reason {
 					OutputLimit => {
 						echo!("Next page\n")
-						$batch = MeetingSchedule.resume(progress.cursor, limits)?
+						$batch = progress.query.page(1)?
 					}
 					_ => return Err(WorkBudgetReached(progress.reason))
 				}

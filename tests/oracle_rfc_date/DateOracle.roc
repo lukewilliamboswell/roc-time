@@ -1,15 +1,16 @@
-import time.ICalTimedRule
-import time.ICalDateTime
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.TimedRecurrence
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.DateTime as ICalDateTime
+import time.ScheduleDefinition
+
+import time.Recurrence.Timed as TimedRecurrence
 import time.LocalDateTime
 import time.Calendar
 import time.ClockTime
 import time.PosixSpan
 import time.PosixDelta
-import time.ICalDateRule
-import time.DateRecurrence
+import time.ICalendar.DateRule as ICalDateRule
+import time.Recurrence.Date as DateRecurrence
+import time.Recurrence.DateCursor as DateCursor
 import time.GregorianDate
 
 DateOracle :: [].{
@@ -46,7 +47,7 @@ observe = |input| {
 	var $result = ["ok"]
 	var $batches = 0.U64
 	var $complete = False
-	for outcome in DateRecurrence.Cursor.chunks(initial, { max_steps: 17, max_buffered: 366, max_occurrences: 1 }) {
+	for outcome in DateCursor.chunks(initial, { max_steps: 17, max_buffered: 366, max_occurrences: 1 }) {
 		# Also exercise process-independent immutable resumptions, with one output
 		# slot and a limit that regularly splits calendar periods.
 		batch = match outcome {
@@ -135,21 +136,21 @@ observe_timed = |input| {
 		Err(error) => crash "Timed oracle rule rejected: ${Str.inspect(error)}"
 	}
 	window = { start: midnight_label(at(input, 4)), end: midnight_label(at(input, 5)) }
-	var $cursor = match ICalTimedRule.schedule({}, parsed, window, Utc) {
+	var $cursor = match ICalTimedRule.schedule({ series: {}, rule: parsed, window, context: Utc }) {
 		Ok(value) => value
 		Err(_) => crash "Timed oracle window rejected"
 	}
 	var $output = ["ok"]
 	var $calls = 0.U64
 	while $calls < 10000 {
-		batch = match TimedSchedule.collect($cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
+		batch = match ScheduleDefinition.Cursor.collect($cursor, { work: { max_steps: 17, max_buffered: 366, max_zone_segments: 2, max_zone_candidates: 1 }, max_occurrences: 1 }) {
 			Ok(value) => value
 			Err(_) => crash "Timed oracle execution failed"
 		}
 		for value in batch.occurrences {
-			source = TimedOccurrence.source(value)
+			source = ScheduleDefinition.Occurrence.source(value)
 			fields = Calendar.Date.to_fields(LocalDateTime.date(source))
-			if ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(source)) != 0 or PosixSpan.coordinate_width(TimedOccurrence.span(value)) != Ok(PosixDelta.from_microseconds(86400000000)) {
+			if ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(source)) != 0 or PosixSpan.coordinate_width(ScheduleDefinition.Occurrence.span(value)) != Ok(PosixDelta.from_microseconds(86400000000)) {
 				crash "Timed midnight lifting changed clock or width"
 			}
 			$output = $output.append("${fields.year.to_str()}${pad(fields.month)}${pad(fields.day)}")

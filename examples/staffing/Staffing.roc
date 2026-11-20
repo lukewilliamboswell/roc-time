@@ -11,7 +11,7 @@ Staffing :: { zone : Str, hours : I64 }.{
 		end_date = Calendar.Date.from_gregorian(morning)
 		start_clock = "22:00"
 		end_clock = "06:00"
-		shift = ZoneRules.appointment(rules, LocalDateTime.new(start_date, start_clock), RequireUnique, LocalDateTime.new(end_date, end_clock), RequireUnique)?
+		shift = ZoneRules.appointment(rules, { start: { local: LocalDateTime.new({ date: start_date, clock: start_clock }), occurrence: RequireUnique }, end: { local: LocalDateTime.new({ date: end_date, clock: end_clock }), occurrence: RequireUnique } })?
 		width = PosixSpan.coordinate_width(shift)?
 		micros = PosixDelta.to_microseconds(width)
 		if I64.rem_by(micros, 3600000000) != 0 {

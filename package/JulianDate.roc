@@ -94,6 +94,10 @@ JulianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	to_inspect : JulianDate -> Str
 	to_inspect = |Date(fields)| "JulianDate(${fields.year.to_str()}, ${fields.month.to_str()}, ${fields.day.to_str()})"
 
+	## Order by the native scalar coordinate.
+	order_relative_to : JulianDate, JulianDate -> [Before, Same, After]
+	order_relative_to = |left, right| if (left < right) Before else if (left > right) After else Same
+
 	## Whether the first of two Julian dates precedes the second in their numeric order.
 	is_lt : JulianDate, JulianDate -> Bool
 	is_lt = |a, b| to_civil_day(a) < to_civil_day(b)

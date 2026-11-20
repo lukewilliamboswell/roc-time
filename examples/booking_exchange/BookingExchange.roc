@@ -5,16 +5,18 @@ import time.Coverage
 BookingExchange :: [].{
 	available = |opening_text, booking_texts| {
 		opening = parse(opening_text)?
-		var $bookings = []
-		for text in booking_texts {
-			$bookings = $bookings.append(ExactInterval.span(parse(text)?))
-		}
-		computed = Coverage.complement_within(Coverage.from_spans($bookings), ExactInterval.span(opening))
+		bookings = booking_texts.map_try(
+			|source| {
+				booking = parse(source)?
+				Ok(booking.span())
+			},
+		)?
+		computed = Coverage.complement_within(Coverage.from_spans(bookings), opening.span())
 		var $output = []
 		for span in computed {
 			# The application requests exact microsecond output in UTC. This
 			# does not reconstruct the original bookings from merged coverage.
-			value = match ExactInterval.from_span(span, UnassertedUtc, 6) {
+			value = match ExactInterval.from_span(span, { offset: UnassertedUtc, fraction_digits: 6 }) {
 				Ok(found) => found
 				Err(error) => return Err(Output(error))
 			}

@@ -1,14 +1,14 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
 import time.Explanation
-import time.SemanticFact
+import time.Explanation.Fact as SemanticFact
 import time.Coverage
 import time.PosixSpan
 import time.PosixBoundary
 import time.FixedOffset
 import time.ZoneRules
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 import SelectionFixture
 
 # R07/R09/R15/R16: input construction precedes counters. The runtime matrix
@@ -25,23 +25,23 @@ main! = |args| {
 	Host.assert!(text_size == 4 or text_size == 524288)
 	coverage = SelectionFixture.coverage(count, ownership)
 	rules = SelectionFixture.rules(count, text_size)
-	start = match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(count.to_i64() - count.to_i64()), Gregorian) {
+	start = match FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(count.to_i64() - count.to_i64()), calendar: Gregorian }) {
 		Ok(v) => v
 		Err(_) => crash "start"
 	}
-	end = match FixedOffset.project(FixedOffset.from_seconds(0), PosixBoundary.from_microseconds(4000000000000000000 - count.to_i64()), Julian) {
+	end = match FixedOffset.project(FixedOffset.from_seconds(0), { boundary: PosixBoundary.from_microseconds(4000000000000000000 - count.to_i64()), calendar: Julian }) {
 		Ok(v) => v
 		Err(_) => crash "end"
 	}
-	boundary = match ResolvedBoundary.resolve(rules, start, RequireUnique) {
+	boundary = match ResolvedBoundary.resolve(rules, { local: start, occurrence: RequireUnique }) {
 		Ok(v) => v
 		Err(_) => crash "boundary"
 	}
-	selection = match ResolvedSelection.resolve(rules, start, end) {
+	selection = match ResolvedSelection.resolve(rules, { start, end }) {
 		Ok(v) => v
 		Err(_) => crash "selection"
 	}
-	cursor = match ZoneRules.selection_cursor(rules, start, end) {
+	cursor = match ZoneRules.SelectionCursor.from_bounds(rules, { start, end }) {
 		Ok(v) => v
 		Err(_) => crash "cursor"
 	}

@@ -44,8 +44,10 @@ def expected_sum(corpus, mode, iterations):
                           + clock + (offset_seconds + 86400) * 101)
         elif mode in ("parse", "resolve"):
             values.append(case["microseconds"] % 1000000007)
-        elif mode in ("format", "end_to_end"):
+        elif mode == "format":
             values.append(sum(case["canonical"].encode("ascii")))
+        elif mode == "end_to_end":
+            values.append(case["microseconds"] % 1000000007 + sum(case["canonical"].encode("ascii")))
         else:
             raise ValueError(f"unknown workload: {mode}")
     cycles, tail = divmod(iterations, len(values))
@@ -54,12 +56,17 @@ def expected_sum(corpus, mode, iterations):
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        raise SystemExit('usage: reference_benchmarks.py CORPUS ITERATIONS')
+        raise SystemExit('usage: reference_benchmarks.py CORPUS ITERATIONS|--per-case')
     source = Path(sys.argv[1])
-    iterations = int(sys.argv[2])
+    per_case = sys.argv[2] == '--per-case'
+    iterations = 1 if per_case else int(sys.argv[2])
     if source.stat().st_size > 1048576 or not 1 <= iterations <= 10000000:
         raise ValueError('Reference budget exceeded')
     corpus = [json.loads(line) for line in source.read_text().splitlines()]
     if not corpus or len(corpus) > 4096 or any(case != oracle(case['text']) for case in corpus):
         raise ValueError('Corpus disagrees with independent datetime oracle')
-    print(json.dumps({'cases': corpus, 'checksums': {mode: expected_sum(corpus, mode, iterations) for mode in MODES}}, separators=(',', ':')))
+    if per_case:
+        print(json.dumps({mode: [expected_sum([case], mode, 1) for case in corpus]
+                          for mode in MODES}, separators=(',', ':')))
+    else:
+        print(json.dumps({'cases': corpus, 'checksums': {mode: expected_sum(corpus, mode, iterations) for mode in MODES}}, separators=(',', ':')))

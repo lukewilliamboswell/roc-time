@@ -1,9 +1,10 @@
-import time.ICalPeriod
-import time.ICalTimedRule
-import time.ICalDateTime
-import time.TimedSchedule
-import time.TimedOccurrence
-import time.TimedRecurrence
+import time.ICalendar.Period as ICalPeriod
+import time.ICalendar.TimedRule as ICalTimedRule
+import time.ICalendar.DateTime as ICalDateTime
+import time.ScheduleDefinition
+
+import time.Recurrence.Timed as TimedRecurrence
+import time.Recurrence.TimedStart as TimedStart
 import time.PosixBoundary
 import time.PosixSpan
 import time.PosixDelta
@@ -237,9 +238,9 @@ observe = |input, start_minute, steps| {
 	# schedule directly, avoiding a deliberately incompatible export/import.
 	rules = fixture_rules(input.shift)
 	var $cursor = if input.termination == 1 {
-		ICalPeriod.schedule("local-corpus", rule, { start: label(start_minute), end: label(2880) }, definition.duration, definition.periods, Local(rules)) ?? crash "native local schedule"
+		ICalPeriod.schedule({ series: "local-corpus", rule, window: { start: label(start_minute), end: label(2880) }, duration: definition.duration, periods: definition.periods, context: Local(rules) }) ?? crash "native local schedule"
 	} else {
-		ICalTimedRule.schedule("local-corpus", parsed, { start: label(start_minute), end: label(2880) }, Local(rules)) ?? crash "local schedule"
+		ICalTimedRule.schedule({ series: "local-corpus", rule: parsed, window: { start: label(start_minute), end: label(2880) }, context: Local(rules) }) ?? crash "local schedule"
 	}
 	# Every zero budget must produce explicit incompleteness and preserve a
 	# continuation, then successful calls resume that exact state.
@@ -249,7 +250,7 @@ observe = |input, start_minute, steps| {
 		{ max_steps: 17, max_buffered: 8, max_zone_segments: 0, max_zone_candidates: 2 },
 		{ max_steps: 17, max_buffered: 8, max_zone_segments: 8, max_zone_candidates: 0 },
 	] {
-		paused = TimedSchedule.collect($cursor, { work, max_occurrences: 1 }) ?? crash "zero budget failed"
+		paused = ScheduleDefinition.Cursor.collect($cursor, { work, max_occurrences: 1 }) ?? crash "zero budget failed"
 		match paused.status {
 			Complete => crash "zero budget falsely complete"
 			Limited(progress) => {
@@ -260,7 +261,7 @@ observe = |input, start_minute, steps| {
 			crash "zero budget emitted output"
 		}
 	}
-	output_pause = TimedSchedule.collect($cursor, { work: { max_steps: 17, max_buffered: 8, max_zone_segments: 17, max_zone_candidates: 2 }, max_occurrences: 0 }) ?? crash "output pause failed"
+	output_pause = ScheduleDefinition.Cursor.collect($cursor, { work: { max_steps: 17, max_buffered: 8, max_zone_segments: 17, max_zone_candidates: 2 }, max_occurrences: 0 }) ?? crash "output pause failed"
 	match output_pause.status {
 		Limited(progress) => {
 			$cursor = progress.cursor
@@ -273,22 +274,22 @@ observe = |input, start_minute, steps| {
 	var $output = []
 	var $calls = 0.U64
 	while $calls < 2000 {
-		batch = TimedSchedule.collect($cursor, { work: { max_steps: steps, max_buffered: 8, max_zone_segments: steps, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "composed schedule failed"
+		batch = ScheduleDefinition.Cursor.collect($cursor, { work: { max_steps: steps, max_buffered: 8, max_zone_segments: steps, max_zone_candidates: 2 }, max_occurrences: 1 }) ?? crash "composed schedule failed"
 		if batch.steps > steps or batch.zone_segments > steps or batch.occurrences.len() > 1 {
 			crash "composed schedule exceeded budget"
 		}
 		for occurrence in batch.occurrences {
-			source = TimedRecurrence.Occurrence.source(TimedOccurrence.start(occurrence))
-			id = TimedOccurrence.id(occurrence)
+			source = TimedStart.source(ScheduleDefinition.Occurrence.start(occurrence))
+			id = ScheduleDefinition.Occurrence.id(occurrence)
 			if id.series != "local-corpus" or id.source != source {
 				crash "source identity changed"
 			}
 			minute = PosixBoundary.to_microseconds(FixedOffset.resolve(FixedOffset.from_seconds(0), source) ?? crash "source coordinate") // 60000000
-			span = TimedOccurrence.span(occurrence)
+			span = ScheduleDefinition.Occurrence.span(occurrence)
 			if I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.start(span)), 60000000) != 0 or I64.rem_by(PosixBoundary.to_microseconds(PosixSpan.end(span)), 60000000) != 0 {
 				crash "local fixture boundary lost minute precision"
 			}
-			ending_kind = match TimedOccurrence.ending(occurrence) {
+			ending_kind = match ScheduleDefinition.Occurrence.ending(occurrence) {
 				AtLocal(spec) => {
 					if spec.source != label(
 						if minute == 90 {
@@ -314,11 +315,11 @@ observe = |input, start_minute, steps| {
 				}
 				_ => crash "lost coordinate ending intent"
 			}
-			adjusted = match TimedRecurrence.Occurrence.adjustment(TimedOccurrence.start(occurrence)) {
+			adjusted = match TimedStart.adjustment(ScheduleDefinition.Occurrence.start(occurrence)) {
 				Exact => Bool.False
 				BeforeGap(_) => Bool.True
 			}
-			end_adjusted = match TimedOccurrence.calendar_anchor(occurrence) {
+			end_adjusted = match ScheduleDefinition.Occurrence.calendar_anchor(occurrence) {
 				None => Bool.False
 				Some(value) => match value.choice.adjustment {
 					Exact => Bool.False
@@ -339,14 +340,14 @@ observe = |input, start_minute, steps| {
 }
 
 fixture_rules = |shift| {
-	validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(345600000000)) ?? crash "validity"
-	ZoneRules.new_bounded(
-		"Synthetic/Composed",
-		"integer-minute-v1",
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(345600000000) }) ?? crash "validity"
+	ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Composed",
+		version: "integer-minute-v1",
 		validity,
-		FixedOffset.from_seconds(0),
-		[{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(shift.to_i32_wrap() * 60) }],
-		{
+		initial: FixedOffset.from_seconds(0),
+		transitions: [{ at: PosixBoundary.from_microseconds(7200000000), offset: FixedOffset.from_seconds(shift.to_i32_wrap() * 60) }],
+		bounds: {
 			minimum: if shift < 0 {
 				shift.to_i32_wrap() * 60
 			} else {
@@ -358,7 +359,7 @@ fixture_rules = |shift| {
 				0
 			},
 		},
-	) ?? crash "rules"
+	}) ?? crash "rules"
 }
 
 validate = |expected, actual| if expected == actual {

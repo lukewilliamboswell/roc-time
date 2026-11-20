@@ -69,8 +69,8 @@ EdtfInterval :: { raw : CalendarInterval }.{
 
 	## Construct through the shared native validator and date adapter. Known
 	## descriptions keep their independent resolutions and qualifications.
-	new : CalendarInterval.Endpoint, CalendarInterval.Endpoint -> Try(EdtfInterval, Error)
-	new = |start, end| {
+	new : { start : CalendarInterval.Endpoint, end : CalendarInterval.Endpoint } -> Try(EdtfInterval, Error)
+	new = |{ start, end }| {
 		match check_endpoint(start) {
 			Ok(_) => {}
 			Err(error) => return Err(Start(error))
@@ -79,7 +79,7 @@ EdtfInterval :: { raw : CalendarInterval }.{
 			Ok(_) => {}
 			Err(error) => return Err(End(error))
 		}
-		raw = match CalendarInterval.new(start, end) {
+		raw = match CalendarInterval.new({ start, end }) {
 			Ok(value) => value
 			Err(ReversedBounds) => return Err(ReversedBounds)
 			Err(Start(_)) => return Err(Start(UnsupportedResolution))
@@ -92,7 +92,7 @@ EdtfInterval :: { raw : CalendarInterval }.{
 	from_description : CalendarInterval -> Try(EdtfInterval, Error)
 	from_description = |raw| {
 		parts = CalendarInterval.endpoints(raw)
-		new(parts.start, parts.end)
+		new({ start: parts.start, end: parts.end })
 	}
 
 	## Return the shared validated description. No calendar interpretation occurs.
@@ -111,6 +111,7 @@ EdtfInterval :: { raw : CalendarInterval }.{
 		}
 		start = match parse_endpoint(parts.first() ?? "") {
 			Ok(value) => value
+			Err(Incomplete) if parts.len() == 2 => return Err(Start(Malformed))
 			Err(error) => return Err(Start(error))
 		}
 		if parts.len() != 2 {
@@ -120,7 +121,7 @@ EdtfInterval :: { raw : CalendarInterval }.{
 			Ok(value) => value
 			Err(error) => return Err(End(error))
 		}
-		new(start, end)
+		new({ start, end })
 	}
 
 	## Canonical EDTF text preserves knowledge, resolution and qualifier scopes.
@@ -163,6 +164,9 @@ parse_endpoint : Str -> Try(CalendarInterval.Endpoint, EdtfDate.Error)
 parse_endpoint = |text| {
 	if text == "" {
 		return Ok(Unknown)
+	}
+	if text == "." {
+		return Err(Incomplete)
 	}
 	if text == ".." {
 		return Ok(Open)
@@ -298,17 +302,17 @@ expect {
 		EdtfInterval.parse("1900-02-29") == Err(Start(Malformed)) and
 			EdtfInterval.parse("Y170000002") == Err(Start(UnsupportedForm)) and
 				EdtfInterval.parse("1985/2004-99") == Err(End(Malformed)) and
-					EdtfInterval.parse("1985/.") == Err(End(Malformed)) and
+					EdtfInterval.parse("1985/.") == Err(End(Incomplete)) and
 						EdtfInterval.parse("1985/2004-02-") == Err(End(Incomplete)) and
 							EdtfInterval.parse("x".repeat(64)) == Err(Start(Malformed))
 }
 
 expect {
 	julian = QualifiedCalendarValue.new(Calendar.Value.year(Julian, 2004)?, [])?
-	native = CalendarInterval.new(Known(julian), Open)?
+	native = CalendarInterval.new({ start: Known(julian), end: Open })?
 	negative = QualifiedCalendarValue.new(Calendar.Value.year(Gregorian, -1)?, [])?
 	EdtfInterval.from_description(native) == Err(Start(UnsupportedCalendar)) and
-		EdtfInterval.new(Unknown, Known(negative)) == Err(End(OutOfRange))
+		EdtfInterval.new({ start: Unknown, end: Known(negative) }) == Err(End(OutOfRange))
 }
 
 expect {

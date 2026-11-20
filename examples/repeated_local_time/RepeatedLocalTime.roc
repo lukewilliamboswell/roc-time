@@ -1,11 +1,11 @@
-import time.ICalDateTime
+import time.ICalendar.DateTime as ICalDateTime
 import time.LocalDateTime
 import time.ZoneRules
 import time.FixedOffset
 import time.PosixBoundary
 import time.PosixSpan
-import time.ResolvedBoundary
-import time.ResolvedSelection
+import time.ZoneSnapshot.Boundary as ResolvedBoundary
+import time.ZoneSnapshot.Selection as ResolvedSelection
 import time.OffsetTimestamp
 import time.Coverage
 
@@ -16,12 +16,12 @@ RepeatedLocalTime :: [].{
 		if ICalDateTime.form(start) != Local or ICalDateTime.form(end) != Local {
 			return Err(ExpectedLocalLabels)
 		}
-		validity = PosixSpan.new(PosixBoundary.from_microseconds(-86400000000), PosixBoundary.from_microseconds(86400000000))?
-		rules = ZoneRules.new_bounded("Synthetic/Fallback", "example-v1", validity, FixedOffset.from_seconds(3600), [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], { minimum: 0, maximum: 3600 })?
+		validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-86400000000), end: PosixBoundary.from_microseconds(86400000000) })?
+		rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/Fallback", version: "example-v1", validity, initial: FixedOffset.from_seconds(3600), transitions: [{ at: PosixBoundary.from_microseconds(0), offset: FixedOffset.from_seconds(0) }], bounds: { minimum: 0, maximum: 3600 } })?
 		local = ICalDateTime.local_label(start)
-		first = ResolvedBoundary.resolve(rules, local, First)?
-		last = ResolvedBoundary.resolve(rules, local, Last)?
-		selected = ResolvedSelection.resolve(rules, local, ICalDateTime.local_label(end))?
+		first = ResolvedBoundary.resolve(rules, { local, occurrence: First })?
+		last = ResolvedBoundary.resolve(rules, { local, occurrence: Last })?
+		selected = ResolvedSelection.resolve(rules, { start: local, end: ICalDateTime.local_label(end) })?
 		coverage = ResolvedSelection.coverage(selected)
 		var $lines = [
 			"Synthetic fallback: interpret a repeated local time",
@@ -38,7 +38,7 @@ RepeatedLocalTime :: [].{
 }
 
 utc = |boundary| {
-	value = match OffsetTimestamp.from_boundary(boundary, UnassertedUtc, 0) {
+	value = match OffsetTimestamp.from_boundary(boundary, { offset: UnassertedUtc, fraction_digits: 0 }) {
 		Ok(timestamp) => timestamp
 		Err(error) => return Err(Display(error))
 	}

@@ -1,6 +1,7 @@
 app [main!] { pf: platform "../platform/main.roc", time: "../../package/main.roc" }
 import pf.Host
-import time.Ixdtf
+import time.Interchange.Ixdtf as Ixdtf
+import time.Interchange.IxdtfSnapshot as IxdtfSnapshot
 import time.ExactInterval
 import time.PosixBoundary
 import time.PosixSpan
@@ -11,9 +12,9 @@ import time.EnglishGregorian
 import time.Calendar
 import time.FixedOffset
 import time.ZoneRules
-import time.EdtfDate
+import time.Interchange.EdtfDate as EdtfDate
 import time.Explanation
-import time.SemanticFact
+import time.Explanation.Fact as SemanticFact
 import InterchangeFixture
 
 # R09/R14/R15: runtime text and rules; counters measure requested allocation
@@ -47,11 +48,11 @@ main! = |args| {
 	Host.mark!(1)
 	var $i = 0.U32
 	while $i < 100000 {
-		local = match Ixdtf.Snapshot.presentation(snapshot) {
+		local = match IxdtfSnapshot.presentation(snapshot) {
 			Ok(v) => v
 			Err(_) => crash "stored presentation"
 		}
-		Host.assert!(ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local)) == 1000000 and Ixdtf.Snapshot.boundary(snapshot) == PosixBoundary.from_microseconds(1000000) and Ixdtf.Snapshot.offset(snapshot) == FixedOffset.from_seconds(0))
+		Host.assert!(ClockTime.to_microseconds_since_midnight(LocalDateTime.clock(local)) == 1000000 and IxdtfSnapshot.boundary(snapshot) == PosixBoundary.from_microseconds(1000000) and IxdtfSnapshot.offset(snapshot) == FixedOffset.from_seconds(0))
 		$i = $i + 1
 	}
 	queried = Host.allocated_bytes!({})
@@ -61,8 +62,8 @@ main! = |args| {
 	declaration_summary = Str.inspect(declaration)
 	inspected = Host.allocated_bytes!({})
 	Host.assert!(summary.count_utf8_bytes() < 160 and declaration_summary.count_utf8_bytes() < 160 and inspected - queried <= ceiling)
-	Host.assert!(Ixdtf.Snapshot.source(snapshot) == declaration)
-	match Ixdtf.Snapshot.context(snapshot) {
+	Host.assert!(IxdtfSnapshot.source(snapshot) == declaration)
+	match IxdtfSnapshot.context(snapshot) {
 		Some(retained) => Host.assert!(ZoneRules.name(retained) == "Fixture/Many" and ZoneRules.version(retained) == "resource-v1")
 		None => Host.assert!(False)
 	}
@@ -181,7 +182,7 @@ main! = |args| {
 		Ok(value) => value
 		Err(_) => crash "calendar fixture"
 	}
-	julian_local = LocalDateTime.new(julian_date, clock)
+	julian_local = LocalDateTime.new({ date: julian_date, clock })
 	Host.mark!(12)
 	e0 = Host.allocated_bytes!({})
 	english_date = EnglishGregorian.date(date)

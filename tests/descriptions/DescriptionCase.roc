@@ -1,11 +1,12 @@
 import fuzz.Fuzz
 import time.LocalDateTime
 import time.Explanation
-import time.SemanticFact
+import time.Explanation.Fact as SemanticFact
 import time.Calendar
-import time.IntervalEvidence
-import time.CalendarEvidence
-import time.QualifiedCalendarValue
+import time.Evidence.Interval as IntervalEvidence
+import time.Evidence.Calendar as CalendarEvidence
+import time.Evidence.CalendarQuery as CalendarQuery
+import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
 import time.FixedOffset
 import time.PosixBoundary
 import time.PosixSpan
@@ -46,7 +47,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			$index = $index + 1
 		}
 		fraction = (I64.mod_by(number, 1000000) // $width).to_u32_wrap()
-		value = match Calendar.Value.fractional_second(date, { hour: h, minute: m, second: s }, { value: fraction, digits: input.digits }) {
+		value = match Calendar.Value.fractional_second(date, { clock: { hour: h, minute: m, second: s }, fraction: { value: fraction, digits: input.digits } }) {
 			Ok(found) => found
 			Err(_) => crash "Valid decimal grid rejected"
 		}
@@ -57,11 +58,11 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			Ok(found) => found
 			Err(_) => crash "Valid hour"
 		}
-		minute = match Calendar.Value.minute(date, h, m) {
+		minute = match Calendar.Value.minute(date, { hour: h, minute: m }) {
 			Ok(found) => found
 			Err(_) => crash "Valid minute"
 		}
-		second = match Calendar.Value.second(date, h, m, s) {
+		second = match Calendar.Value.second(date, { hour: h, minute: m, second: s }) {
 			Ok(found) => found
 			Err(_) => crash "Valid second"
 		}
@@ -80,7 +81,7 @@ DescriptionCase := { number : U64, digits : U8, gap : Bool }.{
 			2.I32
 		}
 		after = 2 - initial
-		rules = match ZoneRules.new_bounded("Synthetic/Description", "v1", span(start - 4000000, start + 4000000), FixedOffset.from_seconds(initial), [{ at: point(start - 1000000), offset: FixedOffset.from_seconds(after) }], { minimum: 0, maximum: 2 }) {
+		rules = match ZoneRules.Provider.new_bounded({ name: "Synthetic/Description", version: "v1", validity: span(start - 4000000, start + 4000000), initial: FixedOffset.from_seconds(initial), transitions: [{ at: point(start - 1000000), offset: FixedOffset.from_seconds(after) }], bounds: { minimum: 0, maximum: 2 } }) {
 			Ok(found) => found
 			Err(_) => crash "Valid synthetic rules"
 		}
@@ -145,7 +146,7 @@ check_bounds = |value, start, width| {
 
 point = |number| PosixBoundary.from_microseconds(number)
 
-span = |start, end| match PosixSpan.new(point(start), point(end)) {
+span = |start, end| match PosixSpan.new({ start: point(start), end: point(end) }) {
 	Ok(value) => value
 	Err(_) => crash "Nonempty oracle span"
 }
@@ -298,7 +299,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 			chosen = minute_start + chosen_second * 1000000 + fraction
 			h = (chosen // 3600000000).to_u8_wrap()
 			m = I64.mod_by(chosen // 60000000, 60).to_u8_wrap()
-			candidate = match Calendar.Value.fractional_second(date, { hour: h, minute: m, second: chosen_second.to_u8_wrap() }, { value: (fraction // width).to_u32_wrap(), digits: input.digits }) {
+			candidate = match Calendar.Value.fractional_second(date, { clock: { hour: h, minute: m, second: chosen_second.to_u8_wrap() }, fraction: { value: (fraction // width).to_u32_wrap(), digits: input.digits } }) {
 				Ok(found) => found
 				Err(_) => crash "Valid evidence candidate"
 			}
@@ -331,11 +332,11 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 		} else {
 			Possible
 		}
-		query = match CalendarEvidence.query(model, rules, point(coordinate)) {
+		query = match CalendarEvidence.query(model, { rules, point: point(coordinate) }) {
 			Ok(found) => found
 			Err(_) => crash "Valid model point rejected"
 		}
-		zero = CalendarEvidence.Query.collect(query, { max_alternatives: 0 })
+		zero = CalendarQuery.collect(query, { max_alternatives: 0 })
 		var $cursor = match zero.status {
 			Limited(found) => found
 			Complete(_) => crash "Zero work claimed complete evidence"
@@ -343,7 +344,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 		var $finished = Bool.False
 		var $calls = 0.U64
 		while $calls < 4 and !$finished {
-			batch = CalendarEvidence.Query.collect($cursor, { max_alternatives: 1 })
+			batch = CalendarQuery.collect($cursor, { max_alternatives: 1 })
 			if batch.examined > 1 {
 				crash "Evidence work budget exceeded"
 			}
@@ -360,7 +361,7 @@ check_evidence = |date, value, rules, input, start, width, offset| {
 			}
 			$calls = $calls + 1
 		}
-		whole = CalendarEvidence.Query.collect(query, { max_alternatives: 4 })
+		whole = CalendarQuery.collect(query, { max_alternatives: 4 })
 		match whole.status {
 			Complete(truth) => if !$finished or truth != expected {
 				crash "Evidence resumption changed truth"
@@ -483,7 +484,7 @@ check_interval_truth = |evidence, intervals, points| {
 check_calendar_description = |input, h, m, s, fraction| {
 	for calendar in [Gregorian, Julian] {
 		date = Calendar.Date.from_fields(calendar, { year: 1970, month: 1, day: 1 }) ?? crash "valid description date"
-		fractional = Calendar.Value.fractional_second(date, { hour: h, minute: m, second: s }, { digits: input.digits, value: fraction }) ?? crash "valid fractional description"
+		fractional = Calendar.Value.fractional_second(date, { clock: { hour: h, minute: m, second: s }, fraction: { digits: input.digits, value: fraction } }) ?? crash "valid fractional description"
 		check_explanation(fractional, calendar, input, h, m, s, fraction)
 		for limit in [-2147483648.I64, 2147483647] {
 			value = Calendar.Value.year(calendar, limit) ?? crash "provider year limit rejected"

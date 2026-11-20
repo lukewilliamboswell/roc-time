@@ -2,6 +2,7 @@ import cli.Cmd
 import cli.OsStr
 import cli.Duration
 import cli.Path
+import cli.Stderr
 
 ## Supervise build/measurement processes without shell or Python launchers.
 ## Timings belong to the subjects' in-process records, not this wrapper.
@@ -32,7 +33,12 @@ BenchmarkProcess := [].{
 		Path.write_bytes!(Path.join(logs, "${label}.stderr"), stderr)?
 		match outcome {
 			Ok({ status: Exited(0), .. }) => Ok({ stdout: Str.from_utf8(stdout)?, stderr: Str.from_utf8(stderr)? })
-			Ok(output) => Err(BenchmarkStatus(label, output.status))
+			Ok(output) => {
+				Stderr.line!("${label} failed (full logs under ${Path.display(logs)})")?
+				Stderr.line!(Str.from_utf8(stdout.take_first(16384)) ?? "See captured stdout.")?
+				Stderr.line!(Str.from_utf8(stderr.take_first(16384)) ?? "See captured stderr.")?
+				Err(BenchmarkStatus(label, output.status))
+			}
 			Err(error) => Err(BenchmarkSupervision(label, Str.inspect(error)))
 		}
 	}

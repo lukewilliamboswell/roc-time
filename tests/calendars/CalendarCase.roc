@@ -1,7 +1,7 @@
 import fuzz.Fuzz
 import time.Calendar
-import time.CivilDay
-import time.JulianDate
+import time.Calendar.CivilDay as CivilDay
+import time.Calendar.JulianDate as JulianDate
 import time.ClockTime
 import time.LocalDateTime
 import time.EnglishGregorian
@@ -73,8 +73,8 @@ CalendarCase := { number : I64 }.{
 				Ok(label) => label
 				Err(_) => crash "supported local clock rejected"
 			}
-			local = LocalDateTime.new(julian, clock)
-			other = LocalDateTime.new(gregorian, clock)
+			local = LocalDateTime.new({ date: julian, clock })
+			other = LocalDateTime.new({ date: gregorian, clock })
 			# R02/R06/R14: a calendar-specific text adapter cannot relabel Julian
 			# fields. Gregorian parsing composes the independently tested date and
 			# clock profiles into this already-constructed local position, without
@@ -154,7 +154,7 @@ check_description = |date| {
 		Ok(value) => value
 		Err(_) => crash "Valid description year"
 	}
-	month = match Calendar.Value.month(calendar, fields.year, fields.month) {
+	month = match Calendar.Value.month(calendar, { year: fields.year, month: fields.month }) {
 		Ok(value) => value
 		Err(_) => crash "Valid description month"
 	}
