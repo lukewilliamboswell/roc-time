@@ -1,5 +1,4 @@
 import zones.Database
-import time.Calendar
 import time.EnglishGregorian
 import time.FixedOffset
 import time.LocalDateTime
@@ -17,11 +16,7 @@ ZonedAppointment :: [].{
 		Err(error) => Err(Input(error))
 	}
 
-	next_day = |local| {
-		date = Calendar.Date.as_gregorian(LocalDateTime.date(local))?
-		advanced = Calendar.Arithmetic.shift_day(date, { delta: Calendar.Delta.days(1), policy: Reject })?
-		Ok(LocalDateTime.new({ date: Calendar.Date.from_gregorian(advanced), clock: LocalDateTime.clock(local) }))
-	}
+	next_day = |local| local.add_days(1)
 
 	resolve = |zone, local, policy| ZoneRules.resolve_occurrence(zone, { local, occurrence: policy })
 	classify = |zone, local| ZoneRules.resolve(zone, local)

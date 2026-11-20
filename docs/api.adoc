@@ -39,8 +39,8 @@ timeline; `PosixDelta` represents a displacement between positions.
 For a finite unordered iterator, `Coverage.from_iter` collects its input before
 sorting. For ordered input, append each validated span to `Coverage.SortedBuilder`
 with `for` or `for!`. The
-https://github.com/lukewilliamboswell/roc-time/tree/main/examples/booking_exchange[booking exchange example]
-consumes a fallible ordered stream and propagates input errors.
+booking exchange example uses the list path. The separate ordered stream example
+retains its pending span and source when the builder reaches capacity.
 
 == Calendar meaning and interpretation
 

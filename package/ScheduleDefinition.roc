@@ -82,6 +82,23 @@ ScheduleDefinition :: { origin : Definition, rule : TimedRecurrence, endings : T
 	cursor : ScheduleDefinition, { series : id, window : TimedRecurrence.Window } -> Try(TimedSchedule(id), [EmptyWindow, ReversedWindow, OutOfRange])
 	cursor = |value, { series, window }| TimedSchedule.from_prepared({ series, rule: value.rule, window, endings: value.endings, context: value.context })
 
+	## Prototype per-page work policy, initialized with the Paris example's finite caps.
+	QueryOptions(id) := {
+		series : id,
+		window : TimedRecurrence.Window,
+		work : TimedSchedule.Limits ?? { max_steps: 1000, max_buffered: 32, max_zone_segments: 100000, max_zone_candidates: 8 },
+	}
+
+	## An open query with a reusable finite per-page budget.
+	PageQuery(id) : SchedulePageQuery(id)
+
+	## Open a query without evaluating occurrences.
+	open_query : ScheduleDefinition, QueryOptions(id) -> Try(PageQuery(id), [EmptyWindow, ReversedWindow, OutOfRange])
+	open_query = |definition_value, options| {
+		current = cursor(definition_value, { series: options.series, window: options.window })?
+		Ok(SchedulePageQuery.({ current, work: options.work }))
+	}
+
 	## Declaration equality includes origin, retained selectors/exception labels,
 	## ending intent and complete immutable context. It does not establish that
 	## different recurrence declarations enumerate the same occurrence set.
@@ -279,4 +296,57 @@ expect {
 		_ => Bool.False
 	}
 	conflict and wrong_context
+}
+
+SchedulePageQuery(id) :: { current : TimedSchedule(id), work : TimedSchedule.Limits }.{
+
+	## Replace the per-page caps while retaining the exact continuation.
+	with_work : SchedulePageQuery(id), TimedSchedule.Limits -> SchedulePageQuery(id)
+	with_work = |query, limits| { ..query, work: limits }
+
+	## Collect one bounded page. Reaching capacity does not look ahead for completion.
+	page : SchedulePageQuery(id), U64 -> Try({ occurrences : List(TimedOccurrence({ series : id, source : LocalDateTime })), steps : U64, zone_segments : U64, status : [Complete, Limited({ query : SchedulePageQuery(id), reason : TimedSchedule.Limit })] }, TimedSchedule.Error)
+	page = |query, size| {
+		batch = query.current.collect({ work: query.work, max_occurrences: size })?
+		status = match batch.status {
+			Complete => Complete
+			Limited(progress) => Limited({ query: { ..query, current: progress.cursor }, reason: progress.reason })
+		}
+		Ok({ occurrences: batch.occurrences, steps: batch.steps, zone_segments: batch.zone_segments, status })
+	}
+}
+
+## A zero-work page can resume with a larger budget; pagination equals uninterrupted collection.
+expect {
+	declared = ScheduleDefinition.from_native(test_native()?)?
+	window = { start: test_local(1)?, end: test_local(9)? }
+	work = { max_steps: 1000, max_buffered: 32, max_zone_segments: 100000, max_zone_candidates: 8 }
+	query = declared.open_query({ series: 1.U64, window, work: { ..work, max_steps: 0 } })?
+	blocked = query.page(1)?
+	resumable = match blocked.status {
+		Limited(progress) if progress.reason == StartWorkLimit => progress.query.with_work(work)
+		_ => crash "Expected start work limit"
+	}
+	whole = resumable.page(10)?
+	var $current = resumable
+	var $output = []
+	var $pages = 0
+	var $done = False
+	while !$done and $pages < 12 {
+		batch = $current.page(1)?
+		$output = $output.concat(batch.occurrences)
+		$pages = $pages + 1
+		match batch.status {
+			Complete => {
+				$done = True
+			}
+			Limited(progress) => {
+				if progress.reason != OutputLimit {
+					crash "Expected only page capacity limits"
+				}
+				$current = progress.query
+			}
+		}
+	}
+	blocked.occurrences.is_empty() and $done and $pages == whole.occurrences.len() + 1 and $output.map(|item| { id: item.id(), span: item.span() }) == whole.occurrences.map(|item| { id: item.id(), span: item.span() })
 }

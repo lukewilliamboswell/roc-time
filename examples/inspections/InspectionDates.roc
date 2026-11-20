@@ -1,36 +1,21 @@
-import time.Recurrence.CalendarPattern as CalendarPattern
+import time.Recurrence
 import time.GregorianDate
-import time.Calendar.CivilDay as CivilDay
-import time.Recurrence.Date as DateRecurrence
-
-import time.Recurrence.DateCursor as DateCursor
 
 ## Plan equipment inspections on the last Tuesday every three months.
 InspectionDates :: [].{
 	for_year = |year| {
 		february = GregorianDate.from_fields({ year, month: 2, day: 1 })?
-		spec = { ..CalendarPattern.defaults(Monthly), interval: 3, by_day: [{ ordinal: -1, weekday: Tuesday }] }
-		pattern = CalendarPattern.new(february, spec)?
-		# Find the first actual inspection date, which anchors the series.
-		frame = CalendarPattern.period(pattern, 0)?
-		var $day = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.start))
-		end = CivilDay.to_day_number(GregorianDate.to_civil_day(frame.end))
-		var $first = None
-		while $day < end {
-			date = GregorianDate.from_civil_day(CivilDay.from_day_number($day))?
-			if CalendarPattern.matches(pattern, { period_index: 0, date })? {
-				$first = Some(date)
-			}
-			$day = $day + 1
-		}
-		anchor = match $first {
-			Some(date) => date
-			None => return Err(NoInspectionDate)
-		}
-		rule = DateRecurrence.new(anchor, { pattern: spec, termination: Count(4), by_set_pos: [], inclusions: [], exclusions: [] })?
+		series = Recurrence.Date.from_pattern(
+			february,
+			{
+				pattern: { ..Recurrence.CalendarPattern.defaults(Monthly), interval: 3, by_day: [{ ordinal: -1, weekday: Tuesday }] },
+				termination: Count(4),
+				start_policy: FromSeed,
+			},
+		)?
 		window_end = GregorianDate.from_fields({ year, month: 12, day: 1 })?
-		cursor = DateRecurrence.cursor(rule, { start: february, end: window_end })?
-		batch = DateCursor.collect(cursor, { max_steps: 1000, max_buffered: 31, max_occurrences: 4 })?
+		cursor = series.cursor({ start: february, end: window_end })?
+		batch = cursor.collect({ max_steps: 1000, max_buffered: 31, max_occurrences: 4 })?
 		match batch.status {
 			Complete => Ok(batch.dates)
 			Limited(progress) => Err(InspectionLimit(progress.reason))

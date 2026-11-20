@@ -29,6 +29,7 @@ applications available when that release was built, which may be fewer.
 | --- | --- |
 | [Room availability](coverage/main.roc) | Retain booking identities, report conflicts and subtract occupied coverage from opening hours |
 | [Booking exchange](booking_exchange/main.roc) | Read bookings with different offsets and serialize computed free windows in UTC |
+| [Ordered booking stream](booking_stream/main.roc) | Resume ordered ingestion after a capacity pause and surface source failures |
 | [Clock deadline](clock_deadline/main.roc) | Read the platform clock, check an expiry boundary and emit a typed JSON record with exact UTC microseconds |
 | [Annotation review](annotation_review/main.roc) | Preserve IXDTF zone/calendar annotations and distinguish an offset conflict from unsupported presentation |
 | [Explain event terms](explain_event_terms/main.roc) | Review calendar-day versus clock-duration terms, local/UTC PERIOD inputs and an exact interval with different endpoint offsets |

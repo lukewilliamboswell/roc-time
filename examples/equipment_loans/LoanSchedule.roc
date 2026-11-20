@@ -14,11 +14,11 @@ LoanSchedule :: [].{
 	upcoming = |rules| {
 		date = GregorianDate.from_fields({ year: 2025, month: 1, day: 31 })?
 		clock = ClockTime.from_fields({ hour: 9, minute: 0, second: 0, microsecond: 0 })?
-		start = LocalDateTime.new({ date: Calendar.Date.from_gregorian(date), clock })
+		start = LocalDateTime.from_gregorian({ date: date, clock })
 		end_date = GregorianDate.from_fields({ year: 2025, month: 4, day: 1 })?
-		end = LocalDateTime.new({ date: Calendar.Date.from_gregorian(end_date), clock })
+		end = LocalDateTime.from_gregorian({ date: end_date, clock })
 		extra_date = GregorianDate.from_fields({ year: 2025, month: 2, day: 14 })?
-		extra = LocalDateTime.new({ date: Calendar.Date.from_gregorian(extra_date), clock })
+		extra = LocalDateTime.from_gregorian({ date: extra_date, clock })
 		rule = TimedRecurrence.from_calendar(
 			{ date, clock },
 			{
@@ -33,7 +33,7 @@ LoanSchedule :: [].{
 		monthly_duration = Calendar({ delta: Calendar.Delta.months(1), invalid_date: Clamp, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
 		extra_duration : ScheduleDefinition.Occurrence.Duration
 		extra_duration = Calendar({ delta: Calendar.Delta.days(7), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap })
-		overrides = [{ source: LocalDateTime.new({ date: Calendar.Date.from_gregorian(extra_date), clock }), ending: After(extra_duration) }]
+		overrides = [{ source: extra, ending: After(extra_duration) }]
 		definition = ScheduleDefinition.from_native({ rule, duration: monthly_duration, overrides, context: { rules, occurrence: RequireUnique, gap: RejectGap } })?
 		cursor = definition.cursor({ series, window: { start, end } })?
 		batch = match ScheduleDefinition.Cursor.collect(cursor, { work: { max_steps: 10000, max_buffered: 2, max_zone_segments: 100000, max_zone_candidates: 2 }, max_occurrences: 4 }) {

@@ -67,6 +67,26 @@ DateRecurrence :: {
 		exclusions : List(GregorianDate),
 	}
 
+	## Native date pattern options. The strict policy requires the start to be selected.
+	PatternOptions := {
+		pattern : CalendarPattern.Spec,
+		termination : Termination,
+		start_policy : [RequireMatchingStart, FromSeed] ?? RequireMatchingStart,
+		by_set_pos : List(I16) ?? [],
+		inclusions : List(GregorianDate) ?? [],
+		exclusions : List(GregorianDate) ?? [],
+	}
+
+	## Native series kept separate from declarations eligible for iCalendar export.
+	PatternSeries : DatePatternSeries
+
+	## FromSeed fixes cadence and the generated lower bound without searching for a match.
+	from_pattern : GregorianDate, PatternOptions -> Try(PatternSeries, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])
+	from_pattern = |start, options| {
+		checked = build(start, { pattern: options.pattern, termination: options.termination, by_set_pos: options.by_set_pos, inclusions: options.inclusions, exclusions: options.exclusions }, options.start_policy)?
+		Ok(DatePatternSeries.(checked))
+	}
+
 	## The anchor and checked declaration fields, independent of query progress. Rebuilding a
 	## declaration creates no occurrences and does not save a cursor.
 	Definition : { anchor : GregorianDate, spec : Spec }
@@ -125,45 +145,7 @@ DateRecurrence :: {
 	## Invalid generated dates are skipped; UNTIL is inclusive. COUNT applies
 	## before exclusions; explicit inclusions do not consume or replenish COUNT.
 	new : GregorianDate, Spec -> Try(DateRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])
-	new = |anchor, spec| {
-		if spec.by_set_pos.len() > 4096 or spec.inclusions.len() > 4096 or spec.exclusions.len() > 4096 {
-			return Err(TooManySelectors)
-		}
-		for position in spec.by_set_pos {
-			if position == 0 or position < -366 or position > 366 {
-				return Err(InvalidSelector("BYSETPOS"))
-			}
-		}
-		match spec.termination {
-			Count(0) => return Err(InvalidCount)
-			Until(end) => if end < anchor {
-				return Err(InvalidUntil)
-			}
-			_ => {}
-		}
-		pattern = CalendarPattern.new(anchor, spec.pattern)?
-		frame = CalendarPattern.period(pattern, 0)?
-		var $day = number(frame.start)
-		var $count = 0.U64
-		var $anchor_position = None
-		while $day < number(frame.end) {
-			date = from_number($day)?
-			if CalendarPattern.matches(pattern, { period_index: 0, date })? {
-				if date == anchor {
-					$anchor_position = Some($count)
-				}
-				$count = $count + 1
-			}
-			$day = $day + 1
-		}
-		match $anchor_position {
-			Some(position) => if !selected(spec.by_set_pos, position, $count) {
-				return Err(UnsynchronizedStart)
-			}
-			None => return Err(UnsynchronizedStart)
-		}
-		Ok({ anchor, pattern, termination: spec.termination, positions: spec.by_set_pos, inclusions: sorted_unique(spec.inclusions), exclusions: sorted_unique(spec.exclusions) })
-	}
+	new = |anchor, spec| build(anchor, spec, RequireMatchingStart)
 
 	## Bind a fresh cursor to this exact immutable rule and a finite half-open
 	## date window. Evaluation starts at the series anchor, preserving COUNT.
@@ -914,4 +896,99 @@ expect {
 		Complete => batch.dates == [start]
 		Limited(_) => False
 	}
+}
+
+DatePatternSeries :: DateRecurrence.{
+
+	## Open a bounded date query retaining the original seed and cadence.
+	cursor : DatePatternSeries, DateRecurrence.Window -> Try(DateRecurrenceCursor, [EmptyWindow, ReversedWindow])
+	cursor = |DatePatternSeries.(rule), window| DateRecurrence.cursor(rule, window)
+}
+
+build : GregorianDate, DateRecurrence.Spec, [RequireMatchingStart, FromSeed] -> Try(DateRecurrence, [InvalidInterval, TooManySelectors, InvalidSelector(Str), InvalidCombination(Str), InvalidCount, InvalidUntil, UnsynchronizedStart, OutOfRange])
+build = |anchor, spec, policy| {
+	if spec.by_set_pos.len() > 4096 or spec.inclusions.len() > 4096 or spec.exclusions.len() > 4096 {
+		return Err(TooManySelectors)
+	}
+	for position in spec.by_set_pos {
+		if position == 0 or position < -366 or position > 366 {
+			return Err(InvalidSelector("BYSETPOS"))
+		}
+	}
+	match spec.termination {
+		Count(0) => return Err(InvalidCount)
+		Until(end) => if end < anchor {
+			return Err(InvalidUntil)
+		}
+		_ => {}
+	}
+	pattern = CalendarPattern.new(anchor, spec.pattern)?
+	if policy == RequireMatchingStart {
+		frame = CalendarPattern.period(pattern, 0)?
+		var $day = number(frame.start)
+		var $count = 0.U64
+		var $anchor_position = None
+		while $day < number(frame.end) {
+			date = from_number($day)?
+			if CalendarPattern.matches(pattern, { period_index: 0, date })? {
+				if date == anchor {
+					$anchor_position = Some($count)
+				}
+				$count = $count + 1
+			}
+			$day = $day + 1
+		}
+		match $anchor_position {
+			Some(position) => if !selected(spec.by_set_pos, position, $count) {
+				return Err(UnsynchronizedStart)
+			}
+			None => return Err(UnsynchronizedStart)
+		}
+	}
+	Ok({ anchor, pattern, termination: spec.termination, positions: spec.by_set_pos, inclusions: sorted_unique(spec.inclusions), exclusions: sorted_unique(spec.exclusions) })
+}
+
+## Strict construction rejects a seed that does not match. Relaxed selection retains cadence.
+expect {
+	feb = GregorianDate.parse("2025-02-01")?
+	end = GregorianDate.parse("2025-12-01")?
+	pattern = { ..CalendarPattern.defaults(Monthly), interval: 3, by_month_day: [31] }
+	strict_rejected = match DateRecurrence.from_pattern(feb, { pattern, termination: Count(2) }) {
+		Err(UnsynchronizedStart) => True
+		_ => False
+	}
+	series = DateRecurrence.from_pattern(feb, { pattern, termination: Count(2), start_policy: FromSeed, exclusions: [GregorianDate.parse("2025-05-31")?] })?
+	cursor = series.cursor({ start: feb, end })?
+	first = cursor.collect({ max_steps: 1, max_buffered: 31, max_occurrences: 8 })?
+	match first.status {
+		Limited(progress) => {
+			resumed = progress.cursor.collect({ max_steps: 500, max_buffered: 31, max_occurrences: 8 })?
+			strict_rejected and first.dates.is_empty() and resumed.dates == [GregorianDate.parse("2025-08-31")?]
+		}
+		Complete => False
+	}
+}
+
+## Whole-period positional selection precedes the seed cutoff.
+expect {
+	seed = GregorianDate.parse("2025-01-08")?
+	end = GregorianDate.parse("2025-03-01")?
+	pattern = { ..CalendarPattern.defaults(Monthly), by_day: [{ ordinal: 0, weekday: Monday }] }
+	series = DateRecurrence.from_pattern(seed, { pattern, termination: Count(1), start_policy: FromSeed, by_set_pos: [1] })?
+	cursor = series.cursor({ start: seed, end })?
+	result = cursor.collect({ max_steps: 500, max_buffered: 31, max_occurrences: 8 })?
+	result.dates == [GregorianDate.parse("2025-02-03")?]
+}
+
+## The default matches the anchored constructor and inherits an omitted month-day.
+expect {
+	start = GregorianDate.parse("2025-01-31")?
+	end = GregorianDate.parse("2025-07-01")?
+	pattern = CalendarPattern.defaults(Monthly)
+	bounded = { max_steps: 500, max_buffered: 31, max_occurrences: 8 }
+	legacy = DateRecurrence.new(start, { pattern, termination: Count(3), by_set_pos: [], inclusions: [], exclusions: [] })?
+	strict = DateRecurrence.from_pattern(start, { pattern, termination: Count(3) })?
+	baseline = legacy.cursor({ start, end })?.collect(bounded)?
+	variant = strict.cursor({ start, end })?.collect(bounded)?
+	variant.dates == baseline.dates and variant.dates == [start, GregorianDate.parse("2025-03-31")?, GregorianDate.parse("2025-05-31")?]
 }

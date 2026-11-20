@@ -58,6 +58,7 @@ RecurrenceCase := { last_monday : Bool, interval : U8, count : U8, query_month :
 		if !is_in_domain(input) {
 			return Fuzz.reject
 		}
+		check_seeded_months(input)
 		check_unreachable_period(input)
 		check_inclusion_before_gap(input)
 		# Independent two-segment local model composed with exclusions/endings.
@@ -1694,6 +1695,43 @@ check_inclusion_before_gap = |input| {
 				crash "Equal inclusion must emit once while the rule still consumes COUNT"
 			}
 			Limited(_) => crash "Equal inclusion fixture fits its budget"
+		}
+	}
+}
+
+# R11–R12. In 2025 the months with 31 days are an independent finite table.
+# Vary cadence, query start and count. A tiny first batch must be resumable.
+check_seeded_months : RecurrenceCase -> {}
+check_seeded_months = |input| {
+	seed = date(2025, 2, 1)
+	pattern = { ..CalendarPattern.defaults(Monthly), interval: input.interval.to_i64(), by_month_day: [31] }
+	series = DateRecurrence.from_pattern(seed, { pattern, termination: Count(input.count.to_u64()), start_policy: FromSeed }) ?? crash "seeded rule rejected"
+	window = { start: date(2025, input.query_month, 1), end: date(2026, 1, 1) }
+	cursor = series.cursor(window) ?? crash "valid window"
+	var $expected = []
+	var $counted = 0.U64
+	for month in [3.U8, 5, 7, 8, 10, 12] {
+		if U8.rem_by(month - 2, input.interval) == 0 and $counted < input.count.to_u64() {
+			$counted = $counted + 1
+			if month >= input.query_month {
+				$expected = $expected.append(date(2025, month, 31))
+			}
+		}
+	}
+	first = cursor.collect({ max_steps: 1, max_buffered: 31, max_occurrences: 12 }) ?? crash "bounded first advance"
+	match first.status {
+		Limited({ cursor: continuation, reason: _ }) => {
+			rest = continuation.collect({ max_steps: 1000, max_buffered: 31, max_occurrences: 12 }) ?? crash "resumption"
+			complete = match rest.status {
+				Complete => True
+				Limited(_) => False
+			}
+			if !complete or first.dates.concat(rest.dates) != $expected {
+				crash "Seeded calendar must preserve phase, count and resume"
+			}
+		}
+		Complete => if first.dates != $expected {
+			crash "Wrong complete seeded series"
 		}
 	}
 }

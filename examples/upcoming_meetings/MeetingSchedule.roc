@@ -15,20 +15,6 @@ MeetingSchedule :: [].{
 			Err(error) => Err(Definition(error))
 		}
 	}
-	query = |meeting, series, window, limits| {
-		cursor = match meeting.cursor({ series, window }) {
-			Ok(value) => value
-			Err(error) => return Err(Window(error))
-		}
-		match ScheduleDefinition.Cursor.collect(cursor, limits) {
-			Ok(value) => Ok(value)
-			Err(error) => Err(Evaluation(error))
-		}
-	}
-	resume = |cursor, limits| match ScheduleDefinition.Cursor.collect(cursor, limits) {
-		Ok(value) => Ok(value)
-		Err(error) => Err(Evaluation(error))
-	}
 	local = |text| match LocalDateTime.parse_gregorian(text) {
 		Ok(value) => Ok(value)
 		Err(error) => Err(LocalInput(error))

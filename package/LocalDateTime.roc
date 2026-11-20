@@ -90,6 +90,22 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 	new : { date : Calendar.Date, clock : ClockTime } -> LocalDateTime
 	new = |{ date: date_value, clock: clock_value }| { date: date_value, clock: clock_value }
 
+	## Combine validated Gregorian components without interpreting the local label.
+	from_gregorian : { date : GregorianDate, clock : ClockTime } -> LocalDateTime
+	from_gregorian = |input| new({ date: Calendar.Date.from_gregorian(input.date), clock: input.clock })
+
+	## Shift by signed civil days, preserving the calendar and exact clock label.
+	add_days : LocalDateTime, I64 -> Try(LocalDateTime, [OutOfRange])
+	add_days = |local, days| {
+		start = local.date.to_civil_day().to_day_number()
+		destination = match I128.to_i64_try(start.to_i128() + days.to_i128()) {
+			Ok(value) => value
+			Err(_) => return Err(OutOfRange)
+		}
+		shifted = Calendar.Date.from_civil_day(local.date.calendar(), CivilDay.from_day_number(destination))?
+		Ok(new({ date: shifted, clock: local.clock }))
+	}
+
 	## Read the calendar date as described, retaining its calendar identity.
 	date : LocalDateTime -> Calendar.Date
 	date = |value| value.date
@@ -199,4 +215,13 @@ LocalDateTime :: { date : Calendar.Date, clock : ClockTime }.{
 		compare_position({ left: new({ date: before, clock: last }), right: new({ date: after, clock: first }) }) == Before and
 			compare_position({ left: new({ date: after, clock: first }), right: new({ date: before, clock: last }) }) == After
 	}
+}
+
+## Julian leap days keep the source calendar and microsecond clock.
+expect {
+	day = Calendar.Date.from_fields(Julian, { year: 1900, month: 2, day: 28 })?
+	time = ClockTime.from_microseconds_since_midnight(123)?
+	local = LocalDateTime.new({ date: day, clock: time })
+	shifted = local.add_days(1)?
+	shifted.date().calendar() == Julian and shifted.date().to_fields() == { year: 1900, month: 2, day: 29 } and shifted.clock() == time and local.add_days(I64.highest) == Err(OutOfRange)
 }
