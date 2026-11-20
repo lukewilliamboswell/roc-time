@@ -9,6 +9,13 @@ Find free time between bookings, calculate calendar dates and query recurring
 appointments in Roc. This manual accompanies version {docs-version}; links to
 repository source can show newer APIs, identified in the relevant guide.
 
+*41.8–42.8 million timestamps per second* in two native runs on an Apple M2
+MacBook Air. The benchmark parses six-digit, numeric-offset RFC 3339 records
+into exact signed POSIX microseconds. Median time per record was 1.01–1.02×
+Chrono 0.4.45, the fastest eligible peer. The measured source is in
+`0623c95` and uses Roc `nightly-2026-11-18-a520eed` on arm64 macOS.
+https://github.com/lukewilliamboswell/roc-time/blob/main/benchmarks/comparison/native-date-timestamp.md[Results, exact source digests, and reproduction commands]
+
 Start with xref:getting-started.adoc#getting-started[the first application],
 choose a task from xref:overview.adoc#overview[the overview], or use
 xref:api.adoc#api[the API map]. Download the
