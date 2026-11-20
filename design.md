@@ -679,6 +679,24 @@ Semantic examples (R01–R02, R07–R09, R12–R16):
 
 ## Performance objectives
 
+Each designated competitive workload and profile has a median time per
+completed public operation of at most 1.50 times the fastest eligible pinned
+comparator on the designated native reference environment. Designate rows and
+comparator eligibility before timing. Eligible operations have equivalent
+validation, precision, interpretation, supported input and observable output
+within the measured profile.
+
+Maintain a reviewed roc-time baseline for each workload and environment.
+Investigate confirmed regressions even when the competitive target still holds.
+Establish timing tolerances from independent sessions on the reference host.
+Enforce exactness, explicit interpretation, structured errors, bounded work,
+allocation, retained memory and complexity independently.
+
+Cached independent expectations and pinned comparator measurements support
+measuring changed Roc code without repeating external generation or timing.
+Published claims reproduce workload-level results from reviewed evidence
+scoped to the workload, compiler, target and reference environment.
+
 These are engineering targets and review criteria, not measured implementation claims. Let `n` and `m` be input span counts and `k` the number of output spans or matches. Complexity assumes compatible resolved domains and constant-cost endpoint comparison.
 
 | Operation | Target |
@@ -717,8 +735,8 @@ These stable identifiers define observable acceptance contracts. Semantic claims
 | R12 — bounded evaluation | Limits account for candidates, buffered work, and output. `Limited` cannot masquerade as `Complete`; resumption equals uninterrupted output without skipped or duplicated occurrences. Invalid/stale cursor contexts fail explicitly. |
 | R13 — uncertainty and reasoning | Alternatives differ from all-of coverage. Definite/possible/impossible results agree with enumeration of small admissible models. Inconsistent evidence and unsupported reasoning error. No inferred tolerance for approximate qualifiers. |
 | R14 — parsing and persistence | Distinguish malformed, unsupported, incomplete, and out-of-range input. Preserve resolution and meaningful qualifiers in semantic round trips. Unknown critical extensions fail. Source-text fidelity is separately advertised. Persistence uses declared external standard profiles without a roc-time archive schema. Preserve axis, units and meaningful interpretation; reject unrepresentable values rather than silently narrow them. |
-| R15 — resource behavior | Verify core operations against the stated complexity/allocation targets using varying sizes and ownership patterns. Measure retained slices, not just allocation throughput. No per-microsecond loops, repeated parsing, or hidden provider lookups in set operations. |
-| R16 — API evidence | Each advertised usage compiles and runs against the real package on the compiler the evidence names. Wrong-domain examples fail for the intended reason. Native and supported Wasm paths agree on semantic fixtures. Proposed sketches remain labeled until this evidence exists. |
+| R15 — resource and competitive performance | Maintain reviewed workload baselines and enforce the performance objectives above. Verify core operations against the stated complexity/allocation targets using varying sizes and ownership patterns. Measure retained slices, not just allocation throughput. No per-microsecond loops, repeated parsing, or hidden provider lookups in set operations. |
+| R16 — API and publication evidence | Each advertised usage compiles and runs against the real package on the compiler the evidence names. Wrong-domain examples fail for the intended reason. Native and supported Wasm paths agree on semantic fixtures. Proposed sketches remain labeled until this evidence exists. Published performance claims reproduce workload-level results from reviewed evidence. |
 
 Cross-cutting failure behavior: public data errors are returned through `Try` with actionable structured information. A result that requires more interpretation, unsupported functionality, exhausted work, and an empty answer remain distinguishable. Private invariant violations may be programmer errors; malformed user input must not reach them.
 
