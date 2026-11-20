@@ -54,6 +54,21 @@ displacements and unresolved local date-times. Exact narrowing is the default.
 Choose an explicit rounding policy when discarding precision is intended.
 Span and interval bounds, zone options and schedule inputs now use named records.
 
+== Recurrence and paging
+
+Native date rules can use a period seed with explicit `FromSeed`, which keeps
+cadence when the first period has no match. Strict start validation is the
+default. Existing iCalendar start validation still applies.
+
+Open a reusable schedule query and call `page(size)` to collect within finite
+per-call work limits. The default caps are 1,000 candidate steps, 32 buffered
+start candidates, 100,000 zone segments and 8 candidates per zone buffer. Supply custom caps when
+opening the query or replace them when resuming. A full page does not look ahead
+to establish completion.
+
+`LocalDateTime.add_days` preserves the civil calendar and clock label. Resolving
+the shifted label still requires explicit zone rules and policy.
+
 == Use this release
 
 The core package is available at {package-url}.
