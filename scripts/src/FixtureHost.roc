@@ -12,8 +12,10 @@ FixtureHost := [].{
 	## Preserve the allocation checks on the November 23 and 24 nightlies.
 	## Their default dev lowering adds allocation traffic to these fixtures.
 	resource_build_flags : Str, Str -> List(Str)
-	resource_build_flags = |version, mode|
-		if (version == "Roc compiler version nightly-2026-11-23-b5c77fc" and mode == "dev") ["--specialize=yes"] else []
+	resource_build_flags = |version, mode| {
+		affected_nightlies = ["Roc compiler version nightly-2026-11-23-b5c77fc", "Roc compiler version nightly-2026-11-24-ff5e544"]
+		if (mode == "dev" and affected_nightlies.contains(version)) ["--specialize=yes"] else []
+	}
 
 	build! : () => Try(Str, _)
 	build! = || {
