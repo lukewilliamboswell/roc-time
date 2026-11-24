@@ -37,7 +37,7 @@ main! = |_args| {
 			} else {
 				args
 			}
-			nightly.cmd(build_args.map(OsStr.from_str)).timeout(Duration.millis(120000)).call!()?
+			nightly.cmd(build_args.concat(FixtureHost.resource_build_flags(version, mode)).map(OsStr.from_str)).timeout(Duration.millis(120000)).call!()?
 			var $observations = []
 			var $equal = Dict.empty()
 			var $references = Dict.empty()

@@ -18,6 +18,7 @@ main! = |_args| {
 	directory = Path.absolute!("tzdb/package")?
 	manifest = ZoneVerification.integrity!(directory)?
 	compiler = Script.roc_nightly!()?
+	version = compiler.output!(["version"])?
 	program = OsStr.display(compiler.program())
 	cwd = Path.absolute!(".")?
 	work = Env.create_temp_dir_in!(Path.absolute!(".roc-time-tmp")?, "zone-replay-")?
@@ -75,7 +76,7 @@ main! = |_args| {
 				"--target=${target}",
 				"--output=${Path.display(binary)}",
 				"--no-cache",
-			],
+			].concat(FixtureHost.resource_build_flags(version, mode)),
 			cwd,
 			logs: work,
 			label: "resource-build-${mode}",

@@ -8,6 +8,13 @@ import Script
 ## link inputs inside the ignored platform targets directory; canonical build
 ## artifacts and verified downloads stay under .roc-time-tmp/fixture-platform.
 FixtureHost := [].{
+
+	## Preserve the allocation checks on the November 23 nightly, whose
+	## default dev lowering adds allocation traffic to these fixtures.
+	resource_build_flags : Str, Str -> List(Str)
+	resource_build_flags = |version, mode|
+		if (version == "Roc compiler version nightly-2026-11-23-b5c77fc" and mode == "dev") ["--specialize=yes"] else []
+
 	build! : () => Try(Str, _)
 	build! = || {
 		host = (Script.command("uname").output!(["-s"])?, Script.command("uname").output!(["-m"])?)
