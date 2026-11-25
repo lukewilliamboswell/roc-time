@@ -51,6 +51,7 @@ public package accompany the symbolic arithmetic and finite histories.
 | [spec_period_order](../spec_period_order/main.roc) | R05 and R11. Solve finds a weekly index that would wrap to period zero in a U64 product. Public cases distinguish period-start ordering from construction of a whole frame and check week numbering at both Gregorian provider limits. Ordered clock tuples and linear rank counts check candidate indexing and subdaily slices across the epoch. |
 | [spec_timed_ending_state](../spec_timed_ending_state/main.roc) | R07, R11 and R12. Model changes budgets while a fold or gap ending is pending and an inclusion is queued. Both active and retained schedules recover the chosen calendar anchor, the coordinate tail, and the queued explicit ending. |
 | [spec_ixdtf_prefixes](../spec_ixdtf_prefixes/main.roc) | R14. A table of shortest valid completions checks each adjacent raw byte budget. It distinguishes a partial key that can still grow, a committed key that must repeat a critical value, and a critical flag on the zone alone. |
+| [spec_rrule_fields](../spec_rrule_fields/main.roc) | R11 and R14. Signed year-day selectors check leap-year DATE output and filter secondly, minutely, and hourly candidates across the epoch. The fixtures check canonical field order and specific syntax, range and frequency errors. |
 
 ## Generated properties
 

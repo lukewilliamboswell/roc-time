@@ -315,6 +315,32 @@ expect {
 		EdtfInterval.new({ start: Unknown, end: Known(negative) }) == Err(End(OutOfRange))
 }
 
+# R06/R13/R14. The inputs are pinned by tests/oracles/julian-manifest.toml
+# and tests/oracles/gregorian-manifest.toml. Julian case 98 puts 1900-02-29
+# at civil day -25496, twelve days beyond Gregorian case 60 (1900-03-01).
+# Case 62 in each oracle puts their December 31 labels thirteen days apart,
+# so Julian December 18 is the final day of Gregorian 1900.
+expect {
+	february = QualifiedCalendarValue.new(Calendar.Value.month(Julian, { year: 1900, month: 2 })?, [])?
+	year = QualifiedCalendarValue.new(Calendar.Value.year(Gregorian, 1900)?, [])?
+	var $valid = Bool.True
+	for fixture in [
+		{ calendar: Gregorian, month: 3.U8, day: 13.U8, end: Known(february), error: End(UnsupportedCalendar) },
+		{ calendar: Julian, month: 12, day: 18, end: Known(year), error: Start(UnsupportedCalendar) },
+	] {
+		boundary = Calendar.Date.from_fields(fixture.calendar, { year: 1900, month: fixture.month, day: fixture.day })?
+		later = Calendar.Date.from_fields(fixture.calendar, { year: 1900, month: fixture.month, day: fixture.day + 1 })?
+		first = QualifiedCalendarValue.new(Calendar.Value.day(boundary), [])?
+		too_late = QualifiedCalendarValue.new(Calendar.Value.day(later), [])?
+		parts = { start: Known(first), end: fixture.end }
+		native = CalendarInterval.new(parts)?
+		$valid = $valid and CalendarInterval.endpoints(native) == parts and
+			CalendarInterval.new({ start: Known(too_late), end: fixture.end }) == Err(ReversedBounds) and
+				EdtfInterval.from_description(native) == Err(fixture.error)
+	}
+	$valid
+}
+
 expect {
 	EdtfInterval.to_text(EdtfInterval.parse("0000-02-29/9999")?) == "0000-02-29/9999" and
 		EdtfInterval.parse("0000-02-29/0000-02-29") != Err(ReversedBounds) and
