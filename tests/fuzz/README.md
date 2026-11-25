@@ -45,6 +45,7 @@ the symbolic arithmetic and finite histories.
 | [spec_nano_local](../spec_nano_local/main.roc) | R01 and R05. Solve checks every clock count on the two partial Gregorian days at the signed I64 nanosecond limits. Public text fixtures check each exact limit and its nearest out-of-range label. |
 | [spec_zone_selection](../spec_zone_selection/main.roc) | R07 and R12. Model projects an 18-cell timeline forward through five fixed segments. It checks a selection with three disjoint runs, varying segment and member limits, and retention of earlier continuations. A gap fixture checks completion with a zero-member cap. |
 | [spec_calendar_evidence](../spec_calendar_evidence/main.roc) | R12 and R13. Model uses one or four civil second cells around a synthetic fold. It checks the exact earliest decisive prefix under changing limits and retention of a partially examined query. |
+| [spec_timed_cursor](../spec_timed_cursor/main.roc) | R11 and R12. Model pauses and resumes a two-segment fold while classifying a rule start or explicit inclusion. It checks shrinking candidate capacity, the retained classification branch, and first, last and unique-occurrence policies. |
 
 ## Generated properties
 

@@ -33,6 +33,7 @@ FuzzOptions := [].{
 		"spec_nano_local",
 		"spec_zone_selection",
 		"spec_calendar_evidence",
+		"spec_timed_cursor",
 	]
 
 	## Properties keep independent corpus/baseline identities inside three builds.
