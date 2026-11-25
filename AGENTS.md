@@ -115,6 +115,11 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   When a limit applies after projection, pair cases where the projection
   moves the value into and out of the accepted range. Verify any error
   attribution exposed to callers.
+  When a query discards declaration details, compare equal query answers
+  from distinct declarations and check the retained details through a
+  caller that uses them, such as a dictionary keyed by declaration identity.
+  For `Incomplete` input, exhibit a valid completion within the remaining
+  budget and check the adjacent budget where the completion cannot fit.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a

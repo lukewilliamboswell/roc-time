@@ -116,6 +116,47 @@ test_eventcollection_span = |a, b| match PosixSpan.new({ start: PosixBoundary.fr
 	Err(_) => crash "Invalid test test_eventcollection_span"
 }
 
+FixtureBookingId := { tenant : U64, number : U64, label : Str }.{
+	is_eq : FixtureBookingId, FixtureBookingId -> Bool
+	is_eq = |a, b| a.tenant == b.tenant and a.number == b.number
+
+	# Different tenants can hash to the same local booking number.
+	to_hash : FixtureBookingId, Hasher -> Hasher
+	to_hash = |id, hasher| id.number.to_hash(hasher)
+
+	to_inspect : FixtureBookingId -> Str
+	to_inspect = |id| id.label
+}
+
+# R04/R10. Different tenants can reuse both a booking number and a display
+# label. Keep them distinct through overlap and a disconnected clip, then
+# reject a renamed booking with the same application identity.
+expect {
+	span = test_eventcollection_span
+	inner = FixtureBookingId.{ tenant: 0, number: 7, label: "Booking 7" }
+	outer = FixtureBookingId.{ tenant: U64.highest, number: 7, label: "Booking 7" }
+	renamed = FixtureBookingId.{ tenant: 0, number: 7, label: "Desk booking 7" }
+	entries = [{ id: inner, span: span(-1, 4) }, { id: outer, span: span(-2, 5) }]
+	events = EventCollection.from_entries(entries)?
+	window = Coverage.from_spans([span(-2, 0), span(3, 5)])
+	clipped = EventCollection.clip(events, window)
+	duplicates = EventCollection.from_entries(entries.append({ id: renamed, span: span(5, 6) }))
+	EventCollection.event_count(events) == 2 and
+		EventCollection.to_entries(events) == entries and
+			EventCollection.to_coverage(events) == Coverage.from_spans([span(-2, 5)]) and
+				EventCollection.segments(events) == [
+					{ span: span(-2, -1), contributors: [outer] },
+					{ span: span(-1, 4), contributors: [inner, outer] },
+					{ span: span(4, 5), contributors: [outer] },
+				] and clipped == [
+					{ id: inner, coverage: Coverage.from_spans([span(-1, 0), span(3, 4)]) },
+					{ id: outer, coverage: window },
+				] and match duplicates {
+					Err(DuplicateId(id)) => id == renamed and Str.inspect(id) == "Desk booking 7"
+					Ok(_) => False
+				}
+}
+
 expect {
 	entries = [{ id: "booking-a", span: test_eventcollection_span(0, 2) }, { id: "booking-b", span: test_eventcollection_span(0, 2) }]
 	events = EventCollection.from_entries(entries)?

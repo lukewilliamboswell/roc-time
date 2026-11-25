@@ -251,3 +251,28 @@ expect {
 	a != b and IntervalEvidence.possible_coverage(a) == IntervalEvidence.possible_coverage(b) and
 		IntervalEvidence.definite_coverage(a) == IntervalEvidence.definite_coverage(b)
 }
+
+# R02/R13. Keep normalized supplied evidence as a key even when two
+# declarations have identical admissible intervals and pointwise projections.
+expect {
+	lower = point(I64.lowest)
+	middle = point(0)
+	upper = point(I64.highest)
+	supplied = IntervalEvidence.independent({ starts: [upper, middle, lower, middle], ends: [upper, lower, upper] })?
+	normalized = IntervalEvidence.independent({ starts: [lower, middle, upper], ends: [lower, upper] })?
+	viable_only = IntervalEvidence.independent({ starts: [lower, middle], ends: [upper] })?
+	wide = test_span(I64.lowest, I64.highest)?
+	narrow = test_span(0, I64.highest)?
+	paired = IntervalEvidence.paired([narrow, wide])?
+	keys = Dict.empty().insert(supplied, 1.U8).insert(viable_only, 2).insert(paired, 3)
+	IntervalEvidence.declaration(supplied) == Independent({ starts: [lower, middle, upper], ends: [lower, upper] }) and
+		[supplied, viable_only, paired].all(
+			|value|
+				Coverage.to_spans(IntervalEvidence.possible_coverage(value)) == [wide] and
+					Coverage.to_spans(IntervalEvidence.definite_coverage(value)) == [narrow],
+		) and
+			supplied == normalized and
+				Dict.get(keys, normalized) == Ok(1) and
+					Dict.get(keys, viable_only) == Ok(2) and
+						Dict.get(keys, paired) == Ok(3)
+}
