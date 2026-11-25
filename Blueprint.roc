@@ -13,7 +13,7 @@
 # here provides a bare `roc`. Building, testing and publishing a release is the
 # shared roc-automation workflow that .github/workflows/release.yml calls; it
 # tests the exact publication artifacts separately from the contributor gate.
-app [config] { pf: platform "https://github.com/lukewilliamboswell/roc-blueprint/releases/download/0.13.0/DBtzmMfrSgt6nCGVAcZYCVPxWbhpqw3MXpm6sdQzMn4v.tar.zst" }
+app [config] { pf: platform "https://github.com/lukewilliamboswell/roc-blueprint/releases/download/0.15.0-rc.1/FwWWY6PczB7QsUoWKgaLTuBGGajLjfA4MhaLD36sJxrN.tar.zst" }
 
 import pf.Recipes
 
