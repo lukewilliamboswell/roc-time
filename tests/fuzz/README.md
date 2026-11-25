@@ -33,9 +33,9 @@ evidence. See [baseline scope and reproduction](baselines/README.md).
 
 ## Deterministic models and proofs
 
-The integration gate runs these roots with `roc test PATH --no-cache`. They use
-the same pinned platform. Outcome checks through the public package accompany
-the symbolic arithmetic and finite histories.
+The integration gate runs these roots with `roc test PATH --no-cache`.
+Roots that use roc-fuzz share the platform pin. Outcome checks through the
+public package accompany the symbolic arithmetic and finite histories.
 
 | Root | Contract and domain |
 | --- | --- |
@@ -50,6 +50,7 @@ the symbolic arithmetic and finite histories.
 | [spec_all_day_resume](../spec_all_day_resume/main.roc) | R10–R12. Model shares one zone work budget across two events at a synthetic dateline jump, preserves the skipped day's identity, and resumes the pending date from active and saved cursors. A separate case checks the shared date work budget. |
 | [spec_period_order](../spec_period_order/main.roc) | R05 and R11. Solve finds a weekly index that would wrap to period zero in a U64 product. Public cases distinguish period-start ordering from construction of a whole frame and check week numbering at both Gregorian provider limits. Ordered clock tuples and linear rank counts check candidate indexing and subdaily slices across the epoch. |
 | [spec_timed_ending_state](../spec_timed_ending_state/main.roc) | R07, R11 and R12. Model changes budgets while a fold or gap ending is pending and an inclusion is queued. Both active and retained schedules recover the chosen calendar anchor, the coordinate tail, and the queued explicit ending. |
+| [spec_ixdtf_prefixes](../spec_ixdtf_prefixes/main.roc) | R14. A table of shortest valid completions checks each adjacent raw byte budget. It distinguishes a partial key that can still grow, a committed key that must repeat a critical value, and a critical flag on the zone alone. |
 
 ## Generated properties
 

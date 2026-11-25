@@ -220,7 +220,9 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 					return Err(TooManyAnnotations)
 				}
 				var $missing = suffix_missing_bytes(body, { critical, zone_allowed, tag_allowed })?
-				if tag_allowed {
+				# Only earlier tags can conflict. The guard above has already
+				# rejected a full tag list, which also prevents a zone suffix.
+				if !$tags.is_empty() {
 					match body.split_on("=") {
 						[key, value] => {
 							# A committed key can only match a conflicting earlier
@@ -241,13 +243,19 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 						}
 						_ => {}
 					}
-					if critical and "u-ca=gregory".starts_with(body) and (!$tags.is_empty() or $zone != None) and
+					if critical and "u-ca=gregory".starts_with(body) and
 						$tags.any(|previous| previous.key == "u-ca" and previous.value != "gregory") {
 						return Err(ConflictingCritical)
 					}
 				}
-				if bytes.len() + $missing + 1 > 4096 {
-					return Err(TooLarge)
+				needed_before_close = bytes.len() + $missing
+				if needed_before_close >= 4095 {
+					# An elective bare u-ca key would fit with =x], but adding
+					# that conflicts with the validated critical calendar.
+					# Extending the key takes one more byte.
+					if needed_before_close >= 4096 or (!critical and body == "u-ca" and $tags.any(|previous| previous.critical)) {
+						return Err(TooLarge)
+					}
 				}
 				return Err(Incomplete)
 			}

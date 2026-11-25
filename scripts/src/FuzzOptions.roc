@@ -24,7 +24,7 @@ FuzzOptions := [].{
 		"interchange",
 	]
 
-	## Deterministic Model and Solve roots use the same platform pin.
+	## Deterministic spec roots exercise the public package.
 	spec_roots : List(Str)
 	spec_roots = [
 		"spec_precision",
@@ -38,6 +38,7 @@ FuzzOptions := [].{
 		"spec_all_day_resume",
 		"spec_period_order",
 		"spec_timed_ending_state",
+		"spec_ixdtf_prefixes",
 	]
 
 	## Properties keep independent corpus/baseline identities inside three builds.
