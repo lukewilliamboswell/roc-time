@@ -12,9 +12,9 @@ Scope: LLVM `--opt=speed --fuzz --no-cache`, profile `speed`, metric version
 use roc-fuzz 0.7.0 suites and `nightly-2026-11-18-a520eed`. The nanosecond entries were measured on
 Apple Silicon macOS and in an x86-64 Ubuntu 24.04 Docker guest on Apple Silicon.
 The Linux suite also matches these observations on roc-fuzz 0.8.0 with
-`nightly-2026-11-24-ff5e544` for unchanged targets. The Linux interchange
-entry uses roc-fuzz 0.8.0 and `nightly-2026-11-25-d5a4f1e`; it reflects skipping
-the duplicate check when an incomplete annotation has no earlier tag.
+`nightly-2026-11-24-ff5e544` for unchanged targets. Both interchange entries
+use roc-fuzz 0.8.0 and `nightly-2026-11-25-d5a4f1e`. They reflect skipping the
+duplicate check when an incomplete annotation has no earlier tag.
 Each named property executes once in a fresh
 process. Counters cover the platform's `$property` region, including the
 property's independent models and assertions; they are not isolated production
