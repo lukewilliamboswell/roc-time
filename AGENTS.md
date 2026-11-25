@@ -106,6 +106,9 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   concrete boundary cases or solver witnesses through the public API. When a
   proof encodes an arithmetic term separately, record how the public check
   connects it to actual behavior.
+  A witness search can also find the smallest input where an alternative
+  calculation disagrees with the contract. Check that witness through the
+  public entry point.
   If a proof is expensive, derive fixed anchors with exact arithmetic, then
   prove the decision over the variables within the boundary cells. Measure
   it in the test backend used by CI.

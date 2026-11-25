@@ -589,6 +589,35 @@ expect {
 				IxdtfSnapshot.source(first) == source and IxdtfSnapshot.source(second) == source
 }
 
+# A refresh can replace later transitions even when the observed position,
+# offset, and provider labels agree. Keep both versions of the evidence.
+expect {
+	source = Ixdtf.parse("1970-01-01T00:00:00+00:00[Synthetic/Refresh]")?
+	later = PosixBoundary.from_microseconds(1)
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(2) })?
+	make_rules = |future_offset| ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Refresh",
+		version: "v1",
+		validity,
+		initial: FixedOffset.from_seconds(0),
+		bounds: { minimum: 0, maximum: 120 },
+		transitions: [{ at: later, offset: FixedOffset.from_seconds(future_offset) }],
+	})
+	first = Ixdtf.resolve(source, Some(make_rules(60)?))?
+	refreshed = IxdtfSnapshot.reresolve(first, Some(make_rules(120)?))?
+	conflict = test_rules("Synthetic/Refresh", PosixBoundary.from_microseconds(0), 60)?
+	match (IxdtfSnapshot.context(first), IxdtfSnapshot.context(refreshed)) {
+		(Some(old_rules), Some(new_rules)) =>
+			IxdtfSnapshot.same_position(first, refreshed) and first != refreshed and
+				IxdtfSnapshot.source(refreshed) == source and
+					IxdtfSnapshot.offset(refreshed) == FixedOffset.from_seconds(0) and
+						ZoneRules.offset_at(old_rules, later) == Ok(FixedOffset.from_seconds(60)) and
+							ZoneRules.offset_at(new_rules, later) == Ok(FixedOffset.from_seconds(120)) and
+								resolve_error(IxdtfSnapshot.reresolve(refreshed, Some(conflict))) == Some(OffsetConflict)
+		_ => False
+	}
+}
+
 test_rules = |name, point, offset| {
 	# One microsecond validity: these fixtures assert only the queried instant.
 	validity = PosixSpan.microsecond_at(point)?
