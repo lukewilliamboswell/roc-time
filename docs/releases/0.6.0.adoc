@@ -1,0 +1,19 @@
+= roc-time 0.6.0
+
+== Correctness fixes
+
+* Gregorian week selectors can evaluate dates at both ends of the supported
+  Gregorian range. Week numbering sometimes needs an adjacent year's anchor
+  even when that year falls outside the date provider's range.
+* The IXDTF parser returns `TooLarge` when an unfinished annotation has no
+  valid completion within the 4,096-byte input limit. This includes a partial
+  key that needs another byte to avoid a conflict with an earlier critical
+  calendar annotation.
+
+== Use this release
+
+The core package is available at {package-url}.
+The optional zone database package is available at {tzdb-url}.
+
+Download the examples archive to run the applications against these package
+URLs. This release also includes versioned API documentation and the PDF manual.
