@@ -14,7 +14,7 @@ import src/ComparisonBenchmark
 import src/ComparisonOptions
 import src/OperationalBenchmark
 import src/Script
-# nightly-2026-10-23-18478ff crashes when main! is annotated here.
+main! : List(OsStr) => Try({}, _)
 main! = |args| {
 	if args.map(OsStr.display) == ["--help"] {
 		return Script.info!({
