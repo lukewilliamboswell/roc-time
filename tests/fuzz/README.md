@@ -39,7 +39,7 @@ the symbolic arithmetic and finite histories.
 
 | Root | Contract and domain |
 | --- | --- |
-| [spec_precision](../spec_precision/main.roc) | R01 and R03. Solve checks the width-overflow cutoff across ordered signed I64 endpoints. It also finds the first attosecond where truncating Dec seconds to whole nanoseconds changes nearest rounding at the lower I64 limit. Public calls check these boundaries and their neighbors. |
+| [spec_precision](../spec_precision/main.roc) | R01, R03 and R04. Solve checks the span width cutoff across signed I64 endpoints and the accumulation cutoff for two positive widths. Public cases include disconnected coverage whose enclosing hull overflows. Solve also finds the first attosecond where truncating Dec seconds to whole nanoseconds changes nearest rounding at the lower I64 limit. Public calls check these boundaries and their neighbors. |
 | [spec_coverage](../spec_coverage/main.roc) | R03, R04 and R12. Model checks all reachable abstract histories for seven intervals over five unit cells, capacities 0–3, and one retained preview. A separate replay resumes the actual builder returned at capacity. |
 | [spec_recurrence](../spec_recurrence/main.roc) | R11 and R12. Model covers two windows over one finite daily rule with COUNT, inclusions and exclusions. It exhausts up to three changing-budget reads, then drains both the active and retained cursors against an independent list of dates. |
 | [spec_nano_local](../spec_nano_local/main.roc) | R01 and R05. Solve checks every clock count on the two partial Gregorian days at the signed I64 nanosecond limits. Public text fixtures check each exact limit and its nearest out-of-range label. |

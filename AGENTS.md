@@ -101,14 +101,17 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
 - Add a generated walk when it reaches relevant histories beyond the
   deterministic search. An exhausted finite action grammar can run in a
   deterministic test root with no separate fuzz baseline.
+  For a stateless query, use a direct fixture or bounded input grid when
+  it exercises the same contract. Assert result ordering explicitly if
+  membership observations can hide it.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a
   proof encodes an arithmetic term separately, record how the public check
   connects it to actual behavior.
-  A witness search can also find the smallest input where an alternative
-  calculation disagrees with the contract. Check that witness through the
-  public entry point.
+  A witness search can also find where an alternative calculation disagrees
+  with the contract. State the ordering when claiming a smallest witness.
+  Check the witness through the public entry point.
   If a proof is expensive, derive fixed anchors with exact arithmetic, then
   prove the decision over the variables within the boundary cells. Measure
   it in the test backend used by CI.

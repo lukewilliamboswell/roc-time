@@ -136,6 +136,22 @@ expect {
 	EventCollection.clip(events, windows) == [{ id: 8, coverage: windows }]
 }
 
+## R10 and R04. A report clips bookings to one viewing window and keeps their
+## source order even where disjoint clipped extents cannot observe one another.
+expect {
+	early = test_eventcollection_span(0, 2)
+	late = test_eventcollection_span(2, 4)
+	entries = [{ id: 90.U64, span: late }, { id: 11, span: early }, { id: 3, span: late }, { id: 25, span: early }]
+	events = EventCollection.from_entries(entries)?
+	window = Coverage.from_spans([test_eventcollection_span(1, 3)])
+	clipped = EventCollection.clip(events, window)
+	left = Coverage.from_spans([test_eventcollection_span(1, 2)])
+	right = Coverage.from_spans([test_eventcollection_span(2, 3)])
+	clipped == [{ id: 90, coverage: right }, { id: 11, coverage: left }, { id: 3, coverage: right }, { id: 25, coverage: left }] and
+		EventCollection.segments(events) == [{ span: early, contributors: [11, 25] }, { span: late, contributors: [90, 3] }] and
+			EventCollection.to_entries(events) == entries
+}
+
 expect {
 	events = EventCollection.from_entries([{ id: 0.U64, span: test_eventcollection_span(0, 2) }, { id: 1, span: test_eventcollection_span(1, 3) }, { id: 2, span: test_eventcollection_span(2, 4) }])?
 	EventCollection.segments(events) == [
