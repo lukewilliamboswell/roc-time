@@ -47,6 +47,7 @@ the symbolic arithmetic and finite histories.
 | [spec_calendar_evidence](../spec_calendar_evidence/main.roc) | R12 and R13. Model uses one or four civil second cells around a synthetic fold. It checks the exact earliest decisive prefix under changing limits and retention of a partially examined query. |
 | [spec_timed_cursor](../spec_timed_cursor/main.roc) | R11 and R12. Model pauses and resumes a two-segment fold while classifying a rule start or explicit inclusion. It checks shrinking candidate capacity, the retained classification branch, and first, last and unique-occurrence policies. |
 | [spec_zone_classification](../spec_zone_classification/main.roc) | R07 and R12. Model checks classification across six segments with two exact matches and two gap witnesses. Both kinds of evidence count toward retained capacity. Saved and active cursors recover the witnesses and the same fold policies. |
+| [spec_all_day_resume](../spec_all_day_resume/main.roc) | R10–R12. Model shares one zone work budget across two events at a synthetic dateline jump, preserves the skipped day's identity, and resumes the pending date from active and saved cursors. A separate case checks the shared date work budget. |
 
 ## Generated properties
 
