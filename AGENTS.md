@@ -79,6 +79,30 @@ executable evidence that checks it.
 
 Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and resource measurements. A passing campaign establishes evidence for its tested properties and budget, not exhaustive correctness, allocation bounds, or portability to untested backends.
 
+### Spec-first models and proofs
+
+- Start from a caller-visible contract and a failure the existing checks could
+  miss. Identify the entry point that owns the contract, the facts it accepts,
+  its structured errors and its observable result. Derive expectations from
+  the contract using an independent representation or a different calculation.
+- Use roc-fuzz `Model` for interactions across calls. List actions, reachable
+  configurations and history bounds. Require meaningful goals and check
+  whether the search exhausted the domain. The state key must preserve every
+  distinction that can affect later actions or observations, including
+  retained values. Check transition rules before pruning duplicate states
+  when they can observe differences between incoming actions.
+- Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
+  widths, preconditions and conflict budget. Check the exact verdict and pass
+  concrete boundary cases or solver witnesses through the public API. When a
+  proof encodes an arithmetic term separately, record how the public check
+  connects it to actual behavior.
+- Change one production decision in a scratch worktree and check that the new
+  evidence detects the intended failure. Run the closest existing check on
+  that mutation to see what the new evidence adds. Restore the production
+  code, keep minimized regressions for real defects, and stop adding models
+  when plausible remaining failures already have independent checks.
+  [roc-pdf correctness-oracle method](https://github.com/lukewilliamboswell/roc-pdf/blob/75a9b4880838dd7cab7a4a55d4a655bc890b8a74/docs/testing.adoc#designing-correctness-oracles)
+
 ## Oracle evidence
 
 Use at least one oracle when adding temporal behavior or changing an algorithm; this is a standing implementation requirement. Use the opt-in `scripts/oracles.roc` development comparisons, an independent bounded reference model, or sourced executable fixtures as appropriate. Establish the intended caller meaning from the design and primary evidence, then compare the public API against independently sourced expectations or a deliberately different bounded model. Round trips and agreement between libraries can preserve the same incorrect interpretation.

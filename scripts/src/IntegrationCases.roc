@@ -11,6 +11,11 @@ IntegrationCases := [].{
 				program: "scripts/check_compile_failures.roc",
 				args: [],
 			},
+			{
+				name: "span width proof and boundary checks",
+				program: roc,
+				args: ["test", "tests/spec_precision/main.roc", "--no-cache"],
+			},
 		].concat(
 			application({
 				roc,
