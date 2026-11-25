@@ -98,6 +98,9 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   before using such a key. When an abstract key merges histories, replay a
   short caller sequence separately if it must consume a particular returned
   continuation.
+  Choose inputs that distinguish budgets for supplied entries, retained
+  results, and work across a batch. Duplicates and empty results can expose
+  cases where these counts differ.
 - Add a generated walk when it reaches relevant histories beyond the
   deterministic search. An exhausted finite action grammar can run in a
   deterministic test root with no separate fuzz baseline.

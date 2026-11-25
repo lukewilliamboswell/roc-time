@@ -218,6 +218,22 @@ expect {
 			IntervalEvidence.independent({ starts: [point(2)], ends: [point(1), point(2)] }) == Err(InconsistentEvidence) and
 				IntervalEvidence.independent({ starts: List.repeat(point(0), 4097), ends: [point(1)] }) == Err(TooManyAlternatives)
 }
+
+# Input limits count supplied entries, before repeated choices collapse.
+expect {
+	start = point(0)
+	end = point(1)
+	starts = List.repeat(start, 4096)
+	ends = List.repeat(end, 4096)
+	independent = IntervalEvidence.independent({ starts, ends })?
+	span = test_span(0, 1)?
+	paired = IntervalEvidence.paired(List.repeat(span, 4096))?
+	IntervalEvidence.declaration(independent) == Independent({ starts: [start], ends: [end] }) and
+		IntervalEvidence.declaration(paired) == Paired([span]) and
+			IntervalEvidence.independent({ starts, ends: ends.append(end) }) == Err(TooManyAlternatives) and
+				IntervalEvidence.paired(List.repeat(span, 4097)) == Err(TooManyAlternatives)
+}
+
 expect {
 	value = IntervalEvidence.independent({ starts: [point(I64.lowest), point(I64.highest)], ends: [point(I64.lowest), point(I64.highest)] })?
 	IntervalEvidence.contains(value, point(I64.lowest)) == Definite and
