@@ -1556,6 +1556,55 @@ expect {
 	resumed.valid == whole.valid and resumed.boundaries == whole.boundaries and resumed.sources == whole.sources and resumed.adjusted == whole.adjusted and resumed.valid and resumed.boundaries == [PosixBoundary.from_microseconds(0)] and positioned.valid and positioned.boundaries == resumed.boundaries
 }
 
+# R07/R10/R11/R12. A calendar editor moves or clears a UTC cancellation
+# while a reader holds a cursor at the gap. A +1h jump at 01:00Z makes
+# 01:00 and 02:00 local select 01:00Z. The separate local 03:00 cancellation
+# applies in every branch. The next day cannot refill COUNT.
+expect {
+	hour = 3600000000.I64
+	point = PosixBoundary.from_microseconds
+	label = |index| local_at(0, clock_from_number(index * hour))
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	start = label(0)?
+	window = { start, end: local_at(2, clock)? }
+	validity = PosixSpan.new({ start: point(-hour), end: point(48 * hour) })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Synthetic/ExclusionEdit", version: "v1", validity, initial: FixedOffset.from_seconds(0), transitions: [{ at: point(hour), offset: FixedOffset.from_seconds(3600) }], bounds: { minimum: 0, maximum: 3600 } })?
+	context = { rules, occurrence: First, gap: UseOffsetBeforeGap }
+	base = TimedRecurrence.new({ date, clock }, { calendar: CalendarPattern.defaults(Daily), clocks: { hours: [0, 1, 2, 3, 4], minutes: [], seconds: [] }, termination: Count(5), by_set_pos: [] })?
+	local = TimedRecurrence.with_exclusions(base, [label(3)?])?
+	original = TimedRecurrence.with_boundary_exclusions(local, [point(hour)])?
+	open = |rule| TimedRecurrence.cursor(rule, { window, context })
+	work = { max_steps: 100.U64, max_buffered: 1.U64, max_zone_segments: 100.U64, max_zone_candidates: 2.U64 }
+	initial = match TimedRecurrenceCursor.next(open(original)?, work)?.status {
+		Item(item) if TimedRecurrenceOccurrence.source(item.occurrence) == start => item.cursor
+		_ => crash "Expected the uncancelled midnight source"
+	}
+	paused = TimedRecurrenceCursor.next(initial, { ..work, max_zone_segments: 1 })?
+	retained = match paused.status {
+		Limited(progress) if progress.reason == ZoneWorkLimit => progress.cursor
+		_ => crash "Expected a pending gap classification"
+	}
+	moved = TimedRecurrence.with_boundary_exclusions(original, [point(3 * hour)])?
+	cleared = TimedRecurrence.with_boundary_exclusions(original, [])?
+	drain = |cursor| {
+		batch = TimedRecurrenceCursor.collect(cursor, { work, max_occurrences: 6 })?
+		match batch.status {
+			Complete => Ok({ sources: batch.occurrences.map(TimedRecurrenceOccurrence.source), boundaries: batch.occurrences.map(TimedRecurrenceOccurrence.boundary) })
+			_ => crash "Expected the finite edited recurrence to finish"
+		}
+	}
+	after_move = drain(open(moved)?)?
+	after_clear = drain(open(cleared)?)?
+	old = drain(retained)?
+	colliding = [start, label(1)?, label(2)?]
+	four = label(4)?
+	positions = [point(0), point(hour), point(hour)]
+	after_move.sources == colliding and after_move.boundaries == positions and
+		after_clear.sources == colliding.append(four) and after_clear.boundaries == positions.append(point(3 * hour)) and
+			old.sources == [four] and old.boundaries == [point(3 * hour)]
+}
+
 # The backward transition repeats 00:00: its first boundary is zero and its
 # last boundary is 01:00Z. An exclusion of the unchosen alternative must not
 # remove the first occurrence just because projection gives the same label.

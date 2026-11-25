@@ -110,8 +110,8 @@ copied into this model.
 
 ## Fuzzing and resource checks
 
-The existing `recurrence-v1` roc-fuzz target maps its bounded input fields onto
-the same local model. It keeps the pinned 0.4.3 URL and existing runner:
+The `recurrence-v1` roc-fuzz target maps its bounded input fields onto the same
+local model. It uses the shared [platform pin](../fuzz/dependency.json) and runner.
 
 ```text
 ROC_NIGHTLY=/path/to/roc blueprint run fuzz -- --operation replay --targets recurrence

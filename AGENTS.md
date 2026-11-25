@@ -103,6 +103,9 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   cases where these counts differ.
   For a pipeline, resume a partial item with later work queued and verify
   both results. A lost continuation can otherwise look like forward progress.
+  When an immutable declaration changes while a cursor is live, resume the
+  retained cursor and open a new one. Check the distinct results against
+  the original and edited declarations.
 - Add a generated walk when it reaches relevant histories beyond the
   deterministic search. An exhausted finite action grammar can run in a
   deterministic test root with no separate fuzz baseline.

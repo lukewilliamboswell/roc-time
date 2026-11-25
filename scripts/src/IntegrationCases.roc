@@ -14,7 +14,7 @@ IntegrationCases := [].{
 				args: [],
 			},
 		].concat(
-			FuzzOptions.spec_roots.concat(["spec_ixdtf_prefixes", "spec_rrule_fields"]).map(
+			FuzzOptions.spec_roots.concat(["spec_ixdtf_prefixes", "spec_rrule_fields", "spec_zone_admission"]).map(
 				|name| {
 					name,
 					program: roc,

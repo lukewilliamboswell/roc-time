@@ -31,6 +31,7 @@ FuzzOptions := [].{
 		"spec_coverage",
 		"spec_recurrence",
 		"spec_nano_local",
+		"spec_nano_posix",
 		"spec_zone_selection",
 		"spec_calendar_evidence",
 		"spec_timed_cursor",
