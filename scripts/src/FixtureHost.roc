@@ -9,11 +9,15 @@ import Script
 ## artifacts and verified downloads stay under .roc-time-tmp/fixture-platform.
 FixtureHost := [].{
 
-	## Preserve the allocation checks on the November 23 and 24 nightlies.
-	## Their default dev lowering adds allocation traffic to these fixtures.
+	## Use specialization on nightlies whose default dev lowering adds
+	## allocation traffic to these fixtures.
 	resource_build_flags : Str, Str -> List(Str)
 	resource_build_flags = |version, mode| {
-		affected_nightlies = ["Roc compiler version nightly-2026-11-23-b5c77fc", "Roc compiler version nightly-2026-11-24-ff5e544"]
+		affected_nightlies = [
+			"Roc compiler version nightly-2026-11-23-b5c77fc",
+			"Roc compiler version nightly-2026-11-24-ff5e544",
+			"Roc compiler version nightly-2026-11-25-d5a4f1e",
+		]
 		if (mode == "dev" and affected_nightlies.contains(version)) ["--specialize=yes"] else []
 	}
 
