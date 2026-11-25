@@ -133,7 +133,7 @@ prepare! = || {
 	if hash_file!(archive)? != dependency.sha256 {
 		return Err(PlatformIntegrity)
 	}
-	for name in FuzzOptions.builds(FuzzOptions.names).concat(["lifecycle", "lifecycle_fixed"]) {
+	for name in FuzzOptions.builds(FuzzOptions.names).concat(["lifecycle", "lifecycle_fixed"]).concat(FuzzOptions.spec_roots) {
 		source = Path.read_utf8!(Path.utf8("tests/${name}/main.roc"))?
 		urls = source.split_on("fuzz: platform \"").drop_first(1).map(|part| part.split_on("\"").first() ?? "")
 		if urls != [dependency.url] {

@@ -516,8 +516,9 @@ ZoneRules :: {
 
 		## One segment unit performs fixed offset arithmetic and one ordered
 		## builder append. Rejected/empty segments still consume work. Shared
-		## output appends can copy up to max_members retained spans. Zero budgets
-		## return Limited; no incomplete coverage is exposed as a complete value.
+		## output appends can copy up to max_members retained spans. A zero
+		## segment budget leaves a live cursor incomplete. A zero member cap
+		## can complete a selection whose preimage is empty.
 		collect : SelectionCursor, SelectionLimits -> Try(SelectionBatch, [OutOfRange])
 		collect = |initial, limits| {
 			rules = initial.rules

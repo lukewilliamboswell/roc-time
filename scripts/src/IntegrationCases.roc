@@ -1,5 +1,7 @@
 ## Routine CI: invariant targets, regressions, public usage and resource gates.
 ## External oracle comparisons are explicit development tasks.
+import FuzzOptions
+
 IntegrationCases := [].{
 	Case : { name : Str, program : Str, args : List(Str) }
 
@@ -11,22 +13,15 @@ IntegrationCases := [].{
 				program: "scripts/check_compile_failures.roc",
 				args: [],
 			},
-			{
-				name: "span width proof and boundary checks",
-				program: roc,
-				args: ["test", "tests/spec_precision/main.roc", "--no-cache"],
-			},
-			{
-				name: "date recurrence cursor histories",
-				program: roc,
-				args: ["test", "tests/spec_recurrence/main.roc", "--no-cache"],
-			},
-			{
-				name: "sorted coverage builder histories",
-				program: roc,
-				args: ["test", "tests/spec_coverage/main.roc", "--no-cache"],
-			},
 		].concat(
+			FuzzOptions.spec_roots.map(
+				|name| {
+					name,
+					program: roc,
+					args: ["test", "tests/${name}/main.roc", "--no-cache"],
+				},
+			),
+		).concat(
 			application({
 				roc,
 				work,

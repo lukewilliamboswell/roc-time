@@ -42,6 +42,9 @@ the symbolic arithmetic and finite histories.
 | [spec_precision](../spec_precision/main.roc) | R01 and R03. Solve checks the width-overflow cutoff across ordered signed I64 endpoints. Public examples check the cutoff and neighboring widths at the lowest start. |
 | [spec_coverage](../spec_coverage/main.roc) | R03, R04 and R12. Model checks all reachable abstract histories for seven intervals over five unit cells, capacities 0–3, and one retained preview. A separate replay resumes the actual builder returned at capacity. |
 | [spec_recurrence](../spec_recurrence/main.roc) | R11 and R12. Model covers two windows over one finite daily rule with COUNT, inclusions and exclusions. It exhausts up to three changing-budget reads, then drains both the active and retained cursors against an independent list of dates. |
+| [spec_nano_local](../spec_nano_local/main.roc) | R01 and R05. Solve checks every clock count on the two partial Gregorian days at the signed I64 nanosecond limits. Public text fixtures check each exact limit and its nearest out-of-range label. |
+| [spec_zone_selection](../spec_zone_selection/main.roc) | R07 and R12. Model projects an 18-cell timeline forward through five fixed segments. It checks a selection with three disjoint runs, varying segment and member limits, and retention of earlier continuations. A gap fixture checks completion with a zero-member cap. |
+| [spec_calendar_evidence](../spec_calendar_evidence/main.roc) | R12 and R13. Model uses one or four civil second cells around a synthetic fold. It checks the exact earliest decisive prefix under changing limits and retention of a partially examined query. |
 
 ## Generated properties
 

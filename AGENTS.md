@@ -87,22 +87,28 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   the contract using an independent representation or a different calculation.
 - Use roc-fuzz `Model` for interactions across calls. List actions, reachable
   configurations and history bounds. Require meaningful goals and check
-  whether the search exhausted the domain. The state key must preserve every
+  whether the search exhausted the domain. Review shortest goal witnesses
+  to check that they exercise the intended interaction. The state key must preserve every
   distinction that can affect later actions or observations, including
-  retained values. Check transition rules before pruning duplicate states
-  when they can observe differences between incoming actions.
+  retained values. Use `verify: EveryStep` when state rules must inspect
+  every returned value before pruning duplicates. Use step rules for facts
+  that depend on the incoming action.
   For an opaque cursor, a short complete action history can preserve progress
   that is absent from the latest public output. Bound the number of actions
   before using such a key. When an abstract key merges histories, replay a
   short caller sequence separately if it must consume a particular returned
   continuation.
+- Add a generated walk when it reaches relevant histories beyond the
+  deterministic search. An exhausted finite action grammar can run in a
+  deterministic test root with no separate fuzz baseline.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a
   proof encodes an arithmetic term separately, record how the public check
   connects it to actual behavior.
-  If a proof is expensive, try an equivalent cutoff expressed from a known
-  integer boundary and measure it in the test backend used by CI.
+  If a proof is expensive, derive fixed anchors with exact arithmetic, then
+  prove the decision over the variables within the boundary cells. Measure
+  it in the test backend used by CI.
 - Change one production decision in a scratch worktree and check that the new
   evidence detects the intended failure. Run the closest existing check on
   that mutation to see what the new evidence adds. Restore the production
