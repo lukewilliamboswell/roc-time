@@ -107,6 +107,9 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   For a stateless query, use a direct fixture or bounded input grid when
   it exercises the same contract. Assert result ordering explicitly if
   membership observations can hide it.
+  For interval algebra, use cells between chosen endpoints to cover wide
+  coordinates with a small oracle. Cell membership needs only endpoint
+  order, so the oracle can include intervals whose width overflows.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a
