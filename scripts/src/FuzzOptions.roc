@@ -36,6 +36,7 @@ FuzzOptions := [].{
 		"spec_timed_cursor",
 		"spec_zone_classification",
 		"spec_all_day_resume",
+		"spec_period_order",
 	]
 
 	## Properties keep independent corpus/baseline identities inside three builds.

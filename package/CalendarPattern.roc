@@ -1,5 +1,6 @@
 import CivilDay
 import GregorianDate
+import GregorianYear
 
 ## Validated Gregorian date selectors within anchored calendar periods.
 ## This is the candidate layer: it does not apply DTSTART truncation, COUNT,
@@ -208,25 +209,27 @@ weekday_index = |weekday| match weekday {
 ordinal_matches = |selected, position, total| selected == position or selected == position - total - 1
 
 week_start = |year, weekday| {
-	jan_four = number(january(year)?) + 3
-	Ok(jan_four - I64.mod_by(weekday_number(jan_four) - weekday_index(weekday), 7))
+	# A week-year boundary can lie outside the date provider. Only its
+	# scalar coordinate is needed, even when the whole civil period fits.
+	jan_four = GregorianYear.start(year) + 3
+	jan_four - I64.mod_by(weekday_number(jan_four) - weekday_index(weekday), 7)
 }
 
 week_position = |date, weekday| {
 	day = number(date)
-	var $year = GregorianDate.to_fields(date).year.to_i128()
-	var $start = week_start($year, weekday)?
-	var $end = week_start($year + 1, weekday)?
+	var $year = GregorianDate.to_fields(date).year
+	var $start = week_start($year, weekday)
+	var $end = week_start($year + 1, weekday)
 	if day < $start {
 		$year = $year - 1
 		$end = $start
-		$start = week_start($year, weekday)?
+		$start = week_start($year, weekday)
 	} else if day >= $end {
 		$year = $year + 1
 		$start = $end
-		$end = week_start($year + 1, weekday)?
+		$end = week_start($year + 1, weekday)
 	}
-	Ok({ position: I64.div_trunc_by(day - $start, 7) + 1, total: I64.div_trunc_by($end - $start, 7) })
+	{ position: I64.div_trunc_by(day - $start, 7) + 1, total: I64.div_trunc_by($end - $start, 7) }
 }
 
 test_calendarpattern_date = |year, month, day| match GregorianDate.from_fields({ year, month, day }) {
@@ -429,7 +432,7 @@ matches_filters = |spec, date| {
 		}
 	}
 	if !spec.by_week_no.is_empty() {
-		week = week_position(date, spec.week_start)?
+		week = week_position(date, spec.week_start)
 		var $found = False
 		for selected in spec.by_week_no {
 			$found = $found or ordinal_matches(selected.to_i64(), week.position, week.total)

@@ -1,4 +1,5 @@
 import CivilDay
+import GregorianYear
 
 ## Proleptic Gregorian day, with astronomical years (0 means 1 BCE).
 ## Valid years are -2147483648 through 2147483647, inclusive.
@@ -283,7 +284,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 	ordinal_day : GregorianDate -> U16
 	ordinal_day = |date| {
 		Date(fields) = date
-		match I64.to_u16_try(CivilDay.to_day_number(to_civil_day(date)) - year_start(fields.year) + 1) {
+		match I64.to_u16_try(CivilDay.to_day_number(to_civil_day(date)) - GregorianYear.start(fields.year) + 1) {
 			Ok(value) => value
 			Err(_) => crash "Gregorian ordinal day invariant"
 		}
@@ -301,14 +302,14 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		# Each ISO week belongs to the Gregorian year of its Thursday.
 		# Moving at most three days stays far inside I64 at provider limits.
 		thursday = number + 3 - index
-		week_year = if thursday < year_start(fields.year) {
+		week_year = if thursday < GregorianYear.start(fields.year) {
 			fields.year - 1
-		} else if thursday >= year_start(fields.year + 1) {
+		} else if thursday >= GregorianYear.start(fields.year + 1) {
 			fields.year + 1
 		} else {
 			fields.year
 		}
-		week = match I64.to_u8_try((thursday - year_start(week_year)) // 7 + 1) {
+		week = match I64.to_u8_try((thursday - GregorianYear.start(week_year)) // 7 + 1) {
 			Ok(value) => value # Thursday's zero-based year day is 0..365: weeks 1..53.
 			Err(_) => crash "Gregorian ISO week invariant"
 		}
@@ -343,7 +344,7 @@ GregorianDate :: [Date({ year : I64, month : U8, day : U8 })].{
 		# The in-year ordinal is at most 365, and the provider range keeps
 		# the resulting coordinate below 10^12 in magnitude.
 		ordinal = before + leap_day + U8.to_i64(date.day) - 1
-		CivilDay.from_day_number(I64.plus_wrap(year_start(date.year), ordinal))
+		CivilDay.from_day_number(I64.plus_wrap(GregorianYear.start(date.year), ordinal))
 	}
 
 	## Describe a shared civil-day coordinate in the Gregorian calendar.
@@ -578,27 +579,10 @@ pad_two = |value| if value < 10 {
 # Provider bounds are immutable and evaluated once at compile time. Every
 # inverse conversion validates against them without recomputing either year.
 first_supported_day : I64
-first_supported_day = year_start(-2147483648)
+first_supported_day = GregorianYear.start(-2147483648)
 
 after_last_supported_day : I64
-after_last_supported_day = year_start(2147483648)
-
-# Counts complete years before January 1 relative to Gregorian 1970-01-01.
-# All callers constrain year to [-2147483648, 2147483648]; intermediates fit I64.
-# Shifting by a whole number of Gregorian cycles preserves every leap-year
-# divisor and makes all three quotient inputs nonnegative, including BCE.
-year_start : I64 -> I64
-year_start = |year| {
-	# The least whole-cycle shift that covers the year before I32.lowest.
-	cycles = 5368710.I64
-	previous = I64.plus_wrap(year, cycles * 400 - 1).to_u64_wrap()
-	# previous is below 2^33 and the accumulated days below 2^42.
-	# The common-year total alone covers the century correction.
-	common_days = U64.times_wrap(365, previous)
-	leap_days = previous // 4 - previous // 100 + previous // 400
-	days = U64.plus_wrap(common_days, leap_days)
-	I64.minus_wrap(days.to_i64_wrap(), cycles * 146097 + 719162)
-}
+after_last_supported_day = GregorianYear.start(2147483648)
 
 # Internal callers establish a valid year and month in 1..12.
 month_length : I64, U8 -> U8

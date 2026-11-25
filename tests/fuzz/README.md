@@ -48,6 +48,7 @@ the symbolic arithmetic and finite histories.
 | [spec_timed_cursor](../spec_timed_cursor/main.roc) | R11 and R12. Model pauses and resumes a two-segment fold while classifying a rule start or explicit inclusion. It checks shrinking candidate capacity, the retained classification branch, and first, last and unique-occurrence policies. |
 | [spec_zone_classification](../spec_zone_classification/main.roc) | R07 and R12. Model checks classification across six segments with two exact matches and two gap witnesses. Both kinds of evidence count toward retained capacity. Saved and active cursors recover the witnesses and the same fold policies. |
 | [spec_all_day_resume](../spec_all_day_resume/main.roc) | R10–R12. Model shares one zone work budget across two events at a synthetic dateline jump, preserves the skipped day's identity, and resumes the pending date from active and saved cursors. A separate case checks the shared date work budget. |
+| [spec_period_order](../spec_period_order/main.roc) | R05 and R11. Solve finds a weekly index that would wrap to period zero in a U64 product. Public cases distinguish period-start ordering from construction of a whole frame and check week numbering at both Gregorian provider limits. |
 
 ## Generated properties
 
