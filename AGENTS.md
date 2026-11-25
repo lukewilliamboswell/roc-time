@@ -1,5 +1,14 @@
 # Working on roc-time
 
+## What belongs in the repository
+
+Everything we commit must earn its place. Keep material that helps someone use,
+maintain, or verify the repository and makes sense without the context of the
+original change. Use comments to explain invariants, surprising choices, and
+constraints that still apply. Preserve historical context only when it helps a
+future reader make a decision. Leave other history in Git and delete material
+when it stops serving a purpose.
+
 ## Sources of truth
 
 - Read [design.md](design.md) before changing temporal behavior or public APIs. Its requirements R01–R16 are architectural contracts.
@@ -174,8 +183,6 @@ Keep changes scoped. When commits are requested, create clean, coherent commits 
 
 ## Documentation
 
-Documentation serves current users and contributors. Every paragraph must help a
-current task; delete obsolete or duplicated material. Keep implementation history
-in Git, unfinished work in issues, and release changes in release records. Preserve
-required public anchors without explaining their history. Follow the
+Keep unfinished work in issues and release changes in release records. Preserve
+required public anchors. Follow the
 [shared documentation guidance](https://lukewilliamboswell.github.io/roc-automation/documentation.html#write-project-documentation).
