@@ -13,9 +13,6 @@ import ZoneRules
 ## An identified civil-day selection, including occurrences with empty coverage.
 ## Pair an application series ID with the original date for recurrence identity.
 ## Duration counts civil days, never fixed 24-hour elapsed quantities.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 AllDayOccurrence(id) :: { id : id, date : Calendar.Date, days : U64, selection : ResolvedSelection }.{
 
 	## Constant calendar work; zone interpretation is deferred to the cursor.

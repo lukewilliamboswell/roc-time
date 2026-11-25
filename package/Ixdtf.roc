@@ -34,9 +34,6 @@ import ClockTime
 ## Numeric zone -00:00 denotes a fixed zero offset, serialized as +00:00.
 ## Canonical IXDTF text preserves the declaration; snapshots remain in-memory
 ## results with explicit context. No complete ISO or broader-calendar claim.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }.{
 
 	## A named zone requiring matching rules at resolution, or a fixed numeric zone offset.
@@ -223,7 +220,9 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 					return Err(TooManyAnnotations)
 				}
 				var $missing = suffix_missing_bytes(body, { critical, zone_allowed, tag_allowed })?
-				if tag_allowed {
+				# Only earlier tags can conflict. The guard above has already
+				# rejected a full tag list, which also prevents a zone suffix.
+				if !$tags.is_empty() {
 					match body.split_on("=") {
 						[key, value] => {
 							# A committed key can only match a conflicting earlier
@@ -244,13 +243,19 @@ Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(T
 						}
 						_ => {}
 					}
-					if critical and "u-ca=gregory".starts_with(body) and (!$tags.is_empty() or $zone != None) and
+					if critical and "u-ca=gregory".starts_with(body) and
 						$tags.any(|previous| previous.key == "u-ca" and previous.value != "gregory") {
 						return Err(ConflictingCritical)
 					}
 				}
-				if bytes.len() + $missing + 1 > 4096 {
-					return Err(TooLarge)
+				needed_before_close = bytes.len() + $missing
+				if needed_before_close >= 4095 {
+					# An elective bare u-ca key would fit with =x], but adding
+					# that conflicts with the validated critical calendar.
+					# Extending the key takes one more byte.
+					if needed_before_close >= 4096 or (!critical and body == "u-ca" and $tags.any(|previous| previous.critical)) {
+						return Err(TooLarge)
+					}
 				}
 				return Err(Incomplete)
 			}
@@ -587,6 +592,35 @@ expect {
 		IxdtfSnapshot.offset(first) == FixedOffset.from_seconds(0) and
 			IxdtfSnapshot.offset(second) == FixedOffset.from_seconds(3600) and
 				IxdtfSnapshot.source(first) == source and IxdtfSnapshot.source(second) == source
+}
+
+# A refresh can replace later transitions even when the observed position,
+# offset, and provider labels agree. Keep both versions of the evidence.
+expect {
+	source = Ixdtf.parse("1970-01-01T00:00:00+00:00[Synthetic/Refresh]")?
+	later = PosixBoundary.from_microseconds(1)
+	validity = PosixSpan.new({ start: PosixBoundary.from_microseconds(-1), end: PosixBoundary.from_microseconds(2) })?
+	make_rules = |future_offset| ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Refresh",
+		version: "v1",
+		validity,
+		initial: FixedOffset.from_seconds(0),
+		bounds: { minimum: 0, maximum: 120 },
+		transitions: [{ at: later, offset: FixedOffset.from_seconds(future_offset) }],
+	})
+	first = Ixdtf.resolve(source, Some(make_rules(60)?))?
+	refreshed = IxdtfSnapshot.reresolve(first, Some(make_rules(120)?))?
+	conflict = test_rules("Synthetic/Refresh", PosixBoundary.from_microseconds(0), 60)?
+	match (IxdtfSnapshot.context(first), IxdtfSnapshot.context(refreshed)) {
+		(Some(old_rules), Some(new_rules)) =>
+			IxdtfSnapshot.same_position(first, refreshed) and first != refreshed and
+				IxdtfSnapshot.source(refreshed) == source and
+					IxdtfSnapshot.offset(refreshed) == FixedOffset.from_seconds(0) and
+						ZoneRules.offset_at(old_rules, later) == Ok(FixedOffset.from_seconds(60)) and
+							ZoneRules.offset_at(new_rules, later) == Ok(FixedOffset.from_seconds(120)) and
+								resolve_error(IxdtfSnapshot.reresolve(refreshed, Some(conflict))) == Some(OffsetConflict)
+		_ => False
+	}
 }
 
 test_rules = |name, point, offset| {

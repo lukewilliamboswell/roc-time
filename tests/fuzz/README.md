@@ -6,9 +6,9 @@ Its independent model, deterministic corpus, seed provenance and resource scopes
 are described in [the local recurrence evidence](../local_recurrence/README.md).
 
 The test roots `tests/core_suite/main.roc`, `tests/civil_suite/main.roc` and
-`tests/interpretation_suite/main.roc` combine seventeen properties using
-[roc-fuzz 0.7.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
-Core groups precision, spans, coverage, events and nano POSIX; civil groups Gregorian,
+`tests/interpretation_suite/main.roc` combine eighteen properties using
+[roc-fuzz 0.8.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.8.0).
+Core groups precision, spans, coverage, retention, events and nano POSIX; civil groups Gregorian,
 arithmetic, calendars, clock, nano clock, offsets and nano local; interpretation groups
 zones, patterns, recurrence, descriptions and interchange. The runner builds each selected suite
 once and uses `--target=NAME` for each member's examples, replay and search.
@@ -30,6 +30,32 @@ Measured executables are built with `--no-cache` after the source check to
 exclude persistent compiler-cache artifacts from the allocation profile.
 The runner rejects zero accepted inputs, missing baselines and incomplete
 evidence. See [baseline scope and reproduction](baselines/README.md).
+
+## Deterministic models and proofs
+
+The integration gate runs these roots with `roc test PATH --no-cache`.
+Roots that use roc-fuzz share the platform pin. Outcome checks through the
+public package accompany the symbolic arithmetic and finite histories.
+
+| Root | Contract and domain |
+| --- | --- |
+| [spec_precision](../spec_precision/main.roc) | R01, R03, R04 and R14. Solve checks span width and accumulation cutoffs and finds witnesses for Dec rounding and aggregate iCalendar duration overflow. Public cases include disconnected coverage whose enclosing hull overflows and an iCalendar duration whose individually representable fields overflow in combination. |
+| [spec_coverage](../spec_coverage/main.roc) | R03, R04 and R12. Model checks all reachable abstract histories for seven intervals over five unit cells, capacities 0–3, and one retained preview. A separate replay resumes the actual builder returned at capacity. Four cells between signed I64 limits also check canonical algebra and whole-member queries over widths that can overflow. |
+| [spec_recurrence](../spec_recurrence/main.roc) | R11 and R12. Model covers two windows over one finite daily rule with COUNT, inclusions and exclusions. It exhausts up to three changing-budget reads, then drains both the active and retained cursors against an independent list of dates. |
+| [spec_nano_local](../spec_nano_local/main.roc) | R01 and R05. Solve checks every clock count on the two partial Gregorian days at the signed I64 nanosecond limits. Public text fixtures check each exact limit and its nearest out-of-range label. |
+| [spec_nano_posix](../spec_nano_posix/main.roc) | R01 and R02. Solve proves the exact signed microsecond interval whose product with 1,000 fits an I64 nanosecond carrier. Both public nominal conversions check the limits and adjacent values against I128 products. |
+| [spec_zone_selection](../spec_zone_selection/main.roc) | R07 and R12. Model projects an 18-cell timeline forward through five fixed segments. It checks a selection with three disjoint runs, varying segment and member limits, and retention of earlier continuations. A gap fixture checks completion with a zero-member cap. |
+| [spec_calendar_evidence](../spec_calendar_evidence/main.roc) | R12 and R13. Model uses one or four civil second cells around a synthetic fold. It checks the exact earliest decisive prefix under changing limits and retention of a partially examined query. |
+| [spec_timed_cursor](../spec_timed_cursor/main.roc) | R11 and R12. Model pauses and resumes a two-segment fold while classifying a rule start or explicit inclusion. It checks shrinking candidate capacity, the retained classification branch, and first, last and unique-occurrence policies. |
+| [spec_zone_classification](../spec_zone_classification/main.roc) | R07 and R12. Model checks classification across six segments with two exact matches and two gap witnesses. Both kinds of evidence count toward retained capacity. Saved and active cursors recover the witnesses and the same fold policies. |
+| [spec_zone_admission](../spec_zone_admission/main.roc) | R01, R07 and R12. A possible offset absent from the observed table distinguishes signed axis overflow from narrower provider validity. Public point and half-open selection queries check both signed edges in Gregorian and Julian. |
+| [spec_all_day_resume](../spec_all_day_resume/main.roc) | R10–R12. Model shares one zone work budget across two events at a synthetic dateline jump, preserves the skipped day's identity, and resumes the pending date from active and saved cursors. A separate case checks the shared date work budget. |
+| [spec_period_order](../spec_period_order/main.roc) | R05 and R11. Solve finds a weekly index that would wrap to period zero in a U64 product. Public cases distinguish period-start ordering from construction of a whole frame and check week numbering at both Gregorian provider limits. Ordered clock tuples and linear rank counts check candidate indexing and subdaily slices across the epoch. |
+| [spec_timed_ending_state](../spec_timed_ending_state/main.roc) | R07, R11 and R12. Model changes budgets while a fold or gap ending is pending and an inclusion is queued. Both active and retained schedules recover the chosen calendar anchor, the coordinate tail, and the queued explicit ending. |
+| [spec_ixdtf_prefixes](../spec_ixdtf_prefixes/main.roc) | R14. A table of shortest valid completions checks each adjacent raw byte budget. It distinguishes a partial key that can still grow, a committed key that must repeat a critical value, and a critical flag on the zone alone. |
+| [spec_rrule_fields](../spec_rrule_fields/main.roc) | R11 and R14. Signed year-day selectors check leap-year DATE output and filter secondly, minutely, and hourly candidates across the epoch. The fixtures check canonical field order and specific syntax, range and frequency errors. |
+
+## Generated properties
 
 Each property package wires the platform to a separate pure type module (`PrecisionCase`,
 `SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, `CalendarCase`, or `NanoClockCase`). Generators and semantic checks live in those

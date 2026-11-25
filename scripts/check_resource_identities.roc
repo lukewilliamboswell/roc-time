@@ -15,6 +15,7 @@ main! : List(OsStr) => Try({}, _)
 main! = |_args| {
 	target = FixtureHost.build!()?
 	nightly = Script.roc_nightly!()?
+	version = nightly.output!(["version"])?
 	fixtures : List(Fixture)
 	fixtures = Json.parse(Path.read_utf8!("tests/resource_identities/spec.json")?)?
 	if fixtures.is_empty() {
@@ -27,13 +28,14 @@ main! = |_args| {
 		}
 		for mode in ["dev", "speed"] {
 			binary = Path.join(work, "${fixture.name}-${mode}")
-			nightly.cmd([
+			build_args = [
 				"build",
-				OsStr.from_str(fixture.source),
-				OsStr.from_str("--opt=${mode}"),
-				OsStr.from_str("--target=${target}"),
-				OsStr.from_str("--output=${Path.display(binary)}"),
-			]).timeout(Duration.millis(180000)).call!()?
+				fixture.source,
+				"--opt=${mode}",
+				"--target=${target}",
+				"--output=${Path.display(binary)}",
+			].concat(FixtureHost.resource_build_flags(version, mode))
+			nightly.cmd(build_args.map(OsStr.from_str)).timeout(Duration.millis(180000)).call!()?
 			for args in fixture.cases {
 				result = Cmd.new(Path.to_os_str(binary)).args((args).map(OsStr.from_str)).timeout(Duration.millis(10000)).stdout(Capture).stderr(Capture).run!()?
 				stdout = Str.from_utf8(result.stdout_bytes)?

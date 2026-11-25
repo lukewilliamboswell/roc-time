@@ -22,6 +22,7 @@ import ExactInterval
 import ICalDateTime
 import ICalDuration
 import ICalPeriod
+import ZoneRules
 
 ## Bounded explanation of descriptions and already-bound interpretation results.
 ## Typed facts come directly from the source; rendering never resolves zones,
@@ -427,6 +428,103 @@ expect {
 	empty = Explanation.plain(value, { max_facts: 10, max_utf8_bytes: 0 })
 	tiny = Explanation.plain(value, { max_facts: 10, max_utf8_bytes: 3 })
 	zero.visited_facts == 0 and zero.text == "" and zero.status == Limited(FactLimit) and empty.visited_facts == 0 and empty.text == "" and empty.status == Limited(ByteLimit) and tiny.text == "..." and tiny.status == Limited(ByteLimit)
+}
+
+# A booking viewer changes its fact and byte allowances on the same
+# three-fact selection. Calibrate the line boundaries from a generous render so
+# these expectations can survive prose edits. The oracle counts fitting whole
+# prefixes and validates UTF-8 byte prefixes independently of the renderer's
+# string slicing. Long context text has a separately known field preview.
+expect {
+	short = "é界𐍈"
+	long = "x".repeat(252)
+	var $valid = Bool.True
+	edge = "${long}𐍈"
+	for (version, shown, clipped) in [(short, short, False), (edge, edge, False), ("${edge}é", "${long}...", True)] {
+		explanation = budget_test_selection(version)?
+		full = Explanation.plain(explanation, { max_facts: 4, max_utf8_bytes: 4096 })
+		match full.text.split_on("\n") {
+			[first, context, last] => {
+				$valid = $valid and full.total_facts == 3 and context.contains(Str.inspect(shown)) and context.contains(shown)
+				prefixes = ["", first, "${first}\n${context}", "${first}\n${context}\n${last}"]
+				var $bytes = 0.U64
+				while $bytes <= full.text.count_utf8_bytes() + 1 {
+					for facts in [0.U64, 1, 2, 3, 4] {
+						budget = { max_facts: facts, max_utf8_bytes: $bytes }
+						$valid = $valid and Explanation.plain(explanation, budget) == budget_test_report(prefixes, budget, clipped)
+					}
+					$bytes = $bytes + 1
+				}
+			}
+			_ => {
+				$valid = False
+			}
+		}
+	}
+	$valid
+}
+
+budget_test_selection = |version| {
+	zero = FixedOffset.from_seconds(0)
+	lower = PosixBoundary.from_microseconds(0)
+	upper = PosixBoundary.from_microseconds(1)
+	validity = PosixSpan.new({ start: lower, end: upper })?
+	rules = ZoneRules.Provider.new_bounded({ name: "Fixture/Budget", version, validity, initial: zero, transitions: [], bounds: { minimum: 0, maximum: 0 } })?
+	start = FixedOffset.project(zero, { boundary: lower, calendar: Gregorian })?
+	end = FixedOffset.project(zero, { boundary: upper, calendar: Gregorian })?
+	Ok(Explanation.new(ResolvedSelection(ResolvedSelection.resolve(rules, { start, end })?)))
+}
+
+budget_test_report : List(Str), Explanation.Budget, Bool -> Explanation.Report
+budget_test_report = |prefixes, budget, clipped| {
+	total = prefixes.len() - 1
+	allowed = U64.min(budget.max_facts, total)
+	zero = { text: "", status: Limited(FactLimit), visited_facts: 0.U64, total_facts: total }
+	if allowed == 0 {
+		return zero
+	}
+	if budget.max_utf8_bytes == 0 {
+		return { ..zero, status: Limited(ByteLimit) }
+	}
+	fitting = prefixes.take_first(allowed + 1).keep_if(|prefix| prefix.count_utf8_bytes() <= budget.max_utf8_bytes)
+	visited = fitting.len() - 1
+	text = fitting.last() ?? crash "empty prefix always fits"
+	remaining = budget.max_utf8_bytes - text.count_utf8_bytes()
+	if visited < total and remaining == 0 {
+		return { text, status: Limited(ByteLimit), visited_facts: visited, total_facts: total }
+	}
+	if visited < allowed {
+		next = prefixes.get(visited + 1) ?? crash "next fixture line"
+		bytes = next.to_utf8()
+		dots = if remaining >= 3 {
+			"..."
+		} else {
+			""
+		}
+		end = budget.max_utf8_bytes - dots.count_utf8_bytes()
+		var $cut = end
+		var $part = ""
+		while $cut >= text.count_utf8_bytes() {
+			match Str.from_utf8(bytes.take_first($cut)) {
+				Ok(prefix) => {
+					$part = prefix
+					break
+				}
+				Err(_) => {
+					$cut = $cut - 1
+				}
+			}
+		}
+		return { text: "${$part}${dots}", status: Limited(ByteLimit), visited_facts: visited + 1, total_facts: total }
+	}
+	status = if clipped and visited >= 2 {
+		Limited(TextLimit)
+	} else if visited < total {
+		Limited(FactLimit)
+	} else {
+		Complete
+	}
+	{ text, status, visited_facts: visited, total_facts: total }
 }
 
 # Render only supplied calendar fields. Filled constructor fields never imply

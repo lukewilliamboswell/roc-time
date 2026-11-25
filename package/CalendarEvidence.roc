@@ -21,9 +21,6 @@ import PosixSpan
 ## At most 4096 input alternatives, before deduplication. Construction validates
 ## fields and exclusive civil bounds once, then sorts/deduplicates in O(n log n), without zone interpretation or
 ## enumeration. Canonical order is local position, not resolved timeline order.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 CalendarEvidence :: { description : QualifiedCalendarValue, alternatives : List({ value : Calendar.Value, end : LocalDateTime }) }.{
 
 	## Point membership across admissible alternatives: Definite means all, Possible

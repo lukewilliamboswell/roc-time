@@ -8,9 +8,6 @@ import JulianDate as JulianDateType
 ## Calendar.Date retains calendar identity; Calendar.Delta describes calendar components;
 ## Calendar.Value retains supplied resolution. Calendar.Arithmetic requires an explicit policy.
 ## Gregorian and Julian profiles are proleptic; no historical reform is inferred.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 Calendar := [Gregorian, Julian].{
 
 	## JulianDate operations and types.

@@ -72,6 +72,12 @@ record a new or changed application's output with
 runs, built from roc-automation's `scripts/release_package.roc` with the `roc`
 on `PATH`.
 
+When a public type nests another nominal type with the same associated method
+name, declare the inner type at module scope and re-export it as an alias. Roc
+checks method names in nested declarations against the containing scope. This
+keeps public names such as `TimedSchedule.Endings` while giving each type its
+own method scope. See [Roc's nested type guidance](https://github.com/roc-lang/roc/issues/13077).
+
 ## Scripts
 
 New automation is written as Roc scripts. Each entry point in `scripts/*.roc`
@@ -376,7 +382,7 @@ notices in generated reference output. Cached replay uses no network service.
 
 The three fuzz applications under `tests/core_suite/`, `tests/civil_suite/` and
 `tests/interpretation_suite/` use the content-addressed
-[roc-fuzz 0.7.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
+[roc-fuzz 0.8.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.8.0).
 They import reusable property packages from the semantic target directories.
 Each suite compiles once per invocation; members retain independent examples,
 corpora, allocation baselines and reports. Corpus and dependency metadata live under `tests/fuzz/`.
@@ -407,12 +413,19 @@ Targets declare readable boundary examples in source and retain discovered
 regressions as named binary witnesses. Campaign seeds come from roc-fuzz's
 prepared named examples; synthetic starter files are unnecessary. The runner requires
 complete metrics, passing trace rules, a matched baseline and nonzero accepted
-exploration counts from `roc-fuzz-quality/1` reports. Ordinary checks never update
+exploration counts from `roc-fuzz-quality/2` reports. Ordinary checks never update
 `tests/fuzz/baselines/`. For an intentional change, review the observations and run
 `blueprint run fuzz -- --operation accept --targets NAME`, then review the baseline
 diff and replay the gate. Missing baselines fail repository policy even when the
 platform reports an otherwise successful unbaselined check. Changed/missing
 baseline controls run with the failure lifecycle.
+
+Run an individual deterministic proof or model with
+`roc test tests/spec_precision/main.roc --no-cache`, substituting another
+root from the [model and proof inventory](tests/fuzz/README.md#deterministic-models-and-proofs).
+The integration gate runs these checks with the package compiler. See the
+[spec-first workflow](AGENTS.md#spec-first-models-and-proofs) for choosing
+between `Model`, `Solve`, and generated properties.
 
 For a saved failure, run these commands from a directory under `.roc-time-tmp/`
 so the runner's own `.roc-fuzz/` artifacts remain disposable. `TARGET` and

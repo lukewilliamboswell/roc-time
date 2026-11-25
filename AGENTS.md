@@ -1,5 +1,14 @@
 # Working on roc-time
 
+## What belongs in the repository
+
+Everything we commit must earn its place. Keep material that helps someone use,
+maintain, or verify the repository and makes sense without the context of the
+original change. Use comments to explain invariants, surprising choices, and
+constraints that still apply. Preserve historical context only when it helps a
+future reader make a decision. Leave other history in Git and delete material
+when it stops serving a purpose.
+
 ## Sources of truth
 
 - Read [design.md](design.md) before changing temporal behavior or public APIs. Its requirements R01–R16 are architectural contracts.
@@ -70,7 +79,7 @@ executable evidence that checks it.
   about a gap after a valid inclusion. Keep the smallest counterexample as a
   named example or curated regression, and show it fails on the unfixed
   behavior. Run the property with a bounded search in addition to replay.
-- State the applicable requirement IDs, input domain, property preconditions, and independent oracle or semantic law. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
+- Identify the applicable requirements in the test inventory or review notes. Use test comments to explain the input domain, preconditions, and independent expectation. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
 - Generate useful valid inputs directly and deliberately include signed limits, adjacent endpoints, empty collections, duplicates, and touching/overlapping spans as applicable. Exercise owned, shared, and sliced collections where ownership can affect behavior. Small exhaustive models complement exploration across the full supported range.
 - Test malformed public inputs for the required structured errors. Reject a generated input only when it is outside the property's domain; do not discard expected error paths or turn ordinary public errors into harness crashes.
 - Check inverse and round-trip preconditions explicitly. Checked arithmetic may overflow in an intermediate step; clamped calendar arithmetic is not invertible; semantic round trips need not preserve source spelling. Pair algebraic laws with independent models or sourced fixtures so mutually consistent bugs can be detected.
@@ -78,6 +87,68 @@ executable evidence that checks it.
 - Run affected targets with explicit finite budgets and replay their saved regressions. Record exact commands, revisions, backend/target, seed, budgets, and results. Normal CI must build targets, replay curated regressions, and run bounded searches on supported hosts; longer campaigns supplement that gate, with unfinished automation work tracked in an active plan. Unsupported hosts and failed setup remain explicit limitations.
 
 Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and resource measurements. A passing campaign establishes evidence for its tested properties and budget, not exhaustive correctness, allocation bounds, or portability to untested backends.
+
+### Spec-first models and proofs
+
+- Start from a caller-visible contract and a failure the existing checks could
+  miss. Identify the entry point that owns the contract, the facts it accepts,
+  its structured errors and its observable result. Derive expectations from
+  the contract using an independent representation or a different calculation.
+- Use roc-fuzz `Model` for interactions across calls. List actions, reachable
+  configurations and history bounds. Require meaningful goals and check
+  whether the search exhausted the domain. Review shortest goal witnesses
+  to check that they exercise the intended interaction. The state key must preserve every
+  distinction that can affect later actions or observations, including
+  retained values. Use `verify: EveryStep` when state rules must inspect
+  every returned value before pruning duplicates. Use step rules for facts
+  that depend on the incoming action.
+  For an opaque cursor, a short complete action history can preserve progress
+  that is absent from the latest public output. Bound the number of actions
+  before using such a key. When an abstract key merges histories, replay a
+  short caller sequence separately if it must consume a particular returned
+  continuation.
+  Choose inputs that distinguish budgets for supplied entries, retained
+  results, and work across a batch. Duplicates and empty results can expose
+  cases where these counts differ.
+  For a pipeline, resume a partial item with later work queued and verify
+  both results. A lost continuation can otherwise look like forward progress.
+  When an immutable declaration changes while a cursor is live, resume the
+  retained cursor and open a new one. Check the distinct results against
+  the original and edited declarations.
+- Add a generated walk when it reaches relevant histories beyond the
+  deterministic search. An exhausted finite action grammar can run in a
+  deterministic test root with no separate fuzz baseline.
+  For a stateless query, use a direct fixture or bounded input grid when
+  it exercises the same contract. Assert result ordering explicitly if
+  membership observations can hide it.
+  For interval algebra, use cells between chosen endpoints to cover wide
+  coordinates with a small oracle. Cell membership needs only endpoint
+  order, so the oracle can include intervals whose width overflows.
+  When a limit applies after projection, pair cases where the projection
+  moves the value into and out of the accepted range. Verify any error
+  attribution exposed to callers.
+  When a query discards declaration details, compare equal query answers
+  from distinct declarations and check the retained details through a
+  caller that uses them, such as a dictionary keyed by declaration identity.
+  For `Incomplete` input, exhibit a valid completion within the remaining
+  budget and check the adjacent budget where the completion cannot fit.
+- Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
+  widths, preconditions and conflict budget. Check the exact verdict and pass
+  concrete boundary cases or solver witnesses through the public API. When a
+  proof encodes an arithmetic term separately, record how the public check
+  connects it to actual behavior.
+  A witness search can also find where an alternative calculation disagrees
+  with the contract. State the ordering when claiming a smallest witness.
+  Check the witness through the public entry point.
+  If a proof is expensive, derive fixed anchors with exact arithmetic, then
+  prove the decision over the variables within the boundary cells. Measure
+  it in the test backend used by CI.
+- Change one production decision in a scratch worktree and check that the new
+  evidence detects the intended failure. Run the closest existing check on
+  that mutation to see what the new evidence adds. Restore the production
+  code, keep minimized regressions for real defects, and stop adding models
+  when plausible remaining failures already have independent checks.
+  [roc-pdf correctness-oracle method](https://github.com/lukewilliamboswell/roc-pdf/blob/75a9b4880838dd7cab7a4a55d4a655bc890b8a74/docs/testing.adoc#designing-correctness-oracles)
 
 ## Oracle evidence
 
@@ -112,8 +183,6 @@ Keep changes scoped. When commits are requested, create clean, coherent commits 
 
 ## Documentation
 
-Documentation serves current users and contributors. Every paragraph must help a
-current task; delete obsolete or duplicated material. Keep implementation history
-in Git, unfinished work in issues, and release changes in release records. Preserve
-required public anchors without explaining their history. Follow the
+Keep unfinished work in issues and release changes in release records. Preserve
+required public anchors. Follow the
 [shared documentation guidance](https://lukewilliamboswell.github.io/roc-automation/documentation.html#write-project-documentation).

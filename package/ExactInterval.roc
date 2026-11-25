@@ -2,6 +2,7 @@ import SemanticFact
 import OffsetTimestamp
 import PosixSpan
 import PosixBoundary
+import FixedOffset
 
 ## Exact appointments, native profile exact-offset-interval-v1. Both endpoints
 ## are complete OffsetTimestamp declarations, separated by one slash. The start
@@ -219,6 +220,52 @@ expect {
 	b = ExactInterval.parse("1970-01-01T00:00:00.120Z/1970-01-01T00:00:00.130Z")?
 	a != b and ExactInterval.span(a) == ExactInterval.span(b) and ExactInterval.from_span(ExactInterval.span(b), { offset: UnassertedUtc, fraction_digits: 2 }) == Ok(a) and ExactInterval.from_span(ExactInterval.span(b), { offset: UnassertedUtc, fraction_digits: 1 }) == Err(Start(UnsupportedPrecision))
 }
+
+# Calendar-year counts from astronomical year zero give independent
+# January 1 coordinates. Count leap years in [0, year) directly.
+export_test_year_start : I64 -> I64
+export_test_year_start = |year| {
+	days = year * 365 + (year + 3) // 4 - (year + 99) // 100 + (year + 399) // 400
+	days_to_epoch = 1970 * 365 + 493 - 20 + 5
+	(days - days_to_epoch) * 86400000000
+}
+
+export_test_span : I64, I64 -> Try(PosixSpan, [EmptySpan, ReversedBounds])
+export_test_span = |start, end|
+	PosixSpan.new({ start: PosixBoundary.from_microseconds(start), end: PosixBoundary.from_microseconds(end) })
+
+expect {
+	# An archive caller can export these one-microsecond intervals because the
+	# specified offsets project both endpoints into the supported local years.
+	offset_micros = 86340000000.I64
+	first = export_test_year_start(0) - offset_micros
+	last = export_test_year_start(10000) + offset_micros - 1
+	early = export_test_span(first, first + 1)?
+	late = export_test_span(last - 1, last)?
+	a = ExactInterval.from_span(early, { offset: Asserted(FixedOffset.from_seconds(86340)), fraction_digits: 6 })?
+	b = ExactInterval.from_span(late, { offset: Asserted(FixedOffset.from_seconds(-86340)), fraction_digits: 6 })?
+	ExactInterval.span(a) == early and ExactInterval.span(b) == late and
+		ExactInterval.to_text(a) == "0000-01-01T00:00:00.000000+23:59/0000-01-01T00:00:00.000001+23:59" and
+			ExactInterval.to_text(b) == "9999-12-31T23:59:59.999998-23:59/9999-12-31T23:59:59.999999-23:59"
+}
+
+expect {
+	# These UTC coordinates can lie inside the four-digit years even when the
+	# local label cannot. The errors identify which endpoint prevents export.
+	offset_micros = 86340000000.I64
+	first = export_test_year_start(0) + offset_micros
+	after = export_test_year_start(10000) - offset_micros
+	early = export_test_span(first - 1, first)?
+	late = export_test_span(after - 1, after)?
+	west = { offset: Asserted(FixedOffset.from_seconds(-86340)), fraction_digits: 6 }
+	east = { offset: Asserted(FixedOffset.from_seconds(86340)), fraction_digits: 6 }
+	exact_start = export_test_span(first, first + 1)?
+	ExactInterval.from_span(early, west) == Err(Start(OutOfRange)) and
+		ExactInterval.from_span(late, east) == Err(End(OutOfRange)) and
+			ExactInterval.from_span(exact_start, { ..west, fraction_digits: 5 }) == Err(End(UnsupportedPrecision)) and
+				ExactInterval.from_span(late, { ..east, fraction_digits: 5 }) == Err(Start(UnsupportedPrecision))
+}
+
 expect {
 	ExactInterval.parse("1964/2008") == Err(Start(Malformed)) and
 		ExactInterval.parse("1970-01-01T00:00:00Z/") == Err(End(Incomplete)) and

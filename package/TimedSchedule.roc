@@ -80,9 +80,6 @@ import ZoneRules
 ## When a batch returns `Limited`, process its partial output and resume the returned
 ## cursor with sufficient budgets. Increasing only the output cap does not fix a
 ## work or buffer limit.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 TimedSchedule(id) :: { series : id, duration : TimedOccurrence.Duration, overrides : List(EndingEntry), starts : TimedRecurrence.Cursor, start_buffered : U64, start_zone_buffered : U64, end_buffered : U64, pending : [None, Some(TimedOccurrence.Cursor({ series : id, source : LocalDateTime }))] }.{
 	# TODO: Restore Endings.Entry/ConstructionError after nested alias lookup
 	# works on our compiler: https://github.com/roc-lang/roc/issues/11464

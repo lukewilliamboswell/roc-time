@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - id: nightly
         uses: lukewilliamboswell/roc-automation/actions/setup-roc-nightly@dd30a5dd576973b6e224db70d96e3e12c96bcc95
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dd30a5dd576973b6e224db70d96e3e12c96bcc95
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@2b0ffc9c556f465759ca81055bb819c7e15624eb
         with:
           install-nix: 'true'
           cache: 'true'
@@ -57,7 +57,7 @@ jobs:
       - uses: lukewilliamboswell/roc-automation/actions/setup-roc-nightly@dd30a5dd576973b6e224db70d96e3e12c96bcc95
         with:
           nightly-tag: ${{ needs.test.outputs.nightly-tag }}
-      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@dd30a5dd576973b6e224db70d96e3e12c96bcc95
+      - uses: lukewilliamboswell/roc-automation/actions/setup-blueprint@2b0ffc9c556f465759ca81055bb819c7e15624eb
         with:
           cache: 'true'
           cache-workload: fuzz

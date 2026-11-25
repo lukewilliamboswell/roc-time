@@ -350,3 +350,73 @@ expect {
 	}
 	blocked.occurrences.is_empty() and $done and $pages == whole.occurrences.len() + 1 and $output.map(|item| { id: item.id(), span: item.span() }) == whole.occurrences.map(|item| { id: item.id(), span: item.span() })
 }
+
+# A page viewer pauses a calendar ending and forks the returned
+# query with a larger work budget. In fixed UTC, day one occupies [0, day)
+# and the second ending falls outside the provider. Exact and zero pages
+# must leave that later error for the next request with available capacity.
+expect {
+	day = 86400000000.I64
+	point = PosixBoundary.from_microseconds
+	start = test_local(1)?
+	window = { start, end: test_local(3)? }
+	date = GregorianDate.from_fields({ year: 1970, month: 1, day: 1 })?
+	clock = ClockTime.from_microseconds_since_midnight(0)?
+	rule = TimedRecurrence.new(
+		{ date, clock },
+		{
+			calendar: CalendarPattern.defaults(Daily),
+			clocks: { hours: [], minutes: [], seconds: [] },
+			termination: Count(2),
+			by_set_pos: [],
+		},
+	)?
+	validity = PosixSpan.new({ start: point(-1), end: point(day + 1) })?
+	rules = ZoneRules.Provider.new_bounded({
+		name: "Synthetic/Page",
+		version: "1",
+		validity,
+		initial: FixedOffset.from_seconds(0),
+		transitions: [],
+		bounds: { minimum: 0, maximum: 0 },
+	})?
+	declared = ScheduleDefinition.from_native({
+		rule,
+		duration: Calendar({ delta: Calendar.Delta.days(1), invalid_date: Reject, tail: PosixDelta.from_microseconds(0), occurrence: RequireUnique, gap: RejectGap }),
+		context: { rules, occurrence: RequireUnique, gap: RejectGap },
+	})?
+	first = [{ id: { series: 42.U64, source: start }, span: PosixSpan.new({ start: point(0), end: point(day) })? }]
+	rows = |page| page.occurrences.map(|item| { id: item.id(), span: item.span() })
+	held = |page| page.steps == 0 and page.zone_segments == 0 and page.occurrences.is_empty()
+	resume = |status, expected| match status {
+		Limited(progress) if progress.reason == expected => progress.query
+		_ => crash "unexpected fixture page status"
+	}
+	outside = |answer| match answer {
+		Err(OutsideValidity) => True
+		_ => False
+	}
+
+	narrow = { max_steps: 64.U64, max_buffered: 1.U64, max_zone_segments: 1.U64, max_zone_candidates: 1.U64 }
+	wide = { ..narrow, max_zone_segments: 2 }
+	query = declared.open_query({ series: 42.U64, window, work: narrow })?
+	initial_zero = query.page(0)?
+	partial = resume(initial_zero.status, OutputLimit).page(1)?
+	pending = resume(partial.status, EndZoneWorkLimit)
+
+	fast = pending.with_work(wide)
+	exact = fast.page(1)?
+	after_exact = resume(exact.status, OutputLimit)
+	later_zero = after_exact.page(0)?
+	later = resume(later_zero.status, OutputLimit)
+	slow = pending.page(2)?
+	slow_rest = resume(slow.status, StartZoneWorkLimit)
+	default = declared.open_query({ series: 42.U64, window })?.page(1)?
+	default_rest = resume(default.status, OutputLimit)
+
+	held(initial_zero) and partial.zone_segments == 1 and partial.occurrences.is_empty() and
+		exact.steps == 0 and exact.zone_segments == 1 and rows(exact) == first and
+			held(later_zero) and outside(later.page(1)) and outside(fast.page(2)) and
+				slow.zone_segments == 1 and rows(slow) == first and outside(slow_rest.with_work(wide).page(1)) and
+					default.zone_segments == 2 and rows(default) == first and outside(default_rest.page(1))
+}

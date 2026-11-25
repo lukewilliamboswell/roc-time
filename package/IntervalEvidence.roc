@@ -218,6 +218,22 @@ expect {
 			IntervalEvidence.independent({ starts: [point(2)], ends: [point(1), point(2)] }) == Err(InconsistentEvidence) and
 				IntervalEvidence.independent({ starts: List.repeat(point(0), 4097), ends: [point(1)] }) == Err(TooManyAlternatives)
 }
+
+# Input limits count supplied entries, before repeated choices collapse.
+expect {
+	start = point(0)
+	end = point(1)
+	starts = List.repeat(start, 4096)
+	ends = List.repeat(end, 4096)
+	independent = IntervalEvidence.independent({ starts, ends })?
+	span = test_span(0, 1)?
+	paired = IntervalEvidence.paired(List.repeat(span, 4096))?
+	IntervalEvidence.declaration(independent) == Independent({ starts: [start], ends: [end] }) and
+		IntervalEvidence.declaration(paired) == Paired([span]) and
+			IntervalEvidence.independent({ starts, ends: ends.append(end) }) == Err(TooManyAlternatives) and
+				IntervalEvidence.paired(List.repeat(span, 4097)) == Err(TooManyAlternatives)
+}
+
 expect {
 	value = IntervalEvidence.independent({ starts: [point(I64.lowest), point(I64.highest)], ends: [point(I64.lowest), point(I64.highest)] })?
 	IntervalEvidence.contains(value, point(I64.lowest)) == Definite and
@@ -234,4 +250,29 @@ expect {
 	b = IntervalEvidence.paired([test_span(0, 2)?, test_span(1, 3)?, test_span(0, 3)?])?
 	a != b and IntervalEvidence.possible_coverage(a) == IntervalEvidence.possible_coverage(b) and
 		IntervalEvidence.definite_coverage(a) == IntervalEvidence.definite_coverage(b)
+}
+
+# Keep normalized supplied evidence as a key even when two
+# declarations have identical admissible intervals and pointwise projections.
+expect {
+	lower = point(I64.lowest)
+	middle = point(0)
+	upper = point(I64.highest)
+	supplied = IntervalEvidence.independent({ starts: [upper, middle, lower, middle], ends: [upper, lower, upper] })?
+	normalized = IntervalEvidence.independent({ starts: [lower, middle, upper], ends: [lower, upper] })?
+	viable_only = IntervalEvidence.independent({ starts: [lower, middle], ends: [upper] })?
+	wide = test_span(I64.lowest, I64.highest)?
+	narrow = test_span(0, I64.highest)?
+	paired = IntervalEvidence.paired([narrow, wide])?
+	keys = Dict.empty().insert(supplied, 1.U8).insert(viable_only, 2).insert(paired, 3)
+	IntervalEvidence.declaration(supplied) == Independent({ starts: [lower, middle, upper], ends: [lower, upper] }) and
+		[supplied, viable_only, paired].all(
+			|value|
+				Coverage.to_spans(IntervalEvidence.possible_coverage(value)) == [wide] and
+					Coverage.to_spans(IntervalEvidence.definite_coverage(value)) == [narrow],
+		) and
+			supplied == normalized and
+				Dict.get(keys, normalized) == Ok(1) and
+					Dict.get(keys, viable_only) == Ok(2) and
+						Dict.get(keys, paired) == Ok(3)
 }

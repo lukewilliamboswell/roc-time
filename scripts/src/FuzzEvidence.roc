@@ -38,7 +38,7 @@ FuzzEvidence := [].{
 			baseline: report.baseline_status,
 		}
 		expected_identity = {
-			format: "roc-fuzz-quality/1",
+			format: "roc-fuzz-quality/2",
 			metric_version: "roc-fuzz-allocations/1",
 			host,
 			outcome: "passed",
@@ -71,7 +71,7 @@ FuzzEvidence := [].{
 }
 
 fixture = {
-	format: "roc-fuzz-quality/1",
+	format: "roc-fuzz-quality/2",
 	metric_version: "roc-fuzz-allocations/1",
 	target: "clock-v1",
 	host_target: "x64musl",
