@@ -16,6 +16,11 @@ IntegrationCases := [].{
 				program: roc,
 				args: ["test", "tests/spec_precision/main.roc", "--no-cache"],
 			},
+			{
+				name: "date recurrence cursor histories",
+				program: roc,
+				args: ["test", "tests/spec_recurrence/main.roc", "--no-cache"],
+			},
 		].concat(
 			application({
 				roc,

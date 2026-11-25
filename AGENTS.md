@@ -91,11 +91,16 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   distinction that can affect later actions or observations, including
   retained values. Check transition rules before pruning duplicate states
   when they can observe differences between incoming actions.
+  For an opaque cursor, a short complete action history can preserve progress
+  that is absent from the latest public output. Bound the number of actions
+  before using such a key.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a
   proof encodes an arithmetic term separately, record how the public check
   connects it to actual behavior.
+  If a proof is expensive, try an equivalent cutoff expressed from a known
+  integer boundary and measure it in the test backend used by CI.
 - Change one production decision in a scratch worktree and check that the new
   evidence detects the intended failure. Run the closest existing check on
   that mutation to see what the new evidence adds. Restore the production
