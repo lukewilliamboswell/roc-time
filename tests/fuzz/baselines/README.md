@@ -1,7 +1,7 @@
 # Allocation observations
 
 These host-specific baselines cover source-declared boundary examples and
-retained regressions for all seventeen semantic targets. Typed example makers
+retained regressions for all eighteen semantic targets. Typed example makers
 produce the platform's logical input encoding; regression witnesses retain
 their exact original bytes. Input hashes are checked in baseline entries and
 replay reports.
@@ -11,6 +11,8 @@ Scope: LLVM `--opt=speed --fuzz --no-cache`, profile `speed`, metric version
 `roc-fuzz-allocations/1`. Linux `x64musl` and Apple Silicon `arm64mac` entries
 use roc-fuzz 0.7.0 suites and `nightly-2026-11-18-a520eed`. The nanosecond entries were measured on
 Apple Silicon macOS and in an x86-64 Ubuntu 24.04 Docker guest on Apple Silicon.
+The Linux suite also matches these observations on roc-fuzz 0.8.0 with
+`nightly-2026-11-24-ff5e544`.
 Each named property executes once in a fresh
 process. Counters cover the platform's `$property` region, including the
 property's independent models and assertions; they are not isolated production

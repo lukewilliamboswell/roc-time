@@ -376,7 +376,7 @@ notices in generated reference output. Cached replay uses no network service.
 
 The three fuzz applications under `tests/core_suite/`, `tests/civil_suite/` and
 `tests/interpretation_suite/` use the content-addressed
-[roc-fuzz 0.7.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
+[roc-fuzz 0.8.0 release](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.8.0).
 They import reusable property packages from the semantic target directories.
 Each suite compiles once per invocation; members retain independent examples,
 corpora, allocation baselines and reports. Corpus and dependency metadata live under `tests/fuzz/`.
@@ -407,7 +407,7 @@ Targets declare readable boundary examples in source and retain discovered
 regressions as named binary witnesses. Campaign seeds come from roc-fuzz's
 prepared named examples; synthetic starter files are unnecessary. The runner requires
 complete metrics, passing trace rules, a matched baseline and nonzero accepted
-exploration counts from `roc-fuzz-quality/1` reports. Ordinary checks never update
+exploration counts from `roc-fuzz-quality/2` reports. Ordinary checks never update
 `tests/fuzz/baselines/`. For an intentional change, review the observations and run
 `blueprint run fuzz -- --operation accept --targets NAME`, then review the baseline
 diff and replay the gate. Missing baselines fail repository policy even when the

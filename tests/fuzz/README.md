@@ -6,9 +6,9 @@ Its independent model, deterministic corpus, seed provenance and resource scopes
 are described in [the local recurrence evidence](../local_recurrence/README.md).
 
 The test roots `tests/core_suite/main.roc`, `tests/civil_suite/main.roc` and
-`tests/interpretation_suite/main.roc` combine seventeen properties using
-[roc-fuzz 0.7.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.7.0).
-Core groups precision, spans, coverage, events and nano POSIX; civil groups Gregorian,
+`tests/interpretation_suite/main.roc` combine eighteen properties using
+[roc-fuzz 0.8.0](https://github.com/lukewilliamboswell/roc-fuzz/releases/tag/0.8.0).
+Core groups precision, spans, coverage, retention, events and nano POSIX; civil groups Gregorian,
 arithmetic, calendars, clock, nano clock, offsets and nano local; interpretation groups
 zones, patterns, recurrence, descriptions and interchange. The runner builds each selected suite
 once and uses `--target=NAME` for each member's examples, replay and search.
