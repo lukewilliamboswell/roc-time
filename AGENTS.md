@@ -93,7 +93,9 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   when they can observe differences between incoming actions.
   For an opaque cursor, a short complete action history can preserve progress
   that is absent from the latest public output. Bound the number of actions
-  before using such a key.
+  before using such a key. When an abstract key merges histories, replay a
+  short caller sequence separately if it must consume a particular returned
+  continuation.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a

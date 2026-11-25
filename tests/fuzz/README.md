@@ -31,6 +31,20 @@ exclude persistent compiler-cache artifacts from the allocation profile.
 The runner rejects zero accepted inputs, missing baselines and incomplete
 evidence. See [baseline scope and reproduction](baselines/README.md).
 
+## Deterministic models and proofs
+
+The integration gate runs these roots with `roc test PATH --no-cache`. They use
+the same pinned platform. Outcome checks through the public package accompany
+the symbolic arithmetic and finite histories.
+
+| Root | Contract and domain |
+| --- | --- |
+| [spec_precision](../spec_precision/main.roc) | R01 and R03. Solve checks the width-overflow cutoff across ordered signed I64 endpoints. Public examples check the cutoff and neighboring widths at the lowest start. |
+| [spec_coverage](../spec_coverage/main.roc) | R03, R04 and R12. Model checks all reachable abstract histories for seven intervals over five unit cells, capacities 0–3, and one retained preview. A separate replay resumes the actual builder returned at capacity. |
+| [spec_recurrence](../spec_recurrence/main.roc) | R11 and R12. Model covers two windows over one finite daily rule with COUNT, inclusions and exclusions. It exhausts up to three changing-budget reads, then drains both the active and retained cursors against an independent list of dates. |
+
+## Generated properties
+
 Each property package wires the platform to a separate pure type module (`PrecisionCase`,
 `SpanCase`, `CoverageCase`, `GregorianCase`, `ArithmeticCase`, `CalendarCase`, or `NanoClockCase`). Generators and semantic checks live in those
 modules; the runner records their source hashes along with the root and public

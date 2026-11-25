@@ -414,9 +414,10 @@ diff and replay the gate. Missing baselines fail repository policy even when the
 platform reports an otherwise successful unbaselined check. Changed/missing
 baseline controls run with the failure lifecycle.
 
-Run the deterministic span width proof and public boundary cases with
-`roc test tests/spec_precision/main.roc --no-cache`. The integration gate
-runs the same command with the package compiler. See the
+Run an individual deterministic proof or model with
+`roc test tests/spec_precision/main.roc --no-cache`, substituting another
+root from the [model and proof inventory](tests/fuzz/README.md#deterministic-models-and-proofs).
+The integration gate runs these checks with the package compiler. See the
 [spec-first workflow](AGENTS.md#spec-first-models-and-proofs) for choosing
 between `Model`, `Solve`, and generated properties.
 

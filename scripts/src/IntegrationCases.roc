@@ -21,6 +21,11 @@ IntegrationCases := [].{
 				program: roc,
 				args: ["test", "tests/spec_recurrence/main.roc", "--no-cache"],
 			},
+			{
+				name: "sorted coverage builder histories",
+				program: roc,
+				args: ["test", "tests/spec_coverage/main.roc", "--no-cache"],
+			},
 		].concat(
 			application({
 				roc,
