@@ -34,9 +34,6 @@ import ClockTime
 ## Numeric zone -00:00 denotes a fixed zero offset, serialized as +00:00.
 ## Canonical IXDTF text preserves the declaration; snapshots remain in-memory
 ## results with explicit context. No complete ISO or broader-calendar claim.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 Ixdtf :: { timestamp : OffsetTimestamp, zone : [None, Some(Zone)], tags : List(Tag) }.{
 
 	## A named zone requiring matching rules at resolution, or a fixed numeric zone offset.

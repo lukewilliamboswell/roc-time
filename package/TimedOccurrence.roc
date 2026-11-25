@@ -22,9 +22,6 @@ import ZoneRules
 ## appointments and None for explicit ends. InvalidDuration also identifies an
 ## explicit end that resolves at or before the start.
 ## It does not construct the preimage of every civil label between endpoints.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 TimedOccurrence(id) :: { id : id, start : TimedRecurrence.Occurrence, ending : Ending, span : PosixSpan, calendar_anchor : [None, Some({ source : LocalDateTime, choice : ZoneRules.BoundaryChoice })] }.{
 
 	## Endpoint intent is distinct from an elapsed or calendar quantity.

@@ -32,9 +32,6 @@ import PosixSpan
 ## ```
 ##
 ## Examples assume a package dependency named `time`.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 Coverage :: [Spans(List(PosixSpan))].{
 
 	## Coverage containing no occupied spans. Empty coverage is a complete value,

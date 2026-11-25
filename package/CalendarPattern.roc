@@ -7,9 +7,6 @@ import GregorianYear
 ## UNTIL, BYSETPOS, clock selectors, exclusions or zone interpretation.
 ## Week ordinals use the date's week-numbering year, which can differ from its
 ## civil year. Negative positions count back from that numbering year's end.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 CalendarPattern :: { anchor : GregorianDate, spec : Spec }.{
 	# TODO: Restore Filter.Spec after nested alias lookup is supported by the
 	# compiler we use: https://github.com/roc-lang/roc/issues/11464

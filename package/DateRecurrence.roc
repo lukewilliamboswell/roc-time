@@ -41,9 +41,6 @@ import GregorianDate
 ## ```
 ##
 ## Examples assume a package dependency named `time`.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 DateRecurrence :: {
 	anchor : GregorianDate,
 	pattern : CalendarPattern,

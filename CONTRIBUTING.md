@@ -72,6 +72,12 @@ record a new or changed application's output with
 runs, built from roc-automation's `scripts/release_package.roc` with the `roc`
 on `PATH`.
 
+When a public type nests another nominal type with the same associated method
+name, declare the inner type at module scope and re-export it as an alias. Roc
+checks method names in nested declarations against the containing scope. This
+keeps public names such as `TimedSchedule.Endings` while giving each type its
+own method scope. See [Roc's nested type guidance](https://github.com/roc-lang/roc/issues/13077).
+
 ## Scripts
 
 New automation is written as Roc scripts. Each entry point in `scripts/*.roc`

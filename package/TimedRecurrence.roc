@@ -31,9 +31,6 @@ import ZoneRules
 ## Without positions, buffering holds one occurrence. With positions it holds
 ## the whole interpreted period, subject to max_buffered. Retained cursors can
 ## share buffers; resuming a shared buffer can copy it on append.
-# TODO: Restore the nested nominal definitions after the compiler's nested
-# method shadowing issue is fixed for our supported nightly:
-# https://github.com/roc-lang/roc/issues/13077
 TimedRecurrence :: { anchor : LocalDateTime, schedule : [Calendar(CalendarPattern), Subdaily(SubdailyPattern)], clocks : ClockPattern, termination : Termination, positions : List(I16), exclusions : List(LocalDateTime), boundary_exclusions : List(PosixBoundary), inclusions : List(LocalDateTime) }.{
 
 	## Until is inclusive in source-label order. UntilBoundary is inclusive
