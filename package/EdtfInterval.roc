@@ -315,7 +315,7 @@ expect {
 		EdtfInterval.new({ start: Unknown, end: Known(negative) }) == Err(End(OutOfRange))
 }
 
-# R06/R13/R14. The inputs are pinned by tests/oracles/julian-manifest.toml
+# The inputs are pinned by tests/oracles/julian-manifest.toml
 # and tests/oracles/gregorian-manifest.toml. Julian case 98 puts 1900-02-29
 # at civil day -25496, twelve days beyond Gregorian case 60 (1900-03-01).
 # Case 62 in each oracle puts their December 31 labels thirteen days apart,

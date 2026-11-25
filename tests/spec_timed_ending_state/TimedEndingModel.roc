@@ -13,7 +13,7 @@ import time.ScheduleDefinition.Cursor as ScheduleCursor
 import time.ScheduleDefinition.Occurrence as Occurrence
 import time.ZoneRules
 
-## R07/R11/R12. One calendar ending is pending while an explicit inclusion
+## One calendar ending is pending while an explicit inclusion
 ## remains queued. Its next-day 00:30 label either occurs twice or lies in a
 ## gap. The coordinate tail extends beyond zone validity in both fixtures.
 TimedEndingModel :: [].{

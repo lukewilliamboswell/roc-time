@@ -5,7 +5,7 @@ import time.PosixDelta
 
 ICalDurationTail := [].{}
 
-# R01 and R14. The parser must reject coordinate tails that exceed the
+# The parser must reject coordinate tails that exceed the
 # microsecond range only after adding all their fields. Fix the hour field
 # one hour below the last whole hour, then search normalized second fields
 # and minute fields up through 61. RFC 5545 §3.3.6 gives minutes no upper

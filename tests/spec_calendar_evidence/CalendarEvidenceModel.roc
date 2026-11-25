@@ -8,7 +8,7 @@ import time.PosixSpan
 import time.CalendarDescription.QualifiedValue as QualifiedCalendarValue
 import time.ZoneRules
 
-# R12–R13. A caller checks whether an exact instant lies in an unknown
+# A caller checks whether an exact instant lies in an unknown
 # actual calendar selection, varying the work allowance and retaining a
 # partially read query. The alternatives are January 1, 1970 Gregorian
 # second cells. A synthetic -2 second change at timeline second 3 repeats

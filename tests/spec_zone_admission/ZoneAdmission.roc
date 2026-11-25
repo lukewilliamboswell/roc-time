@@ -10,7 +10,7 @@ import time.ZoneRules
 
 ZoneAdmission := {}
 
-# R01/R07/R12. The finite provider has one segment with the most negative
+# The finite provider has one segment with the most negative
 # I32 offset. Its advertised upper offset is one second larger and does
 # not occur in the table. At local labels representing timeline L under
 # the observed offset, an unseen occurrence would lie at L - 1 second.

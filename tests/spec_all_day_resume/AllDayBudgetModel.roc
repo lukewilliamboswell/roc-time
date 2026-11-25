@@ -11,7 +11,7 @@ import time.Recurrence.CalendarPattern as CalendarPattern
 import time.Recurrence.Date as DateRecurrence
 import time.ZoneRules
 
-## R10–R12. Two daily events straddle a synthetic dateline move at POSIX
+## Two daily events straddle a synthetic dateline move at POSIX
 ## zero. Local January 1 is skipped. January 2 maps to [0, 86400s).
 ## Each preimage requires two segment visits, including empty segments.
 AllDayBudgetModel :: [].{

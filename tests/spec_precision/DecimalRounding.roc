@@ -13,7 +13,7 @@ highest_attos = I64.highest.to_i128() * attos_per_microsecond.to_i128()
 
 round_attos = |value, policy| PosixBoundary.from_seconds(Dec.from_attos(value), policy).map_ok(PosixBoundary.to_microseconds)
 
-# R01. A caller importing Dec seconds must retain the original attoseconds
+# A caller importing Dec seconds must retain the original attoseconds
 # until rounding is complete. Search the full microsecond below I64.lowest
 # for the closest input that would be accepted after truncating to nanoseconds.
 # The distance to the outside neighbor is one microsecond minus the distance

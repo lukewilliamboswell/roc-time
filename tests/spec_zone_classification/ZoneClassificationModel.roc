@@ -4,7 +4,7 @@ import time.PosixBoundary
 import time.PosixSpan
 import time.ZoneRules
 
-## R07/R12. A caller pauses a classification, saves progress and retries under
+## A caller pauses a classification, saves progress and retries under
 ## different work and capacity limits. Matching occurrences and forward gaps
 ## share the retained budget even when the final resolution is a fold.
 ZoneClassificationModel :: [].{

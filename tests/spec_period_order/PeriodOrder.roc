@@ -8,7 +8,7 @@ PeriodOrder := [].{}
 
 date = |year, month, day| GregorianDate.from_fields({ year, month, day }) ?? crash "fixture date"
 
-# R05/R11. With an interval of two, a product in a 64-bit carrier can
+# With an interval of two, a product in a 64-bit carrier can
 # map a positive index to step zero. Ask for that alias and exercise both
 # public period operations. The mathematical start is far past the provider.
 expect {

@@ -351,7 +351,7 @@ expect {
 	blocked.occurrences.is_empty() and $done and $pages == whole.occurrences.len() + 1 and $output.map(|item| { id: item.id(), span: item.span() }) == whole.occurrences.map(|item| { id: item.id(), span: item.span() })
 }
 
-# R11/R12. A page viewer pauses a calendar ending and forks the returned
+# A page viewer pauses a calendar ending and forks the returned
 # query with a larger work budget. In fixed UTC, day one occupies [0, day)
 # and the second ending falls outside the provider. Exact and zero pages
 # must leave that later error for the next request with available capacity.

@@ -9,7 +9,7 @@ import time.GregorianDate
 
 RuleFields := {}
 
-# R11/R14. RFC 5545 §3.3.10 accepts rule parts in any order and signed
+# RFC 5545 §3.3.10 accepts rule parts in any order and signed
 # BYYEARDAY magnitudes of one to three digits. 1972 is a leap year, so
 # day -366 equals January 1, and day +366 is December 31. Input rotation
 # places each field first once. Canonical text and dates are fixed separately.

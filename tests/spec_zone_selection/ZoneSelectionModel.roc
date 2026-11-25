@@ -8,7 +8,7 @@ import time.PosixBoundary
 import time.PosixSpan
 import time.ZoneRules
 
-## R07/R12. A booking reader expands a local selection through finite zone
+## A booking reader expands a local selection through finite zone
 ## rules. The caller changes limits and can resume an earlier retained branch.
 ## The reference projects each grid cell forward under its fixture offset,
 ## then counts connected runs in prefixes of the timeline.

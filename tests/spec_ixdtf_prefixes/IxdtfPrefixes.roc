@@ -2,7 +2,7 @@ import time.Interchange.Ixdtf as Ixdtf
 
 IxdtfPrefixes := {}
 
-# R14. RFC 9557 §4.1 permits extending a suffix key until `=` commits it.
+# RFC 9557 §4.1 permits extending a suffix key until `=` commits it.
 # §3.3 requires an error when disagreeing duplicates include a critical tag.
 # roc-time's profile recognizes only gregory as a critical calendar and caps
 # raw text at 4096 bytes. In each case the independent oracle names a shortest

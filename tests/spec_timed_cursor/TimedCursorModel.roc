@@ -12,7 +12,7 @@ import time.Recurrence.TimedCursor as TimedCursor
 import time.Recurrence.TimedStart as TimedStart
 import time.ZoneRules
 
-# R11–R12. The label 1970-01-01 00:00:01 resolves to POSIX second 1
+# The label 1970-01-01 00:00:01 resolves to POSIX second 1
 # in the first segment and POSIX second 2 in the next. Classify the same
 # folded label as either a rule start or an earlier explicit inclusion.
 # Candidate storage and segment work can change independently while the

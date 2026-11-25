@@ -4,7 +4,7 @@ import time.Recurrence.CalendarPattern as CalendarPattern
 import time.Recurrence.Date as DateRecurrence
 import time.Recurrence.DateCursor as DateCursor
 
-# R11–R12. A booking reader changes budgets and consumption APIs mid-query,
+# A booking reader changes budgets and consumption APIs mid-query,
 # keeping the cursor from the first call to read both branches independently.
 # January 2025 needs no calendar oracle: interval 2 and COUNT 3 give days
 # 1, 3, 5. The exclusions remove 3 even when explicitly included; additions

@@ -5,7 +5,7 @@ import time.PosixSpan
 
 SpanWidth := [].{}
 
-# R01 and R03. Two arbitrary I64 boundaries represent a span only when start < end.
+# Two arbitrary I64 boundaries represent a span only when start < end.
 # At the lowest start, an end of zero is the first that overflows. Moving the
 # start right moves that cutoff equally. Only negative starts can overflow, and
 # their distance from I64.lowest fits. Production subtracts start from end.

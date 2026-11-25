@@ -3,7 +3,7 @@ import time.Nanosecond.LocalDateTime as NanoLocalDateTime
 
 NanoLocalRange := [].{}
 
-# R01/R05. A table exporter accepts validated Gregorian labels when their
+# A table exporter accepts validated Gregorian labels when their
 # nominal day and clock fit the signed I64 carrier. Floor-dividing each limit
 # into 86,400-second days identifies a partial day at each edge.
 day_nanoseconds = 86_400_000_000_000.U64

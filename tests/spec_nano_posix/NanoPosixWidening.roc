@@ -6,7 +6,7 @@ import time.Nanosecond.PosixDelta as PosixNanoDelta
 
 NanoPosixWidening := [].{}
 
-# R01/R02. An exporter converting a microsecond position or displacement to
+# An exporter converting a microsecond position or displacement to
 # an I64 nanosecond column may use the closed interval between the first and
 # last whole microseconds in that carrier.
 first = -9_223_372_036_854_775.I64

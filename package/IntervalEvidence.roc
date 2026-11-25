@@ -252,7 +252,7 @@ expect {
 		IntervalEvidence.definite_coverage(a) == IntervalEvidence.definite_coverage(b)
 }
 
-# R02/R13. Keep normalized supplied evidence as a key even when two
+# Keep normalized supplied evidence as a key even when two
 # declarations have identical admissible intervals and pointwise projections.
 expect {
 	lower = point(I64.lowest)

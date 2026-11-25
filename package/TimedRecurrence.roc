@@ -1556,7 +1556,7 @@ expect {
 	resumed.valid == whole.valid and resumed.boundaries == whole.boundaries and resumed.sources == whole.sources and resumed.adjusted == whole.adjusted and resumed.valid and resumed.boundaries == [PosixBoundary.from_microseconds(0)] and positioned.valid and positioned.boundaries == resumed.boundaries
 }
 
-# R07/R10/R11/R12. A calendar editor moves or clears a UTC cancellation
+# A calendar editor moves or clears a UTC cancellation
 # while a reader holds a cursor at the gap. A +1h jump at 01:00Z makes
 # 01:00 and 02:00 local select 01:00Z. The separate local 03:00 cancellation
 # applies in every branch. The next day cannot refill COUNT.

@@ -70,7 +70,7 @@ executable evidence that checks it.
   about a gap after a valid inclusion. Keep the smallest counterexample as a
   named example or curated regression, and show it fails on the unfixed
   behavior. Run the property with a bounded search in addition to replay.
-- State the applicable requirement IDs, input domain, property preconditions, and independent oracle or semantic law. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
+- Identify the applicable requirements in the test inventory or review notes. Use test comments to explain the input domain, preconditions, and independent expectation. Keep targets narrow and deterministic, with explicit interpretation fixtures and bounded input sizes and work.
 - Generate useful valid inputs directly and deliberately include signed limits, adjacent endpoints, empty collections, duplicates, and touching/overlapping spans as applicable. Exercise owned, shared, and sliced collections where ownership can affect behavior. Small exhaustive models complement exploration across the full supported range.
 - Test malformed public inputs for the required structured errors. Reject a generated input only when it is outside the property's domain; do not discard expected error paths or turn ordinary public errors into harness crashes.
 - Check inverse and round-trip preconditions explicitly. Checked arithmetic may overflow in an intermediate step; clamped calendar arithmetic is not invertible; semantic round trips need not preserve source spelling. Pair algebraic laws with independent models or sourced fixtures so mutually consistent bugs can be detected.

@@ -2,7 +2,7 @@ import time.Coverage
 import time.PosixBoundary
 import time.PosixSpan
 
-## R03/R04. Availability can span the entire signed coordinate domain even
+## Availability can span the entire signed coordinate domain even
 ## when its width cannot be represented as an I64 displacement.
 WideCoverage := [].{}
 

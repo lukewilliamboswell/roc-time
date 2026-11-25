@@ -3,7 +3,7 @@ import time.Coverage
 import time.PosixBoundary
 import time.PosixSpan
 
-## R03/R04/R12. An ordered booking stream can keep a coverage preview, pause
+## An ordered booking stream can keep a coverage preview, pause
 ## at capacity, and retry the pending span with a new capacity. The reference
 ## marks occupied unit cells and counts runs independently of the builder.
 CoverageBuilderModel := [].{}

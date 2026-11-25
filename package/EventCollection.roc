@@ -128,7 +128,7 @@ FixtureBookingId := { tenant : U64, number : U64, label : Str }.{
 	to_inspect = |id| id.label
 }
 
-# R04/R10. Different tenants can reuse both a booking number and a display
+# Different tenants can reuse both a booking number and a display
 # label. Keep them distinct through overlap and a disconnected clip, then
 # reject a renamed booking with the same application identity.
 expect {
@@ -177,7 +177,7 @@ expect {
 	EventCollection.clip(events, windows) == [{ id: 8, coverage: windows }]
 }
 
-## R10 and R04. A report clips bookings to one viewing window and keeps their
+## A report clips bookings to one viewing window and keeps their
 ## source order even where disjoint clipped extents cannot observe one another.
 expect {
 	early = test_eventcollection_span(0, 2)

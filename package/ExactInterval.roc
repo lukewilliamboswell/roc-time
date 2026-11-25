@@ -221,7 +221,7 @@ expect {
 	a != b and ExactInterval.span(a) == ExactInterval.span(b) and ExactInterval.from_span(ExactInterval.span(b), { offset: UnassertedUtc, fraction_digits: 2 }) == Ok(a) and ExactInterval.from_span(ExactInterval.span(b), { offset: UnassertedUtc, fraction_digits: 1 }) == Err(Start(UnsupportedPrecision))
 }
 
-# R01/R14. Calendar-year counts from astronomical year zero give independent
+# Calendar-year counts from astronomical year zero give independent
 # January 1 coordinates. Count leap years in [0, year) directly.
 export_test_year_start : I64 -> I64
 export_test_year_start = |year| {

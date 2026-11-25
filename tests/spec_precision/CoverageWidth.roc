@@ -6,7 +6,7 @@ import time.PosixSpan
 
 CoverageWidth := [].{}
 
-# R01 and R04. Each of two positive I64 member widths fits separately.
+# Each of two positive I64 member widths fits separately.
 # Their exact sum fits U64, which independently determines whether their
 # signed accumulator must reject it.
 expect {

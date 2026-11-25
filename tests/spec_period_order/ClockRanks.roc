@@ -34,7 +34,7 @@ grid = |selectors, fraction| {
 	$values
 }
 
-# R05/R11. Exercise expanded dimensions of different sizes and inherit each
+# Exercise expanded dimensions of different sizes and inherit each
 # field independently. Duplicates and source order cannot affect the ranks.
 expect {
 	anchor = ClockTime.from_fields({ hour: 17, minute: 43, second: 26, microsecond: 999999 })?

@@ -430,7 +430,7 @@ expect {
 	zero.visited_facts == 0 and zero.text == "" and zero.status == Limited(FactLimit) and empty.visited_facts == 0 and empty.text == "" and empty.status == Limited(ByteLimit) and tiny.text == "..." and tiny.status == Limited(ByteLimit)
 }
 
-# R12/R14: a booking viewer changes its fact and byte allowances on the same
+# A booking viewer changes its fact and byte allowances on the same
 # three-fact selection. Calibrate the line boundaries from a generous render so
 # these expectations can survive prose edits. The oracle counts fitting whole
 # prefixes and validates UTF-8 byte prefixes independently of the renderer's
