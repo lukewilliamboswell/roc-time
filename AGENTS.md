@@ -101,6 +101,8 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   Choose inputs that distinguish budgets for supplied entries, retained
   results, and work across a batch. Duplicates and empty results can expose
   cases where these counts differ.
+  For a pipeline, resume a partial item with later work queued and verify
+  both results. A lost continuation can otherwise look like forward progress.
 - Add a generated walk when it reaches relevant histories beyond the
   deterministic search. An exhausted finite action grammar can run in a
   deterministic test root with no separate fuzz baseline.
@@ -110,6 +112,9 @@ Fuzzing supplements fixed fixtures, compile-failure checks, public examples, and
   For interval algebra, use cells between chosen endpoints to cover wide
   coordinates with a small oracle. Cell membership needs only endpoint
   order, so the oracle can include intervals whose width overflows.
+  When a limit applies after projection, pair cases where the projection
+  moves the value into and out of the accepted range. Verify any error
+  attribution exposed to callers.
 - Use roc-fuzz `Solve` for fixed-width arithmetic. State the signedness,
   widths, preconditions and conflict budget. Check the exact verdict and pass
   concrete boundary cases or solver witnesses through the public API. When a
